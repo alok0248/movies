@@ -1,0 +1,30 @@
+
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}My Watch List{% endblock %}
+{% block content %}
+<div class="container mt-5 pt-5">
+    <h1 class="text-white mb-4">My Watch List</h1>
+    
+    {% if movies %}
+        <h2 class="section-title">Movies</h2>
+        <div class="movie-grid">
+            {% include 'core/_movie_cards.html' with movies=movies %}
+        </div>
+    {% endif %}
+    
+    {% if series %}
+        <h2 class="section-title">Series</h2>
+        <div class="movie-grid">
+            {% include 'core/_series_cards.html' with series=series %}
+        </div>
+    {% endif %}
+    
+    {% if not movies and not series %}
+        <div class="text-center text-white mt-5">
+            <p>Your watchlist is empty!</p>
+            <a href="{% url 'index' %}" class="btn btn-primary">Browse Content</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,284 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+{% if series.backdrop_url %}
+<div style="background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.3) 100%), url('{{ series.backdrop_url }}'); background-size: cover; background-position: center; padding: 6rem 3rem; min-height: 80vh; display: flex; align-items: center;">
+{% else %}
+<div style="background: linear-gradient(to bottom, #141414 0%, #0a0a0a 100%); padding: 6rem 3rem; min-height: 80vh; display: flex; align-items: center;">
+{% endif %}
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            {% if series.cover_url %}
+            <div class="col-md-4 mb-4 mb-md-0">
+                <img src="{{ series.cover_url }}" alt="{{ series.title }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 500px; width: auto;">
+            </div>
+            {% endif %}
+            <div class="col-md-8">
+                <a href="{% url 'series_list' %}" class="btn btn-outline-light mb-4">&larr; Back to TV Shows</a>
+                <h1 style="font-size: 3.5rem; font-weight: 800; margin-bottom: 1rem;">{{ series.title }}</h1>
+                <p style="font-size: 1.25rem; color: #b3b3b3; margin-bottom: 0.5rem;">
+                    {% if series.first_air_date %}{{ series.first_air_date|slice:":4" }}{% endif %}
+                    {% if series.vote_average %}• <span style="color: #ffc107;">★ {{ series.vote_average }}</span>{% endif %}
+                    {% if series.number_of_seasons %}• {{ series.number_of_seasons }} Seasons{% endif %}
+                </p>
+                {% if series.genres %}
+                <div style="margin-bottom: 1rem;">
+                    {% for genre in series.genres %}
+                    <span class="badge bg-secondary me-1 mb-1" style="font-size: 0.9rem;">{{ genre.name }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <p style="font-size: 1.125rem; max-width: 600px; margin-bottom: 2rem;">{{ series.overview|default:"No description available." }}</p>
+                <div class="d-flex gap-3">
+                            <button id="play-button" class="btn btn-primary btn-lg">
+                                <i class="fas fa-play me-2"></i> Play Now
+                            </button>
+                            <button id="watchlist-btn" class="btn btn-outline-light btn-lg" 
+                                    data-tmdb-id="{{ series.id }}" 
+                                    data-media-type="tv" 
+                                    onclick="toggleWatchlist({{ series.id }}, 'tv', '{{ series.title|escapejs }}', '{{ series.poster_path|default:'' }}')">
+                                <i class="fas fa-bookmark me-2"></i><span class="watchlist-btn-text"> My List</span>
+                            </button>
+                        </div>
+                        <div class="watchlist-warning text-danger" style="display: none; font-size: 1rem; margin-top: 1rem;">
+                            You need to login to add to the list
+                        </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="filter-bar" style="margin-top: 0; padding-top: 2rem; padding-bottom: 2rem;">
+    <div style="max-width: 1280px; margin: 0 auto;">
+        <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem;">Select Season & Episode</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label for="seasonSelect" class="form-label">Season</label>
+                <select id="seasonSelect" class="form-select">
+                    {% for season in seasons %}
+                    <option value="{{ season.season_number }}" data-season-name="{{ season.name }}" {% if season.season_number == current_season %}selected{% endif %}>
+                        {{ season.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-8">
+                <label for="episodeSelect" class="form-label">Episode</label>
+                <select id="episodeSelect" class="form-select">
+                    {% for episode in episodes %}
+                    <option value="{{ episode.episode_number }}" data-episode-name="{{ episode.name }}" {% if episode.episode_number == current_episode %}selected{% endif %}>
+                        Episode {{ episode.episode_number }}: {{ episode.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="player-section" style="padding: 3rem 0; background: #0a0a0a; display: none;">
+    <div style="max-width: 1280px; margin: 0 auto;">
+        <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1.5rem;">Watch {{ series.title }}</h2>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+            <button id="popoutSeriesBtn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                <i class="fas fa-external-link-alt me-2"></i> Pop-out Player
+            </button>
+        </div>
+        <div id="player-container" style="position: relative; width: 100%; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <iframe id="player-iframe" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+        </div>
+    </div>
+</div>
+
+<h2 class="section-title">More Like This</h2>
+<div class="row-container">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container">
+        {% for s in more_series %}
+        {% if s.slug != series.slug %}
+        <div class="card-wrapper">
+            <div class="movie-card">
+                {% if s.cover_url %}
+                <div class="card-image-container">
+                    <!-- Only the poster area links to detail page -->
+                    <a href="{% url 'series_detail' s.slug %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                    <img src="{{ s.cover_url }}" class="card-image" alt="{{ s.title }}" loading="lazy">
+                    <div class="rating-badge">
+                        {% if s.vote_average %}
+                        ★ {{ s.vote_average|floatformat:1 }}
+                        {% endif %}
+                    </div>
+                    <div class="card-hover-overlay">
+                        <div class="hover-content">
+                            {% if s.overview %}
+                            <p class="hover-description">{{ s.overview|truncatewords:30 }}</p>
+                            {% elif s.plot %}
+                            <p class="hover-description">{{ s.plot|truncatewords:30 }}</p>
+                            {% endif %}
+                            <div class="hover-actions">
+                                <button class="hover-play-btn" onclick="window.location.href='{% url 'series_detail' s.slug %}'">▶ Play</button>
+                                <button class="hover-watchlist-btn" 
+                                        data-tmdb-id="{{ s.id }}" 
+                                        data-media-type="tv" 
+                                        data-title="{{ s.title|escapejs }}" 
+                                        data-poster-path="{{ s.poster_path|default:'' }}">
+                                    <span class="watchlist-icon">+</span>
+                                </button>
+                            </div>
+                            <div class="watchlist-warning text-danger" style="display: none; font-size: 0.8rem; margin-top: 0.5rem;">
+                                You need to login to add to the list
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="card-info">
+                    <a href="{% url 'series_detail' s.slug %}" style="text-decoration: none; color: inherit;">
+                        <h5 class="card-title">{{ s.title }}</h5>
+                        <p class="card-year">
+                            {% if s.first_air_date %}
+                            {{ s.first_air_date|slice:":4" }}
+                            {% elif s.year %}
+                            {{ s.year }}
+                            {% endif %}
+                        </p>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+
+<script>
+const CODESPECTERS_BASE_URL = "https://api.codespecters.com/embed";
+const CODESPECTERS_API_KEY = "{{ settings.CODESPECTERS_API_KEY }}";
+const SERIES_TMDB_ID = {{ series.id }};
+
+let currentSeason = {{ current_season }};
+let currentEpisode = {{ current_episode }};
+let seriesPopupWindow = null;
+let playerLoaded = false;
+
+function getPlayerUrl() {
+    return `${CODESPECTERS_BASE_URL}/tv/${SERIES_TMDB_ID}/${currentSeason}/${currentEpisode}?apikey=${CODESPECTERS_API_KEY}`;
+}
+
+function updatePlayerUrl() {
+    const playerIframe = document.getElementById('player-iframe');
+    playerIframe.src = getPlayerUrl();
+    playerLoaded = true;
+    
+    // Update URL without reloading page
+    const newUrl = `${window.location.pathname}?season=${currentSeason}&episode=${currentEpisode}`;
+    window.history.pushState({ season: currentSeason, episode: currentEpisode }, '', newUrl);
+}
+
+function updateEpisodeSelect(episodeList) {
+    const episodeSelect = document.getElementById('episodeSelect');
+    episodeSelect.innerHTML = '';
+    
+    episodeList.forEach(episode => {
+        const option = document.createElement('option');
+        option.value = episode.episode_number;
+        option.dataset.episodeName = episode.name;
+        option.textContent = `Episode ${episode.episode_number}: ${episode.name}`;
+        if (episode.episode_number === currentEpisode) {
+            option.selected = true;
+        }
+        episodeSelect.appendChild(option);
+    });
+}
+
+async function loadEpisodesForSeason(seasonNumber) {
+    try {
+        const tmdbApiKey = "{{ settings.TMDB_API_KEY }}";
+        const response = await fetch(`https://api.themoviedb.org/3/tv/${SERIES_TMDB_ID}/season/${seasonNumber}?api_key=${tmdbApiKey}`);
+        const data = await response.json();
+        
+        if (data.episodes) {
+            currentSeason = seasonNumber;
+            currentEpisode = 1;
+            updateEpisodeSelect(data.episodes);
+            if (playerLoaded) {
+                updatePlayerUrl();
+            }
+        }
+    } catch (error) {
+        console.error('Error loading episodes:', error);
+    }
+}
+
+document.getElementById('seasonSelect').addEventListener('change', (e) => {
+    const newSeason = parseInt(e.target.value);
+    if (newSeason !== currentSeason) {
+        loadEpisodesForSeason(newSeason);
+    }
+});
+
+document.getElementById('episodeSelect').addEventListener('change', (e) => {
+    const newEpisode = parseInt(e.target.value);
+    if (newEpisode !== currentEpisode) {
+        currentEpisode = newEpisode;
+        if (playerLoaded) {
+            updatePlayerUrl();
+        }
+    }
+});
+
+// Handle browser back/forward buttons
+window.addEventListener('popstate', (e) => {
+    if (e.state) {
+        currentSeason = e.state.season;
+        currentEpisode = e.state.episode;
+        
+        // Update select boxes
+        document.getElementById('seasonSelect').value = currentSeason;
+        
+        // Load new episodes if season changed
+        loadEpisodesForSeason(currentSeason);
+    }
+});
+
+document.getElementById('play-button').addEventListener('click', function() {
+    const playerSection = document.getElementById('player-section');
+    const playerIframe = document.getElementById('player-iframe');
+    
+    if (!playerLoaded) {
+        playerIframe.src = getPlayerUrl();
+        playerLoaded = true;
+    }
+    
+    playerSection.style.display = 'block';
+    playerSection.scrollIntoView({ behavior: 'smooth' });
+});
+
+document.getElementById('popoutSeriesBtn').addEventListener('click', function() {
+    if (!playerLoaded) {
+        const playerIframe = document.getElementById('player-iframe');
+        playerIframe.src = getPlayerUrl();
+        playerLoaded = true;
+    }
+    
+    const playerUrl = document.getElementById('player-iframe').src;
+    if (seriesPopupWindow && !seriesPopupWindow.closed) {
+        seriesPopupWindow.focus();
+        return;
+    }
+    
+    const width = 1280;
+    const height = 720;
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    
+    seriesPopupWindow = window.open(
+        playerUrl,
+        'SeriesPlayer',
+        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
+    );
+});
+</script>
+{% endblock %}

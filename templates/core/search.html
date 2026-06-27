@@ -1,0 +1,30 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Search{% if search_query %} - {{ search_query }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-5 pt-5">
+    <h1 class="text-white mb-4">Search{% if search_query %}: "{{ search_query }}"{% endif %}</h1>
+    
+    {% if movies %}
+        <h2 class="section-title">Movies</h2>
+        <div class="movie-grid">
+            {% include 'core/_movie_cards.html' with movies=movies %}
+        </div>
+    {% endif %}
+    
+    {% if series %}
+        <h2 class="section-title">Series</h2>
+        <div class="movie-grid">
+            {% include 'core/_series_cards.html' with series=series %}
+        </div>
+    {% endif %}
+    
+    {% if not movies and not series and search_query %}
+        <div class="text-center text-white mt-5">
+            <p>No results found for "{{ search_query }}"</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

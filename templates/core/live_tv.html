@@ -1,0 +1,63 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Live TV{% endblock %}
+
+{% block content %}
+<div class="container mt-5 pt-5">
+    <h1 class="text-white mb-4">Live TV</h1>
+    <div class="movie-grid" id="channels-container">
+        {% include 'core/_channel_cards.html' with channels=channels %}
+    </div>
+    <div id="loading" class="text-center mt-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let isLoading = false;
+let hasNext = {% if has_next %}true{% else %}false{% endif %};
+
+window.addEventListener('scroll', () => {
+    if (isLoading || !hasNext) return;
+    
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = document.documentElement.clientHeight;
+    
+    if (scrollTop + clientHeight >= scrollHeight - 500) {
+        loadMoreChannels();
+    }
+});
+
+function loadMoreChannels() {
+    if (isLoading || !hasNext) return;
+    isLoading = true;
+    document.getElementById('loading').style.display = 'block';
+    
+    currentPage++;
+    fetch('{% url 'live_tv' %}?page=' + currentPage, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.html) {
+            document.getElementById('channels-container').insertAdjacentHTML('beforeend', data.html);
+        }
+        hasNext = data.has_next;
+    })
+    .catch(error => {
+        console.error('Error loading more channels:', error);
+    })
+    .finally(() => {
+        isLoading = false;
+        document.getElementById('loading').style.display = 'none';
+    });
+}
+</script>
+{% endblock %}

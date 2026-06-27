@@ -1,0 +1,119 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Filter Tabs -->
+<div style="padding: 2rem 3rem; display: flex; gap: 1.5rem; align-items: center;">
+    <h2 style="font-size: 1.75rem; font-weight: 800; margin: 0;">Movies</h2>
+    <div class="filter-tabs">
+        <a href="{% url 'movie_list' %}{% if genre_id %}?genre={{ genre_id }}{% endif %}" class="filter-tab {% if not filter_type %}active{% endif %}">Latest</a>
+        <a href="{% url 'movie_list' %}?filter_type=popular{% if genre_id %}&genre={{ genre_id }}{% endif %}" class="filter-tab {% if filter_type == 'popular' %}active{% endif %}">Popular</a>
+        <a href="{% url 'movie_list' %}?filter_type=upcoming{% if genre_id %}&genre={{ genre_id }}{% endif %}" class="filter-tab {% if filter_type == 'upcoming' %}active{% endif %}">Coming Soon</a>
+        <a href="{% url 'movie_list' %}?filter_type=top_rated{% if genre_id %}&genre={{ genre_id }}{% endif %}" class="filter-tab {% if filter_type == 'top_rated' %}active{% endif %}">Top Rated</a>
+    </div>
+</div>
+
+<!-- Search and Filters -->
+<div class="filter-bar">
+    <div class="row g-3 align-items-center">
+        <div class="col-md-4">
+            <form method="get" class="d-flex gap-2">
+                <input type="text" name="search" class="form-control search-input" placeholder="Search movies..." value="{{ search_query }}">
+                <button type="submit" class="btn btn-primary">Search</button>
+            </form>
+        </div>
+        <div class="col-md-8">
+            <form method="get" class="d-flex gap-2 align-items-center">
+                {% if search_query %}
+                <input type="hidden" name="search" value="{{ search_query }}">
+                {% endif %}
+                {% if filter_type %}
+                <input type="hidden" name="filter_type" value="{{ filter_type }}">
+                {% endif %}
+                
+                <select name="genre" class="form-select">
+                    <option value="">All Genres</option>
+                    {% for genre in all_genres %}
+                    <option value="{{ genre.id }}" {% if genre_id|stringformat:"s" == genre.id|stringformat:"s" %}selected{% endif %}>
+                        {{ genre.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                
+                <select name="sort" class="form-select">
+                    <option value="">Sort</option>
+                    <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Title</option>
+                    <option value="year" {% if sort_by == 'year' %}selected{% endif %}>Year</option>
+                    <option value="rating" {% if sort_by == 'rating' %}selected{% endif %}>Rating</option>
+                </select>
+                
+                {% if sort_by %}
+                <select name="order" class="form-select">
+                    <option value="asc" {% if order == 'asc' %}selected{% endif %}>Ascending</option>
+                    <option value="desc" {% if order == 'desc' %}selected{% endif %}>Descending</option>
+                </select>
+                {% endif %}
+                
+                <button type="submit" class="btn btn-primary">Apply</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Movies Grid -->
+<div class="content-section" style="padding: 0 3rem;">
+    <div class="movie-grid">
+        {% include 'core/_movie_cards.html' %}
+    </div>
+</div>
+
+<div id="loading" class="text-center py-4 d-none">
+    <div class="spinner-border text-danger" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<script>
+let page = 1;
+let hasNext = {{ has_next|yesno:"true,false" }};
+let isLoading = false;
+
+function loadMoreMovies() {
+    if (isLoading || !hasNext) return;
+    
+    isLoading = true;
+    document.getElementById('loading').classList.remove('d-none');
+    
+    page += 1;
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set('page', page);
+    
+    fetch(`?${searchParams.toString()}`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const container = document.querySelector('.movie-grid');
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = data.html;
+        while (tempDiv.firstChild) {
+            container.appendChild(tempDiv.firstChild);
+        }
+        hasNext = data.has_next;
+        initScrollButtons();
+    })
+    .finally(() => {
+        isLoading = false;
+        document.getElementById('loading').classList.add('d-none');
+    });
+}
+
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
+        loadMoreMovies();
+    }
+});
+</script>
+{% endblock %}

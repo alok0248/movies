@@ -1,0 +1,9 @@
+{% if site_settings.enable_sidebar_ads and site_settings.sidebar_ads_code %}
+<div class="col-md-3 mt-4">
+    <div class="card">
+        <div class="card-body">
+            {{ site_settings.sidebar_ads_code|safe }}
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,7 @@
+django
+requests
+psycopg2-binary
+oracledb
+pyodbc
+django-mssql-backend
+pandas

@@ -1,0 +1,171 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+{% if movie.backdrop_url %}
+<div style="background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.3) 100%), url('{{ movie.backdrop_url }}'); background-size: cover; background-position: center; padding: 6rem 3rem; min-height: 80vh; display: flex; align-items: center;">
+{% else %}
+<div style="background: linear-gradient(to bottom, #141414 0%, #0a0a0a 100%); padding: 6rem 3rem; min-height: 80vh; display: flex; align-items: center;">
+{% endif %}
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            {% if movie.cover_url %}
+            <div class="col-md-4 mb-4 mb-md-0">
+                <img src="{{ movie.cover_url }}" alt="{{ movie.title }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 500px; width: auto;">
+            </div>
+            {% endif %}
+            <div class="col-md-8">
+                <a href="{% url 'movie_list' %}" class="btn btn-outline-light mb-4">&larr; Back to Movies</a>
+                <h1 style="font-size: 3.5rem; font-weight: 800; margin-bottom: 1rem;">{{ movie.title }}</h1>
+                <p style="font-size: 1.25rem; color: #b3b3b3; margin-bottom: 0.5rem;">
+                    {% if movie.year %}{{ movie.year }}{% endif %}
+                    {% if movie.vote_average %}• <span style="color: #ffc107;">★ {{ movie.vote_average }}</span>{% endif %}
+                    {% if movie.runtime %}• {{ movie.runtime }} min{% endif %}
+                </p>
+                {% if movie.genres %}
+                <div style="margin-bottom: 1rem;">
+                    {% for genre in movie.genres %}
+                    <span class="badge bg-secondary me-1 mb-1" style="font-size: 0.9rem;">{{ genre.name }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <p style="font-size: 1.125rem; max-width: 600px; margin-bottom: 2rem;">{{ movie.overview|default:"No description available." }}</p>
+                <div class="d-flex gap-3">
+                            <button id="play-button" class="btn btn-primary btn-lg">
+                                <i class="fas fa-play me-2"></i> Play Now
+                            </button>
+                            <button id="watchlist-btn" class="btn btn-outline-light btn-lg" 
+                                    data-tmdb-id="{{ movie.id }}" 
+                                    data-media-type="movie" 
+                                    onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
+                                <i class="fas fa-bookmark me-2"></i><span class="watchlist-btn-text"> My List</span>
+                            </button>
+                        </div>
+                        <div class="watchlist-warning text-danger" style="display: none; font-size: 1rem; margin-top: 1rem;">
+                            You need to login to add to the list
+                        </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="player-section" style="padding: 3rem 0; background: #0a0a0a; display: none;">
+    <div style="max-width: 1280px; margin: 0 auto;">
+        <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1.5rem;">Watch {{ movie.title }}</h2>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+            <button id="popoutMovieBtn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                <i class="fas fa-external-link-alt me-2"></i> Pop-out Player
+            </button>
+        </div>
+        <div id="moviePlayerContainer" style="position: relative; width: 100%; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <iframe id="moviePlayer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+        </div>
+    </div>
+</div>
+
+<h2 class="section-title">More Like This</h2>
+<div class="row-container">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container">
+        {% for m in more_movies %}
+        {% if m.slug != movie.slug %}
+        <div class="card-wrapper">
+            <div class="movie-card">
+                {% if m.cover_url %}
+                <div class="card-image-container">
+                    <!-- Only the poster area links to detail page -->
+                    <a href="{% url 'movie_detail' m.slug %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                    <img src="{{ m.cover_url }}" class="card-image" alt="{{ m.title }}" loading="lazy">
+                    <div class="rating-badge">
+                        {% if m.vote_average %}
+                        ★ {{ m.vote_average|floatformat:1 }}
+                        {% endif %}
+                    </div>
+                    <div class="card-hover-overlay">
+                        <div class="hover-content">
+                            {% if m.overview %}
+                            <p class="hover-description">{{ m.overview|truncatewords:30 }}</p>
+                            {% elif m.plot %}
+                            <p class="hover-description">{{ m.plot|truncatewords:30 }}</p>
+                            {% endif %}
+                            <div class="hover-actions">
+                                <button class="hover-play-btn" onclick="window.location.href='{% url 'movie_detail' m.slug %}'">▶ Play</button>
+                                <button class="hover-watchlist-btn" 
+                                        data-tmdb-id="{{ m.id }}" 
+                                        data-media-type="movie" 
+                                        data-title="{{ m.title|escapejs }}" 
+                                        data-poster-path="{{ m.poster_path|default:'' }}">
+                                    <span class="watchlist-icon">+</span>
+                                </button>
+                            </div>
+                            <div class="watchlist-warning text-danger" style="display: none; font-size: 0.8rem; margin-top: 0.5rem;">
+                                You need to login to add to the list
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="card-info">
+                    <a href="{% url 'movie_detail' m.slug %}" style="text-decoration: none; color: inherit;">
+                        <h5 class="card-title">{{ m.title }}</h5>
+                        <p class="card-year">
+                            {% if m.release_date %}
+                            {{ m.release_date|slice:":4" }}
+                            {% elif m.year %}
+                            {{ m.year }}
+                            {% endif %}
+                        </p>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+
+<script>
+const moviePlayerUrl = "{{ player_url }}";
+let moviePopupWindow = null;
+let playerLoaded = false;
+
+document.getElementById('play-button').addEventListener('click', function() {
+    const playerSection = document.getElementById('player-section');
+    const moviePlayer = document.getElementById('moviePlayer');
+    
+    if (!playerLoaded) {
+        moviePlayer.src = moviePlayerUrl;
+        playerLoaded = true;
+    }
+    
+    playerSection.style.display = 'block';
+    playerSection.scrollIntoView({ behavior: 'smooth' });
+});
+
+document.getElementById('popoutMovieBtn').addEventListener('click', function() {
+    if (!playerLoaded) {
+        const moviePlayer = document.getElementById('moviePlayer');
+        moviePlayer.src = moviePlayerUrl;
+        playerLoaded = true;
+    }
+    
+    const playerUrl = document.getElementById('moviePlayer').src;
+    if (moviePopupWindow && !moviePopupWindow.closed) {
+        moviePopupWindow.focus();
+        return;
+    }
+    
+    const width = 1280;
+    const height = 720;
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    
+    moviePopupWindow = window.open(
+        playerUrl,
+        'MoviePlayer',
+        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
+    );
+});
+</script>
+{% endblock %}

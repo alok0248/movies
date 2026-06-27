@@ -1,0 +1,27 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.index, name='index'),
+    path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('admin-dashboard/edit-settings/', views.edit_settings, name='edit_settings'),
+    path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
+    path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
+    path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),
+    path('admin-dashboard/content-rows/<int:row_id>/delete/', views.content_row_delete, name='content_row_delete'),
+    path('movies/', views.movie_list, name='movie_list'),
+    path('movies/<slug:movie_slug>/', views.movie_detail, name='movie_detail'),
+    path('series/', views.series_list, name='series_list'),
+    path('series/<slug:series_slug>/', views.series_detail, name='series_detail'),
+    path('search/', views.search, name='search'),
+    path('live-tv/', views.live_tv, name='live_tv'),
+    path('row/<int:row_id>/load-more/', views.load_more_row_content, name='load_more_row_content'),
+    path('ajax/login/', views.ajax_login, name='ajax_login'),
+    path('ajax/register/', views.ajax_register, name='ajax_register'),
+    path('ajax/logout/', views.ajax_logout, name='ajax_logout'),
+    path('ajax/forgot-password/', views.ajax_forgot_password, name='ajax_forgot_password'),
+    path('reset-password/<uidb64>/<token>/', views.reset_password, name='reset_password'),
+    path('ajax/toggle-watchlist/', views.ajax_toggle_watchlist, name='ajax_toggle_watchlist'),
+    path('ajax/check-watchlist/', views.ajax_check_watchlist, name='ajax_check_watchlist'),
+    path('watchlist/', views.watchlist, name='watchlist'),
+]

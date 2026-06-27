@@ -1,0 +1,113 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+{% if movie_rows and movie_rows.0 and movie_rows.0.items and movie_rows.0.items.0 %}
+{% with hero_movie=movie_rows.0.items.0 %}
+<div class="hero-section" {% if hero_movie.backdrop_path or hero_movie.poster_path %}style="background-image: url('{{ settings.TMDB_IMAGE_BASE_URL }}{{ hero_movie.backdrop_path|default:hero_movie.poster_path }}');"{% endif %}>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+        <h1 class="hero-title">{{ hero_movie.title }}</h1>
+        <div class="hero-meta">
+            {% if hero_movie.release_date %}<span>{{ hero_movie.release_date|slice:":4" }}</span>{% endif %}
+            {% if hero_movie.vote_average %}<span style="color: #46d369;">★ {{ hero_movie.vote_average|floatformat:1 }}</span>{% endif %}
+        </div>
+        <p class="hero-description">{{ hero_movie.overview|default:'' }}</p>
+        <div class="d-flex gap-3">
+            {% if hero_movie.slug %}
+            <a href="{% url 'movie_detail' hero_movie.slug %}" class="hero-btn hero-btn-primary">
+                ▶ Watch
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endif %}
+
+{% for row_data in movie_rows %}
+<h2 class="section-title">{{ row_data.row.title }}</h2>
+<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="movie-row-{{ row_data.row.id }}">
+        {% include 'core/_movie_cards.html' with movies=row_data.items %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endfor %}
+
+{% for row_data in series_rows %}
+<h2 class="section-title">{{ row_data.row.title }}</h2>
+<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="series-row-{{ row_data.row.id }}">
+        {% include 'core/_series_cards.html' with series=row_data.items %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Track scroll position and load more when reaching end of row
+    const rowContainers = document.querySelectorAll('.row-container');
+    
+    rowContainers.forEach(container => {
+        const scrollContainer = container.querySelector('.scroll-container');
+        const rowId = container.dataset.rowId;
+        let currentPage = parseInt(container.dataset.currentPage);
+        const totalPages = parseInt(container.dataset.totalPages);
+        let isLoading = false;
+        
+        scrollContainer.addEventListener('scroll', () => {
+            const scrollLeft = scrollContainer.scrollLeft;
+            const scrollWidth = scrollContainer.scrollWidth;
+            const clientWidth = scrollContainer.clientWidth;
+            
+            // Load more when scrolled to 80% of content
+            if (scrollLeft + clientWidth >= scrollWidth * 0.8 && !isLoading && currentPage < totalPages) {
+                loadMoreContent(container, rowId, currentPage + 1);
+                currentPage++;
+                container.dataset.currentPage = currentPage;
+            }
+        });
+    });
+});
+
+function loadMoreContent(container, rowId, page) {
+    const isLoading = container.dataset.isLoading === 'true';
+    if (isLoading) return;
+    
+    container.dataset.isLoading = 'true';
+    const scrollContainer = container.querySelector('.scroll-container');
+    
+    fetch(`{% url 'load_more_row_content' 0 %}`.replace('0', rowId) + `?page=${page}`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = data.html;
+            while (tempDiv.firstChild) {
+                scrollContainer.appendChild(tempDiv.firstChild);
+            }
+        }
+        
+        // Update total pages
+        container.dataset.totalPages = data.total_pages;
+        
+        // Re-initialize scroll buttons
+        initScrollButtons();
+    })
+    .catch(error => {
+        console.error('Error loading more content:', error);
+    })
+    .finally(() => {
+        container.dataset.isLoading = 'false';
+    });
+}
+</script>
+{% endblock %}

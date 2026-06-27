@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Admin Dashboard</h1>
+
+<div class="row mt-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Current Status</h5>
+                <p><strong>Active Data Source:</strong> {{ site_settings.get_data_source_display }}</p>
+                <p><strong>Items per Row:</strong> {{ site_settings.get_items_per_row_display }}</p>
+                <p><strong>Card Size:</strong> {{ site_settings.get_card_size_display }}</p>
+                <p><strong>Title Size:</strong> {{ site_settings.get_title_size_display }}</p>
+                <p><strong>Text Size:</strong> {{ site_settings.get_text_size_display }}</p>
+                <p><strong>Sidebar Ads:</strong> {% if site_settings.enable_sidebar_ads %}Enabled{% else %}Disabled{% endif %}</p>
+                <a href="{% url 'edit_settings' %}" class="btn btn-primary">Edit All Settings</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Quick Links</h5>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item bg-transparent">
+                        <a href="{% url 'index' %}" class="text-decoration-none">🏠 Home</a>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <a href="{% url 'movie_list' %}" class="text-decoration-none">🎬 Movies</a>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <a href="{% url 'series_list' %}" class="text-decoration-none">📺 Series</a>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <a href="{% url 'content_row_list' %}" class="text-decoration-none">📋 Content Rows (Homepage)</a>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <a href="{% url 'edit_settings' %}" class="text-decoration-none">⚙️ Edit Site Settings</a>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <a href="/admin/" class="text-decoration-none">🛠️ Django Admin Panel (to populate data)</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

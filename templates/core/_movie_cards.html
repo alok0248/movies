@@ -1,0 +1,53 @@
+
+{% for movie in movies %}
+<div class="card-wrapper">
+    <div class="movie-card">
+        {% if movie.cover_url %}
+        <div class="card-image-container">
+            <!-- Only the poster area links to detail page -->
+            <a href="{% url 'movie_detail' movie.slug %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+            <img src="{{ movie.cover_url }}" class="card-image" alt="{{ movie.title }}" loading="lazy">
+            <div class="rating-badge">
+                {% if movie.vote_average %}
+                ★ {{ movie.vote_average|floatformat:1 }}
+                {% endif %}
+            </div>
+            <div class="card-hover-overlay">
+                <div class="hover-content">
+                    {% if movie.overview %}
+                    <p class="hover-description">{{ movie.overview|truncatewords:30 }}</p>
+                    {% elif movie.plot %}
+                    <p class="hover-description">{{ movie.plot|truncatewords:30 }}</p>
+                    {% endif %}
+                    <div class="hover-actions">
+                        <button class="hover-play-btn" onclick="window.location.href='{% url 'movie_detail' movie.slug %}'">▶ Play</button>
+                        <button class="hover-watchlist-btn" 
+                                data-tmdb-id="{{ movie.id }}" 
+                                data-media-type="movie" 
+                                data-title="{{ movie.title|escapejs }}" 
+                                data-poster-path="{{ movie.poster_path|default:'' }}">
+                            <span class="watchlist-icon">+</span>
+                        </button>
+                    </div>
+                    <div class="watchlist-warning text-danger" style="display: none; font-size: 0.8rem; margin-top: 0.5rem;">
+                        You need to login to add to the list
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="card-info">
+            <a href="{% url 'movie_detail' movie.slug %}" style="text-decoration: none; color: inherit;">
+                <h5 class="card-title">{{ movie.title }}</h5>
+                <p class="card-year">
+                    {% if movie.release_date %}
+                    {{ movie.release_date|slice:":4" }}
+                    {% elif movie.year %}
+                    {{ movie.year }}
+                    {% endif %}
+                </p>
+            </a>
+        </div>
+    </div>
+</div>
+{% endfor %}

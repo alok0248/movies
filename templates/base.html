@@ -1,0 +1,1616 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ site_settings.brand_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --brand-color: {{ site_settings.brand_color }};
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #141414;
+            color: #ffffff;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 100%);
+            padding: 0.5rem 3rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            transition: background 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            background-color: #141414;
+        }
+
+        .navbar-brand {
+            color: var(--brand-color) !important;
+            font-weight: 900;
+            font-size: 1.75rem;
+            text-decoration: none;
+        }
+
+        .nav-link {
+            color: #ffffff !important;
+            margin: 0 0.5rem;
+            font-size: 0.9rem;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #b3b3b3 !important;
+        }
+
+        .dropdown-menu {
+            background-color: rgba(0, 0, 0, 0.95) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .dropdown-item {
+            color: #fff !important;
+        }
+
+        .dropdown-item:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .dropdown-item.active {
+            background-color: var(--brand-color) !important;
+        }
+
+        .content-wrapper {
+            padding-top: 4rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.5rem 3rem;
+        }
+
+        .row-container {
+            position: relative;
+            padding: 0 3rem;
+            overflow: hidden;
+        }
+
+        .scroll-container {
+            display: flex;
+            overflow-x: auto;
+            overflow-y: hidden;
+            gap: 0.5rem;
+            padding: 1rem 0;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            scroll-behavior: smooth;
+        }
+
+        .scroll-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .card-wrapper {
+            flex: 0 0 auto;
+            width: 200px;
+            position: relative;
+            transition: transform 0.3s ease, z-index 0s 0.3s;
+            z-index: 1;
+        }
+
+        .card-wrapper:hover {
+            transform: scale(1.3);
+            z-index: 10;
+            transition: transform 0.3s ease, z-index 0s;
+        }
+
+        .netflix-card-link {
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+
+        .netflix-card {
+            background-color: #141414;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .card-hover-preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.8));
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 15px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .card-wrapper:hover .card-hover-preview {
+            opacity: 1;
+        }
+
+        .preview-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .preview-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.7);
+            background: rgba(0,0,0,0.6);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .preview-btn:hover {
+            background: white;
+            color: black;
+            border-color: white;
+        }
+
+        .preview-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .preview-meta {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .rating-text {
+            color: #46d369;
+            font-weight: bold;
+        }
+
+        .year-text {
+            color: #b3b3b3;
+        }
+
+        .preview-plot {
+            font-size: 11px;
+            color: #ffffff;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .card-image {
+            width: 100%;
+            aspect-ratio: 2/3;
+            object-fit: cover;
+            display: block;
+        }
+
+        .card-info {
+            display: none;
+            padding: 0.75rem;
+            background-color: #181818;
+            border-radius: 0 0 4px 4px;
+        }
+
+        .card-wrapper:hover .card-info {
+            display: block;
+        }
+
+        .card-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0 0 0.25rem 0;
+            color: #ffffff;
+        }
+
+        .card-meta {
+            font-size: 0.7rem;
+            color: #b3b3b3;
+        }
+
+        .scroll-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 48px;
+            height: 100%;
+            background-color: rgba(20, 20, 20, 0.7);
+            border: none;
+            color: #ffffff;
+            font-size: 2rem;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .scroll-btn:hover {
+            opacity: 1;
+        }
+
+        .scroll-btn.left {
+            left: 0;
+        }
+
+        .scroll-btn.right {
+            right: 0;
+        }
+
+        .filter-bar {
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, rgba(20, 20, 20, 1) 100%);
+            padding: 1rem 3rem;
+            margin-top: 1rem;
+        }
+
+        .search-input {
+            background-color: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+        }
+
+        .search-input::placeholder {
+            color: #b3b3b3;
+        }
+
+        .search-input:focus {
+            background-color: rgba(0, 0, 0, 0.8);
+            border-color: #ffffff;
+            outline: none;
+            box-shadow: none;
+            color: #ffffff;
+        }
+
+        .form-select {
+            background-color: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+        }
+
+        .form-select:focus {
+            background-color: rgba(0, 0, 0, 0.8);
+            border-color: #ffffff;
+            outline: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background-color: var(--brand-color);
+            border: none;
+            padding: 0.5rem 1.5rem;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            background-color: #f40612;
+        }
+
+        /* Blurred Popup Modal Styles */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-backdrop.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .detail-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 90%;
+            max-width: 1000px;
+            background: #181818;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            z-index: 2001;
+            display: none;
+            opacity: 0;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .detail-modal.active {
+            display: block;
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .modal-hero {
+            position: relative;
+            height: 450px;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .modal-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to right, rgba(24, 24, 24, 1) 0%, rgba(24, 24, 24, 0.7) 50%, rgba(24, 24, 24, 0.3) 100%);
+        }
+
+        .modal-hero-content {
+            position: relative;
+            z-index: 1;
+            padding: 3rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .modal-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .modal-meta {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            color: #b3b3b3;
+        }
+
+        .modal-rating {
+            color: #46d369;
+            font-weight: 700;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .modal-btn {
+            padding: 0.75rem 2rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .modal-btn.play {
+            background: #ffffff;
+            color: #000000;
+        }
+
+        .modal-btn.play:hover {
+            background: rgba(255, 255, 255, 0.85);
+        }
+
+        .modal-btn.more {
+            background: rgba(109, 109, 110, 0.7);
+            color: #ffffff;
+        }
+
+        .modal-btn.more:hover {
+            background: rgba(109, 109, 110, 0.5);
+        }
+
+        .modal-content {
+            padding: 2rem 3rem 3rem 3rem;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(42, 42, 42, 0.8);
+            border: none;
+            color: #ffffff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(42, 42, 42, 1);
+            transform: scale(1.1);
+        }
+
+        .genre-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .genre-tag {
+            background: rgba(109, 109, 110, 0.3);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            color: #ffffff;
+        }
+
+        /* Hero section styles */
+        .hero-section {
+            position: relative;
+            height: 80vh;
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+        }
+
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to right, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.1) 100%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            padding-left: 3rem;
+            max-width: 600px;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .hero-meta {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            color: #b3b3b3;
+        }
+
+        .hero-description {
+            font-size: 1.125rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .hero-btn {
+            padding: 0.75rem 2rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .hero-btn-primary {
+            background-color: #ffffff;
+            color: #000000;
+        }
+
+        .hero-btn-primary:hover {
+            background-color: rgba(255, 255, 255, 0.85);
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .filter-tab {
+            color: #b3b3b3;
+            font-size: 1rem;
+            font-weight: 500;
+            text-decoration: none;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .filter-tab:hover {
+            color: #ffffff;
+        }
+
+        .filter-tab.active {
+            color: #ffffff;
+            border-bottom: 2px solid #ffffff;
+        }
+
+        .movie-grid, .series-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1rem 0;
+        }
+
+        /* Auth Modal Styles */
+        .auth-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 3000;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .auth-modal-backdrop.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 1;
+        }
+
+        .auth-modal {
+            width: 90%;
+            max-width: 450px;
+            background: #181818;
+            border-radius: 12px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+            transform: scale(0.9);
+            opacity: 0;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .auth-modal.active {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .auth-modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: transparent;
+            border: none;
+            color: #b3b3b3;
+            font-size: 1.75rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .auth-modal-close:hover {
+            color: #fff;
+        }
+
+        .auth-form-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #fff;
+        }
+
+        .auth-form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .auth-form-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: none;
+            border-radius: 6px;
+            background: #333;
+            color: #fff;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+
+        .auth-form-input:focus {
+            outline: none;
+            background: #444;
+        }
+
+        .auth-form-input::placeholder {
+            color: #8c8c8c;
+        }
+
+        .auth-form-btn {
+            width: 100%;
+            padding: 0.875rem;
+            margin-top: 0.5rem;
+            border: none;
+            border-radius: 6px;
+            background: var(--brand-color);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .auth-form-btn:hover {
+            background: #ff0a16;
+        }
+
+        .auth-form-link {
+            color: #b3b3b3;
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .auth-form-link:hover {
+            color: #fff;
+            text-decoration: underline;
+        }
+
+        .auth-form-message {
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .auth-form-message.success {
+            background: rgba(70, 211, 105, 0.2);
+            color: #46d369;
+        }
+
+        .auth-form-message.error {
+            background: rgba(229, 9, 20, 0.2);
+            color: #e50914;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            margin: 1.25rem 0;
+            color: #8c8c8c;
+            font-size: 0.9rem;
+        }
+
+        .auth-divider::before, .auth-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #333;
+        }
+
+        .auth-divider span {
+            margin: 0 0.75rem;
+        }
+
+        /* New Movie Card Styles */
+        .card-wrapper {
+            flex: 0 0 auto;
+            width: 220px;
+            position: relative;
+            transition: transform 0.3s ease, z-index 0s 0.3s;
+            z-index: 1;
+        }
+
+        .card-wrapper:hover {
+            transform: scale(1.15);
+            z-index: 10;
+            transition: transform 0.3s ease, z-index 0s;
+        }
+
+        .movie-card-link {
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+
+        .movie-card {
+            background-color: #0a0a0a;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            position: relative;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .movie-card:hover {
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.9);
+        }
+
+        .card-image-container {
+            position: relative;
+            aspect-ratio: 2/3;
+            overflow: hidden;
+        }
+
+        .card-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.4s ease;
+        }
+
+        .card-wrapper:hover .card-image {
+            transform: scale(1.1);
+        }
+
+        .rating-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            color: #ffc107;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 5;
+        }
+
+        .card-hover-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                180deg,
+                rgba(0, 0, 0, 0.1) 0%,
+                rgba(0, 0, 0, 0.5) 50%,
+                rgba(0, 0, 0, 0.95) 100%
+            );
+            display: flex;
+            align-items: flex-end;
+            padding: 15px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .card-wrapper:hover .card-hover-overlay {
+            opacity: 1;
+        }
+
+        .hover-content {
+            width: 100%;
+        }
+
+        .hover-description {
+            font-size: 0.8rem;
+            color: #e0e0e0;
+            line-height: 1.5;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .hover-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .hover-play-btn {
+            flex: 1;
+            padding: 8px 16px;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 20;
+        }
+
+        .hover-play-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-2px);
+        }
+
+        .hover-watchlist-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+        }
+
+        .hover-watchlist-btn:hover {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: #fff;
+        }
+
+        .hover-watchlist-btn.in-watchlist {
+            background: #46d369;
+            border-color: #46d369;
+            color: #000;
+        }
+
+        .hover-watchlist-btn.in-watchlist:hover {
+            background: #3bc05c;
+            border-color: #3bc05c;
+        }
+
+        .card-info {
+            padding: 12px;
+            background: #0a0a0a;
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card-year {
+            font-size: 0.85rem;
+            color: #999;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'index' %}">{{ site_settings.brand_name }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'index' %}">Home</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="{% url 'movie_list' %}" id="movieDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Movies
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="movieDropdown">
+                            <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular">Popular</a></li>
+                            <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated">Top Rated</a></li>
+                            <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming">Upcoming</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="{% url 'series_list' %}" id="seriesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            TV Shows
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="seriesDropdown">
+                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular">Popular TV Shows</a></li>
+                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today">Airing Today</a></li>
+                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air">On The Air</a></li>
+                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated">Top Rated TV Shows</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'live_tv' %}">Live TV</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="navWatchlistBtn" onclick="handleNavWatchlistClick(event)">
+                            <i class="fas fa-bookmark"></i> My Watch List
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="genreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Genres
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="genreDropdown" style="min-width: 350px;">
+                            {% if request.resolver_match.url_name == 'movie_list' or request.resolver_match.url_name == 'movie_detail' %}
+                                <li><h6 class="dropdown-header">Movie Genres</h6></li>
+                                <li>
+                                    <div class="row px-3">
+                                        <div class="col">
+                                            {% for genre in movie_genres|slice:":10" %}
+                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col">
+                                            {% for genre in movie_genres|slice:"10:" %}
+                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </li>
+                            {% elif request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' %}
+                                <li><h6 class="dropdown-header">TV Show Genres</h6></li>
+                                <li>
+                                    <div class="row px-3">
+                                        <div class="col">
+                                            {% for genre in series_genres|slice:":10" %}
+                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col">
+                                            {% for genre in series_genres|slice:"10:" %}
+                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </li>
+                            {% else %}
+                                <li><h6 class="dropdown-header">Movie Genres</h6></li>
+                                <li>
+                                    <div class="row px-3">
+                                        <div class="col">
+                                            {% for genre in movie_genres|slice:":10" %}
+                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col">
+                                            {% for genre in movie_genres|slice:"10:" %}
+                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><h6 class="dropdown-header">TV Show Genres</h6></li>
+                                <li>
+                                    <div class="row px-3">
+                                        <div class="col">
+                                            {% for genre in series_genres|slice:":10" %}
+                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col">
+                                            {% for genre in series_genres|slice:"10:" %}
+                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                </ul>
+                <form class="d-flex gap-2 me-3" method="GET" action="{% url 'search' %}">
+                    <input class="form-control search-input" type="search" name="q" placeholder="Search..." aria-label="Search">
+                    <button class="btn btn-primary" type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg></button>
+                </form>
+                <div class="d-flex gap-2 align-items-center">
+                    {% if user.is_authenticated %}
+                        <div class="dropdown">
+                            <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Hi, {{ user.username }}!
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'watchlist' %}">📋 My Watch List</a></li>
+                                {% if user.is_staff or user.is_superuser %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">📊 Admin Dashboard</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" onclick="handleLogout(); return false;">🚪 Logout</a></li>
+                            </ul>
+                        </div>
+                    {% else %}
+                        <button class="btn btn-outline-light btn-sm" onclick="openAuthModal('login')">Sign In</button>
+                        <button class="btn btn-primary btn-sm" onclick="openAuthModal('register')">Sign Up</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Navbar Watchlist Warning -->
+    <div id="navWatchlistWarning" class="text-center py-2" style="background: #dc3545; display: none;">
+        You need to login to view your watch list
+    </div>
+
+    <div class="content-wrapper">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Blurred Modal -->
+    <div id="modalBackdrop" class="modal-backdrop"></div>
+    <div id="detailModal" class="detail-modal">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div id="modalHero" class="modal-hero">
+            <div class="modal-hero-content">
+                <h1 id="modalTitle" class="modal-title"></h1>
+                <div id="modalMeta" class="modal-meta"></div>
+                <div class="modal-buttons">
+                    <button class="modal-btn play" id="modalPlayBtn">▶ Play</button>
+                    <button class="modal-btn more">+ My List</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-content">
+            <p id="modalPlot" style="font-size: 1.125rem; line-height: 1.6; color: #ffffff;"></p>
+            <div id="modalGenres" class="genre-tags"></div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModalBackdrop" class="auth-modal-backdrop" onclick="closeAuthModal(event)">
+        <div id="authModal" class="auth-modal" onclick="event.stopPropagation()">
+            <button class="auth-modal-close" onclick="closeAuthModal()">&times;</button>
+            
+            <!-- Login Form -->
+            <div id="loginForm">
+                <h2 class="auth-form-title">Sign In</h2>
+                <form id="loginFormElement" onsubmit="handleLogin(event)">
+                    {% csrf_token %}
+                    <div class="auth-form-group">
+                        <input type="text" class="auth-form-input" id="loginUsername" name="username" placeholder="Username" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <input type="password" class="auth-form-input" id="loginPassword" name="password" placeholder="Password" required>
+                    </div>
+                    <div id="loginMessage" class="auth-form-message" style="display: none;"></div>
+                    <button type="submit" class="auth-form-btn">Sign In</button>
+                    <div class="mt-3 text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('forgot')">Forgot password?</span>
+                    </div>
+                    <div class="auth-divider">
+                        <span>New to {{ site_settings.brand_name }}?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('register')">Sign up now</span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" style="display: none;">
+                <h2 class="auth-form-title">Sign Up</h2>
+                <form id="registerFormElement" onsubmit="handleRegister(event)">
+                    {% csrf_token %}
+                    <div class="auth-form-group">
+                        <input type="text" class="auth-form-input" id="registerUsername" name="username" placeholder="Username" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <input type="email" class="auth-form-input" id="registerEmail" name="email" placeholder="Email" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <input type="password" class="auth-form-input" id="registerPassword" name="password" placeholder="Password" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <input type="password" class="auth-form-input" id="registerConfirmPassword" name="confirm_password" placeholder="Confirm Password" required>
+                    </div>
+                    <div id="registerMessage" class="auth-form-message" style="display: none;"></div>
+                    <button type="submit" class="auth-form-btn">Sign Up</button>
+                    <div class="auth-divider">
+                        <span>Already have an account?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('login')">Sign in</span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Forgot Password Form -->
+            <div id="forgotForm" style="display: none;">
+                <h2 class="auth-form-title">Reset Password</h2>
+                <form id="forgotFormElement" onsubmit="handleForgotPassword(event)">
+                    {% csrf_token %}
+                    <div class="auth-form-group">
+                        <input type="email" class="auth-form-input" id="forgotEmail" name="email" placeholder="Enter your email" required>
+                    </div>
+                    <div id="forgotMessage" class="auth-form-message" style="display: none;"></div>
+                    <button type="submit" class="auth-form-btn">Send Reset Link</button>
+                    <div class="auth-divider">
+                        <span>Remember your password?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('login')">Sign in</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener('scroll', () => {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        function initScrollButtons() {
+            document.querySelectorAll('.scroll-container').forEach(container => {
+                const parent = container.parentElement;
+                const leftBtn = parent.querySelector('.scroll-btn.left');
+                const rightBtn = parent.querySelector('.scroll-btn.right');
+                
+                parent.addEventListener('mouseenter', () => {
+                    if (container.scrollWidth > container.clientWidth) {
+                        leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.5';
+                        rightBtn.style.opacity = '1';
+                    }
+                });
+                
+                parent.addEventListener('mouseleave', () => {
+                    leftBtn.style.opacity = '0';
+                    rightBtn.style.opacity = '0';
+                });
+                
+                leftBtn.addEventListener('click', () => {
+                    container.scrollBy({ left: -600, behavior: 'smooth' });
+                });
+                
+                rightBtn.addEventListener('click', () => {
+                    container.scrollBy({ left: 600, behavior: 'smooth' });
+                });
+                
+                container.addEventListener('scroll', () => {
+                    leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.5';
+                    rightBtn.style.opacity = container.scrollLeft < container.scrollWidth - container.clientWidth - 10 ? '1' : '0.5';
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initScrollButtons);
+
+        // Modal functions
+        function openModal(data) {
+            document.getElementById('modalBackdrop').classList.add('active');
+            document.getElementById('detailModal').classList.add('active');
+
+            document.getElementById('modalTitle').textContent = data.title;
+            document.getElementById('modalPlot').textContent = data.overview || 'No description available';
+
+            // Build meta
+            const metaParts = [];
+            if (data.release_date) metaParts.push(data.release_date.substring(0, 4));
+            else if (data.first_air_date) metaParts.push(data.first_air_date.substring(0, 4));
+            if (data.vote_average) metaParts.push(`<span class="modal-rating">★ ${data.vote_average.toFixed(1)}</span>`);
+            document.getElementById('modalMeta').innerHTML = metaParts.join(' • ');
+
+            // Genres
+            const genreDiv = document.getElementById('modalGenres');
+            genreDiv.innerHTML = '';
+            if (data.genres) {
+                data.genres.forEach(genre => {
+                    const tag = document.createElement('span');
+                    tag.className = 'genre-tag';
+                    tag.textContent = genre.name;
+                    genreDiv.appendChild(tag);
+                });
+            } else if (data.genre_ids) {
+                // We'd need a genre lookup here, but for now just show as IDs
+                data.genre_ids.forEach(id => {
+                    const tag = document.createElement('span');
+                    tag.className = 'genre-tag';
+                    tag.textContent = `Genre ${id}`;
+                    genreDiv.appendChild(tag);
+                });
+            }
+
+            // Hero image
+            const hero = document.getElementById('modalHero');
+            const imgPath = data.backdrop_path || data.poster_path;
+            if (imgPath) {
+                hero.style.backgroundImage = `url('{{ settings.TMDB_IMAGE_BASE_URL }}{{ imgPath }}')`;
+            }
+
+            // Play button
+            const playBtn = document.getElementById('modalPlayBtn');
+            // Generate slug
+            let slug = '';
+            if (data.title) {
+                slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            } else if (data.name) {
+                slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            }
+            
+            if (data.media_type === 'movie' || data.title) {
+                playBtn.onclick = () => window.location.href = '{% url "movie_detail" "0" %}'.replace('0', slug);
+            } else {
+                playBtn.onclick = () => window.location.href = '{% url "series_detail" "0" %}'.replace('0', slug);
+            }
+
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('modalBackdrop').classList.remove('active');
+            document.getElementById('detailModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close on backdrop click
+        document.getElementById('modalBackdrop').addEventListener('click', closeModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeAuthModal();
+            }
+        });
+
+        // Auth Modal Functions
+        function openAuthModal(formType) {
+            const backdrop = document.getElementById('authModalBackdrop');
+            const modal = document.getElementById('authModal');
+            
+            backdrop.classList.add('active');
+            setTimeout(() => modal.classList.add('active'), 10);
+            
+            switchAuthForm(formType);
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuthModal(event) {
+            if (event && event.target !== document.getElementById('authModalBackdrop')) return;
+            
+            const backdrop = document.getElementById('authModalBackdrop');
+            const modal = document.getElementById('authModal');
+            
+            modal.classList.remove('active');
+            setTimeout(() => {
+                backdrop.classList.remove('active');
+                document.body.style.overflow = 'auto';
+                
+                // Reset forms
+                ['loginFormElement', 'registerFormElement', 'forgotFormElement'].forEach(id => {
+                    const form = document.getElementById(id);
+                    if (form) form.reset();
+                });
+                ['loginMessage', 'registerMessage', 'forgotMessage'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.style.display = 'none';
+                        el.className = 'auth-form-message';
+                    }
+                });
+            }, 300);
+        }
+
+        function switchAuthForm(formType) {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('forgotForm').style.display = 'none';
+            document.getElementById(formType + 'Form').style.display = 'block';
+        }
+
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = 'auth-form-message ' + type;
+            el.style.display = 'block';
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            
+            try {
+                const response = await fetch('{% url "ajax_login" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('loginMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeAuthModal();
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showMessage('loginMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('loginMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            
+            try {
+                const response = await fetch('{% url "ajax_register" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('registerMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeAuthModal();
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showMessage('registerMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('registerMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleForgotPassword(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            
+            try {
+                const response = await fetch('{% url "ajax_forgot_password" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('forgotMessage', data.message, 'success');
+                } else {
+                    showMessage('forgotMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('forgotMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await fetch('{% url "ajax_logout" %}', { method: 'POST' });
+                window.location.reload();
+            } catch (error) {
+                window.location.reload();
+            }
+        }
+
+        async function toggleWatchlist(tmdbId, mediaType, title, posterPath) {
+            console.log("toggleWatchlist called with:", { tmdbId, mediaType, title, posterPath });
+            
+            // First, hide all warnings
+            document.querySelectorAll('.watchlist-warning').forEach(w => {
+                w.style.display = 'none';
+            });
+            
+            try {
+                const formData = new FormData();
+                formData.append('tmdb_id', tmdbId);
+                formData.append('media_type', mediaType);
+                formData.append('title', title);
+                formData.append('poster_path', posterPath);
+
+                const response = await fetch('{% url "ajax_toggle_watchlist" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                console.log("toggleWatchlist response:", data);
+
+                if (data.success) {
+                    // Success! Update all buttons
+                    const inWatchlist = data.action === 'added';
+                    updateAllWatchlistButtons(tmdbId, mediaType, inWatchlist);
+                } else {
+                    // Not logged in!
+                    if (data.message.includes('login')) {
+                        // Find the button that was clicked
+                        let clickedButton = null;
+                        // Check detail page button first
+                        const detailBtn = document.getElementById('watchlist-btn');
+                        if (detailBtn && detailBtn.dataset.tmdbId == tmdbId && detailBtn.dataset.mediaType == mediaType) {
+                            clickedButton = detailBtn;
+                        } else {
+                            // Check hover buttons
+                            document.querySelectorAll('.hover-watchlist-btn').forEach(btn => {
+                                if (btn.dataset.tmdbId == tmdbId && btn.dataset.mediaType == mediaType) {
+                                    clickedButton = btn;
+                                }
+                            });
+                        }
+                        
+                        if (clickedButton) {
+                            // Find nearest warning div
+                            let warningDiv = clickedButton.closest('.hover-content')?.querySelector('.watchlist-warning') || 
+                                             clickedButton.closest('.col-md-8')?.querySelector('.watchlist-warning');
+                            if (warningDiv) {
+                                warningDiv.style.display = 'block';
+                                // Hide after 3 seconds
+                                setTimeout(() => {
+                                    warningDiv.style.display = 'none';
+                                }, 3000);
+                            }
+                        }
+                    } else {
+                        alert(data.message);
+                    }
+                }
+            } catch (error) {
+                console.error('Error toggling watchlist:', error);
+            }
+        }
+
+        function updateWatchlistButton(button, inWatchlist) {
+            const icon = button.querySelector('.watchlist-icon');
+            if (icon) {
+                // Card button
+                if (inWatchlist) {
+                    icon.textContent = '✓';
+                    button.classList.add('in-watchlist');
+                } else {
+                    icon.textContent = '+';
+                    button.classList.remove('in-watchlist');
+                }
+            } else {
+                // Detail page button - update the text span
+                const textSpan = button.querySelector('.watchlist-btn-text');
+                if (textSpan) {
+                    textSpan.textContent = inWatchlist ? ' Added' : ' My List';
+                }
+                if (inWatchlist) {
+                    button.classList.remove('btn-outline-light');
+                    button.classList.add('btn-primary');
+                } else {
+                    button.classList.remove('btn-primary');
+                    button.classList.add('btn-outline-light');
+                }
+            }
+        }
+
+        async function checkWatchlist(tmdbId, mediaType) {
+            try {
+                const response = await fetch(`{% url "ajax_check_watchlist" %}?tmdb_id=${tmdbId}&media_type=${mediaType}`);
+                const data = await response.json();
+                return data.in_watchlist;
+            } catch (error) {
+                console.error('Error checking watchlist:', error);
+                return false;
+            }
+        }
+
+        async function updateAllWatchlistButtons(tmdbId = null, mediaType = null, inWatchlist = null) {
+            // If specific tmdbId/mediaType provided, update only those
+            if (tmdbId && mediaType && inWatchlist !== null) {
+                document.querySelectorAll('.hover-watchlist-btn').forEach(btn => {
+                    if (btn.dataset.tmdbId == tmdbId && btn.dataset.mediaType == mediaType) {
+                        updateWatchlistButton(btn, inWatchlist);
+                    }
+                });
+                const detailBtn = document.getElementById('watchlist-btn');
+                if (detailBtn) {
+                    const detailTmdbId = detailBtn.dataset.tmdbId;
+                    const detailMediaType = detailBtn.dataset.mediaType;
+                    if (detailTmdbId == tmdbId && detailMediaType == mediaType) {
+                        updateWatchlistButton(detailBtn, inWatchlist);
+                    }
+                }
+            } else {
+                // Otherwise, update all buttons
+                const hoverButtons = document.querySelectorAll('.hover-watchlist-btn');
+                for (const btn of hoverButtons) {
+                    const btnTmdbId = btn.dataset.tmdbId;
+                    const btnMediaType = btn.dataset.mediaType;
+                    if (btnTmdbId && btnMediaType) {
+                        const inWL = await checkWatchlist(parseInt(btnTmdbId), btnMediaType);
+                        updateWatchlistButton(btn, inWL);
+                    }
+                }
+                
+                const detailBtn = document.getElementById('watchlist-btn');
+                if (detailBtn) {
+                    const detailTmdbId = detailBtn.dataset.tmdbId;
+                    const detailMediaType = detailBtn.dataset.mediaType;
+                    if (detailTmdbId && detailMediaType) {
+                        const inWL = await checkWatchlist(parseInt(detailTmdbId), detailMediaType);
+                        updateWatchlistButton(detailBtn, inWL);
+                    }
+                }
+            }
+        }
+
+        function handleNavWatchlistClick(event) {
+            event.preventDefault();
+            
+            {% if user.is_authenticated %}
+                // Logged in: go to watch list page
+                window.location.href = "{% url 'watchlist' %}";
+            {% else %}
+                // Not logged in: show warning
+                const warningDiv = document.getElementById('navWatchlistWarning');
+                warningDiv.style.display = 'block';
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    warningDiv.style.display = 'none';
+                }, 3000);
+                
+                // Also open the login modal as an extra prompt
+                openAuthModal('login');
+            {% endif %}
+        }
+
+        // Add click handler to all hover watchlist buttons
+        document.addEventListener('click', (e) => {
+            const watchlistBtn = e.target.closest('.hover-watchlist-btn');
+            if (watchlistBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const tmdbId = watchlistBtn.dataset.tmdbId;
+                const mediaType = watchlistBtn.dataset.mediaType;
+                const title = watchlistBtn.dataset.title;
+                const posterPath = watchlistBtn.dataset.posterPath;
+                
+                toggleWatchlist(tmdbId, mediaType, title, posterPath);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateAllWatchlistButtons();
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
