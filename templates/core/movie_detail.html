@@ -1,5 +1,6 @@
 
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block content %}
 {% if movie.backdrop_url %}
@@ -22,28 +23,146 @@
                     {% if movie.vote_average %}• <span style="color: #ffc107;">★ {{ movie.vote_average }}</span>{% endif %}
                     {% if movie.runtime %}• {{ movie.runtime }} min{% endif %}
                 </p>
-                {% if movie.genres %}
-                <div style="margin-bottom: 1rem;">
-                    {% for genre in movie.genres %}
-                    <span class="badge bg-secondary me-1 mb-1" style="font-size: 0.9rem;">{{ genre.name }}</span>
-                    {% endfor %}
+                {% if movie.tagline %}
+                <p style="font-size: 1.15rem; color: #888; font-style: italic; margin-bottom: 0.75rem;">"{{ movie.tagline }}"</p>
+                {% endif %}
+                <p style="font-size: 1.125rem; max-width: 600px; margin-bottom: 1.5rem;">{{ movie.overview|default:"No description available." }}</p>
+                
+                <!-- Movie Details Section -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: #fff;">Movie Details</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                        {% if movie.tagline %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Tagline</span>
+                            <p style="color: #fff; font-size: 1rem; margin-bottom: 0; font-style: italic;">"{{ movie.tagline }}"</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if movie.release_date %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Release Date</span>
+                            <p style="color: #fff; font-size: 1rem; margin-bottom: 0;">{{ movie.release_date }}</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if movie.runtime %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Runtime</span>
+                            <p style="color: #fff; font-size: 1rem; margin-bottom: 0;">{{ movie.runtime }} min</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if movie.status %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Status</span>
+                            <p style="color: #fff; font-size: 1rem; margin-bottom: 0;">{{ movie.status }}</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if movie.vote_average %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Rating</span>
+                            <p style="color: #fff; font-size: 1rem; margin-bottom: 0;">
+                                <span style="color: #ffc107;">★</span> {{ movie.vote_average }} ({{ movie.vote_count }} votes)
+                            </p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if movie.original_language %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Original Language</span>
+                            <p style="color: #fff; font-size: 1rem; margin-bottom: 0;">{{ movie.original_language|upper }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if movie.genres %}
+                    <div style="margin-bottom: 0;">
+                        <span style="color: #888; font-size: 0.9rem;">Genres</span>
+                        <div style="margin-top: 0.5rem;">
+                            {% for genre in movie.genres %}
+                            <span class="badge bg-secondary me-1 mb-1" style="font-size: 0.9rem;">{{ genre.name }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Where to Watch Section -->
+                {% with region_data=watch_providers|get_item:watch_region %}
+                {% if watch_providers and region_data %}
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="color: #fff; font-size: 1.1rem; margin-bottom: 0.75rem;">Where to Watch ({{ watch_region }})</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+                        {% if region_data.flatrate %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Streaming</span>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                {% for provider in region_data.flatrate %}
+                                {% if provider.logo_path %}
+                                <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px;">
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if region_data.rent %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Rent</span>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                {% for provider in region_data.rent %}
+                                {% if provider.logo_path %}
+                                <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px;">
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if region_data.buy %}
+                        <div>
+                            <span style="color: #888; font-size: 0.9rem;">Buy</span>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                {% for provider in region_data.buy %}
+                                {% if provider.logo_path %}
+                                <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px;">
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
-                <p style="font-size: 1.125rem; max-width: 600px; margin-bottom: 2rem;">{{ movie.overview|default:"No description available." }}</p>
+                {% endwith %}
                 <div class="d-flex gap-3">
-                            <button id="play-button" class="btn btn-primary btn-lg">
-                                <i class="fas fa-play me-2"></i> Play Now
-                            </button>
-                            <button id="watchlist-btn" class="btn btn-outline-light btn-lg" 
-                                    data-tmdb-id="{{ movie.id }}" 
-                                    data-media-type="movie" 
-                                    onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
-                                <i class="fas fa-bookmark me-2"></i><span class="watchlist-btn-text"> My List</span>
-                            </button>
-                        </div>
-                        <div class="watchlist-warning text-danger" style="display: none; font-size: 1rem; margin-top: 1rem;">
-                            You need to login to add to the list
-                        </div>
+                    <button id="play-button" class="btn btn-primary btn-lg">
+                        <i class="fas fa-play me-2"></i> Play Now
+                    </button>
+                    <button id="watchlist-btn" class="btn btn-outline-light btn-lg" 
+                            data-tmdb-id="{{ movie.id }}" 
+                            data-media-type="movie" 
+                            onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
+                        <i class="fas fa-bookmark me-2"></i><span class="watchlist-btn-text"> My List</span>
+                    </button>
+                    <button id="wikipedia-btn" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-info-circle me-2"></i> Wikipedia
+                    </button>
+                </div>
+                <div class="watchlist-warning text-danger" style="display: none; font-size: 1rem; margin-top: 1rem;">
+                    You need to login to add to the list
+                </div>
+                <!-- Wikipedia Section (if available) -->
+                <div id="wikipedia-section" style="margin-top: 1.5rem; display: none;">
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem;">
+                        <h3 id="wikipedia-title" style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #fff;"></h3>
+                        <p id="wikipedia-summary" style="font-size: 1.05rem; line-height: 1.7; color: #b3b3b3;"></p>
+                        <a id="wikipedia-link" target="_blank" style="color: #46d369; text-decoration: none; font-weight: 600;">
+                            <i class="fas fa-external-link-alt me-1"></i> Read more on Wikipedia
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -53,11 +172,11 @@
     <div style="max-width: 1280px; margin: 0 auto;">
         <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1.5rem;">Watch {{ movie.title }}</h2>
         <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-            <button id="popoutMovieBtn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+            <button id="popoutBtn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
                 <i class="fas fa-external-link-alt me-2"></i> Pop-out Player
             </button>
         </div>
-        <div id="moviePlayerContainer" style="position: relative; width: 100%; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+        <div id="playerContainer" style="position: relative; width: 100%; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
             <iframe id="moviePlayer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" frameborder="0" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
         </div>
     </div>
@@ -126,33 +245,34 @@
 </div>
 
 <script>
-const moviePlayerUrl = "{{ player_url }}";
-let moviePopupWindow = null;
+// Function to build Vidking URL
+function getVidkingUrl(movieId) {
+    return `https://www.vidking.net/embed/movie/${movieId}?color=5865f2&autoPlay=true&nextEpisode=true&episodeSelector=true`;
+}
+
+const movieId = "{{ movie.id }}";
+const movieTitle = "{{ movie.title|escapejs }}";
+const movieYear = "{{ movie.year|escapejs }}";
+let popupWindow = null;
 let playerLoaded = false;
+let wikipediaLoaded = false;
 
 document.getElementById('play-button').addEventListener('click', function() {
     const playerSection = document.getElementById('player-section');
     const moviePlayer = document.getElementById('moviePlayer');
     
-    if (!playerLoaded) {
-        moviePlayer.src = moviePlayerUrl;
-        playerLoaded = true;
-    }
-    
     playerSection.style.display = 'block';
     playerSection.scrollIntoView({ behavior: 'smooth' });
-});
-
-document.getElementById('popoutMovieBtn').addEventListener('click', function() {
+    
     if (!playerLoaded) {
-        const moviePlayer = document.getElementById('moviePlayer');
-        moviePlayer.src = moviePlayerUrl;
+        moviePlayer.src = getVidkingUrl(movieId);
         playerLoaded = true;
     }
-    
-    const playerUrl = document.getElementById('moviePlayer').src;
-    if (moviePopupWindow && !moviePopupWindow.closed) {
-        moviePopupWindow.focus();
+});
+
+document.getElementById('popoutBtn').addEventListener('click', function() {
+    if (popupWindow && !popupWindow.closed) {
+        popupWindow.focus();
         return;
     }
     
@@ -161,11 +281,50 @@ document.getElementById('popoutMovieBtn').addEventListener('click', function() {
     const left = Math.max(0, (window.screen.width - width) / 2);
     const top = Math.max(0, (window.screen.height - height) / 2);
     
-    moviePopupWindow = window.open(
-        playerUrl,
+    popupWindow = window.open(
+        getVidkingUrl(movieId),
         'MoviePlayer',
         `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
     );
+});
+
+document.getElementById('wikipedia-btn').addEventListener('click', async function() {
+    const wikipediaSection = document.getElementById('wikipedia-section');
+    const wikipediaTitle = document.getElementById('wikipedia-title');
+    const wikipediaSummary = document.getElementById('wikipedia-summary');
+    const wikipediaLink = document.getElementById('wikipedia-link');
+    const btn = this;
+    
+    if (wikipediaSection.style.display === 'none') {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Loading...';
+        btn.disabled = true;
+        
+        // Load Wikipedia only if not already loaded
+        if (!wikipediaLoaded) {
+            try {
+                const response = await fetch(`/ajax/fetch-wikipedia/?title=${encodeURIComponent(movieTitle)}&year=${encodeURIComponent(movieYear)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    wikipediaTitle.textContent = data.details.title;
+                    wikipediaSummary.textContent = data.details.summary;
+                    wikipediaLink.href = data.details.url;
+                    wikipediaSection.style.display = 'block';
+                    wikipediaLoaded = true;
+                }
+            } catch (error) {
+                console.error('Error fetching Wikipedia details:', error);
+            }
+        } else {
+            wikipediaSection.style.display = 'block';
+        }
+        
+        btn.innerHTML = '<i class="fas fa-times-circle me-2"></i> Hide Wikipedia';
+        btn.disabled = false;
+    } else {
+        wikipediaSection.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-info-circle me-2"></i> Wikipedia';
+    }
 });
 </script>
 {% endblock %}

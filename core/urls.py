@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path('', views.index, name='index'),
+    path('upcoming/', views.upcoming, name='upcoming'),
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-dashboard/edit-settings/', views.edit_settings, name='edit_settings'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
@@ -10,8 +11,10 @@ urlpatterns = [
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),
     path('admin-dashboard/content-rows/<int:row_id>/delete/', views.content_row_delete, name='content_row_delete'),
     path('movies/', views.movie_list, name='movie_list'),
+    path('movies/id/<int:movie_id>/', views.movie_detail_by_id, name='movie_detail_by_id'),
     path('movies/<slug:movie_slug>/', views.movie_detail, name='movie_detail'),
     path('series/', views.series_list, name='series_list'),
+    path('series/id/<int:series_id>/', views.series_detail_by_id, name='series_detail_by_id'),
     path('series/<slug:series_slug>/', views.series_detail, name='series_detail'),
     path('search/', views.search, name='search'),
     path('live-tv/', views.live_tv, name='live_tv'),
@@ -23,5 +26,9 @@ urlpatterns = [
     path('reset-password/<uidb64>/<token>/', views.reset_password, name='reset_password'),
     path('ajax/toggle-watchlist/', views.ajax_toggle_watchlist, name='ajax_toggle_watchlist'),
     path('ajax/check-watchlist/', views.ajax_check_watchlist, name='ajax_check_watchlist'),
+    path('ajax/fetch-wikipedia/', views.fetch_wikipedia, name='fetch_wikipedia'),
     path('watchlist/', views.watchlist, name='watchlist'),
+    path('ajax/calendar/movies/', views.calendar_movies, name='calendar_movies'),
+    path('ajax/calendar/series/', views.calendar_series, name='calendar_series'),
+    path('ajax/extract-video/', views.extract_video_url, name='extract_video_url'),
 ]

@@ -11,6 +11,8 @@ class SiteSettingsForm(forms.ModelForm):
             'card_size',
             'title_size',
             'text_size',
+            'theme_style',
+            'font_family',
             'enable_sidebar_ads',
             'sidebar_ads_code',
             'brand_name',
@@ -23,12 +25,16 @@ class SiteSettingsForm(forms.ModelForm):
             'email_port',
             'email_host_user',
             'email_host_password',
-            'email_use_tls'
+            'email_use_tls',
+            'curated_top_movie_ids',
+            'curated_top_series_ids'
         ]
         widgets = {
             'sidebar_ads_code': forms.Textarea(attrs={'rows': 10, 'cols': 80}),
             'blocked_urls': forms.Textarea(attrs={'rows': 6, 'cols': 80}),
-            'email_host_password': forms.PasswordInput(render_value=True)
+            'email_host_password': forms.PasswordInput(render_value=True),
+            'curated_top_movie_ids': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'placeholder': 'Comma-separated TMDB IDs, e.g., 123,456,789,987,654'}),
+            'curated_top_series_ids': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'placeholder': 'Comma-separated TMDB IDs, e.g., 123,456,789,987,654'}),
         }
 
 
@@ -46,6 +52,7 @@ class ContentRowForm(forms.ModelForm):
             'filter_params',
             'items_per_page',
             'is_active',
+            'auto_scroll',
             'order'
         ]
         widgets = {

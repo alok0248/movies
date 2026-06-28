@@ -14,6 +14,8 @@
                 <p><strong>Title Size:</strong> {{ site_settings.get_title_size_display }}</p>
                 <p><strong>Text Size:</strong> {{ site_settings.get_text_size_display }}</p>
                 <p><strong>Sidebar Ads:</strong> {% if site_settings.enable_sidebar_ads %}Enabled{% else %}Disabled{% endif %}</p>
+                <p><strong>Curated Top Movies:</strong> {% if site_settings.curated_top_movie_ids %}{{ site_settings.curated_top_movie_ids }}{% else %}Using TMDB Top Rated{% endif %}</p>
+                <p><strong>Curated Top Series:</strong> {% if site_settings.curated_top_series_ids %}{{ site_settings.curated_top_series_ids }}{% else %}Using TMDB Top Rated{% endif %}</p>
                 <a href="{% url 'edit_settings' %}" class="btn btn-primary">Edit All Settings</a>
             </div>
         </div>
@@ -37,7 +39,7 @@
                         <a href="{% url 'content_row_list' %}" class="text-decoration-none">📋 Content Rows (Homepage)</a>
                     </li>
                     <li class="list-group-item bg-transparent">
-                        <a href="{% url 'edit_settings' %}" class="text-decoration-none">⚙️ Edit Site Settings</a>
+                        <a href="{% url 'edit_settings' %}" class="text-decoration-none">⚙️ Edit Site Settings (includes Top Movies/Series)</a>
                     </li>
                     <li class="list-group-item bg-transparent">
                         <a href="/admin/" class="text-decoration-none">🛠️ Django Admin Panel (to populate data)</a>

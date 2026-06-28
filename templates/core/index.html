@@ -25,9 +25,31 @@
 {% endwith %}
 {% endif %}
 
+{% if top_movies %}
+<h2 class="section-title">Top Movies</h2>
+<div class="row-container" data-auto-scroll="true">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="top-movies-scroll">
+        {% include 'core/_movie_cards.html' with movies=top_movies %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endif %}
+
+{% if top_series %}
+<h2 class="section-title">Top Series</h2>
+<div class="row-container" data-auto-scroll="true">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="top-series-scroll">
+        {% include 'core/_series_cards.html' with series=top_series %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endif %}
+
 {% for row_data in movie_rows %}
 <h2 class="section-title">{{ row_data.row.title }}</h2>
-<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}">
+<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}" data-auto-scroll="{{ row_data.row.auto_scroll|yesno:"true,false" }}">
     <button class="scroll-btn left">&lsaquo;</button>
     <div class="scroll-container" id="movie-row-{{ row_data.row.id }}">
         {% include 'core/_movie_cards.html' with movies=row_data.items %}
@@ -38,7 +60,7 @@
 
 {% for row_data in series_rows %}
 <h2 class="section-title">{{ row_data.row.title }}</h2>
-<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}">
+<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}" data-auto-scroll="{{ row_data.row.auto_scroll|yesno:"true,false" }}">
     <button class="scroll-btn left">&lsaquo;</button>
     <div class="scroll-container" id="series-row-{{ row_data.row.id }}">
         {% include 'core/_series_cards.html' with series=row_data.items %}
@@ -48,6 +70,8 @@
 {% endfor %}
 
 <script>
+let autoScrollIntervals = [];
+
 document.addEventListener('DOMContentLoaded', () => {
     // Track scroll position and load more when reaching end of row
     const rowContainers = document.querySelectorAll('.row-container');
@@ -65,12 +89,45 @@ document.addEventListener('DOMContentLoaded', () => {
             const clientWidth = scrollContainer.clientWidth;
             
             // Load more when scrolled to 80% of content
-            if (scrollLeft + clientWidth >= scrollWidth * 0.8 && !isLoading && currentPage < totalPages) {
+            if (rowId && scrollLeft + clientWidth >= scrollWidth * 0.8 && !isLoading && currentPage < totalPages) {
                 loadMoreContent(container, rowId, currentPage + 1);
                 currentPage++;
                 container.dataset.currentPage = currentPage;
             }
         });
+
+        // Auto-scroll for this row if enabled
+        if (container.dataset.autoScroll === 'true') {
+            let scrollDirection = 1;
+            let scrollSpeed = 1;
+            
+            const autoScroll = () => {
+                const scrollLeft = scrollContainer.scrollLeft;
+                const scrollWidth = scrollContainer.scrollWidth;
+                const clientWidth = scrollContainer.clientWidth;
+                
+                if (scrollLeft >= scrollWidth - clientWidth - 10) {
+                    scrollDirection = -1;
+                } else if (scrollLeft <= 10) {
+                    scrollDirection = 1;
+                }
+                
+                scrollContainer.scrollLeft += scrollDirection * scrollSpeed;
+            };
+            
+            const intervalId = setInterval(autoScroll, 50);
+            autoScrollIntervals.push(intervalId);
+            
+            // Pause auto-scroll on hover
+            container.addEventListener('mouseenter', () => {
+                clearInterval(intervalId);
+            });
+            
+            container.addEventListener('mouseleave', () => {
+                const newIntervalId = setInterval(autoScroll, 50);
+                autoScrollIntervals.push(newIntervalId);
+            });
+        }
     });
 });
 
@@ -97,7 +154,7 @@ function loadMoreContent(container, rowId, page) {
         }
         
         // Update total pages
-        container.dataset.totalPages = data.total_pages;
+        container.dataset.totalPages = data.totalPages;
         
         // Re-initialize scroll buttons
         initScrollButtons();

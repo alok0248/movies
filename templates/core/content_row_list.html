@@ -20,6 +20,7 @@
                     <th>Region</th>
                     <th>Language</th>
                     <th>Active</th>
+                    <th>Auto-Scroll</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -36,6 +37,13 @@
                     <td>
                         {% if row.is_active %}
                             <span class="badge bg-success">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.auto_scroll %}
+                            <span class="badge bg-primary">Yes</span>
                         {% else %}
                             <span class="badge bg-secondary">No</span>
                         {% endif %}

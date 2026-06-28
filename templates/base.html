@@ -8,7 +8,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
-            --brand-color: {{ site_settings.brand_color }};
+            --brand-color: {{ theme_primary }};
+            --bg-color: {{ theme_bg }};
+            --bg-secondary: {{ theme_bg_secondary }};
         }
 
         * {
@@ -18,9 +20,9 @@
         }
 
         body {
-            background-color: #141414;
+            background-color: var(--bg-color);
             color: #ffffff;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-family: {{ font_family }};
         }
 
         .navbar {
@@ -35,7 +37,7 @@
         }
 
         .navbar.scrolled {
-            background-color: #141414;
+            background-color: var(--bg-color);
         }
 
         .navbar-brand {
@@ -125,7 +127,7 @@
         }
 
         .netflix-card {
-            background-color: #141414;
+            background-color: var(--bg-secondary);
             border-radius: 4px;
             overflow: hidden;
             cursor: pointer;
@@ -1037,6 +1039,12 @@
                         </ul>
                     </li>
                 </ul>
+                <button class="nav-link me-3" style="background: transparent; border: none; cursor: pointer; color: white;" id="navCalendarBtn" onclick="openCalendarModal()">
+                    <i class="fas fa-calendar-alt"></i> Calendar
+                </button>
+                <a href="{% url 'upcoming' %}" class="nav-link me-3" style="background: transparent; border: none; cursor: pointer; color: white; text-decoration: none;">
+                    <i class="fas fa-rocket"></i> Upcoming
+                </a>
                 <form class="d-flex gap-2 me-3" method="GET" action="{% url 'search' %}">
                     <input class="form-control search-input" type="search" name="q" placeholder="Search..." aria-label="Search">
                     <button class="btn btn-primary" type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg></button>
@@ -1092,6 +1100,58 @@
         <div class="modal-content">
             <p id="modalPlot" style="font-size: 1.125rem; line-height: 1.6; color: #ffffff;"></p>
             <div id="modalGenres" class="genre-tags"></div>
+        </div>
+    </div>
+
+    <!-- Calendar Modal -->
+    <div id="calendarModalBackdrop" class="auth-modal-backdrop" onclick="closeCalendarModal(event)">
+        <div id="calendarModal" class="auth-modal" onclick="event.stopPropagation()" style="max-width: 450px; width: 90%;">
+            <button class="auth-modal-close" onclick="closeCalendarModal()">&times;</button>
+            <h2 class="auth-form-title mb-3" style="font-size: 1.25rem;">📅 Release Calendar</h2>
+            
+            <!-- Calendar Navigation -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button class="btn btn-outline-light btn-sm" onclick="navigateMonth(-1)">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="currentMonthYear" class="text-white fw-bold" style="font-size: 1rem;"></div>
+                <button class="btn btn-outline-light btn-sm" onclick="navigateMonth(1)">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            
+            <!-- Calendar Grid -->
+            <div class="mb-2">
+                <!-- Days of Week Header -->
+                <div class="d-flex justify-content-around mb-1 text-white-50 fw-bold" style="font-size: 0.75rem;">
+                    <div class="text-center" style="width: 14%;">Sun</div>
+                    <div class="text-center" style="width: 14%;">Mon</div>
+                    <div class="text-center" style="width: 14%;">Tue</div>
+                    <div class="text-center" style="width: 14%;">Wed</div>
+                    <div class="text-center" style="width: 14%;">Thu</div>
+                    <div class="text-center" style="width: 14%;">Fri</div>
+                    <div class="text-center" style="width: 14%;">Sat</div>
+                </div>
+                
+                <!-- Calendar Days Grid -->
+                <div id="calendarGrid" class="d-flex flex-wrap"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Calendar Hover Popup -->
+    <div id="calendarDatePopup" style="display: none; position: fixed; background: #1f1f1f; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 12px; max-width: 300px; z-index: 10000; box-shadow: 0 4px 20px rgba(0,0,0,0.7);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
+            <div id="popupDateTitle" style="font-weight: bold; color: white;"></div>
+            <button onclick="hidePopup()" style="background: transparent; border: none; color: #b3b3b3; font-size: 1.25rem; cursor: pointer; padding: 0;">×</button>
+        </div>
+        <div id="popupMovies" style="margin-bottom: 8px; display: none;">
+            <div style="color: #b3b3b3; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;"><i class="fas fa-film"></i> Movies</div>
+            <ul id="popupMoviesList" style="list-style: none; margin: 0; padding: 0; font-size: 0.85rem;"></ul>
+        </div>
+        <div id="popupSeries" style="display: none;">
+            <div style="color: #b3b3b3; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;"><i class="fas fa-tv"></i> TV Shows</div>
+            <ul id="popupSeriesList" style="list-style: none; margin: 0; padding: 0; font-size: 0.85rem;"></ul>
         </div>
     </div>
 
@@ -1217,7 +1277,409 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', initScrollButtons);
+        document.addEventListener('DOMContentLoaded', () => {
+            initScrollButtons();
+            
+            // Calendar button click
+            document.getElementById('navCalendarBtn').addEventListener('click', openCalendarModal);
+        });
+
+        // Calendar Modal Functions
+        let currentCalendarDate = new Date();
+        let monthlyMovies = {}; // key: YYYY-MM-DD, value: array of movies
+        let monthlySeries = {}; // key: YYYY-MM-DD, value: array of series
+        let selectedDate = null;
+        let isPopupFixed = false;
+        const TMDB_IMAGE_BASE_URL = '{{ settings.TMDB_IMAGE_BASE_URL }}';
+
+        function openCalendarModal() {
+            const backdrop = document.getElementById('calendarModalBackdrop');
+            const modal = document.getElementById('calendarModal');
+            
+            backdrop.classList.add('active');
+            setTimeout(() => modal.classList.add('active'), 10);
+            document.body.style.overflow = 'hidden';
+            
+            // Load initial data
+            loadMonthlyData();
+            renderCalendarGrid();
+            
+            // Add click listener to hide popup when clicking outside
+            document.addEventListener('click', handleDocumentClick);
+        }
+
+        function closeCalendarModal(event) {
+            if (event && event.target !== document.getElementById('calendarModalBackdrop')) return;
+            
+            const backdrop = document.getElementById('calendarModalBackdrop');
+            const modal = document.getElementById('calendarModal');
+            
+            modal.classList.remove('active');
+            setTimeout(() => {
+                backdrop.classList.remove('active');
+                document.body.style.overflow = 'auto';
+                monthlyMovies = {};
+                monthlySeries = {};
+                selectedDate = null;
+                isPopupFixed = false;
+                hidePopup();
+                // Remove click listener
+                document.removeEventListener('click', handleDocumentClick);
+            }, 300);
+        }
+
+        function handleDocumentClick(event) {
+            if (!isPopupFixed) return;
+            
+            const popup = document.getElementById('calendarDatePopup');
+            const cells = document.querySelectorAll('.calendar-day-cell');
+            const clickedOnCell = Array.from(cells).some(cell => cell.contains(event.target));
+            const clickedOnPopup = popup.contains(event.target);
+            
+            if (!clickedOnCell && !clickedOnPopup) {
+                isPopupFixed = false;
+                hidePopup();
+                // Clear selection
+                selectedDate = null;
+                document.querySelectorAll('.calendar-day-cell').forEach(cell => {
+                    cell.style.background = 'transparent';
+                });
+            }
+        }
+
+        function formatDateForAPI(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDateForDisplay(date) {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function formatMonthYear(date) {
+            const options = { year: 'numeric', month: 'long' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function navigateMonth(direction) {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+            monthlyMovies = {};
+            monthlySeries = {};
+            selectedDate = null;
+            const detailsEl = document.getElementById('selectedDateDetails');
+            if (detailsEl) {
+                detailsEl.style.display = 'none';
+            }
+            loadMonthlyData();
+            renderCalendarGrid();
+        }
+
+        async function loadMonthlyData() {
+            const year = currentCalendarDate.getFullYear();
+            const month = String(currentCalendarDate.getMonth() + 1).padStart(2, '0');
+            const firstDay = `${year}-${month}-01`;
+            const lastDay = `${year}-${month}-${new Date(year, currentCalendarDate.getMonth() + 1, 0).getDate()}`;
+
+            try {
+                // Fetch movies for the month
+                const moviesResponse = await fetch(`/ajax/calendar/movies?start=${firstDay}&end=${lastDay}`);
+                const moviesData = await moviesResponse.json();
+                console.log('Loaded movies:', moviesData);
+                
+                // Organize movies by release date and de-duplicate
+                moviesData.forEach(movie => {
+                    const dateKey = movie.release_date;
+                    if (dateKey) { // Make sure dateKey exists!
+                        if (!monthlyMovies[dateKey]) {
+                            monthlyMovies[dateKey] = [];
+                        }
+                        // Check if movie already exists (by id) before adding
+                        if (!monthlyMovies[dateKey].find(m => m.id === movie.id)) {
+                            monthlyMovies[dateKey].push(movie);
+                        }
+                    }
+                });
+                
+                // Fetch TV shows for the month
+                const seriesResponse = await fetch(`/ajax/calendar/series?start=${firstDay}&end=${lastDay}`);
+                const seriesData = await seriesResponse.json();
+                console.log('Loaded series:', seriesData);
+                
+                // Organize series by air date and de-duplicate
+                seriesData.forEach(show => {
+                    const dateKey = show.first_air_date;
+                    if (dateKey) { // Make sure dateKey exists!
+                        if (!monthlySeries[dateKey]) {
+                            monthlySeries[dateKey] = [];
+                        }
+                        // Check if show already exists (by id) before adding
+                        if (!monthlySeries[dateKey].find(s => s.id === show.id)) {
+                            monthlySeries[dateKey].push(show);
+                        }
+                    }
+                });
+
+                // Update month/year display
+                document.getElementById('currentMonthYear').textContent = formatMonthYear(currentCalendarDate);
+                renderCalendarGrid();
+            } catch (error) {
+                console.error('Error loading monthly data:', error);
+            }
+        }
+
+        function renderCalendarGrid() {
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
+
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Add empty cells for days before first day of month
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.style.width = '14%';
+                emptyCell.style.height = '45px';
+                grid.appendChild(emptyCell);
+            }
+
+            // Add cells for each day of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const cell = document.createElement('div');
+                cell.style.width = '14%';
+                cell.style.height = '45px';
+                cell.style.border = '1px solid rgba(255,255,255,0.1)';
+                cell.style.borderRadius = '8px';
+                cell.style.padding = '8px';
+                cell.style.overflow = 'hidden';
+                cell.style.cursor = 'pointer';
+                cell.className = 'calendar-day-cell';
+                cell.dataset.date = dateKey;
+                cell.style.transition = 'background 0.2s';
+                cell.style.display = 'flex';
+                cell.style.flexDirection = 'column';
+                cell.style.justifyContent = 'center';
+                cell.style.alignItems = 'center';
+                
+                // Check if this day has releases
+                const hasMovies = monthlyMovies[dateKey]?.length > 0;
+                const hasSeries = monthlySeries[dateKey]?.length > 0;
+                const hasData = hasMovies || hasSeries;
+                
+                // Highlight if it's selected
+                if (selectedDate === dateKey) {
+                    cell.style.background = 'rgba(255,255,255,0.2)';
+                }
+                
+                // Show indicator if there are releases
+                let indicator = '';
+                if (hasMovies && hasSeries) {
+                    indicator = '<div style="display:flex;gap:4px;margin-top:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#e50914;"></div><div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div></div>';
+                } else if (hasMovies) {
+                    indicator = '<div style="width:8px;height:8px;border-radius:50%;background:#e50914;margin-top:4px;"></div>';
+                } else if (hasSeries) {
+                    indicator = '<div style="width:8px;height:8px;border-radius:50%;background:#22c55e;margin-top:4px;"></div>';
+                }
+                
+                cell.innerHTML = `<div style="color: white; font-weight: bold;">${day}</div>${indicator}`;
+                
+                // Add handlers
+                cell.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectDate(dateKey, cell, e);
+                });
+                if (hasData) {
+                    cell.addEventListener('mousemove', (e) => {
+                        if (!isPopupFixed) {
+                            showPopup(e, dateKey, false);
+                        }
+                    });
+                    cell.addEventListener('mouseenter', (e) => {
+                        if (!isPopupFixed) {
+                            showPopup(e, dateKey, false);
+                        }
+                    });
+                    cell.addEventListener('mouseleave', () => {
+                        if (!isPopupFixed) {
+                            hidePopup();
+                        }
+                    });
+                }
+                
+                grid.appendChild(cell);
+            }
+        }
+
+        function showPopup(event, dateKey, fixed = false) {
+            const popup = document.getElementById('calendarDatePopup');
+            const dateTitle = document.getElementById('popupDateTitle');
+            const popupMoviesDiv = document.getElementById('popupMovies');
+            const popupMoviesList = document.getElementById('popupMoviesList');
+            const popupSeriesDiv = document.getElementById('popupSeries');
+            const popupSeriesList = document.getElementById('popupSeriesList');
+            
+            // Set date title
+            const dateObj = new Date(dateKey);
+            dateTitle.textContent = formatDateForDisplay(dateObj);
+            
+            // Handle movies
+            const movies = monthlyMovies[dateKey] || [];
+            if (movies.length === 0) {
+                popupMoviesDiv.style.display = 'none';
+            } else {
+                popupMoviesDiv.style.display = 'block';
+                popupMoviesList.innerHTML = '';
+                movies.forEach(movie => {
+                    const li = document.createElement('li');
+                    li.style.marginBottom = '4px';
+                    li.innerHTML = `<a href="/movies/id/${movie.id}/" style="color: white; text-decoration: none;">• ${movie.title}</a>`;
+                    popupMoviesList.appendChild(li);
+                });
+            }
+            
+            // Handle series
+            const series = monthlySeries[dateKey] || [];
+            if (series.length === 0) {
+                popupSeriesDiv.style.display = 'none';
+            } else {
+                popupSeriesDiv.style.display = 'block';
+                popupSeriesList.innerHTML = '';
+                series.forEach(show => {
+                    const title = show.name || show.title || 'Unknown Title';
+                    const li = document.createElement('li');
+                    li.style.marginBottom = '4px';
+                    li.innerHTML = `<a href="/series/id/${show.id}/" style="color: white; text-decoration: none;">• ${title}</a>`;
+                    popupSeriesList.appendChild(li);
+                });
+            }
+            
+            // Position popup
+            popup.style.display = 'block';
+            if (fixed) {
+                // Fixed position
+                const rect = event.target.closest('.calendar-day-cell').getBoundingClientRect();
+                popup.style.left = `${rect.right + 10}px`;
+                popup.style.top = `${rect.top}px`;
+            } else {
+                // Follow cursor
+                popup.style.left = `${event.pageX + 10}px`;
+                popup.style.top = `${event.pageY + 10}px`;
+            }
+        }
+
+        function hidePopup() {
+            const popup = document.getElementById('calendarDatePopup');
+            popup.style.display = 'none';
+        }
+
+        function selectDate(dateKey, cellElement, event) {
+            // Remove previous selection highlight
+            document.querySelectorAll('.calendar-day-cell').forEach(cell => {
+                if (cell.dataset.date === selectedDate) {
+                    cell.style.background = 'transparent';
+                }
+            });
+            
+            // Set new selection
+            selectedDate = dateKey;
+            cellElement.style.background = 'rgba(255,255,255,0.2)';
+            isPopupFixed = true;
+            
+            // Show fixed popup
+            showPopup(event, dateKey, true);
+        }
+
+        function createMovieCard(movie) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'card-wrapper';
+            
+            const slug = movie.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `movie-${movie.id}`;
+            
+            let posterUrl = '';
+            if (movie.poster_path) {
+                posterUrl = `${TMDB_IMAGE_BASE_URL}${movie.poster_path}`;
+            } else {
+                posterUrl = 'https://via.placeholder.com/220x330?text=No+Poster';
+            }
+            
+            wrapper.innerHTML = `
+                <div class="movie-card">
+                    <div class="card-image-container">
+                        <a href="/movie/${slug}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                        <img src="${posterUrl}" class="card-image" alt="${movie.title}" loading="lazy">
+                        ${movie.vote_average ? `<div class="rating-badge">★ ${movie.vote_average.toFixed(1)}</div>` : ''}
+                        <div class="card-hover-overlay">
+                            <div class="hover-content">
+                                ${movie.overview ? `<p class="hover-description">${movie.overview.substring(0, 100)}...</p>` : ''}
+                                <div class="hover-actions">
+                                    <button class="hover-play-btn" onclick="window.location.href='/movie/${slug}'">▶ Play</button>
+                                    <button class="hover-watchlist-btn" data-tmdb-id="${movie.id}" data-media-type="movie" data-title="${movie.title.replace(/"/g, '&quot;')}" data-poster-path="${movie.poster_path || ''}">
+                                        <span class="watchlist-icon">+</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-info">
+                        <a href="/movie/${slug}" style="text-decoration: none; color: inherit;">
+                            <h5 class="card-title">${movie.title}</h5>
+                            <p class="card-year">${movie.release_date ? movie.release_date.substring(0, 4) : ''}</p>
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            return wrapper;
+        }
+
+        function createSeriesCard(show) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'card-wrapper';
+            
+            const title = show.name || show.title || 'Unknown Title';
+            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `series-${show.id}`;
+            
+            let posterUrl = '';
+            if (show.poster_path) {
+                posterUrl = `${TMDB_IMAGE_BASE_URL}${show.poster_path}`;
+            } else {
+                posterUrl = 'https://via.placeholder.com/220x330?text=No+Poster';
+            }
+            
+            wrapper.innerHTML = `
+                <div class="movie-card">
+                    <div class="card-image-container">
+                        <a href="/series/${slug}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                        <img src="${posterUrl}" class="card-image" alt="${title}" loading="lazy">
+                        ${show.vote_average ? `<div class="rating-badge">★ ${show.vote_average.toFixed(1)}</div>` : ''}
+                        <div class="card-hover-overlay">
+                            <div class="hover-content">
+                                ${show.overview ? `<p class="hover-description">${show.overview.substring(0, 100)}...</p>` : ''}
+                                <div class="hover-actions">
+                                    <button class="hover-play-btn" onclick="window.location.href='/series/${slug}'">▶ Play</button>
+                                    <button class="hover-watchlist-btn" data-tmdb-id="${show.id}" data-media-type="tv" data-title="${title.replace(/"/g, '&quot;')}" data-poster-path="${show.poster_path || ''}">
+                                        <span class="watchlist-icon">+</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-info">
+                        <a href="/series/${slug}" style="text-decoration: none; color: inherit;">
+                            <h5 class="card-title">${title}</h5>
+                            <p class="card-year">${show.first_air_date ? show.first_air_date.substring(0, 4) : ''}</p>
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            return wrapper;
+        }
 
         // Modal functions
         function openModal(data) {
