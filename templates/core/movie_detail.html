@@ -136,14 +136,17 @@
                 </div>
                 {% endif %}
                 {% endwith %}
-                <div class="d-flex gap-3">
+                <div class="d-flex gap-3 align-items-center">
+                    {% if all_players %}
                     <button id="play-button" class="btn btn-primary btn-lg">
                         <i class="fas fa-play me-2"></i> Play Now
                     </button>
-                    <button id="watchlist-btn" class="btn btn-outline-light btn-lg" 
-                            data-tmdb-id="{{ movie.id }}" 
-                            data-media-type="movie" 
-                            onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
+                    {% else %}
+                    <button id="play-button" class="btn btn-secondary btn-lg" disabled>
+                        <i class="fas fa-play me-2"></i> No Player Available
+                    </button>
+                    {% endif %}
+                    <button id="watchlist-btn" class="btn btn-outline-light btn-lg" data-tmdb-id="{{ movie.id }}" data-media-type="movie" onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
                         <i class="fas fa-bookmark me-2"></i><span class="watchlist-btn-text"> My List</span>
                     </button>
                     <button id="wikipedia-btn" class="btn btn-outline-light btn-lg">
@@ -245,32 +248,111 @@
 </div>
 
 <script>
-// Function to build Vidking URL
-function getVidkingUrl(movieId) {
-    return `https://www.vidking.net/embed/movie/${movieId}?color=5865f2&autoPlay=true&nextEpisode=true&episodeSelector=true`;
-}
+// Player configurations data
+const playerConfigs = {
+    {% for player in all_players %}
+    {{ player.id }}: {
+        name: "{{ player.name|escapejs }}",
+        color: "{{ player.player_color|default:''|escapejs }}",
+        autoPlay: {% if player.auto_play %}true{% else %}false{% endif %},
+        nextEpisode: {% if player.next_episode %}true{% else %}false{% endif %},
+        episodeSelector: {% if player.episode_selector %}true{% else %}false{% endif %},
+        width: "{{ player.player_width|default:'100%' }}",
+        height: "{{ player.player_height|default:'600px' }}",
+        frameborder: {{ player.frameborder|default:0 }},
+        allowfullscreen: {% if player.allowfullscreen %}true{% else %}false{% endif %},
+        customIframeUrl: "{{ player.custom_iframe_url|default:''|escapejs }}"
+    },
+    {% endfor %}
+};
 
-const movieId = "{{ movie.id }}";
+const movieId = "{{ movie_id }}";
 const movieTitle = "{{ movie.title|escapejs }}";
 const movieYear = "{{ movie.year|escapejs }}";
 let popupWindow = null;
 let playerLoaded = false;
 let wikipediaLoaded = false;
+let currentPlayerId = {% if active_player %}{{ active_player.id }}{% elif all_players %}{{ all_players.0.id }}{% else %}null{% endif %};
+
+// Function to build player URL based on config
+function getPlayerUrl(playerConfig, mediaType, mediaId, season, episode) {
+    // If custom iframe URL is set, use that with placeholders
+    if (playerConfig.customIframeUrl) {
+        let url = playerConfig.customIframeUrl;
+        url = url.replace('{tmdb_id}', mediaId);
+        if (season) {
+            url = url.replace('{season}', season);
+        }
+        if (episode) {
+            url = url.replace('{episode}', episode);
+        }
+        console.log('Custom Player URL:', url);
+        return url;
+    }
+    
+    // Otherwise use Vidking player
+    let baseUrl;
+    if (mediaType === 'movie') {
+        baseUrl = `https://www.vidking.net/embed/movie/${mediaId}`;
+    } else {
+        baseUrl = `https://www.vidking.net/embed/tv/${mediaId}/${season}/${episode}`;
+    }
+    
+    let params = [];
+    if (playerConfig.color) {
+        // Remove # from color if present
+        let cleanColor = playerConfig.color.replace('#', '');
+        params.push(`color=${cleanColor}`);
+    }
+    if (playerConfig.autoPlay) {
+        params.push('autoPlay=true');
+    }
+    if (playerConfig.nextEpisode && mediaType === 'tv') {
+        params.push('nextEpisode=true');
+    }
+    if (playerConfig.episodeSelector && mediaType === 'tv') {
+        params.push('episodeSelector=true');
+    }
+    
+    if (params.length > 0) {
+        baseUrl += '?' + params.join('&');
+    }
+    console.log('Generated Player URL:', baseUrl);
+    return baseUrl;
+}
 
 document.getElementById('play-button').addEventListener('click', function() {
     const playerSection = document.getElementById('player-section');
     const moviePlayer = document.getElementById('moviePlayer');
     
-    playerSection.style.display = 'block';
-    playerSection.scrollIntoView({ behavior: 'smooth' });
-    
-    if (!playerLoaded) {
-        moviePlayer.src = getVidkingUrl(movieId);
-        playerLoaded = true;
+    const playerConfig = playerConfigs[currentPlayerId];
+    if (!playerConfig) {
+        return;
     }
+    
+    // Apply player size
+    const playerContainer = document.getElementById('playerContainer');
+    playerContainer.style.width = playerConfig.width;
+    playerContainer.style.height = playerConfig.height;
+    
+    // Set iframe attributes
+    moviePlayer.frameBorder = playerConfig.frameborder;
+    moviePlayer.allowFullscreen = playerConfig.allowfullscreen;
+    
+    playerSection.style.display = 'block';
+    playerSection.scrollIntoView({ behavior: 'instant', block: 'start' });
+    
+    // Always reload player on play button click
+    moviePlayer.src = getPlayerUrl(playerConfig, 'movie', movieId);
+    playerLoaded = true;
 });
 
 document.getElementById('popoutBtn').addEventListener('click', function() {
+    const playerConfig = playerConfigs[currentPlayerId];
+    if (!playerConfig) {
+        return;
+    }
+    
     if (popupWindow && !popupWindow.closed) {
         popupWindow.focus();
         return;
@@ -282,7 +364,7 @@ document.getElementById('popoutBtn').addEventListener('click', function() {
     const top = Math.max(0, (window.screen.height - height) / 2);
     
     popupWindow = window.open(
-        getVidkingUrl(movieId),
+        getPlayerUrl(playerConfig, 'movie', movieId),
         'MoviePlayer',
         `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
     );

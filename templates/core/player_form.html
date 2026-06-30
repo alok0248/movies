@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">{{ action }} Player Configuration</h1>
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{% url 'player_list' %}" class="btn btn-secondary">&larr; Back to Players</a>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ form.name.label_tag }}
+                            {{ form.name }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.media_type.label_tag }}
+                            {{ form.media_type }}
+                        </div>
+                        <div class="mb-3 form-check">
+                            {{ form.is_active }}
+                            {{ form.is_active.label_tag }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.order.label_tag }}
+                            {{ form.order }}
+                        </div>
+                        
+                        <h4 class="mt-4 mb-3">Vidking Player Options</h4>
+                        <div class="mb-3">
+                            {{ form.player_color.label_tag }}
+                            {{ form.player_color }}
+                        </div>
+                        <div class="mb-3 form-check">
+                            {{ form.auto_play }}
+                            {{ form.auto_play.label_tag }}
+                        </div>
+                        <div class="mb-3 form-check">
+                            {{ form.next_episode }}
+                            {{ form.next_episode.label_tag }} (TV only)
+                        </div>
+                        <div class="mb-3 form-check">
+                            {{ form.episode_selector }}
+                            {{ form.episode_selector.label_tag }} (TV only)
+                        </div>
+                        
+                        <h4 class="mt-4 mb-3">Player Size & Iframe Options</h4>
+                        <div class="mb-3">
+                            {{ form.player_width.label_tag }}
+                            {{ form.player_width }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.player_height.label_tag }}
+                            {{ form.player_height }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.frameborder.label_tag }}
+                            {{ form.frameborder }}
+                        </div>
+                        <div class="mb-3 form-check">
+                            {{ form.allowfullscreen }}
+                            {{ form.allowfullscreen.label_tag }}
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary mt-3">Save</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

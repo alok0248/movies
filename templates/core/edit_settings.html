@@ -1,13 +1,288 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1>Edit Site Settings</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="btn btn-primary">Save Settings</button>
-        <a href="{% url 'admin_dashboard' %}" class="btn btn-secondary">Cancel</a>
-    </form>
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light btn-sm me-3">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+                <h1 class="mb-0">Site Settings</h1>
+            </div>
+
+            <form method="post" class="needs-validation" novalidate>
+                {% csrf_token %}
+
+                <!-- Branding Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-palette me-2"></i> Branding</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.brand_name.id_for_label }}" class="form-label fw-medium">Brand Name</label>
+                                {{ form.brand_name }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.brand_color.id_for_label }}" class="form-label fw-medium">Brand Color</label>
+                                <div class="input-group">
+                                    {{ form.brand_color }}
+                                    <span class="input-group-text bg-secondary border-0" id="brand-color-preview" style="width: 50px;"></span>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.brand_tagline.id_for_label }}" class="form-label fw-medium">Brand Tagline</label>
+                                {{ form.brand_tagline }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-tv me-2"></i> Display</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.items_per_row.id_for_label }}" class="form-label fw-medium">Items per Row</label>
+                                {{ form.items_per_row }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.card_size.id_for_label }}" class="form-label fw-medium">Card Size</label>
+                                {{ form.card_size }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.title_size.id_for_label }}" class="form-label fw-medium">Title Size</label>
+                                {{ form.title_size }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.text_size.id_for_label }}" class="form-label fw-medium">Text Size</label>
+                                {{ form.text_size }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.theme_style.id_for_label }}" class="form-label fw-medium">Theme Style</label>
+                                {{ form.theme_style }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.font_family.id_for_label }}" class="form-label fw-medium">Font Family</label>
+                                {{ form.font_family }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Source Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-database me-2"></i> Data Source</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="{{ form.data_source.id_for_label }}" class="form-label fw-medium">Data Source</label>
+                                {{ form.data_source }}
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.curated_top_movie_ids.id_for_label }}" class="form-label fw-medium">Curated Top Movie IDs (Optional)</label>
+                                {{ form.curated_top_movie_ids }}
+                                <small class="text-muted">Comma-separated TMDB IDs, e.g., 123,456,789</small>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.curated_top_series_ids.id_for_label }}" class="form-label fw-medium">Curated Top Series IDs (Optional)</label>
+                                {{ form.curated_top_series_ids }}
+                                <small class="text-muted">Comma-separated TMDB IDs, e.g., 123,456,789</small>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.watch_region.id_for_label }}" class="form-label fw-medium">Watch Region</label>
+                                {{ form.watch_region }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Player Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-play-circle me-2"></i> Player</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.active_movie_player.id_for_label }}" class="form-label fw-medium">Active Movie Player</label>
+                                {{ form.active_movie_player }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.active_tv_player.id_for_label }}" class="form-label fw-medium">Active TV Player</label>
+                                {{ form.active_tv_player }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ads Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-ad me-2"></i> Ads</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.enable_sidebar_ads }}
+                                    <label class="form-check-label" for="{{ form.enable_sidebar_ads.id_for_label }}">Enable Sidebar Ads</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.sidebar_ads_code.id_for_label }}" class="form-label fw-medium">Sidebar Ads Code</label>
+                                {{ form.sidebar_ads_code }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- URL Blocking Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-shield-alt me-2"></i> URL Blocking</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.enable_url_blocking }}
+                                    <label class="form-check-label" for="{{ form.enable_url_blocking.id_for_label }}">Enable URL Blocking</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.blocked_urls.id_for_label }}" class="form-label fw-medium">Blocked URLs</label>
+                                {{ form.blocked_urls }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.redirect_url.id_for_label }}" class="form-label fw-medium">Redirect URL</label>
+                                {{ form.redirect_url }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-envelope me-2"></i> Email</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_host.id_for_label }}" class="form-label fw-medium">Email Host</label>
+                                {{ form.email_host }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_port.id_for_label }}" class="form-label fw-medium">Email Port</label>
+                                {{ form.email_port }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_host_user.id_for_label }}" class="form-label fw-medium">Email Address</label>
+                                {{ form.email_host_user }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_host_password.id_for_label }}" class="form-label fw-medium">Email Password</label>
+                                {{ form.email_host_password }}
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.email_use_tls }}
+                                    <label class="form-check-label" for="{{ form.email_use_tls.id_for_label }}">Use TLS</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-3 justify-content-end">
+                    <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light px-4">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="fas fa-save me-2"></i> Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
+
+<style>
+    /* Custom form styling */
+    .form-control, .form-select, .form-control:focus, .form-select:focus {
+        background-color: #1a1a1a;
+        border-color: #444;
+        color: #ffffff;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.25);
+        border-color: #e50914;
+        color: #ffffff;
+    }
+
+    .form-label {
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .card-body {
+        background-color: #141414;
+    }
+    
+    .card-header h4 {
+        color: #ffffff;
+    }
+    
+    .text-muted {
+        color: #999999 !important;
+    }
+    
+    .form-check-label {
+        color: #ffffff;
+    }
+    
+    /* Style the color input to look better */
+    input[type="color"] {
+        height: 38px;
+        padding: 0;
+        cursor: pointer;
+        border: 1px solid #444;
+    }
+    
+    /* Custom tooltip styling */
+    [title] {
+        position: relative;
+    }
+    
+    /* Fix the form elements */
+    {{ form.media }}
+</style>
+
+<script>
+    // Initialize color preview
+    document.addEventListener('DOMContentLoaded', function() {
+        const colorInput = document.getElementById('{{ form.brand_color.id_for_label }}');
+        const colorPreview = document.getElementById('brand-color-preview');
+        
+        if (colorInput && colorPreview) {
+            // Set initial preview
+            colorPreview.style.backgroundColor = colorInput.value;
+            
+            // Update preview on change
+            colorInput.addEventListener('input', function() {
+                colorPreview.style.backgroundColor = colorInput.value;
+            });
+        }
+    });
+</script>
 {% endblock %}

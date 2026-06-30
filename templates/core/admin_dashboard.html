@@ -7,6 +7,21 @@
     <div class="col-md-6 mb-4">
         <div class="card h-100">
             <div class="card-body">
+                <h5 class="card-title">🎨 Branding Settings</h5>
+                <p><strong>Current Brand Name:</strong> {{ site_settings.brand_name }}</p>
+                <p><strong>Current Brand Color:</strong> <span style="background: {{ site_settings.brand_color }}; color: white; padding: 2px 8px; border-radius: 4px;">{{ site_settings.brand_color }}</span></p>
+                <div class="mb-3" style="padding: 20px; background: #141414; border-radius: 8px;">
+                    <p style="font-weight: bold; font-size: 2rem; color: {{ site_settings.brand_color }};">{{ site_settings.brand_name }}</p>
+                    <p style="color: #b3b3b3;">{{ site_settings.brand_tagline }}</p>
+                </div>
+                <a href="{% url 'edit_settings' %}" class="btn btn-primary">Edit Branding & All Settings</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
                 <h5 class="card-title">Current Status</h5>
                 <p><strong>Active Data Source:</strong> {{ site_settings.get_data_source_display }}</p>
                 <p><strong>Items per Row:</strong> {{ site_settings.get_items_per_row_display }}</p>
@@ -16,12 +31,11 @@
                 <p><strong>Sidebar Ads:</strong> {% if site_settings.enable_sidebar_ads %}Enabled{% else %}Disabled{% endif %}</p>
                 <p><strong>Curated Top Movies:</strong> {% if site_settings.curated_top_movie_ids %}{{ site_settings.curated_top_movie_ids }}{% else %}Using TMDB Top Rated{% endif %}</p>
                 <p><strong>Curated Top Series:</strong> {% if site_settings.curated_top_series_ids %}{{ site_settings.curated_top_series_ids }}{% else %}Using TMDB Top Rated{% endif %}</p>
-                <a href="{% url 'edit_settings' %}" class="btn btn-primary">Edit All Settings</a>
             </div>
         </div>
     </div>
 
-    <div class="col-md-6 mb-4">
+    <div class="col-md-12 mb-4">
         <div class="card h-100">
             <div class="card-body">
                 <h5 class="card-title">Quick Links</h5>
@@ -37,6 +51,9 @@
                     </li>
                     <li class="list-group-item bg-transparent">
                         <a href="{% url 'content_row_list' %}" class="text-decoration-none">📋 Content Rows (Homepage)</a>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <a href="{% url 'player_list' %}" class="text-decoration-none">🎮 Player Configurations</a>
                     </li>
                     <li class="list-group-item bg-transparent">
                         <a href="{% url 'edit_settings' %}" class="text-decoration-none">⚙️ Edit Site Settings (includes Top Movies/Series)</a>

@@ -15,10 +15,98 @@ from django.core.cache import cache
 import json
 import datetime
 import requests
+import calendar
 from bs4 import BeautifulSoup
-from .models import SiteSettings, ContentRow, WatchList
+from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration
 from .tmdb_client import get_data_client
-from .forms import SiteSettingsForm, ContentRowForm
+from .forms import SiteSettingsForm, ContentRowForm, PlayerConfigurationForm
+
+
+def get_calendar_month_data(year, month):
+    """Get movies and series for a specific month with caching"""
+    cache_key = f"calendar_{year}_{month}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+    
+    client = get_data_client()
+    
+    # Calculate date range for the month
+    first_day = datetime.date(year, month, 1)
+    if month == 12:
+        last_day = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
+    else:
+        last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+    
+    # Fetch movies released in this month
+    movies = []
+    try:
+        movie_params = {
+            'primary_release_date.gte': first_day.strftime('%Y-%m-%d'),
+            'primary_release_date.lte': last_day.strftime('%Y-%m-%d'),
+            'sort_by': 'primary_release_date.desc'
+        }
+        movie_data = client.discover_movies(movie_params)
+        for item in movie_data.get('results', []):
+            processed_item = item.copy()
+            processed_item['title'] = item.get('title', 'Unknown Title')
+            processed_slug = slugify(processed_item['title'])
+            if not processed_slug:
+                processed_slug = f"movie-{item.get('id', 'unknown')}"
+            processed_item['slug'] = processed_slug
+            processed_item['year'] = item.get('release_date', '')[:4] if item.get('release_date') else ''
+            processed_item['vote_average'] = item.get('vote_average', 0)
+            processed_item['cover_url'] = f"{settings.TMDB_IMAGE_BASE_URL}{item['poster_path']}" if item.get('poster_path') else None
+            processed_item['id'] = item.get('id')
+            processed_item['poster_path'] = item.get('poster_path')
+            processed_item['overview'] = item.get('overview', '')
+            processed_item['release_date'] = item.get('release_date')
+            processed_item['media_type'] = 'movie'
+            movies.append(processed_item)
+    except Exception as e:
+        print(f"Error fetching calendar movies: {e}")
+    
+    # Fetch series with episodes airing in this month
+    series = []
+    try:
+        # For series, we can check first_air_date or use discover with air_date
+        series_params = {
+            'air_date.gte': first_day.strftime('%Y-%m-%d'),
+            'air_date.lte': last_day.strftime('%Y-%m-%d'),
+            'sort_by': 'first_air_date.desc'
+        }
+        series_data = client.discover_series(series_params)
+        for item in series_data.get('results', []):
+            processed_item = item.copy()
+            processed_item['title'] = item.get('name', 'Unknown Title')
+            processed_slug = slugify(processed_item['title'])
+            if not processed_slug:
+                processed_slug = f"series-{item.get('id', 'unknown')}"
+            processed_item['slug'] = processed_slug
+            processed_item['vote_average'] = item.get('vote_average', 0)
+            processed_item['cover_url'] = f"{settings.TMDB_IMAGE_BASE_URL}{item['poster_path']}" if item.get('poster_path') else None
+            processed_item['id'] = item.get('id')
+            processed_item['poster_path'] = item.get('poster_path')
+            processed_item['overview'] = item.get('overview', '')
+            processed_item['first_air_date'] = item.get('first_air_date')
+            processed_item['media_type'] = 'tv'
+            series.append(processed_item)
+    except Exception as e:
+        print(f"Error fetching calendar series: {e}")
+    
+    calendar_data = {
+        'year': year,
+        'month': month,
+        'month_name': calendar.month_name[month],
+        'first_day': first_day.strftime('%Y-%m-%d'),
+        'last_day': last_day.strftime('%Y-%m-%d'),
+        'movies': movies,
+        'series': series
+    }
+    
+    # Cache for 24 hours
+    cache.set(cache_key, calendar_data, 86400)
+    return calendar_data
 
 
 def get_content_row_items(row, page=1):
@@ -120,11 +208,23 @@ def get_content_row_items(row, page=1):
     return result
 
 
+def calendar_month_data(request):
+    """AJAX endpoint to get calendar data for a specific month"""
+    year = int(request.GET.get('year', datetime.date.today().year))
+    month = int(request.GET.get('month', datetime.date.today().month))
+    calendar_data = get_calendar_month_data(year, month)
+    return JsonResponse(calendar_data)
+
+
 def index(request):
     # Get active ContentRows
     movie_rows = ContentRow.objects.filter(media_type='movie', is_active=True)
     series_rows = ContentRow.objects.filter(media_type='tv', is_active=True)
     site_settings = SiteSettings.get_settings()
+    
+    # Preload current month calendar data
+    today = datetime.date.today()
+    current_month_data = get_calendar_month_data(today.year, today.month)
 
     # Fetch initial items for each row
     movie_rows_data = []
@@ -275,6 +375,7 @@ def index(request):
         'series_rows': series_rows_data,
         'top_movies': top_movies,
         'top_series': top_series,
+        'current_month_data': current_month_data,
     })
 
 
@@ -592,13 +693,20 @@ def movie_detail_by_id(request, movie_id):
         # Cache for 1 hour
         cache.set(cache_key, (processed_movie, more_movies, watch_providers), 3600)
     
-    player_url = f"{settings.CODESPECTERS_BASE_URL}/movie/{movie_id}?apikey={settings.CODESPECTERS_API_KEY}"
+    # Get player configurations
+    active_player = site_settings.active_movie_player
+    all_players = PlayerConfiguration.objects.filter(
+        media_type__in=['movie', 'both'],
+        is_active=True
+    )
     return render(request, 'core/movie_detail.html', {
         'movie': processed_movie,
-        'player_url': player_url,
         'more_movies': more_movies,
         'watch_providers': watch_providers,
-        'watch_region': site_settings.watch_region or 'US'
+        'watch_region': site_settings.watch_region or 'US',
+        'active_player': active_player,
+        'all_players': all_players,
+        'movie_id': movie_id
     })
 
 def movie_detail(request, movie_slug):
@@ -685,13 +793,20 @@ def movie_detail(request, movie_slug):
         # Cache for 1 hour
         cache.set(cache_key, (processed_movie, more_movies, movie_id, watch_providers), 3600)
 
-    player_url = f"{settings.CODESPECTERS_BASE_URL}/movie/{movie_id}?apikey={settings.CODESPECTERS_API_KEY}"
+    # Get player configurations
+    active_player = site_settings.active_movie_player
+    all_players = PlayerConfiguration.objects.filter(
+        media_type__in=['movie', 'both'],
+        is_active=True
+    )
     return render(request, 'core/movie_detail.html', {
         'movie': processed_movie,
-        'player_url': player_url,
         'more_movies': more_movies,
         'watch_providers': watch_providers,
-        'watch_region': site_settings.watch_region or 'US'
+        'watch_region': site_settings.watch_region or 'US',
+        'active_player': active_player,
+        'all_players': all_players,
+        'movie_id': movie_id
     })
 
 
@@ -783,17 +898,24 @@ def series_detail_by_id(request, series_id):
         # Cache for 1 hour
         cache.set(cache_key, (processed_series, seasons, episodes, more_series, watch_providers), 3600)
     
-    player_url = f"{settings.CODESPECTERS_BASE_URL}/tv/{series_id}/{season_number}/{episode_number}?apikey={settings.CODESPECTERS_API_KEY}"
+    # Get player configurations
+    active_player = site_settings.active_tv_player
+    all_players = PlayerConfiguration.objects.filter(
+        media_type__in=['tv', 'both'],
+        is_active=True
+    )
     return render(request, 'core/series_detail.html', {
         'series': processed_series,
-        'player_url': player_url,
         'seasons': seasons,
         'episodes': episodes,
         'current_season': season_number,
         'current_episode': episode_number,
         'more_series': more_series,
         'watch_providers': watch_providers,
-        'watch_region': site_settings.watch_region or 'US'
+        'watch_region': site_settings.watch_region or 'US',
+        'active_player': active_player,
+        'all_players': all_players,
+        'series_id': series_id
     })
 
 def series_detail(request, series_slug):
@@ -894,17 +1016,24 @@ def series_detail(request, series_slug):
         # Cache for 1 hour
         cache.set(cache_key, (processed_series, seasons, episodes, more_series, series_id, watch_providers), 3600)
 
-    player_url = f"{settings.CODESPECTERS_BASE_URL}/tv/{series_id}/{season_number}/{episode_number}?apikey={settings.CODESPECTERS_API_KEY}"
+    # Get player configurations
+    active_player = site_settings.active_tv_player
+    all_players = PlayerConfiguration.objects.filter(
+        media_type__in=['tv', 'both'],
+        is_active=True
+    )
     return render(request, 'core/series_detail.html', {
         'series': processed_series,
-        'player_url': player_url,
         'seasons': seasons,
         'episodes': episodes,
         'current_season': season_number,
         'current_episode': episode_number,
         'more_series': more_series,
         'watch_providers': watch_providers,
-        'watch_region': site_settings.watch_region or 'US'
+        'watch_region': site_settings.watch_region or 'US',
+        'active_player': active_player,
+        'all_players': all_players,
+        'series_id': series_id
     })
 
 
@@ -1765,3 +1894,39 @@ def extract_video_url(request):
             'extracted_url': embed_url,
             'steps': [f"Error: {e}"]
         })
+
+
+def player_list(request):
+    players = PlayerConfiguration.objects.all()
+    return render(request, 'core/player_list.html', {'players': players})
+
+
+def player_create(request):
+    if request.method == 'POST':
+        form = PlayerConfigurationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('player_list')
+    else:
+        form = PlayerConfigurationForm()
+    return render(request, 'core/player_form.html', {'form': form, 'action': 'Create'})
+
+
+def player_edit(request, player_id):
+    player = get_object_or_404(PlayerConfiguration, id=player_id)
+    if request.method == 'POST':
+        form = PlayerConfigurationForm(request.POST, instance=player)
+        if form.is_valid():
+            form.save()
+            return redirect('player_list')
+    else:
+        form = PlayerConfigurationForm(instance=player)
+    return render(request, 'core/player_form.html', {'form': form, 'action': 'Edit', 'player': player})
+
+
+def player_delete(request, player_id):
+    player = get_object_or_404(PlayerConfiguration, id=player_id)
+    if request.method == 'POST':
+        player.delete()
+        return redirect('player_list')
+    return render(request, 'core/player_delete.html', {'player': player})

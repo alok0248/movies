@@ -223,3 +223,90 @@ class TMDBTV(models.Model):
 
     def __str__(self):
         return self.name or str(self.id)
+
+
+class PlayerConfiguration(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('movie', 'Movies'),
+        ('tv', 'TV Shows'),
+        ('both', 'Both'),
+    ]
+    
+    name = models.CharField(max_length=100, help_text="Name to identify this player configuration")
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='both')
+    is_active = models.BooleanField(default=True, help_text="Whether this configuration is active")
+    order = models.IntegerField(default=0, help_text="Display order for dropdown")
+    
+    # Vidking Player options
+    player_color = models.CharField(max_length=10, blank=True, null=True, help_text="Primary color (hex without #, e.g., e50914)")
+    auto_play = models.BooleanField(default=False, help_text="Enable auto-play feature")
+    next_episode = models.BooleanField(default=False, help_text="Show next episode button (TV only)")
+    episode_selector = models.BooleanField(default=False, help_text="Enable episode selection menu (TV only)")
+    
+    # Player size options
+    player_width = models.CharField(max_length=20, default='100%', help_text="Player width (e.g., 100%, 800px)")
+    player_height = models.CharField(max_length=20, default='600px', help_text="Player height (e.g., 600px, 100%)")
+    
+    # Additional iframe options
+    frameborder = models.IntegerField(default=0, help_text="iframe frameborder attribute")
+    allowfullscreen = models.BooleanField(default=True, help_text="Enable fullscreen mode")
+    
+    # Custom iframe URL (overrides Vidking)
+    custom_iframe_url = models.TextField(blank=True, null=True, help_text="Custom iframe URL (overrides Vidking). Use placeholders: {tmdb_id}, {season}, {episode}")
+    
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = "Player Configuration"
+        verbose_name_plural = "Player Configurations"
+    
+    def save(self, *args, **kwargs):
+        # Clean color - remove # if present
+        if self.player_color:
+            self.player_color = self.player_color.replace('#', '')
+        super(PlayerConfiguration, self).save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({self.get_media_type_display()})"
+    
+    def get_player_url(self, media_type, tmdb_id, season=None, episode=None):
+        # If custom iframe URL is set, use that with placeholders
+        if self.custom_iframe_url:
+            url = self.custom_iframe_url
+            url = url.replace('{tmdb_id}', str(tmdb_id))
+            if season:
+                url = url.replace('{season}', str(season))
+            if episode:
+                url = url.replace('{episode}', str(episode))
+            return url
+        
+        # Otherwise use Vidking player
+        base_url = "https://www.vidking.net/embed"
+        
+        if media_type == 'movie':
+            url = f"{base_url}/movie/{tmdb_id}"
+        elif media_type == 'tv' and season and episode:
+            url = f"{base_url}/tv/{tmdb_id}/{season}/{episode}"
+        else:
+            return None
+        
+        params = []
+        if self.player_color:
+            # Remove # from color if present
+            clean_color = self.player_color.replace('#', '')
+            params.append(f"color={clean_color}")
+        if self.auto_play:
+            params.append("autoPlay=true")
+        if self.next_episode and media_type == 'tv':
+            params.append("nextEpisode=true")
+        if self.episode_selector and media_type == 'tv':
+            params.append("episodeSelector=true")
+        
+        if params:
+            url += f"?{'&'.join(params)}"
+        
+        return url
+
+
+# Add active player references to SiteSettings
+SiteSettings.add_to_class('active_movie_player', models.ForeignKey(PlayerConfiguration, on_delete=models.SET_NULL, null=True, blank=True, related_name='movie_settings'))
+SiteSettings.add_to_class('active_tv_player', models.ForeignKey(PlayerConfiguration, on_delete=models.SET_NULL, null=True, blank=True, related_name='tv_settings'))
