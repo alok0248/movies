@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Delete Navbar Item</h1>
+    <div class="card bg-dark border-secondary">
+        <div class="card-body">
+            <p class="mb-4 text-white">Are you sure you want to delete the navbar item "{{ navbar_item.name }}"?</p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger me-2">Yes, Delete</button>
+                <a href="{% url 'navbar_item_list' %}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

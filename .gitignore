@@ -16,6 +16,7 @@ db.sqlite3-journal
 # Credentials
 credentials.json
 api_keys.txt
+cred/
 
 # Virtual environment
 venv/

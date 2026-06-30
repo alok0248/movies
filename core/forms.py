@@ -1,5 +1,5 @@
 from django import forms
-from .models import SiteSettings, ContentRow, PlayerConfiguration
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem
 
 
 class SiteSettingsForm(forms.ModelForm):
@@ -30,7 +30,13 @@ class SiteSettingsForm(forms.ModelForm):
             'curated_top_series_ids',
             'active_movie_player',
             'active_tv_player',
-            'watch_region'
+            'watch_region',
+            'tmdb_db_host',
+            'tmdb_db_port',
+            'tmdb_db_name',
+            'tmdb_db_user',
+            'tmdb_db_password',
+            'hide_live_tv'
         ]
         widgets = {
             'sidebar_ads_code': forms.Textarea(attrs={'rows': 10, 'cols': 80, 'class': 'form-control', 'title': 'Enter HTML/JS code for sidebar ads to display on the site'}),
@@ -52,12 +58,114 @@ class SiteSettingsForm(forms.ModelForm):
             'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to enable URL blocking for non-admin pages'}),
             'redirect_url': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter the URL to redirect blocked requests to'}),
             'email_host': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP server (e.g., smtp.gmail.com)'}),
-            'email_port': forms.NumberInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP port (e.g., 587 for Gmail TLS)'}),
+            'email_port': forms.NumberInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMDB port (e.g., 587 for Gmail TLS)'}),
             'email_host_user': forms.EmailInput(attrs={'class': 'form-control', 'title': 'Enter the email address to send from (e.g., yourname@gmail.com)'}),
             'email_use_tls': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to use TLS encryption for SMTP (recommended)'}),
             'active_movie_player': forms.Select(attrs={'class': 'form-select', 'title': 'Select the default player to use for movies'}),
             'active_tv_player': forms.Select(attrs={'class': 'form-select', 'title': 'Select the default player to use for TV shows'}),
             'watch_region': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., US, GB, IN', 'title': 'Enter your region for watch provider information'}),
+            'tmdb_db_host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'localhost'}),
+            'tmdb_db_port': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '5432'}),
+            'tmdb_db_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
+            'tmdb_db_user': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
+            'tmdb_db_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control', 'placeholder': 'tmdb123!'}),
+            'hide_live_tv': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to hide Live TV from navigation'}),
+        }
+
+
+class BrandingSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['brand_name', 'brand_tagline', 'brand_color']
+        widgets = {
+            'brand_color': forms.TextInput(attrs={'type': 'color', 'class': 'form-control form-control-color'}),
+            'brand_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'brand_tagline': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class DisplaySettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['items_per_row', 'card_size', 'title_size', 'text_size', 'theme_style', 'font_family']
+        widgets = {
+            'items_per_row': forms.Select(attrs={'class': 'form-select'}),
+            'card_size': forms.Select(attrs={'class': 'form-select'}),
+            'title_size': forms.Select(attrs={'class': 'form-select'}),
+            'text_size': forms.Select(attrs={'class': 'form-select'}),
+            'theme_style': forms.Select(attrs={'class': 'form-select'}),
+            'font_family': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
+class DataSourceSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['data_source', 'watch_region', 'curated_top_movie_ids', 'curated_top_series_ids', 'hide_live_tv']
+        widgets = {
+            'data_source': forms.Select(attrs={'class': 'form-select'}),
+            'watch_region': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., US, GB, IN'}),
+            'curated_top_movie_ids': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Comma-separated TMDB IDs'}),
+            'curated_top_series_ids': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Comma-separated TMDB IDs'}),
+            'hide_live_tv': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class TMDBDBSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['tmdb_db_host', 'tmdb_db_port', 'tmdb_db_name', 'tmdb_db_user', 'tmdb_db_password', 'tmdb_db_enable_api_fallback']
+        widgets = {
+            'tmdb_db_host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'localhost'}),
+            'tmdb_db_port': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '5432'}),
+            'tmdb_db_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
+            'tmdb_db_user': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
+            'tmdb_db_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control', 'placeholder': 'tmdb123!'}),
+            'tmdb_db_enable_api_fallback': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class PlayerSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['active_movie_player', 'active_tv_player']
+        widgets = {
+            'active_movie_player': forms.Select(attrs={'class': 'form-select'}),
+            'active_tv_player': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
+class AdsSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['enable_sidebar_ads', 'sidebar_ads_code']
+        widgets = {
+            'enable_sidebar_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'sidebar_ads_code': forms.Textarea(attrs={'rows': 10, 'class': 'form-control'}),
+        }
+
+
+class URLBlockingSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['enable_url_blocking', 'blocked_urls', 'redirect_url']
+        widgets = {
+            'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'blocked_urls': forms.Textarea(attrs={'rows': 6, 'class': 'form-control'}),
+            'redirect_url': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class EmailSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SiteSettings
+        fields = ['email_host', 'email_port', 'email_host_user', 'email_host_password', 'email_use_tls']
+        widgets = {
+            'email_host': forms.TextInput(attrs={'class': 'form-control'}),
+            'email_port': forms.NumberInput(attrs={'class': 'form-control'}),
+            'email_host_user': forms.EmailInput(attrs={'class': 'form-control'}),
+            'email_host_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control'}),
+            'email_use_tls': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
 
@@ -110,4 +218,49 @@ class PlayerConfigurationForm(forms.ModelForm):
                 'rows': 3,
                 'style': 'width: 100%;'
             }),
+        }
+
+
+class TMDBApiKeyForm(forms.ModelForm):
+    class Meta:
+        model = TMDBApiKey
+        fields = ['key', 'is_active']
+        widgets = {
+            'key': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter TMDB API Key'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class TMDBApiKeyEditForm(forms.ModelForm):
+    class Meta:
+        model = TMDBApiKey
+        fields = ['key', 'is_active']
+        widgets = {
+            'key': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter TMDB API Key'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class ProviderItemForm(forms.ModelForm):
+    class Meta:
+        model = ProviderItem
+        fields = ['name', 'slug', 'is_enabled']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Provider name'}),
+            'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'provider-slug'}),
+            'is_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class NavbarItemForm(forms.ModelForm):
+    class Meta:
+        model = NavbarItem
+        fields = ['name', 'item_type', 'built_in_id', 'url', 'icon', 'is_active', 'order', 'dropdown_items']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter item name'}),
+            'built_in_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., home, movies, tv'}),
+            'url': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter URL for custom item'}),
+            'icon': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Font Awesome icon e.g., fas fa-home'}),
+            'order': forms.NumberInput(attrs={'class': 'form-control'}),
+            'dropdown_items': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'JSON array of dropdown items'}),
         }

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-white mb-0"><i class="fas fa-play-circle me-2 text-info"></i> Providers</h1>
+        <a href="{% url 'provider_item_sync' %}" class="btn btn-outline-info">Manual Sync Providers</a>
+    </div>
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-body">
+            <p class="text-light mb-0">This sync runs only when you click the button. Navbar and filters read only from Django local provider records.</p>
+        </div>
+    </div>
+    <div class="card bg-dark border-secondary">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead><tr><th>Name</th><th>Slug</th><th>Enabled</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for provider in providers %}
+                        <tr>
+                            <td>{{ provider.name }}</td>
+                            <td><code>{{ provider.slug }}</code></td>
+                            <td>{% if provider.is_enabled %}Yes{% else %}No{% endif %}</td>
+                            <td><a href="{% url 'provider_item_edit' provider.id %}" class="btn btn-sm btn-outline-light">Edit</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">No providers found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

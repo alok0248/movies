@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem
 
 
 @admin.register(ContentRow)
@@ -75,3 +75,12 @@ class TMDBTVAdmin(admin.ModelAdmin):
     list_filter = ('adult', 'status', 'in_production', 'first_air_date')
     search_fields = ('name', 'original_name', 'id')
     readonly_fields = ('last_fetched',)
+
+
+@admin.register(NavbarItem)
+class NavbarItemAdmin(admin.ModelAdmin):
+    list_display = ('name', 'item_type', 'built_in_id', 'is_active', 'order')
+    list_filter = ('item_type', 'is_active')
+    list_editable = ('order', 'is_active')
+    search_fields = ('name', 'built_in_id', 'url')
+    ordering = ('order',)

@@ -934,121 +934,165 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'index' %}">Home</a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="{% url 'movie_list' %}" id="movieDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Movies
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="movieDropdown">
-                            <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular">Popular</a></li>
-                            <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated">Top Rated</a></li>
-                            <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming">Upcoming</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="{% url 'series_list' %}" id="seriesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            TV Shows
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="seriesDropdown">
-                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular">Popular TV Shows</a></li>
-                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today">Airing Today</a></li>
-                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air">On The Air</a></li>
-                            <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated">Top Rated TV Shows</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'live_tv' %}">Live TV</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="navWatchlistBtn" onclick="handleNavWatchlistClick(event)">
-                            <i class="fas fa-bookmark"></i> My Watch List
-                        </a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="genreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Genres
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="genreDropdown" style="min-width: 350px;">
-                            {% if request.resolver_match.url_name == 'movie_list' or request.resolver_match.url_name == 'movie_detail' %}
-                                <li><h6 class="dropdown-header">Movie Genres</h6></li>
-                                <li>
-                                    <div class="row px-3">
-                                        <div class="col">
-                                            {% for genre in movie_genres|slice:":10" %}
-                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                        <div class="col">
-                                            {% for genre in movie_genres|slice:"10:" %}
-                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </li>
-                            {% elif request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' %}
-                                <li><h6 class="dropdown-header">TV Show Genres</h6></li>
-                                <li>
-                                    <div class="row px-3">
-                                        <div class="col">
-                                            {% for genre in series_genres|slice:":10" %}
-                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                        <div class="col">
-                                            {% for genre in series_genres|slice:"10:" %}
-                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </li>
-                            {% else %}
-                                <li><h6 class="dropdown-header">Movie Genres</h6></li>
-                                <li>
-                                    <div class="row px-3">
-                                        <div class="col">
-                                            {% for genre in movie_genres|slice:":10" %}
-                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                        <div class="col">
-                                            {% for genre in movie_genres|slice:"10:" %}
-                                            <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><h6 class="dropdown-header">TV Show Genres</h6></li>
-                                <li>
-                                    <div class="row px-3">
-                                        <div class="col">
-                                            {% for genre in series_genres|slice:":10" %}
-                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                        <div class="col">
-                                            {% for genre in series_genres|slice:"10:" %}
-                                            <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </li>
+                    {% for item in navbar_items %}
+                        {% if item.built_in_id == 'home' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'index' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'movies' %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="{% url 'movie_list' %}" id="movieDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="movieDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular">Popular</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated">Top Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming">Upcoming</a></li>
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'tv_shows' %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="{% url 'series_list' %}" id="seriesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="seriesDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular">Popular TV Shows</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today">Airing Today</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air">On The Air</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated">Top Rated TV Shows</a></li>
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'live_tv' and not site_settings.hide_live_tv %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'live_tv' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'watchlist' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" id="navWatchlistBtn" onclick="handleNavWatchlistClick(event)">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'provider' %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="providerDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }} me-1"></i>{% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="providerDropdown">
+                                    <li><h6 class="dropdown-header">Movie Providers</h6></li>
+                                    {% for provider in enabled_providers %}
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?provider={{ provider.slug }}">{{ provider.name }}</a></li>
+                                    {% endfor %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header">TV Providers</h6></li>
+                                    {% for provider in enabled_providers %}
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?provider={{ provider.slug }}">{{ provider.name }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'genres' %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="genreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="genreDropdown" style="min-width: 350px;">
+                                    {% if request.resolver_match.url_name == 'movie_list' or request.resolver_match.url_name == 'movie_detail' %}
+                                        <li><h6 class="dropdown-header">Movie Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% elif request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' %}
+                                        <li><h6 class="dropdown-header">TV Show Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% else %}
+                                        <li><h6 class="dropdown-header">Movie Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">TV Show Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'calendar' %}
+                            <li class="nav-item">
+                                <button class="nav-link" style="background: transparent; border: none; cursor: pointer;" id="navCalendarBtn" onclick="openCalendarModal()">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </button>
+                            </li>
+                        {% elif item.built_in_id == 'upcoming' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'upcoming' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.item_type == 'custom' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ item.url }}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
                 </ul>
-                <button class="nav-link me-3" style="background: transparent; border: none; cursor: pointer; color: white;" id="navCalendarBtn" onclick="openCalendarModal()">
-                    <i class="fas fa-calendar-alt"></i> Calendar
-                </button>
-                <a href="{% url 'upcoming' %}" class="nav-link me-3" style="background: transparent; border: none; cursor: pointer; color: white; text-decoration: none;">
-                    <i class="fas fa-rocket"></i> Upcoming
-                </a>
+
                 <form class="d-flex gap-2 me-3" method="GET" action="{% url 'search' %}">
                     <input class="form-control search-input" type="search" name="q" placeholder="Search..." aria-label="Search">
                     <button class="btn btn-primary" type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg></button>
                 </form>
+
                 <div class="d-flex gap-2 align-items-center">
                     {% if user.is_authenticated %}
                         <div class="dropdown">
@@ -1282,6 +1326,18 @@
             
             // Calendar button click
             document.getElementById('navCalendarBtn').addEventListener('click', openCalendarModal);
+            
+            // Check if we need to open login modal automatically
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('login_required') === 'true') {
+                openAuthModal('login');
+                
+                // Cleanup URL
+                const url = new URL(window.location.href);
+                url.searchParams.delete('login_required');
+                url.searchParams.delete('next');
+                window.history.replaceState({}, '', url);
+            }
         });
 
         // Calendar Modal Functions

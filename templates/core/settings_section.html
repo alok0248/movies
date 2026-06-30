@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{% url back_url %}" class="btn btn-outline-light btn-sm me-3">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+                <h1 class="mb-0">{{ title }}</h1>
+            </div>
+
+            <form method="post" class="needs-validation" novalidate>
+                {% csrf_token %}
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-body">
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label fw-medium text-white">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <small class="text-muted">{{ field.help_text }}</small>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="d-flex gap-3 justify-content-end">
+                    <a href="{% url back_url %}" class="btn btn-outline-light px-4">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="fas fa-save me-2"></i> Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control, .form-select, .form-control:focus, .form-select:focus {
+        background-color: #1a1a1a;
+        border-color: #444;
+        color: #ffffff;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.25);
+        border-color: #e50914;
+        color: #ffffff;
+    }
+
+    .form-label {
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .card-body {
+        background-color: #141414;
+    }
+    
+    .text-muted {
+        color: #999999 !important;
+    }
+    
+    .form-check-label {
+        color: #ffffff;
+    }
+    
+    /* Style the color input to look better */
+    input[type="color"] {
+        height: 38px;
+        padding: 0;
+        cursor: pointer;
+        border: 1px solid #444;
+    }
+</style>
+{% endblock %}

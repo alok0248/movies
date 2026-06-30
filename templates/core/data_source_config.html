@@ -1,0 +1,442 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light btn-sm me-3">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+        <h1 class="mb-0 text-white">
+            <i class="fas fa-database me-2 text-indigo-400"></i> Data Source Configuration
+        </h1>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-lg" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between mb-4 p-4 rounded-3 gap-3" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.05) 100%); border: 1px solid rgba(99, 102, 241, 0.2);">
+                        <div>
+                            <h6 class="mb-1 text-white">Select Data Source</h6>
+                            <p class="text-gray-400 small mb-0">Choose which source the website should use to fetch and show TMDB data.</p>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3">
+                            <a href="{% url 'data_source_usage_stats' %}" class="btn btn-outline-info">
+                                <i class="fas fa-chart-line me-2"></i> Usage Stats
+                            </a>
+                            <button class="btn {% if site_settings.data_source == 'tmdb' %}btn-primary{% else %}btn-outline-secondary{% endif %}" id="btn-api" onclick="setDataSource('tmdb')" style="background: {% if site_settings.data_source == 'tmdb' %}linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);{% endif %} border: 0;">
+                                <i class="fas fa-cloud me-2"></i> Use TMDB API
+                            </button>
+                                <button class="btn {% if site_settings.data_source == 'tmdb_db' %}btn-primary{% else %}btn-outline-secondary{% endif %}" id="btn-db" onclick="setDataSource('tmdb_db')" style="background: {% if site_settings.data_source == 'tmdb_db' %}linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);{% endif %} border: 0;">
+                                    <i class="fas fa-server me-2"></i> Use TMDB DB
+                                </button>
+                        </div>
+                    </div>
+
+                    <div id="api-config" class="mb-4" {% if site_settings.data_source != 'tmdb' %}style="display: none;"{% endif %}>
+                        <h6 class="mb-3 text-white"><i class="fas fa-key me-2 text-yellow-400"></i>API Key Management</h6>
+                        <div class="p-4 rounded-3 mb-3" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%); border: 1px solid rgba(245, 158, 11, 0.2);">
+                            <p class="text-gray-400 small mb-3">Saved TMDB API keys from the database are listed below.</p>
+                            <div class="row g-3 mb-3">
+                                <div class="col-12 col-md-9">
+                                    <input type="text" class="form-control bg-dark border-secondary text-white" id="new-api-key" placeholder="Enter new TMDB API key">
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <button type="button" class="btn btn-success w-100" id="add-api-key-btn">
+                                        <i class="fas fa-plus me-2"></i> Add Key
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="edit-api-key-panel" class="p-3 rounded-3 mb-3 d-none" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.2);">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-12 col-md-9">
+                                        <label class="form-label text-gray-300 fw-medium">Edit API Key</label>
+                                        <input type="text" class="form-control bg-dark border-secondary text-white" id="edit-api-key-value" placeholder="Enter TMDB API key">
+                                    </div>
+                                    <div class="col-12 col-md-3 d-flex gap-2">
+                                        <button type="button" class="btn btn-primary flex-fill" onclick="saveApiKeyEdit()">
+                                            <i class="fas fa-save me-2"></i> Save
+                                        </button>
+                                        <button type="button" class="btn btn-outline-light" onclick="cancelEditApiKey()">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Key</th>
+                                            <th>Active</th>
+                                            <th>Created</th>
+                                            <th>Last Used</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="api-keys-list">
+                                        {% for key in api_keys %}
+                                        <tr data-key-id="{{ key.id }}">
+                                            <td><code class="api-key-value">{{ key.key }}</code></td>
+                                            <td>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" 
+                                                           {% if key.is_active %}checked{% endif %} 
+                                                           id="toggle-{{ key.id }}" 
+                                                           onchange="toggleApiKey({{ key.id }})">
+                                                </div>
+                                            </td>
+                                            <td class="api-key-created">{{ key.created_at|date:"Y-m-d H:i" }}</td>
+                                            <td class="api-key-last-used">{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d H:i" }}{% else %}Never{% endif %}</td>
+                                            <td>
+                                                <div class="d-flex gap-2 flex-wrap">
+                                                    <button class="btn btn-outline-info btn-sm" onclick="startEditApiKey({{ key.id }})">
+                                                        <i class="fas fa-pen"></i> Edit
+                                                    </button>
+                                                    <button class="btn btn-danger btn-sm" onclick="deleteApiKey({{ key.id }})">
+                                                        <i class="fas fa-trash"></i> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr id="no-api-keys-row">
+                                            <td colspan="5" class="text-center text-muted py-4">No API keys added yet.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex gap-2 mt-3">
+                                <button class="btn btn-success bg-gradient border-0" id="test-api-btn" onclick="testAPIConnection()">
+                                    <i class="fas fa-check me-2"></i> Test API Connection
+                                </button>
+                            </div>
+                            <div id="api-test-result" class="mt-3"></div>
+                        </div>
+                    </div>
+
+                    <div id="db-config" {% if site_settings.data_source != 'tmdb_db' %}style="display: none;"{% endif %}>
+                        <h6 class="mb-3 text-white"><i class="fas fa-server me-2 text-purple-400"></i>Database Configuration</h6>
+                        <div class="p-4 rounded-3 mb-3" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.05) 100%); border: 1px solid rgba(139, 92, 246, 0.2);">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label text-gray-300 fw-medium">Host</label>
+                                    <input type="text" class="form-control bg-dark border-secondary text-white" id="db-host" value="{{ site_settings.tmdb_db_host|default:'localhost' }}">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label text-gray-300 fw-medium">Port</label>
+                                    <input type="number" class="form-control bg-dark border-secondary text-white" id="db-port" value="{{ site_settings.tmdb_db_port|default:'5432' }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label text-gray-300 fw-medium">Database Name</label>
+                                    <input type="text" class="form-control bg-dark border-secondary text-white" id="db-name" value="{{ site_settings.tmdb_db_name|default:'tmdb' }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label text-gray-300 fw-medium">Username</label>
+                                    <input type="text" class="form-control bg-dark border-secondary text-white" id="db-user" value="{{ site_settings.tmdb_db_user|default:'tmdb' }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-gray-300 fw-medium">Password</label>
+                                    <input type="password" class="form-control bg-dark border-secondary text-white" id="db-password" value="{{ site_settings.tmdb_db_password|default:'' }}">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="db-enable-api-fallback" {% if site_settings.tmdb_db_enable_api_fallback %}checked{% endif %}>
+                                        <label class="form-check-label text-light" for="db-enable-api-fallback">Enable TMDB API access / fallback while DB mode is selected</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="db-enabled" {% if site_settings.tmdb_db_enabled %}checked{% endif %}>
+                                        <label class="form-check-label text-light" for="db-enabled">Enable TMDB Database access</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-success bg-gradient border-0" id="test-db-btn" onclick="testDBConnection()">
+                                    <i class="fas fa-plug me-2"></i> Test Connection
+                                </button>
+                                <button class="btn btn-primary bg-gradient border-0" id="save-db-btn" onclick="saveDBConfig()">
+                                    <i class="fas fa-save me-2"></i> Save Configuration
+                                </button>
+                            </div>
+                        </div>
+                        <div id="db-test-result" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .text-purple-400 { color: #a78bfa; }
+    .text-yellow-400 { color: #fbbf24; }
+    .text-indigo-400 { color: #818cf8; }
+    .text-gray-300 { color: #cbd5e1; }
+    .text-gray-400 { color: #94a3b8; }
+</style>
+
+<script>
+    let currentDataSource = '{{ site_settings.data_source }}';
+    let editingApiKeyId = null;
+
+    function setDataSource(source) {
+        currentDataSource = source;
+        
+        if (source === 'tmdb') {
+            document.getElementById('btn-api').classList.add('btn-primary');
+            document.getElementById('btn-api').classList.remove('btn-outline-secondary');
+            document.getElementById('btn-db').classList.remove('btn-primary');
+            document.getElementById('btn-db').classList.add('btn-outline-secondary');
+            document.getElementById('btn-api').style.background = 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)';
+            document.getElementById('btn-db').style.background = '';
+            document.getElementById('api-config').style.display = 'block';
+            document.getElementById('db-config').style.display = 'none';
+        } else {
+            document.getElementById('btn-db').classList.add('btn-primary');
+            document.getElementById('btn-db').classList.remove('btn-outline-secondary');
+            document.getElementById('btn-api').classList.remove('btn-primary');
+            document.getElementById('btn-api').classList.add('btn-outline-secondary');
+            document.getElementById('btn-db').style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+            document.getElementById('btn-api').style.background = '';
+            document.getElementById('db-config').style.display = 'block';
+            document.getElementById('api-config').style.display = 'none';
+        }
+
+        saveDataSource(source);
+    }
+
+    async function saveDataSource(source) {
+        try {
+            const response = await fetch('{% url 'set_data_source' %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    data_source: source
+                })
+            });
+            const data = await response.json();
+            
+            if (!data.success) {
+                alert('Error: ' + data.message);
+            }
+        } catch (e) {
+            alert('Error saving data source');
+        }
+    }
+
+    // API Key Management
+    document.getElementById('add-api-key-btn')?.addEventListener('click', addApiKey);
+
+    async function addApiKey() {
+        const keyInput = document.getElementById('new-api-key');
+        const key = keyInput.value.trim();
+        if (!key) {
+            alert('Please enter an API key');
+            return;
+        }
+
+        try {
+            const response = await fetch('{% url 'add_api_key' %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: 'key=' + encodeURIComponent(key) + '&is_active=on'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Error adding key: ' + data.message);
+            }
+        } catch (e) {
+            alert('Error adding API key');
+        }
+    }
+
+    async function deleteApiKey(keyId) {
+        if (!confirm('Are you sure you want to delete this API key?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/ajax/delete-api-key/${keyId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const row = document.querySelector(`tr[data-key-id="${keyId}"]`);
+                if (row) {
+                    row.remove();
+                }
+                if (editingApiKeyId === keyId) {
+                    cancelEditApiKey();
+                }
+                if (!document.querySelector('#api-keys-list tr')) {
+                    document.getElementById('api-keys-list').innerHTML = '<tr id="no-api-keys-row"><td colspan="5" class="text-center text-muted py-4">No API keys added yet.</td></tr>';
+                }
+            } else {
+                alert('Error deleting key: ' + data.message);
+            }
+        } catch (e) {
+            alert('Error deleting API key');
+        }
+    }
+
+    async function toggleApiKey(keyId) {
+        try {
+            const response = await fetch(`/ajax/toggle-api-key/${keyId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                alert('Error toggling key: ' + data.message);
+                const toggle = document.getElementById(`toggle-${keyId}`);
+                if (toggle) {
+                    toggle.checked = !toggle.checked;
+                }
+            }
+        } catch (e) {
+            alert('Error toggling API key');
+        }
+    }
+
+    async function testAPIConnection() {
+        const btn = document.getElementById('test-api-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testing...';
+        const resultDiv = document.getElementById('api-test-result');
+        resultDiv.innerHTML = '';
+
+        try {
+            const response = await fetch('{% url 'test_tmdb_api' %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                resultDiv.innerHTML = '<div class="alert alert-success border-0 rounded-3" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.1) 100%); border: 1px solid rgba(34, 197, 94, 0.3);"><i class="fas fa-check-circle me-2 text-green-400"></i>' + data.message + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-danger border-0 rounded-3" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%); border: 1px solid rgba(239, 68, 68, 0.3);"><i class="fas fa-times-circle me-2 text-red-400"></i>' + data.message + '</div>';
+            }
+        } catch (e) {
+            resultDiv.innerHTML = '<div class="alert alert-danger border-0 rounded-3" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%); border: 1px solid rgba(239, 68, 68, 0.3);"><i class="fas fa-times-circle me-2 text-red-400"></i>Error testing API</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check me-2"></i> Test API Connection';
+        }
+    }
+
+    async function testDBConnection() {
+        const btn = document.getElementById('test-db-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testing...';
+        const resultDiv = document.getElementById('db-test-result');
+        resultDiv.innerHTML = '';
+
+        await saveDBConfigInternal();
+
+        try {
+            const response = await fetch('{% url 'test_db_connection' %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                resultDiv.innerHTML = '<div class="alert alert-success border-0 rounded-3" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.1) 100%); border: 1px solid rgba(34, 197, 94, 0.3);"><i class="fas fa-check-circle me-2 text-green-400"></i>' + data.message + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-danger border-0 rounded-3" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%); border: 1px solid rgba(239, 68, 68, 0.3);"><i class="fas fa-times-circle me-2 text-red-400"></i>' + data.message + '</div>';
+            }
+        } catch (e) {
+            resultDiv.innerHTML = '<div class="alert alert-danger border-0 rounded-3" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%); border: 1px solid rgba(239, 68, 68, 0.3);"><i class="fas fa-times-circle me-2 text-red-400"></i>Error testing connection</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-plug me-2"></i> Test Connection';
+        }
+    }
+
+    async function saveDBConfig() {
+        const btn = document.getElementById('save-db-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+        try {
+            await saveDBConfigInternal();
+            alert('Database configuration saved successfully!');
+        } catch (e) {
+            alert('Error saving configuration');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-2"></i> Save Configuration';
+        }
+    }
+
+    async function saveDBConfigInternal() {
+        const host = document.getElementById('db-host').value;
+        const port = document.getElementById('db-port').value;
+        const dbName = document.getElementById('db-name').value;
+        const user = document.getElementById('db-user').value;
+        const password = document.getElementById('db-password').value;
+
+        const response = await fetch('{% url 'save_db_config' %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                tmdb_db_host: host,
+                tmdb_db_port: port,
+                tmdb_db_name: dbName,
+                tmdb_db_user: user,
+                tmdb_db_password: password,
+                tmdb_db_enable_api_fallback: document.getElementById('db-enable-api-fallback').checked,
+                tmdb_db_enabled: document.getElementById('db-enabled').checked
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save');
+        }
+
+        return await response.json();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

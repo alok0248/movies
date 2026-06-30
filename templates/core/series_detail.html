@@ -484,8 +484,7 @@ function updateEpisodeSelect(episodeList) {
 
 async function loadEpisodesForSeason(seasonNumber) {
     try {
-        const tmdbApiKey = "{{ settings.TMDB_API_KEY }}";
-        const response = await fetch(`https://api.themoviedb.org/3/tv/${SERIES_TMDB_ID}/season/${seasonNumber}?api_key=${tmdbApiKey}`);
+        const response = await fetch(`/series/id/${SERIES_TMDB_ID}/season/${seasonNumber}/episodes/`);
         const data = await response.json();
         
         if (data.episodes) {

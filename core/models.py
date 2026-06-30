@@ -36,7 +36,8 @@ class ContentRow(models.Model):
 
 class SiteSettings(models.Model):
     DATA_SOURCE_CHOICES = [
-        ('tmdb', 'TMDB'),
+        ('tmdb', 'TMDB API'),
+        ('tmdb_db', 'TMDB Database (Extracted)'),
         ('local', 'Local Database'),
         ('xtream', 'Xtream'),
     ]
@@ -97,6 +98,18 @@ class SiteSettings(models.Model):
     watch_region = models.CharField(max_length=10, blank=True, null=True, default='US', help_text="TMDB watch region (e.g., US, GB, IN, FR)")
     curated_top_movie_ids = models.TextField(blank=True, null=True, help_text="Comma-separated TMDB IDs of top movies (e.g., 123,456,789)")
     curated_top_series_ids = models.TextField(blank=True, null=True, help_text="Comma-separated TMDB IDs of top series (e.g., 123,456,789)")
+
+    # TMDB Database Connection Settings
+    tmdb_db_host = models.CharField(max_length=255, blank=True, null=True, default='localhost', help_text="TMDB Database Host")
+    tmdb_db_port = models.IntegerField(blank=True, null=True, default=5432, help_text="TMDB Database Port")
+    tmdb_db_name = models.CharField(max_length=255, blank=True, null=True, default='tmdb', help_text="TMDB Database Name")
+    tmdb_db_user = models.CharField(max_length=255, blank=True, null=True, default='tmdb', help_text="TMDB Database User")
+    tmdb_db_password = models.CharField(max_length=255, blank=True, null=True, default='tmdb123!', help_text="TMDB Database Password")
+    tmdb_db_enabled = models.BooleanField(default=True, help_text="Enable TMDB Database access")
+    tmdb_db_enable_api_fallback = models.BooleanField(default=True, help_text="Allow TMDB API access and fallback when TMDB DB is selected")
+    
+    # Live TV Option
+    hide_live_tv = models.BooleanField(default=True, help_text="Hide Live TV from navigation")
 
     class Meta:
         verbose_name_plural = "Site Settings"
@@ -338,6 +351,99 @@ class ImportLog(models.Model):
     
     def __str__(self):
         return f"{self.year}-{self.month:02d} ({self.get_media_type_display()}) - {self.get_status_display()}"
+
+
+class NavbarItem(models.Model):
+    TYPE_CHOICES = [
+        ('built_in', 'Built-in Item'),
+        ('custom', 'Custom Button'),
+    ]
+    name = models.CharField(max_length=100, help_text="Display name in navbar")
+    item_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='built_in')
+    built_in_id = models.CharField(max_length=50, blank=True, null=True, help_text="ID for built-in items like 'home', 'movies', etc.")
+    url = models.CharField(max_length=255, blank=True, null=True, help_text="URL for custom items")
+    icon = models.CharField(max_length=100, blank=True, null=True, help_text="Font Awesome icon class (e.g., 'fas fa-home')")
+    is_active = models.BooleanField(default=True, help_text="Show this item in navbar")
+    order = models.IntegerField(default=0, help_text="Display order in navbar")
+    dropdown_items = models.JSONField(blank=True, null=True, help_text="JSON array of dropdown items (for dropdown menus)")
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name_plural = "Navbar Items"
+
+    def __str__(self):
+        return f"{self.name} ({self.get_item_type_display()})"
+
+
+class CalendarMonthCache(models.Model):
+    year = models.IntegerField()
+    month = models.IntegerField()
+    month_name = models.CharField(max_length=20)
+    first_day = models.CharField(max_length=10)
+    last_day = models.CharField(max_length=10)
+    movies = models.JSONField(default=list, blank=True)
+    series = models.JSONField(default=list, blank=True)
+    last_synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('year', 'month')
+        ordering = ['-year', '-month']
+
+    def __str__(self):
+        return f"{self.month_name} {self.year}"
+
+
+class ProviderItem(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(max_length=255, unique=True)
+    is_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Provider Item'
+        verbose_name_plural = 'Provider Items'
+
+    def __str__(self):
+        return self.name
+
+
+class TMDBApiKey(models.Model):
+    key = models.CharField(max_length=255, unique=True, help_text="TMDB API Key")
+    is_active = models.BooleanField(default=True, help_text="Is this API key active and usable?")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(blank=True, null=True)
+    usage_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-is_active', '-created_at']
+
+    def __str__(self):
+        return f"TMDB API Key: {self.key[:10]}..."
+
+
+class DataSourceUsageLog(models.Model):
+    SOURCE_CHOICES = [
+        ('db', 'Database'),
+        ('api', 'TMDB API'),
+        ('api_fallback', 'TMDB API Fallback'),
+    ]
+
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    entity_type = models.CharField(max_length=50)
+    entity_id = models.IntegerField(blank=True, null=True)
+    detail = models.CharField(max_length=255, blank=True, null=True)
+    usage_count = models.PositiveIntegerField(default=0)
+    last_used_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('source', 'entity_type', 'entity_id', 'detail')
+        ordering = ['-last_used_at']
+
+    def __str__(self):
+        return f"{self.source} - {self.entity_type} - {self.entity_id or 'n/a'}"
 
 
 # Add active player references to SiteSettings

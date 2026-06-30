@@ -16,13 +16,12 @@ except ImportError:
 ENV = os.environ.get('DJANGO_ENV', 'dev')
 
 # Load credentials from JSON file or environment variables
-creds_path = BASE_DIR / 'credentials.json'
-TMDB_API_KEY = os.environ.get('TMDB_API_KEY', 'YOUR_TMDB_API_KEY_HERE')
+creds_path = BASE_DIR / 'cred' / 'credentials.json'
+TMDB_API_KEY = None
 CODESPECTERS_API_KEY = os.environ.get('CODESPECTERS_API_KEY', 'YOUR_CODESPECTERS_API_KEY_HERE')
 if creds_path.exists():
     with open(creds_path, 'r') as f:
         creds = json.load(f)
-        TMDB_API_KEY = creds.get('TMDB_API_KEY', TMDB_API_KEY)
         CODESPECTERS_API_KEY = creds.get('CODESPECTERS_API_KEY', CODESPECTERS_API_KEY)
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -139,6 +138,9 @@ CACHES = {
         }
     }
 }
+
+# Login URL
+LOGIN_URL = '/login/'
 
 # Security settings for production
 if ENV == 'prod':

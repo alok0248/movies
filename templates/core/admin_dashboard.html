@@ -1,69 +1,183 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>Admin Dashboard</h1>
+<div class="container mt-5 mb-5">
+    <div class="d-flex align-items-center mb-4">
+        <h1 class="mb-0">
+            <i class="fas fa-sliders-h me-3 text-warning"></i>Admin Dashboard
+        </h1>
+    </div>
 
-<div class="row mt-4">
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">🎨 Branding Settings</h5>
-                <p><strong>Current Brand Name:</strong> {{ site_settings.brand_name }}</p>
-                <p><strong>Current Brand Color:</strong> <span style="background: {{ site_settings.brand_color }}; color: white; padding: 2px 8px; border-radius: 4px;">{{ site_settings.brand_color }}</span></p>
-                <div class="mb-3" style="padding: 20px; background: #141414; border-radius: 8px;">
-                    <p style="font-weight: bold; font-size: 2rem; color: {{ site_settings.brand_color }};">{{ site_settings.brand_name }}</p>
-                    <p style="color: #b3b3b3;">{{ site_settings.brand_tagline }}</p>
+    <!-- Settings Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'branding_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-palette me-2 text-purple-400"></i> Branding
+                    </h5>
                 </div>
-                <a href="{% url 'edit_settings' %}" class="btn btn-primary">Edit Branding & All Settings</a>
-            </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Customize brand name, tagline, and color</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'display_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-tv me-2 text-blue-400"></i> Display
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure items per row, card size, theme, and fonts</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'data_source_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-database me-2 text-indigo-400"></i> Data Source
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Select TMDB API or database, configure watch region</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'data_source_config' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #2d1b4e 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-server me-2 text-purple-400"></i> TMDB Database
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure connection to local TMDB database</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'player_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a2e1a 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-play-circle me-2 text-green-400"></i> Player
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Set default movie and TV show players</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'ads_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #3e2d1b 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-ad me-2 text-yellow-400"></i> Ads
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Enable/disable ads and configure sidebar ad code</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'url_blocking_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #2e1a1a 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-shield-alt me-2 text-red-400"></i> URL Blocking
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure URL blocking and redirect rules</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'email_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a2e2e 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-envelope me-2 text-cyan-400"></i> Email
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure SMTP server for email notifications</p>
+                </div>
+            </a>
         </div>
     </div>
 
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Current Status</h5>
-                <p><strong>Active Data Source:</strong> {{ site_settings.get_data_source_display }}</p>
-                <p><strong>Items per Row:</strong> {{ site_settings.get_items_per_row_display }}</p>
-                <p><strong>Card Size:</strong> {{ site_settings.get_card_size_display }}</p>
-                <p><strong>Title Size:</strong> {{ site_settings.get_title_size_display }}</p>
-                <p><strong>Text Size:</strong> {{ site_settings.get_text_size_display }}</p>
-                <p><strong>Sidebar Ads:</strong> {% if site_settings.enable_sidebar_ads %}Enabled{% else %}Disabled{% endif %}</p>
-                <p><strong>Curated Top Movies:</strong> {% if site_settings.curated_top_movie_ids %}{{ site_settings.curated_top_movie_ids }}{% else %}Using TMDB Top Rated{% endif %}</p>
-                <p><strong>Curated Top Series:</strong> {% if site_settings.curated_top_series_ids %}{{ site_settings.curated_top_series_ids }}{% else %}Using TMDB Top Rated{% endif %}</p>
-            </div>
+    <!-- Management Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <h3 class="text-white mb-3"><i class="fas fa-tools me-2 text-warning"></i> Management</h3>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'content_row_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-th-large me-2 text-purple-400"></i> Content Rows
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manage home page content rows</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'player_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-gamepad me-2 text-green-400"></i> Players
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manage video player configurations</p>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'provider_item_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1f2937 0%, #111827 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-play-circle me-2 text-cyan-400"></i> Providers
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manual sync and enable/disable providers stored in Django DB</p>
+                </div>
+            </a>
         </div>
     </div>
 
-    <div class="col-md-12 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Quick Links</h5>
-                <ul class="list-group list-group-flush">
-                    <li class="list-group-item bg-transparent">
-                        <a href="{% url 'index' %}" class="text-decoration-none">🏠 Home</a>
-                    </li>
-                    <li class="list-group-item bg-transparent">
-                        <a href="{% url 'movie_list' %}" class="text-decoration-none">🎬 Movies</a>
-                    </li>
-                    <li class="list-group-item bg-transparent">
-                        <a href="{% url 'series_list' %}" class="text-decoration-none">📺 Series</a>
-                    </li>
-                    <li class="list-group-item bg-transparent">
-                        <a href="{% url 'content_row_list' %}" class="text-decoration-none">📋 Content Rows (Homepage)</a>
-                    </li>
-                    <li class="list-group-item bg-transparent">
-                        <a href="{% url 'player_list' %}" class="text-decoration-none">🎮 Player Configurations</a>
-                    </li>
-                    <li class="list-group-item bg-transparent">
-                        <a href="{% url 'edit_settings' %}" class="text-decoration-none">⚙️ Edit Site Settings (includes Top Movies/Series)</a>
-                    </li>
-                    <li class="list-group-item bg-transparent">
-                        <a href="/admin/" class="text-decoration-none">🛠️ Django Admin Panel (to populate data)</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
 </div>
+
+<style>
+    .text-purple-400 { color: #a78bfa; }
+    .text-blue-400 { color: #60a5fa; }
+    .text-yellow-400 { color: #fbbf24; }
+    .text-green-400 { color: #4ade80; }
+    .text-indigo-400 { color: #818cf8; }
+    .text-pink-400 { color: #f472b6; }
+    .text-purple-300 { color: #c4b5fd; }
+    .text-blue-300 { color: #93c5fd; }
+    .text-green-300 { color: #86efac; }
+    .text-yellow-300 { color: #fde047; }
+    .text-gray-300 { color: #cbd5e1; }
+    .text-gray-400 { color: #94a3b8; }
+    .text-red-400 { color: #f87171; }
+    .text-cyan-400 { color: #22d3ee; }
+    .text-orange-400 { color: #fb923c; }
+</style>
 {% endblock %}

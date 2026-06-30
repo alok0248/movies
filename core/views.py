@@ -4,22 +4,53 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes, force_str
 from django.utils.text import slugify
+from django.utils import timezone
 from django.core.mail import send_mail
 from django.core.cache import cache
+from django.db.models import Sum
 import json
 import datetime
 import requests
 import calendar
 from bs4 import BeautifulSoup
-from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration
-from .tmdb_client import get_data_client
-from .forms import SiteSettingsForm, ContentRowForm, PlayerConfigurationForm
+from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache
+from .tmdb_client import get_data_client, get_tmdb_db_connection
+from .forms import (
+    SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
+    BrandingSettingsForm, DisplaySettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
+    PlayerSettingsForm, AdsSettingsForm, URLBlockingSettingsForm, EmailSettingsForm
+)
+
+
+def _provider_slug_matches(item, provider_slug):
+    if not provider_slug:
+        return True
+
+    provider_exists = ProviderItem.objects.filter(slug=provider_slug, is_enabled=True).exists()
+    if not provider_exists:
+        return False
+
+    watch_providers = item.get('watch_providers') or {}
+    if isinstance(watch_providers, str):
+        try:
+            watch_providers = json.loads(watch_providers)
+        except Exception:
+            watch_providers = {}
+    results = watch_providers.get('results', {}) if isinstance(watch_providers, dict) else {}
+    for region_data in results.values():
+        if not isinstance(region_data, dict):
+            continue
+        for section in ['flatrate', 'rent', 'buy', 'ads', 'free']:
+            for provider in region_data.get(section, []) or []:
+                name = provider.get('provider_name', '')
+                slug = slugify(name)
+                if slug == provider_slug:
+                    return True
+    return False
 
 
 def get_calendar_month_data(year, month):
@@ -28,8 +59,14 @@ def get_calendar_month_data(year, month):
     cached_data = cache.get(cache_key)
     if cached_data:
         return cached_data
-    
+
     client = get_data_client()
+    if hasattr(client, 'get_calendar_month_data'):
+        calendar_data = client.get_calendar_month_data(year, month)
+        if calendar_data:
+            cache.set(cache_key, calendar_data, 86400)
+            _store_calendar_month_data(year, month, calendar_data)
+            return calendar_data
     
     # Calculate date range for the month
     first_day = datetime.date(year, month, 1)
@@ -106,6 +143,7 @@ def get_calendar_month_data(year, month):
     
     # Cache for 24 hours
     cache.set(cache_key, calendar_data, 86400)
+    _store_calendar_month_data(year, month, calendar_data)
     return calendar_data
 
 
@@ -216,13 +254,31 @@ def calendar_month_data(request):
     return JsonResponse(calendar_data)
 
 
+def login_view(request):
+    """Redirect to homepage and trigger login modal"""
+    next_url = request.GET.get('next', '/')
+    response = redirect(f'/?login_required=true&next={next_url}')
+    return response
+
+
+def page_not_found_view(request, exception=None):
+    """Custom 404 page"""
+    return render(request, 'core/404.html', status=404)
+
+
+def permission_denied_view(request, exception=None):
+    """Custom 403 page - for when staff/superuser is required"""
+    return render(request, 'core/403.html', status=403)
+
+
 def index(request):
     # Get active ContentRows
     movie_rows = ContentRow.objects.filter(media_type='movie', is_active=True)
     series_rows = ContentRow.objects.filter(media_type='tv', is_active=True)
     site_settings = SiteSettings.get_settings()
     
-    # Preload current month calendar data
+    # Preload current month and nearby calendar data
+    _seed_calendar_month_window()
     today = datetime.date.today()
     current_month_data = get_calendar_month_data(today.year, today.month)
 
@@ -379,6 +435,11 @@ def index(request):
     })
 
 
+def is_staff_or_superuser(user):
+    return user.is_staff or user.is_superuser
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_dashboard(request):
     site_settings = SiteSettings.get_settings()
     return render(request, 'core/admin_dashboard.html', {'site_settings': site_settings})
@@ -388,31 +449,26 @@ def movie_list(request):
     client = get_data_client()
     site_settings = SiteSettings.get_settings()
 
-    # Get filters
     search_query = request.GET.get('search', '')
     genre_id = request.GET.get('genre', '')
     sort_by = request.GET.get('sort', '')
     order = request.GET.get('order', 'desc')
     filter_type = request.GET.get('filter_type', '')
+    provider_slug = request.GET.get('provider', '')
     page = int(request.GET.get('page', 1))
-    
-    # Create cache key based on all filters and page
-    cache_key = f"movie_list_{search_query}_{genre_id}_{sort_by}_{order}_{filter_type}_{page}"
+
+    cache_key = f"movie_list_{search_query}_{genre_id}_{sort_by}_{order}_{filter_type}_{provider_slug}_{page}"
     cached_result = cache.get(cache_key)
     if cached_result:
         items, total_pages, all_genres = cached_result
     else:
         params = {'page': page}
-
-        # Handle genre
         if genre_id:
             params['with_genres'] = genre_id
 
-        # Handle search
         if search_query:
             data = client.search_movies(search_query, page=page)
         else:
-            # If genre is selected, always use discover endpoint
             if genre_id:
                 data = client.discover_movies(params)
             else:
@@ -422,17 +478,14 @@ def movie_list(request):
                     data = client.get_top_rated_movies(page=page, params=params)
                 elif filter_type == 'upcoming':
                     data = client.get_upcoming_movies(page=page, params=params)
-                else:  # Latest (now playing)
+                else:
                     data = client.get_now_playing_movies(page=page, params=params)
 
-        # Process results
         items = []
         for item in data.get('results', []):
             processed_item = item.copy()
             processed_item['title'] = item.get('title', 'Unknown Title')
-            processed_slug = slugify(processed_item['title'])
-            if not processed_slug:
-                processed_slug = f"movie-{item.get('id', 'unknown')}"
+            processed_slug = slugify(processed_item['title']) or f"movie-{item.get('id', 'unknown')}"
             processed_item['slug'] = processed_slug
             processed_item['year'] = item.get('release_date', '')[:4] if item.get('release_date') else ''
             processed_item['vote_average'] = item.get('vote_average', 0)
@@ -444,39 +497,29 @@ def movie_list(request):
             processed_item['media_type'] = 'movie'
             items.append(processed_item)
 
-        total_pages = data.get('total_pages', 1)
+        if provider_slug:
+            items = [item for item in items if _provider_slug_matches(item, provider_slug)]
 
-        # Get all movie genres from API (cached)
+        total_pages = data.get('total_pages', 1)
         all_genres = cache.get('movie_genres')
         if not all_genres:
             try:
                 all_genres = client.get_movie_genres().get('genres', [])
-                cache.set('movie_genres', all_genres, 3600 * 24)  # Cache for 24 hours
+                cache.set('movie_genres', all_genres, 3600 * 24)
             except Exception as e:
                 print(f"Error fetching genres: {e}")
                 all_genres = []
 
-        # Cache the movie list results for 30 minutes
         cache.set(cache_key, (items, total_pages, all_genres), 1800)
-    
-    has_next = page < total_pages
 
-    # Calculate bootstrap column class with responsive breakpoints
+    has_next = page < total_pages
     base_col = 12 // site_settings.items_per_row
     col_class = f"col-{base_col} col-sm-{max(1, base_col-1)} col-md-{base_col} col-lg-{max(1, base_col-2)} col-xl-{max(1, base_col-3)}"
-    image_heights = {
-        'small': '200px',
-        'medium': '300px',
-        'large': '400px'
-    }
+    image_heights = {'small': '200px', 'medium': '300px', 'large': '400px'}
     image_height = image_heights[site_settings.card_size]
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        html = render_to_string('core/_movie_cards.html', {
-            'movies': items,
-            'col_class': col_class,
-            'image_height': image_height
-        })
+        html = render_to_string('core/_movie_cards.html', {'movies': items, 'col_class': col_class, 'image_height': image_height})
         return JsonResponse({'html': html, 'has_next': has_next})
     return render(request, 'core/movie_list.html', {
         'movies': items,
@@ -485,6 +528,7 @@ def movie_list(request):
         'order': order,
         'genre_id': genre_id,
         'filter_type': filter_type,
+        'provider_slug': provider_slug,
         'all_genres': all_genres,
         'has_next': has_next,
         'col_class': col_class,
@@ -856,6 +900,14 @@ def series_detail_by_id(request, series_id):
         processed_series['original_language'] = series_details.get('original_language', '')
 
         seasons = series_details.get('seasons', [])
+        if not seasons and series_details.get('number_of_seasons'):
+            seasons = [
+                {
+                    'season_number': n,
+                    'name': f'Season {n}'
+                }
+                for n in range(1, int(series_details.get('number_of_seasons', 0)) + 1)
+            ]
         episodes = []
 
         try:
@@ -918,6 +970,16 @@ def series_detail_by_id(request, series_id):
         'series_id': series_id
     })
 
+def series_season_episodes(request, series_id, season_number):
+    client = get_data_client()
+
+    try:
+        season_details = client.get_season_details(series_id, season_number)
+        return JsonResponse({'episodes': season_details.get('episodes', [])})
+    except Exception as e:
+        return JsonResponse({'episodes': [], 'error': str(e)}, status=500)
+
+
 def series_detail(request, series_slug):
     client = get_data_client()
     site_settings = SiteSettings.get_settings()
@@ -974,6 +1036,14 @@ def series_detail(request, series_slug):
         processed_series['original_language'] = series_details.get('original_language', '')
 
         seasons = series_details.get('seasons', [])
+        if not seasons and series_details.get('number_of_seasons'):
+            seasons = [
+                {
+                    'season_number': n,
+                    'name': f'Season {n}'
+                }
+                for n in range(1, int(series_details.get('number_of_seasons', 0)) + 1)
+            ]
         episodes = []
 
         try:
@@ -1037,8 +1107,12 @@ def series_detail(request, series_slug):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def edit_settings(request):
     site_settings = SiteSettings.get_settings()
+    api_keys = TMDBApiKey.objects.all().order_by('-is_active', '-created_at')
+    
     if request.method == 'POST':
         form = SiteSettingsForm(request.POST, instance=site_settings)
         if form.is_valid():
@@ -1046,14 +1120,388 @@ def edit_settings(request):
             return redirect('admin_dashboard')
     else:
         form = SiteSettingsForm(instance=site_settings)
-    return render(request, 'core/edit_settings.html', {'form': form})
+    
+    return render(request, 'core/edit_settings.html', {
+        'form': form,
+        'api_keys': api_keys
+    })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def branding_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = BrandingSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = BrandingSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Branding Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def display_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = DisplaySettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = DisplaySettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Display Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def data_source_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = DataSourceSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = DataSourceSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Data Source Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def tmdb_db_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = TMDBDBSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = TMDBDBSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'TMDB Database Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def player_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = PlayerSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = PlayerSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Player Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ads_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = AdsSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = AdsSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Ads Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def url_blocking_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = URLBlockingSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = URLBlockingSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'URL Blocking Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def email_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = EmailSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = EmailSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Email Settings',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def data_source_usage_stats(request):
+    api_keys = TMDBApiKey.objects.all().order_by('-usage_count', '-is_active', '-created_at')
+    usage_logs = DataSourceUsageLog.objects.all().order_by('-last_used_at', '-usage_count')
+    summary = {
+        'db': DataSourceUsageLog.objects.filter(source='db').aggregate(total=Sum('usage_count'))['total'] or 0,
+        'api': DataSourceUsageLog.objects.filter(source='api').aggregate(total=Sum('usage_count'))['total'] or 0,
+        'api_fallback': DataSourceUsageLog.objects.filter(source='api_fallback').aggregate(total=Sum('usage_count'))['total'] or 0,
+    }
+    return render(request, 'core/data_source_usage_stats.html', {
+        'site_settings': SiteSettings.get_settings(),
+        'api_keys': api_keys,
+        'usage_logs': usage_logs,
+        'summary': summary,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def data_source_config(request):
+    site_settings = SiteSettings.get_settings()
+    api_keys = TMDBApiKey.objects.all().order_by('-is_active', 'last_used_at', '-created_at')
+    return render(request, 'core/data_source_config.html', {
+        'site_settings': site_settings,
+        'api_keys': api_keys,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def test_db_connection(request):
+    """AJAX view to test the TMDB DB connection"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    
+    try:
+        conn = get_tmdb_db_connection()
+        conn.close()
+        return JsonResponse({'success': True, 'message': 'Connection successful!'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def add_api_key(request):
+    """AJAX view to add a new TMDB API key"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    
+    form = TMDBApiKeyForm(request.POST)
+    if form.is_valid():
+        api_key = form.save()
+        return JsonResponse({
+            'success': True,
+            'message': 'API key added successfully!',
+            'api_key': {
+                'id': api_key.id,
+                'key': api_key.key,
+                'is_active': api_key.is_active,
+                'created_at': api_key.created_at.strftime('%Y-%m-%d %H:%M'),
+                'last_used_at': None,
+            }
+        })
+    return JsonResponse({'success': False, 'message': 'Invalid form data', 'errors': form.errors})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def update_api_key(request, key_id):
+    """AJAX view to update an existing TMDB API key"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+    api_key = get_object_or_404(TMDBApiKey, id=key_id)
+    form = TMDBApiKeyEditForm(request.POST, instance=api_key)
+    if form.is_valid():
+        api_key = form.save()
+        return JsonResponse({
+            'success': True,
+            'message': 'API key updated successfully!',
+            'api_key': {
+                'id': api_key.id,
+                'key': api_key.key,
+                'is_active': api_key.is_active,
+                'created_at': api_key.created_at.strftime('%Y-%m-%d %H:%M'),
+                'last_used_at': api_key.last_used_at.strftime('%Y-%m-%d %H:%M') if api_key.last_used_at else None,
+            }
+        })
+    return JsonResponse({'success': False, 'message': 'Invalid form data', 'errors': form.errors})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def delete_api_key(request, key_id):
+    """AJAX view to delete a TMDB API key"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    
+    try:
+        api_key = get_object_or_404(TMDBApiKey, id=key_id)
+        api_key.delete()
+        return JsonResponse({'success': True, 'message': 'API key deleted successfully!'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error deleting key: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def toggle_api_key(request, key_id):
+    """AJAX view to toggle the active status of a TMDB API key"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    
+    try:
+        api_key = get_object_or_404(TMDBApiKey, id=key_id)
+        api_key.is_active = not api_key.is_active
+        api_key.save()
+        return JsonResponse({'success': True, 'message': 'API key status updated!', 'is_active': api_key.is_active})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error updating key: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def toggle_hide_live_tv(request):
+    # AJAX view to toggle hide_live_tv setting
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    try:
+        settings_obj = SiteSettings.get_settings()
+        settings_obj.hide_live_tv = not settings_obj.hide_live_tv
+        settings_obj.save()
+        return JsonResponse({'success': True, 'message': 'Live TV setting updated!', 'hide_live_tv': settings_obj.hide_live_tv})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error updating setting: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def set_data_source(request):
+    # AJAX view to set data source
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    try:
+        data = json.loads(request.body)
+        data_source = data.get('data_source', 'tmdb')
+        
+        if data_source not in ['tmdb', 'local', 'tmdb_db']:
+            return JsonResponse({'success': False, 'message': 'Invalid data source'})
+        
+        settings_obj = SiteSettings.get_settings()
+        settings_obj.data_source = data_source
+        settings_obj.save()
+        
+        return JsonResponse({'success': True, 'message': 'Data source updated'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error updating data source: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def test_tmdb_api(request):
+    # AJAX view to test TMDB API keys
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    
+    try:
+        # Get active API keys
+        active_keys = TMDBApiKey.objects.filter(is_active=True).order_by('last_used_at', 'created_at')
+        if not active_keys.exists():
+            return JsonResponse({'success': False, 'message': 'No active API keys found'})
+        
+        # Test each API key until we find one that works
+        for key in active_keys:
+            try:
+                response = requests.get(f"{settings.TMDB_BASE_URL}/genre/movie/list", params={'api_key': key.key})
+                if response.status_code == 200:
+                    # Update last used
+                    key.last_used_at = timezone.now()
+                    key.save()
+                    return JsonResponse({'success': True, 'message': 'TMDB API key is valid'})
+            except:
+                continue
+        
+        return JsonResponse({'success': False, 'message': 'All API keys are invalid'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error testing API: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def save_db_config(request):
+    # AJAX view to save DB configuration
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    try:
+        data = json.loads(request.body)
+        settings_obj = SiteSettings.get_settings()
+        
+        if 'tmdb_db_host' in data:
+            settings_obj.tmdb_db_host = data.get('tmdb_db_host')
+        if 'tmdb_db_port' in data:
+            settings_obj.tmdb_db_port = data.get('tmdb_db_port')
+        if 'tmdb_db_name' in data:
+            settings_obj.tmdb_db_name = data.get('tmdb_db_name')
+        if 'tmdb_db_user' in data:
+            settings_obj.tmdb_db_user = data.get('tmdb_db_user')
+        if 'tmdb_db_password' in data:
+            settings_obj.tmdb_db_password = data.get('tmdb_db_password')
+        if 'tmdb_db_enabled' in data:
+            settings_obj.tmdb_db_enabled = data.get('tmdb_db_enabled')
+        if 'tmdb_db_enable_api_fallback' in data:
+            settings_obj.tmdb_db_enable_api_fallback = data.get('tmdb_db_enable_api_fallback')
+        
+        settings_obj.save()
+        return JsonResponse({'success': True, 'message': 'DB configuration saved'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error saving DB config: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def content_row_list(request):
     content_rows = ContentRow.objects.all().order_by('order')
     return render(request, 'core/content_row_list.html', {'content_rows': content_rows})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def content_row_create(request):
     if request.method == 'POST':
         form = ContentRowForm(request.POST)
@@ -1065,6 +1513,8 @@ def content_row_create(request):
     return render(request, 'core/content_row_form.html', {'form': form, 'action': 'Create'})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def content_row_edit(request, row_id):
     content_row = get_object_or_404(ContentRow, id=row_id)
     if request.method == 'POST':
@@ -1077,12 +1527,43 @@ def content_row_edit(request, row_id):
     return render(request, 'core/content_row_form.html', {'form': form, 'action': 'Edit'})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def content_row_delete(request, row_id):
     content_row = get_object_or_404(ContentRow, id=row_id)
     if request.method == 'POST':
         content_row.delete()
         return redirect('content_row_list')
     return render(request, 'core/content_row_delete.html', {'content_row': content_row})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def provider_item_list(request):
+    providers = ProviderItem.objects.all().order_by('name')
+    return render(request, 'core/provider_item_list.html', {'providers': providers})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def provider_item_edit(request, provider_id):
+    provider = get_object_or_404(ProviderItem, id=provider_id)
+    if request.method == 'POST':
+        form = ProviderItemForm(request.POST, instance=provider)
+        if form.is_valid():
+            form.save()
+            return redirect('provider_item_list')
+    else:
+        form = ProviderItemForm(instance=provider)
+    return render(request, 'core/provider_item_form.html', {'form': form, 'provider': provider})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def provider_item_sync(request):
+    from .provider_sync import sync_provider_items_once
+    sync_provider_items_once()
+    return redirect('provider_item_list')
 
 
 def ajax_login(request):
@@ -1896,11 +2377,15 @@ def extract_video_url(request):
         })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def player_list(request):
     players = PlayerConfiguration.objects.all()
     return render(request, 'core/player_list.html', {'players': players})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def player_create(request):
     if request.method == 'POST':
         form = PlayerConfigurationForm(request.POST)
@@ -1912,6 +2397,8 @@ def player_create(request):
     return render(request, 'core/player_form.html', {'form': form, 'action': 'Create'})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def player_edit(request, player_id):
     player = get_object_or_404(PlayerConfiguration, id=player_id)
     if request.method == 'POST':
@@ -1924,9 +2411,67 @@ def player_edit(request, player_id):
     return render(request, 'core/player_form.html', {'form': form, 'action': 'Edit', 'player': player})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def player_delete(request, player_id):
     player = get_object_or_404(PlayerConfiguration, id=player_id)
     if request.method == 'POST':
         player.delete()
         return redirect('player_list')
     return render(request, 'core/player_delete.html', {'player': player})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def navbar_item_list(request):
+    navbar_items = NavbarItem.objects.all().order_by('order')
+    return render(request, 'core/navbar_item_list.html', {'navbar_items': navbar_items})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def navbar_item_create(request):
+    if request.method == 'POST':
+        form = NavbarItemForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('navbar_item_list')
+    else:
+        form = NavbarItemForm()
+    return render(request, 'core/navbar_item_form.html', {'form': form, 'action': 'Create'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def navbar_item_edit(request, item_id):
+    navbar_item = get_object_or_404(NavbarItem, id=item_id)
+    if request.method == 'POST':
+        form = NavbarItemForm(request.POST, instance=navbar_item)
+        if form.is_valid():
+            form.save()
+            return redirect('navbar_item_list')
+    else:
+        form = NavbarItemForm(instance=navbar_item)
+    return render(request, 'core/navbar_item_form.html', {'form': form, 'action': 'Edit'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def navbar_item_delete(request, item_id):
+    navbar_item = get_object_or_404(NavbarItem, id=item_id)
+    if request.method == 'POST':
+        navbar_item.delete()
+        return redirect('navbar_item_list')
+    return render(request, 'core/navbar_item_delete.html', {'navbar_item': navbar_item})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_toggle_navbar_item(request):
+    if request.method == 'POST':
+        item_id = int(request.POST.get('item_id'))
+        navbar_item = get_object_or_404(NavbarItem, id=item_id)
+        navbar_item.is_active = not navbar_item.is_active
+        navbar_item.save()
+        return JsonResponse({'success': True, 'is_active': navbar_item.is_active})
+    return JsonResponse({'success': False, 'message': 'Method not allowed'})

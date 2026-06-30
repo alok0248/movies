@@ -100,6 +100,104 @@
                                 <label for="{{ form.watch_region.id_for_label }}" class="form-label fw-medium">Watch Region</label>
                                 {{ form.watch_region }}
                             </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.hide_live_tv }}
+                                    <label class="form-check-label" for="{{ form.hide_live_tv.id_for_label }}">Hide Live TV from navigation</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TMDB DB Connection Section -->
+                <div class="card bg-dark border-0 mb-4" id="tmdb-db-section">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-server me-2"></i> TMDB Database (Extracted)</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_host.id_for_label }}" class="form-label fw-medium">Host</label>
+                                {{ form.tmdb_db_host }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_port.id_for_label }}" class="form-label fw-medium">Port</label>
+                                {{ form.tmdb_db_port }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_name.id_for_label }}" class="form-label fw-medium">Database Name</label>
+                                {{ form.tmdb_db_name }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_user.id_for_label }}" class="form-label fw-medium">Username</label>
+                                {{ form.tmdb_db_user }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_password.id_for_label }}" class="form-label fw-medium">Password</label>
+                                {{ form.tmdb_db_password }}
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-primary w-100" id="test-db-btn">
+                                    <i class="fas fa-plug me-2"></i> Test Connection
+                                </button>
+                            </div>
+                            <div class="col-12" id="db-test-result"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TMDB API Keys Section -->
+                <div class="card bg-dark border-0 mb-4" id="tmdb-api-section">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-key me-2"></i> TMDB API Keys</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-9">
+                                <input type="text" class="form-control" id="new-api-key" placeholder="Enter new TMDB API key">
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <button type="button" class="btn btn-success w-100" id="add-api-key-btn">
+                                    <i class="fas fa-plus me-2"></i> Add Key
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Active</th>
+                                    <th>Created</th>
+                                    <th>Last Used</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="api-keys-list">
+                                {% for key in api_keys %}
+                                <tr data-key-id="{{ key.id }}">
+                                    <td><code>{{ key.key }}</code></td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input api-key-toggle" type="checkbox" {% if key.is_active %}checked{% endif %} data-key-id="{{ key.id }}">
+                                        </div>
+                                    </td>
+                                    <td>{{ key.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td>{{ key.last_used_at|date:"Y-m-d H:i"|default:"Never" }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger delete-api-key-btn" data-key-id="{{ key.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No API keys added</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                         </div>
                     </div>
                 </div>
@@ -282,6 +380,155 @@
             colorInput.addEventListener('input', function() {
                 colorPreview.style.backgroundColor = colorInput.value;
             });
+        }
+
+        // Test DB Connection
+        const testDbBtn = document.getElementById('test-db-btn');
+        const dbTestResult = document.getElementById('db-test-result');
+        
+        if (testDbBtn) {
+            testDbBtn.addEventListener('click', async function() {
+                testDbBtn.disabled = true;
+                testDbBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Testing...';
+                dbTestResult.innerHTML = '';
+
+                try {
+                    const response = await fetch('{% url "test_db_connection" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        dbTestResult.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>' + data.message + '</div>';
+                    } else {
+                        dbTestResult.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle me-2"></i>' + data.message + '</div>';
+                    }
+                } catch (error) {
+                    dbTestResult.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle me-2"></i>Error testing connection</div>';
+                } finally {
+                    testDbBtn.disabled = false;
+                    testDbBtn.innerHTML = '<i class="fas fa-plug me-2"></i> Test Connection';
+                }
+            });
+        }
+
+        // Add API Key
+        const addApiKeyBtn = document.getElementById('add-api-key-btn');
+        const newApiKeyInput = document.getElementById('new-api-key');
+        const apiKeysList = document.getElementById('api-keys-list');
+        
+        if (addApiKeyBtn && newApiKeyInput) {
+            addApiKeyBtn.addEventListener('click', async function() {
+                const key = newApiKeyInput.value.trim();
+                if (!key) {
+                    alert('Please enter an API key');
+                    return;
+                }
+
+                addApiKeyBtn.disabled = true;
+                addApiKeyBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Adding...';
+
+                try {
+                    const response = await fetch('{% url "add_api_key" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: 'key=' + encodeURIComponent(key) + '&is_active=on'
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    alert('Error adding key');
+                } finally {
+                    addApiKeyBtn.disabled = false;
+                    addApiKeyBtn.innerHTML = '<i class="fas fa-plus me-2"></i> Add Key';
+                }
+            });
+        }
+
+        // Toggle API Key
+        apiKeysList.addEventListener('click', async function(e) {
+            if (e.target.classList.contains('api-key-toggle')) {
+                const keyId = e.target.dataset.keyId;
+                
+                try {
+                    const response = await fetch('/ajax/toggle-api-key/' + keyId + '/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (!data.success) {
+                        e.target.checked = !e.target.checked;
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    e.target.checked = !e.target.checked;
+                    alert('Error toggling key');
+                }
+            }
+        });
+
+        // Delete API Key
+        apiKeysList.addEventListener('click', async function(e) {
+            if (e.target.closest('.delete-api-key-btn')) {
+                const btn = e.target.closest('.delete-api-key-btn');
+                const keyId = btn.dataset.keyId;
+                
+                if (confirm('Are you sure you want to delete this API key?')) {
+                    try {
+                        const response = await fetch('/ajax/delete-api-key/' + keyId + '/', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken')
+                            }
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            const row = apiKeysList.querySelector('tr[data-key-id="' + keyId + '"]');
+                            if (row) {
+                                row.remove();
+                            }
+                            if (apiKeysList.querySelectorAll('tr').length === 0) {
+                                apiKeysList.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No API keys added</td></tr>';
+                            }
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    } catch (error) {
+                        alert('Error deleting key');
+                    }
+                }
+            }
+        });
+
+        // Helper function to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
         }
     });
 </script>
