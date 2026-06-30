@@ -307,6 +307,39 @@ class PlayerConfiguration(models.Model):
         return url
 
 
+class ImportLog(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    MEDIA_TYPE_CHOICES = [
+        ('movie', 'Movies'),
+        ('tv', 'TV Shows'),
+        ('both', 'Both'),
+    ]
+    
+    year = models.IntegerField()
+    month = models.IntegerField()
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='both')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    movies_imported = models.IntegerField(default=0)
+    tv_imported = models.IntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        unique_together = ('year', 'month', 'media_type')
+        ordering = ('-year', '-month')
+        verbose_name = "Import Log"
+        verbose_name_plural = "Import Logs"
+    
+    def __str__(self):
+        return f"{self.year}-{self.month:02d} ({self.get_media_type_display()}) - {self.get_status_display()}"
+
+
 # Add active player references to SiteSettings
 SiteSettings.add_to_class('active_movie_player', models.ForeignKey(PlayerConfiguration, on_delete=models.SET_NULL, null=True, blank=True, related_name='movie_settings'))
 SiteSettings.add_to_class('active_tv_player', models.ForeignKey(PlayerConfiguration, on_delete=models.SET_NULL, null=True, blank=True, related_name='tv_settings'))

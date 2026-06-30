@@ -308,7 +308,14 @@ class LocalDBClient:
         if 'with_genres' in params:
             genre_ids = [int(g) for g in params['with_genres'].split(',')]
             query = query.filter(genres__id__in=genre_ids)
-        query = query.order_by('-popularity')
+        if 'primary_release_date.gte' in params:
+            query = query.filter(release_date__gte=params['primary_release_date.gte'])
+        if 'primary_release_date.lte' in params:
+            query = query.filter(release_date__lte=params['primary_release_date.lte'])
+        if 'sort_by' in params and 'primary_release_date.desc' in params['sort_by']:
+            query = query.order_by('-release_date', '-popularity')
+        else:
+            query = query.order_by('-popularity')
         page = params.get('page', 1)
         paginator = Paginator(query, 20)
         page_obj = paginator.page(page)
@@ -326,7 +333,14 @@ class LocalDBClient:
         if 'with_genres' in params:
             genre_ids = [int(g) for g in params['with_genres'].split(',')]
             query = query.filter(genres__id__in=genre_ids)
-        query = query.order_by('-popularity')
+        if 'air_date.gte' in params:
+            query = query.filter(first_air_date__gte=params['air_date.gte'])
+        if 'air_date.lte' in params:
+            query = query.filter(first_air_date__lte=params['air_date.lte'])
+        if 'sort_by' in params and 'first_air_date.desc' in params['sort_by']:
+            query = query.order_by('-first_air_date', '-popularity')
+        else:
+            query = query.order_by('-popularity')
         page = params.get('page', 1)
         paginator = Paginator(query, 20)
         page_obj = paginator.page(page)
