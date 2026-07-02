@@ -589,7 +589,11 @@
         }
 
         /* Mobile responsive styles */
-        @media (max-width: 768px) {
+        @media (max-width: 991px) {
+            /* Simplified mobile nav: hide dropdown toggles */
+            .nav-item.dropdown > .nav-link.dropdown-toggle {
+                display: none !important;
+            }
             /* Smaller cards on mobile */
             .card-wrapper {
                 width: 140px !important;
@@ -601,25 +605,45 @@
             }
             /* Blurred mobile dropdown menu */
             .navbar-collapse {
-                /* Lowering opacity from 0.9 to 0.75 lets more background content show through the blur */
-                background: rgba(62, 188, 190, 0.3);
-                
-                /* Reduced from 10px to 5px for a perfect semi-blur effect */
-                backdrop-filter: blur(5px);
-                -webkit-backdrop-filter: blur(5px);
-                
-                padding: 1rem;
-                border-radius: 0 0 16px 16px;
+                background: rgba(0, 0, 0, 0.92);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                padding: 1.25rem;
+                border-radius: 0 0 20px 20px;
                 margin-top: 0.5rem;
+                max-height: 80vh;
+                overflow-y: auto;
             }
             .nav-link {
-                padding: 0.75rem 0 !important;
-                font-size: 1rem;
+                padding: 0.8rem 0 !important;
+                font-size: 1.05rem;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            .nav-link:last-child {
+                border-bottom: none;
             }
             .dropdown-menu {
-                background: rgba(20, 20, 20, 0.95) !important;
-                backdrop-filter: blur(8px);
-                -webkit-backdrop-filter: blur(8px);
+                background: rgba(30, 30, 30, 0.98) !important;
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
+                margin-top: 0.5rem;
+            }
+            /* Smaller card buttons on mobile */
+            .hover-play-btn {
+                padding: 6px 12px !important;
+                font-size: 0.75rem !important;
+            }
+            .hover-watchlist-btn {
+                width: 32px !important;
+                height: 32px !important;
+                font-size: 0.8rem !important;
+            }
+            /* Better scroll containers for mobile */
+            .scroll-container {
+                scroll-behavior: auto !important; /* No smooth for faster scrolling */
+                -webkit-overflow-scrolling: touch !important; /* iOS native scrolling */
             }
             /* Smaller hero on mobile */
             .hero-section {
@@ -642,6 +666,18 @@
                 padding: 0.5rem 1rem;
             }
         }
+        @media (max-width: 768px) {
+            .card-wrapper {
+                width: 130px !important;
+            }
+            .hover-description {
+                font-size: 0.7rem !important;
+                margin-bottom: 6px !important;
+            }
+            .hover-actions {
+                gap: 8px !important;
+            }
+        }
         @media (max-width: 480px) {
             .card-wrapper {
                 width: 110px !important;
@@ -654,6 +690,26 @@
             .hero-title {
                 font-size: 1.75rem;
             }
+            .hover-description {
+                display: none !important; /* Hide description on very small screens */
+            }
+            .hover-actions {
+                justify-content: center !important;
+            }
+            .hover-play-btn {
+                padding: 5px 10px !important;
+                font-size: 0.7rem !important;
+            }
+            .hover-watchlist-btn {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.7rem !important;
+            }
+        }
+
+        /* Always improve mobile scrolling */
+        .scroll-container {
+            -webkit-overflow-scrolling: touch; /* Native iOS scrolling */
         }
 
         /* Auth Modal Styles */
@@ -1010,7 +1066,13 @@
                                 </a>
                             </li>
                         {% elif item.built_in_id == 'movies' %}
-                            <li class="nav-item dropdown">
+                            <!-- Mobile direct link for Movies -->
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'movie_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown d-none d-lg-block">
                                 <a class="nav-link dropdown-toggle" href="{% url 'movie_list' %}" id="movieDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
@@ -1021,7 +1083,13 @@
                                 </ul>
                             </li>
                         {% elif item.built_in_id == 'tv_shows' %}
-                            <li class="nav-item dropdown">
+                            <!-- Mobile direct link for TV Shows -->
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'series_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown d-none d-lg-block">
                                 <a class="nav-link dropdown-toggle" href="{% url 'series_list' %}" id="seriesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
@@ -1045,7 +1113,8 @@
                                 </a>
                             </li>
                         {% elif item.built_in_id == 'provider' %}
-                            <li class="nav-item dropdown">
+                            <!-- Hide provider dropdown on mobile -->
+                            <li class="nav-item dropdown d-none d-lg-block">
                                 <a class="nav-link dropdown-toggle" href="#" id="providerDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if item.icon %}<i class="{{ item.icon }} me-1"></i>{% endif %}{{ item.name }}
                                 </a>
@@ -1062,7 +1131,8 @@
                                 </ul>
                             </li>
                         {% elif item.built_in_id == 'genres' %}
-                            <li class="nav-item dropdown">
+                            <!-- Hide genre dropdown on mobile -->
+                            <li class="nav-item dropdown d-none d-lg-block">
                                 <a class="nav-link dropdown-toggle" href="#" id="genreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
