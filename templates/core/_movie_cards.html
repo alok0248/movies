@@ -1,11 +1,9 @@
 
 {% for movie in movies %}
 <div class="card-wrapper">
-    <div class="movie-card">
+    <a class="movie-card d-block text-decoration-none text-reset" href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}">
         {% if movie.cover_url %}
         <div class="card-image-container">
-            <!-- Only the poster area links to detail page -->
-            <a href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
             <img src="{{ movie.cover_url }}" class="card-image" alt="{{ movie.title }}" loading="lazy">
             <div class="rating-badge">
                 {% if movie.vote_average %}
@@ -21,6 +19,8 @@
                     {% endif %}
                     <div class="hover-actions">
                         <button class="hover-watchlist-btn" 
+                                type="button"
+                                onclick="event.preventDefault(); event.stopPropagation();"
                                 data-tmdb-id="{{ movie.id }}" 
                                 data-media-type="movie" 
                                 data-title="{{ movie.title|escapejs }}" 
@@ -36,17 +36,15 @@
         </div>
         {% endif %}
         <div class="card-info">
-            <a href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}" style="text-decoration: none; color: inherit;">
-                <h5 class="card-title">{{ movie.title }}</h5>
-                <p class="card-year">
-                    {% if movie.release_date %}
-                    {{ movie.release_date|slice:":4" }}
-                    {% elif movie.year %}
-                    {{ movie.year }}
-                    {% endif %}
-                </p>
-            </a>
+            <h5 class="card-title">{{ movie.title }}</h5>
+            <p class="card-year">
+                {% if movie.release_date %}
+                {{ movie.release_date|slice:":4" }}
+                {% elif movie.year %}
+                {{ movie.year }}
+                {% endif %}
+            </p>
         </div>
-    </div>
+    </a>
 </div>
 {% endfor %}

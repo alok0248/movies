@@ -1,11 +1,9 @@
 
 {% for s in series %}
 <div class="card-wrapper">
-    <div class="movie-card">
+    <a class="movie-card d-block text-decoration-none text-reset" href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}">
         {% if s.cover_url %}
         <div class="card-image-container">
-            <!-- Only the poster area links to detail page -->
-            <a href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
             <img src="{{ s.cover_url }}" class="card-image" alt="{{ s.title }}" loading="lazy">
             <div class="rating-badge">
                 {% if s.vote_average %}
@@ -21,6 +19,8 @@
                     {% endif %}
                     <div class="hover-actions">
                         <button class="hover-watchlist-btn" 
+                                type="button"
+                                onclick="event.preventDefault(); event.stopPropagation();"
                                 data-tmdb-id="{{ s.id }}" 
                                 data-media-type="tv" 
                                 data-title="{{ s.title|escapejs }}" 
@@ -36,17 +36,15 @@
         </div>
         {% endif %}
         <div class="card-info">
-            <a href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}" style="text-decoration: none; color: inherit;">
-                <h5 class="card-title">{{ s.title }}</h5>
-                <p class="card-year">
-                    {% if s.first_air_date %}
-                    {{ s.first_air_date|slice:":4" }}
-                    {% elif s.year %}
-                    {{ s.year }}
-                    {% endif %}
-                </p>
-            </a>
+            <h5 class="card-title">{{ s.title }}</h5>
+            <p class="card-year">
+                {% if s.first_air_date %}
+                {{ s.first_air_date|slice:":4" }}
+                {% elif s.year %}
+                {{ s.year }}
+                {% endif %}
+            </p>
         </div>
-    </div>
+    </a>
 </div>
 {% endfor %}
