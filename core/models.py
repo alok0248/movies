@@ -87,6 +87,24 @@ class SiteSettings(models.Model):
     brand_name = models.CharField(max_length=50, default='NETFLIX')
     brand_tagline = models.CharField(max_length=200, default='Unlimited movies, TV shows, and more')
     brand_color = models.CharField(max_length=20, default='#e50914')
+    footer_enabled = models.BooleanField(default=True)
+    footer_title = models.CharField(max_length=100, default='NETFLIX')
+    footer_description = models.CharField(max_length=255, default='Stream movies, TV shows, calendar updates, and watchlist content in one place.')
+    footer_bottom_text = models.CharField(max_length=255, default='Powered by TMDB data sources and your local media setup.')
+    footer_links_title = models.CharField(max_length=100, default='123movies')
+    footer_links = models.TextField(blank=True, default='Movies\nTV-Series\nFAQ\'s\nDMCA')
+    footer_genres_title = models.CharField(max_length=100, default='Genres')
+    footer_genres = models.TextField(blank=True, default='Action\nAnimation\nComedy\nDrama\nHorror')
+    footer_countries_title = models.CharField(max_length=100, default='Country')
+    footer_countries = models.TextField(blank=True, default='Australia\nCanada\nNetherlands\nUnited Kingdom\nUnited States')
+    footer_subscribe_title = models.CharField(max_length=100, default='Subscribe')
+    footer_subscribe_text = models.CharField(max_length=255, default='Subscribe to the 123movies mailing list to receive updates on movies, tv-series and news of top movies.')
+    footer_subscribe_placeholder = models.CharField(max_length=100, default='Put your email')
+    footer_subscribe_button_text = models.CharField(max_length=50, default='Subscribe')
+    footer_logo_text = models.CharField(max_length=100, default='123MOVIES')
+    footer_logo_tagline = models.CharField(max_length=255, default='Watch Your Favorite Movies Online')
+    footer_copyright_text = models.CharField(max_length=255, default='Copyright © 2026 moviefake.com. All Rights Reserved')
+    footer_disclaimer_text = models.CharField(max_length=255, default='Disclaimer: This site does not store any files on its server. All contents are provided by non-affiliated third parties.')
     enable_url_blocking = models.BooleanField(default=False, help_text="Enable URL blocking for non-admin pages")
     blocked_urls = models.TextField(blank=True, null=True, help_text="List of URLs to block (one per line), or 'all' to block all except admin")
     redirect_url = models.CharField(max_length=200, blank=True, null=True, default="/", help_text="URL to redirect blocked requests to")
@@ -98,6 +116,11 @@ class SiteSettings(models.Model):
     watch_region = models.CharField(max_length=10, blank=True, null=True, default='US', help_text="TMDB watch region (e.g., US, GB, IN, FR)")
     curated_top_movie_ids = models.TextField(blank=True, null=True, help_text="Comma-separated TMDB IDs of top movies (e.g., 123,456,789)")
     curated_top_series_ids = models.TextField(blank=True, null=True, help_text="Comma-separated TMDB IDs of top series (e.g., 123,456,789)")
+    URL_FORMAT_CHOICES = [
+        ('slug', 'Title (Slug)'),
+        ('id', 'TMDB ID'),
+    ]
+    url_format = models.CharField(max_length=10, choices=URL_FORMAT_CHOICES, default='slug', help_text="URL format for movie/series detail pages")
 
     # TMDB Database Connection Settings
     tmdb_db_host = models.CharField(max_length=255, blank=True, null=True, default='localhost', help_text="TMDB Database Host")
@@ -244,6 +267,10 @@ class PlayerConfiguration(models.Model):
         ('tv', 'TV Shows'),
         ('both', 'Both'),
     ]
+    ID_TYPE_CHOICES = [
+        ('tmdb', 'TMDB ID'),
+        ('imdb', 'IMDb ID'),
+    ]
     
     name = models.CharField(max_length=100, help_text="Name to identify this player configuration")
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='both')
@@ -265,7 +292,10 @@ class PlayerConfiguration(models.Model):
     allowfullscreen = models.BooleanField(default=True, help_text="Enable fullscreen mode")
     
     # Custom iframe URL (overrides Vidking)
-    custom_iframe_url = models.TextField(blank=True, null=True, help_text="Custom iframe URL (overrides Vidking). Use placeholders: {tmdb_id}, {season}, {episode}")
+    custom_iframe_id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES, default='tmdb', help_text="Choose whether custom iframe placeholders should use the TMDB ID or IMDb ID")
+    custom_iframe_url = models.TextField(blank=True, null=True, help_text="Shared custom iframe URL. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}, {season}, {episode}")
+    custom_movie_iframe_url = models.TextField(blank=True, null=True, help_text="Movie-specific custom iframe URL. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}")
+    custom_tv_iframe_url = models.TextField(blank=True, null=True, help_text="TV-specific custom iframe URL. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}, {season}, {episode}")
     
     class Meta:
         ordering = ['order', 'name']
@@ -276,19 +306,30 @@ class PlayerConfiguration(models.Model):
         # Clean color - remove # if present
         if self.player_color:
             self.player_color = self.player_color.replace('#', '')
+        if not self.custom_iframe_id_type:
+            self.custom_iframe_id_type = 'tmdb'
         super(PlayerConfiguration, self).save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.get_media_type_display()})"
     
-    def get_player_url(self, media_type, tmdb_id, season=None, episode=None):
+    def get_player_url(self, media_type, tmdb_id, season=None, episode=None, imdb_id=None):
+        custom_url = self.custom_iframe_url
+        if media_type == 'movie' and self.custom_movie_iframe_url:
+            custom_url = self.custom_movie_iframe_url
+        elif media_type == 'tv' and self.custom_tv_iframe_url:
+            custom_url = self.custom_tv_iframe_url
+
         # If custom iframe URL is set, use that with placeholders
-        if self.custom_iframe_url:
-            url = self.custom_iframe_url
-            url = url.replace('{tmdb_id}', str(tmdb_id))
-            if season:
+        if custom_url:
+            selected_id = imdb_id if getattr(self, 'custom_iframe_id_type', 'tmdb') == 'imdb' and imdb_id else tmdb_id
+            url = custom_url
+            url = url.replace('{tmdb_id}', str(tmdb_id or ''))
+            url = url.replace('{imdb_id}', str(imdb_id or ''))
+            url = url.replace('{content_id}', str(selected_id or ''))
+            if season is not None:
                 url = url.replace('{season}', str(season))
-            if episode:
+            if episode is not None:
                 url = url.replace('{episode}', str(episode))
             return url
         

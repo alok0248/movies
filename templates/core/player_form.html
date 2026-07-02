@@ -66,6 +66,39 @@
                             {{ form.allowfullscreen.label_tag }}
                         </div>
                         
+                        <h4 class="mt-4 mb-3">Custom Iframe Player</h4>
+                        <div class="mb-3">
+                            {{ form.custom_iframe_id_type.label_tag }}
+                            {{ form.custom_iframe_id_type }}
+                            <div class="form-text">
+                                Select which ID should be used for <code>{content_id}</code>. Use <code>{tmdb_id}</code> or <code>{imdb_id}</code> directly if the player requires a specific one.
+                            </div>
+                        </div>
+
+                        <div id="shared-iframe-box" class="mb-3">
+                            {{ form.custom_iframe_url.label_tag }}
+                            {{ form.custom_iframe_url }}
+                            <div class="form-text">
+                                Used for movie and TV when a separate box is not needed.
+                            </div>
+                        </div>
+
+                        <div id="movie-iframe-box" class="mb-3" style="display: none;">
+                            <label for="{{ form.custom_movie_iframe_url.id_for_label }}" class="form-label">Movie Iframe URL</label>
+                            {{ form.custom_movie_iframe_url }}
+                            <div class="form-text">
+                                Movie-specific iframe URL. Supports <code>{content_id}</code>, <code>{tmdb_id}</code>, and <code>{imdb_id}</code>.
+                            </div>
+                        </div>
+
+                        <div id="tv-iframe-box" class="mb-3" style="display: none;">
+                            <label for="{{ form.custom_tv_iframe_url.id_for_label }}" class="form-label">TV Show Iframe URL</label>
+                            {{ form.custom_tv_iframe_url }}
+                            <div class="form-text">
+                                TV-specific iframe URL. Supports <code>{content_id}</code>, <code>{tmdb_id}</code>, <code>{imdb_id}</code>, <code>{season}</code>, and <code>{episode}</code>.
+                            </div>
+                        </div>
+                        
                         <button type="submit" class="btn btn-primary mt-3">Save</button>
                     </form>
                 </div>
@@ -73,4 +106,32 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const mediaTypeField = document.getElementById('{{ form.media_type.id_for_label }}');
+    const sharedBox = document.getElementById('shared-iframe-box');
+    const movieBox = document.getElementById('movie-iframe-box');
+    const tvBox = document.getElementById('tv-iframe-box');
+
+    function toggleIframeBoxes() {
+        const value = mediaTypeField ? mediaTypeField.value : '';
+
+        if (value === 'both') {
+            if (sharedBox) sharedBox.style.display = 'none';
+            if (movieBox) movieBox.style.display = '';
+            if (tvBox) tvBox.style.display = '';
+        } else {
+            if (sharedBox) sharedBox.style.display = '';
+            if (movieBox) movieBox.style.display = 'none';
+            if (tvBox) tvBox.style.display = 'none';
+        }
+    }
+
+    if (mediaTypeField) {
+        mediaTypeField.addEventListener('change', toggleIframeBoxes);
+        toggleIframeBoxes();
+    }
+});
+</script>
 {% endblock %}

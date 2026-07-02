@@ -1,5 +1,5 @@
 from .models import SiteSettings, NavbarItem, ProviderItem
-from .tmdb_client import TMDBClient
+from .tmdb_client import get_data_client
 from django.conf import settings as django_settings
 
 
@@ -21,7 +21,7 @@ def site_settings(request):
     movie_genres = []
     series_genres = []
     try:
-        client = TMDBClient()
+        client = get_data_client()
         movie_genres = client.get_movie_genres().get('genres', [])
         series_genres = client.get_series_genres().get('genres', [])
     except Exception as e:

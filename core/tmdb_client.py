@@ -1,6 +1,8 @@
 import requests
 import sys
 import json
+from contextlib import contextmanager
+from threading import local
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db import connections
@@ -10,19 +12,63 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
+_thread_local = local()
+
+
+def _get_cached_site_settings():
+    settings_obj = getattr(_thread_local, 'site_settings', None)
+    if settings_obj is None:
+        settings_obj = SiteSettings.get_settings()
+        _thread_local.site_settings = settings_obj
+    return settings_obj
+
+
+def _clear_cached_db_connection():
+    conn = getattr(_thread_local, 'tmdb_db_conn', None)
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    _thread_local.tmdb_db_conn = None
+
+
 def get_tmdb_db_connection():
-    """Create a direct connection to the extracted TMDB PostgreSQL database using SiteSettings"""
+    """Create or reuse a direct connection to the extracted TMDB PostgreSQL database using SiteSettings"""
     import psycopg2
     from psycopg2.extras import RealDictCursor
-    settings_obj = SiteSettings.get_settings()
-    return psycopg2.connect(
+
+    conn = getattr(_thread_local, 'tmdb_db_conn', None)
+    if conn is not None and getattr(conn, 'closed', 1) == 0:
+        return conn
+
+    settings_obj = _get_cached_site_settings()
+    conn = psycopg2.connect(
         host=settings_obj.tmdb_db_host or 'localhost',
         port=settings_obj.tmdb_db_port or 5432,
         dbname=settings_obj.tmdb_db_name or 'tmdb',
         user=settings_obj.tmdb_db_user or 'tmdb',
         password=settings_obj.tmdb_db_password or 'tmdb123!',
-        cursor_factory=RealDictCursor
+        connect_timeout=5,
+        options='-c statement_timeout=5000',
+        cursor_factory=RealDictCursor,
+        application_name='movies_tmdb_db_client'
     )
+    conn.autocommit = False
+    _thread_local.tmdb_db_conn = conn
+    return conn
+
+
+@contextmanager
+def tmdb_db_cursor():
+    conn = get_tmdb_db_connection()
+    try:
+        with conn.cursor() as cur:
+            yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def _json_or_default(value, default):
@@ -34,6 +80,22 @@ def _json_or_default(value, default):
         except Exception:
             return default
     return value
+
+
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _date_to_iso(value):
@@ -79,11 +141,241 @@ class TMDBDBClient:
         self.movie_table = 'movies'
         self.tv_table = 'tv_shows'
         self.genre_table = 'genres'
-        self.season_table = 'tmdb_tv_seasons'
-        self.episode_table = 'tmdb_tv_episodes'
+        self.movie_genre_table = 'movie_genres'
+        self.tv_genre_table = 'tv_genres'
+        self.movie_provider_table = 'movie_watch_providers'
+        self.tv_provider_table = 'tv_watch_providers'
+        self.movie_spoken_language_table = 'movie_spoken_languages'
+        self.tv_spoken_language_table = 'tv_spoken_languages'
+        self.movie_production_country_table = 'movie_production_countries'
+        self.tv_production_country_table = 'tv_production_countries'
+        self.tv_network_table = 'tv_networks'
+        self.tv_created_by_table = 'tv_created_by'
+        self.tv_origin_country_table = 'tv_origin_countries'
+        self.tv_language_table = 'tv_languages'
+        self.movie_recommendation_table = 'movie_recommendations'
+        self.movie_similar_table = 'movie_similar'
+        self.tv_recommendation_table = 'tv_recommendations'
+        self.tv_similar_table = 'tv_similar'
+        self.movie_release_date_table = 'movie_release_dates'
+        self.content_rating_table = 'tv_content_ratings'
+        self.season_table = 'tv_seasons'
+        self.episode_table = 'tv_episodes'
 
     def _json_db_value(self, value):
         return json.dumps(value) if value is not None else None
+
+    def _fetch_all(self, query, params=None):
+        with tmdb_db_cursor() as cur:
+            cur.execute(query, params or [])
+            return cur.fetchall()
+
+    def _fetch_one(self, query, params=None):
+        with tmdb_db_cursor() as cur:
+            cur.execute(query, params or [])
+            return cur.fetchone()
+
+    def _fetch_many_payloads(self, table, ids):
+        ids = [item for item in ids if item is not None]
+        if not ids:
+            return []
+        with tmdb_db_cursor() as cur:
+            cur.execute(f"SELECT * FROM {table} WHERE id = ANY(%s)", (ids,))
+            rows = cur.fetchall()
+        rows_by_id = {row['id']: row for row in rows}
+        return [rows_by_id[item_id] for item_id in ids if item_id in rows_by_id]
+
+    def _get_genres(self, media_type, entity_id):
+        table = self.movie_genre_table if media_type == 'movie' else self.tv_genre_table
+        id_column = 'movie_id' if media_type == 'movie' else 'tv_id'
+        rows = self._fetch_all(
+            f"""
+            SELECT g.id, g.name
+            FROM {table} rel
+            JOIN {self.genre_table} g ON g.id = rel.genre_id
+            WHERE rel.{id_column} = %s
+            ORDER BY g.name
+            """,
+            (entity_id,),
+        )
+        return [{'id': row['id'], 'name': row['name']} for row in rows]
+
+    def _get_spoken_languages(self, media_type, entity_id):
+        table = self.movie_spoken_language_table if media_type == 'movie' else self.tv_spoken_language_table
+        id_column = 'movie_id' if media_type == 'movie' else 'tv_id'
+        rows = self._fetch_all(
+            f"SELECT iso_639_1, english_name, name FROM {table} WHERE {id_column} = %s ORDER BY iso_639_1",
+            (entity_id,),
+        )
+        return [
+            {
+                'iso_639_1': row['iso_639_1'],
+                'english_name': row.get('english_name'),
+                'name': row.get('name'),
+            }
+            for row in rows
+        ]
+
+    def _get_production_countries(self, media_type, entity_id):
+        table = self.movie_production_country_table if media_type == 'movie' else self.tv_production_country_table
+        id_column = 'movie_id' if media_type == 'movie' else 'tv_id'
+        rows = self._fetch_all(
+            f"SELECT iso_3166_1, name FROM {table} WHERE {id_column} = %s ORDER BY iso_3166_1",
+            (entity_id,),
+        )
+        return [{'iso_3166_1': row['iso_3166_1'], 'name': row.get('name')} for row in rows]
+
+    def _get_watch_providers(self, media_type, entity_id):
+        table = self.movie_provider_table if media_type == 'movie' else self.tv_provider_table
+        id_column = 'movie_id' if media_type == 'movie' else 'tv_id'
+        rows = self._fetch_all(
+            f"""
+            SELECT country_code, provider_type, provider_id, provider_name, logo_path, display_priority
+            FROM {table}
+            WHERE {id_column} = %s
+            ORDER BY country_code, provider_type, display_priority, provider_name
+            """,
+            (entity_id,),
+        )
+        results = {}
+        for row in rows:
+            region = results.setdefault(row['country_code'], {'link': None})
+            region.setdefault(row['provider_type'], []).append(
+                {
+                    'provider_id': row['provider_id'],
+                    'provider_name': row.get('provider_name'),
+                    'logo_path': row.get('logo_path'),
+                    'display_priority': row.get('display_priority'),
+                }
+            )
+        return {'results': results}
+
+    def _get_related_ids(self, table, source_column, target_column, entity_id):
+        rows = self._fetch_all(
+            f"SELECT {target_column} FROM {table} WHERE {source_column} = %s",
+            (entity_id,),
+        )
+        return [row[target_column] for row in rows]
+
+    def _get_movie_release_dates(self, movie_id):
+        rows = self._fetch_all(
+            f"SELECT country_code, release_date, type, note, certification, iso_639_1 FROM {self.movie_release_date_table} WHERE movie_id = %s ORDER BY country_code, release_date",
+            (movie_id,),
+        )
+        grouped = {}
+        for row in rows:
+            item = grouped.setdefault(row['country_code'], {'iso_3166_1': row['country_code'], 'release_dates': []})
+            item['release_dates'].append(
+                {
+                    'certification': row.get('certification') or '',
+                    'descriptors': [],
+                    'iso_639_1': row.get('iso_639_1'),
+                    'note': row.get('note') or '',
+                    'release_date': row.get('release_date'),
+                    'type': row.get('type'),
+                }
+            )
+        return {'results': list(grouped.values())}
+
+    def _get_tv_content_ratings(self, tv_id):
+        rows = self._fetch_all(
+            f"SELECT country_code, rating FROM {self.content_rating_table} WHERE tv_id = %s ORDER BY country_code",
+            (tv_id,),
+        )
+        return {'results': [{'iso_3166_1': row['country_code'], 'rating': row.get('rating') or ''} for row in rows]}
+
+    def _get_tv_networks(self, tv_id):
+        rows = self._fetch_all(
+            f"SELECT network_id, name, logo_path, origin_country FROM {self.tv_network_table} WHERE tv_id = %s ORDER BY name",
+            (tv_id,),
+        )
+        return [
+            {
+                'id': row['network_id'],
+                'name': row.get('name'),
+                'logo_path': row.get('logo_path'),
+                'origin_country': row.get('origin_country') or '',
+            }
+            for row in rows
+        ]
+
+    def _get_tv_created_by(self, tv_id):
+        rows = self._fetch_all(
+            f"SELECT person_id, name, gender, profile_path FROM {self.tv_created_by_table} WHERE tv_id = %s ORDER BY name",
+            (tv_id,),
+        )
+        return [
+            {
+                'id': row['person_id'],
+                'credit_id': None,
+                'name': row.get('name'),
+                'gender': row.get('gender'),
+                'profile_path': row.get('profile_path'),
+            }
+            for row in rows
+        ]
+
+    def _get_tv_origin_country(self, tv_id):
+        rows = self._fetch_all(
+            f"SELECT iso_3166_1 FROM {self.tv_origin_country_table} WHERE tv_id = %s ORDER BY iso_3166_1",
+            (tv_id,),
+        )
+        return [row['iso_3166_1'] for row in rows]
+
+    def _get_tv_languages(self, tv_id):
+        rows = self._fetch_all(
+            f"SELECT iso_639_1 FROM {self.tv_language_table} WHERE tv_id = %s ORDER BY iso_639_1",
+            (tv_id,),
+        )
+        return [row['iso_639_1'] for row in rows]
+
+    def _get_tv_episode_runtime(self, tv_id):
+        row = self._fetch_one(
+            f"SELECT runtime FROM {self.episode_table} WHERE tv_id = %s AND runtime IS NOT NULL ORDER BY runtime DESC LIMIT 1",
+            (tv_id,),
+        )
+        return [row['runtime']] if row and row.get('runtime') is not None else []
+
+    def _get_tv_seasons_summary(self, tv_id):
+        rows = self._fetch_all(
+            f"SELECT tv_id, season_number, id, air_date, name, overview, poster_path, vote_average, episode_count FROM {self.season_table} WHERE tv_id = %s ORDER BY season_number",
+            (tv_id,),
+        )
+        return [
+            {
+                'id': row.get('id'),
+                'air_date': row.get('air_date'),
+                'episode_count': row.get('episode_count') or 0,
+                'name': row.get('name') or f"Season {row['season_number']}",
+                'overview': row.get('overview') or '',
+                'poster_path': row.get('poster_path'),
+                'season_number': row['season_number'],
+                'vote_average': _safe_float(row.get('vote_average')),
+            }
+            for row in rows
+        ]
+
+    def _get_last_or_next_episode(self, table, tv_id):
+        row = self._fetch_one(
+            f"SELECT * FROM {table} WHERE tv_id = %s",
+            (tv_id,),
+        )
+        if not row:
+            return None
+        return {
+            'id': row.get('episode_id'),
+            'air_date': row.get('air_date'),
+            'episode_number': row.get('episode_number'),
+            'name': row.get('name'),
+            'overview': row.get('overview') or '',
+            'production_code': row.get('production_code') or '',
+            'runtime': row.get('runtime'),
+            'season_number': row.get('season_number'),
+            'show_id': tv_id,
+            'still_path': row.get('still_path'),
+            'vote_average': _safe_float(row.get('vote_average')),
+            'vote_count': _safe_int(row.get('vote_count')),
+        }
 
     def _store_series_seasons_from_details(self, series_id, series_payload):
         seasons = _json_or_default(series_payload.get('seasons'), [])
@@ -117,8 +409,8 @@ class TMDBDBClient:
                 cur.execute(
                     f"""
                     INSERT INTO {self.season_table}
-                    (tv_id, season_number, id, air_date, name, overview, poster_path, season_number_actual, vote_average, external_ids, images, videos, credits, last_fetched)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    (tv_id, season_number, id, air_date, name, overview, poster_path, vote_average, episode_count, last_fetched, extraction_status, last_extracted_at, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, NOW(), %s)
                     """,
                     (
                         series_id,
@@ -128,12 +420,10 @@ class TMDBDBClient:
                         season_payload.get('name'),
                         season_payload.get('overview'),
                         season_payload.get('poster_path'),
-                        season_payload.get('season_number', season_number),
                         season_payload.get('vote_average'),
-                        self._json_db_value(season_payload.get('external_ids')),
-                        self._json_db_value(season_payload.get('images')),
-                        self._json_db_value(season_payload.get('videos')),
-                        self._json_db_value(season_payload.get('credits')),
+                        len(episodes),
+                        'success',
+                        None,
                     )
                 )
 
@@ -141,8 +431,8 @@ class TMDBDBClient:
                     cur.execute(
                         f"""
                         INSERT INTO {self.episode_table}
-                        (tv_id, season_number, episode_number, id, air_date, name, overview, production_code, runtime, season_number_actual, show_id, still_path, vote_average, vote_count, crew, guest_stars, external_ids, images, videos, last_fetched)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        (tv_id, season_number, episode_number, id, air_date, name, overview, production_code, runtime, still_path, vote_average, vote_count, last_fetched, extraction_status, last_extracted_at, error_message)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, NOW(), %s)
                         """,
                         (
                             series_id,
@@ -154,127 +444,186 @@ class TMDBDBClient:
                             episode.get('overview'),
                             episode.get('production_code'),
                             episode.get('runtime'),
-                            episode.get('season_number', season_number),
-                            series_id,
                             episode.get('still_path'),
                             episode.get('vote_average'),
                             episode.get('vote_count'),
-                            self._json_db_value(episode.get('crew')),
-                            self._json_db_value(episode.get('guest_stars')),
-                            self._json_db_value(episode.get('external_ids')),
-                            self._json_db_value(episode.get('images')),
-                            self._json_db_value(episode.get('videos')),
+                            'success',
+                            None,
                         )
                     )
                 conn.commit()
         finally:
             conn.close()
 
-    def _movie_to_dict(self, movie):
+    def _movie_summary(self, movie):
+        movie_id = movie['id']
         return {
-            'id': movie['id'],
-            'adult': movie['adult'],
-            'backdrop_path': movie['backdrop_path'],
-            'belongs_to_collection': movie['belongs_to_collection'],
-            'budget': movie['budget'],
-            'genres': _json_or_default(movie['genres'], []),
-            'homepage': movie['homepage'],
-            'imdb_id': movie['imdb_id'],
-            'original_language': movie['original_language'],
-            'original_title': movie['original_title'],
-            'overview': movie['overview'],
-            'popularity': movie['popularity'],
-            'poster_path': movie['poster_path'],
-            'production_companies': _json_or_default(movie['production_companies'], []),
-            'production_countries': _json_or_default(movie['production_countries'], []),
-            'release_date': _date_to_iso(movie['release_date']),
-            'revenue': movie['revenue'],
-            'runtime': movie['runtime'],
-            'spoken_languages': _json_or_default(movie['spoken_languages'], []),
-            'status': movie['status'],
-            'tagline': movie['tagline'],
-            'title': movie['title'],
-            'video': movie['video'],
-            'vote_average': movie['vote_average'],
-            'vote_count': movie['vote_count'],
-            'credits': _json_or_default(movie.get('credits'), {}),
-            'videos': _json_or_default(movie.get('videos'), {'results': []}),
-            'keywords': _json_or_default(movie.get('keywords'), {'keywords': [], 'results': []}),
-            'external_ids': _json_or_default(movie.get('external_ids'), {}),
-            'recommendations': _json_or_default(movie.get('recommendations'), {'results': []}),
-            'similar': _json_or_default(movie.get('similar'), {'results': []}),
-            'reviews': _json_or_default(movie.get('reviews'), {'results': []}),
-            'images': _json_or_default(movie.get('images'), {'backdrops': [], 'posters': []}),
-            'lists': _json_or_default(movie.get('lists'), {'results': []}),
-            'translations': _json_or_default(movie.get('translations'), {'translations': []}),
-            'watch_providers': _json_or_default(movie.get('watch_providers'), {'results': {}}),
-            'release_dates': _json_or_default(movie.get('release_dates'), {'results': []}),
+            'id': movie_id,
+            'adult': bool(movie.get('adult')),
+            'backdrop_path': movie.get('backdrop_path'),
+            'genre_ids': [],
+            'original_language': movie.get('original_language') or '',
+            'original_title': movie.get('original_title') or movie.get('title') or '',
+            'overview': movie.get('overview') or '',
+            'popularity': _safe_float(movie.get('popularity')),
+            'poster_path': movie.get('poster_path'),
+            'release_date': _date_to_iso(movie.get('release_date')),
+            'title': movie.get('title') or '',
+            'video': bool(movie.get('video')),
+            'vote_average': _safe_float(movie.get('vote_average')),
+            'vote_count': _safe_int(movie.get('vote_count')),
+        }
+
+    def _tv_summary(self, tv):
+        tv_id = tv['id']
+        return {
+            'id': tv_id,
+            'adult': bool(tv.get('adult')),
+            'backdrop_path': tv.get('backdrop_path'),
+            'genre_ids': [],
+            'origin_country': [],
+            'original_language': tv.get('original_language') or '',
+            'original_name': tv.get('original_name') or tv.get('name') or '',
+            'overview': tv.get('overview') or '',
+            'popularity': _safe_float(tv.get('popularity')),
+            'poster_path': tv.get('poster_path'),
+            'first_air_date': _date_to_iso(tv.get('first_air_date')),
+            'name': tv.get('name') or '',
+            'vote_average': _safe_float(tv.get('vote_average')),
+            'vote_count': _safe_int(tv.get('vote_count')),
+        }
+
+    def _ordered_id_rows(self, table, ids):
+        ids = [int(item_id) for item_id in ids if str(item_id).isdigit()]
+        if not ids:
+            return []
+
+        with tmdb_db_cursor() as cur:
+            cur.execute(f"SELECT * FROM {table} WHERE id = ANY(%s)", (ids,))
+            rows = cur.fetchall()
+
+        rows_by_id = {row['id']: row for row in rows}
+        return [rows_by_id[item_id] for item_id in ids if item_id in rows_by_id]
+
+    def get_movies_by_ids(self, ids):
+        return [self._movie_summary(movie) for movie in self._ordered_id_rows(self.movie_table, ids)]
+
+    def get_series_by_ids(self, ids):
+        return [self._tv_summary(series) for series in self._ordered_id_rows(self.tv_table, ids)]
+
+    def _movie_to_dict(self, movie):
+        movie_id = movie['id']
+        return {
+            'id': movie_id,
+            'adult': bool(movie.get('adult')),
+            'backdrop_path': movie.get('backdrop_path'),
+            'belongs_to_collection': None,
+            'budget': movie.get('budget') or 0,
+            'genres': self._get_genres('movie', movie_id),
+            'homepage': movie.get('homepage') or '',
+            'imdb_id': movie.get('imdb_id'),
+            'original_language': movie.get('original_language') or '',
+            'original_title': movie.get('original_title') or movie.get('title') or '',
+            'overview': movie.get('overview') or '',
+            'popularity': _safe_float(movie.get('popularity')),
+            'poster_path': movie.get('poster_path'),
+            'production_companies': [],
+            'production_countries': self._get_production_countries('movie', movie_id),
+            'release_date': _date_to_iso(movie.get('release_date')),
+            'revenue': movie.get('revenue') or 0,
+            'runtime': movie.get('runtime'),
+            'spoken_languages': self._get_spoken_languages('movie', movie_id),
+            'status': movie.get('status') or '',
+            'tagline': movie.get('tagline') or '',
+            'title': movie.get('title') or '',
+            'video': bool(movie.get('video')),
+            'vote_average': _safe_float(movie.get('vote_average')),
+            'vote_count': _safe_int(movie.get('vote_count')),
+            'credits': {'cast': [], 'crew': []},
+            'videos': {'results': []},
+            'keywords': {'keywords': [], 'results': []},
+            'external_ids': {'imdb_id': movie.get('imdb_id')},
+            'recommendations': {'page': 1, 'results': [], 'total_pages': 0, 'total_results': 0},
+            'similar': {'page': 1, 'results': [], 'total_pages': 0, 'total_results': 0},
+
+            'reviews': {'results': []},
+            'images': {'backdrops': [], 'posters': []},
+            'lists': {'results': []},
+            'translations': {'translations': []},
+            'watch_providers': self._get_watch_providers('movie', movie_id),
+            'release_dates': self._get_movie_release_dates(movie_id),
         }
 
     def _tv_to_dict(self, tv):
+        tv_id = tv['id']
         return {
-            'id': tv['id'],
-            'adult': tv['adult'],
-            'backdrop_path': tv['backdrop_path'],
-            'created_by': _json_or_default(tv['created_by'], []),
-            'episode_run_time': _json_or_default(tv['episode_run_time'], []),
-            'first_air_date': _date_to_iso(tv['first_air_date']),
-            'genres': _json_or_default(tv['genres'], []),
-            'homepage': tv['homepage'],
-            'in_production': tv['in_production'],
-            'languages': _json_or_default(tv['languages'], []),
-            'last_air_date': _date_to_iso(tv['last_air_date']),
-            'last_episode_to_air': _json_or_default(tv['last_episode_to_air'], {}),
-            'name': tv['name'],
-            'next_episode_to_air': _json_or_default(tv['next_episode_to_air'], {}),
-            'networks': _json_or_default(tv['networks'], []),
-            'number_of_episodes': tv['number_of_episodes'],
-            'number_of_seasons': tv['number_of_seasons'],
-            'origin_country': _json_or_default(tv['origin_country'], []),
-            'original_language': tv['original_language'],
-            'original_name': tv['original_name'],
-            'overview': tv['overview'],
-            'popularity': tv['popularity'],
-            'poster_path': tv['poster_path'],
-            'production_companies': _json_or_default(tv['production_companies'], []),
-            'production_countries': _json_or_default(tv['production_countries'], []),
-            'seasons': _json_or_default(tv['seasons'], []),
-            'spoken_languages': _json_or_default(tv['spoken_languages'], []),
-            'status': tv['status'],
-            'tagline': tv['tagline'],
-            'type': tv['type'],
-            'vote_average': tv['vote_average'],
-            'vote_count': tv['vote_count'],
-            'credits': _json_or_default(tv.get('credits'), {}),
-            'videos': _json_or_default(tv.get('videos'), {'results': []}),
-            'keywords': _json_or_default(tv.get('keywords'), {'results': []}),
-            'external_ids': _json_or_default(tv.get('external_ids'), {}),
-            'recommendations': _json_or_default(tv.get('recommendations'), {'results': []}),
-            'similar': _json_or_default(tv.get('similar'), {'results': []}),
-            'reviews': _json_or_default(tv.get('reviews'), {'results': []}),
-            'images': _json_or_default(tv.get('images'), {'backdrops': [], 'posters': []}),
-            'translations': _json_or_default(tv.get('translations'), {'translations': []}),
-            'watch_providers': _json_or_default(tv.get('watch_providers'), {'results': {}}),
-            'content_ratings': _json_or_default(tv.get('content_ratings'), {'results': []}),
-            'aggregate_credits': _json_or_default(tv.get('aggregate_credits'), {}),
+            'id': tv_id,
+            'adult': bool(tv.get('adult')),
+            'backdrop_path': tv.get('backdrop_path'),
+            'created_by': self._get_tv_created_by(tv_id),
+            'episode_run_time': self._get_tv_episode_runtime(tv_id),
+            'first_air_date': _date_to_iso(tv.get('first_air_date')),
+            'genres': self._get_genres('tv', tv_id),
+            'homepage': tv.get('homepage') or '',
+            'in_production': bool(tv.get('in_production')),
+            'languages': self._get_tv_languages(tv_id),
+            'last_air_date': _date_to_iso(tv.get('last_air_date')),
+            'last_episode_to_air': self._get_last_or_next_episode('tv_last_episode', tv_id),
+            'name': tv.get('name') or '',
+            'next_episode_to_air': self._get_last_or_next_episode('tv_next_episode', tv_id),
+            'networks': self._get_tv_networks(tv_id),
+            'number_of_episodes': _safe_int(tv.get('number_of_episodes')),
+            'number_of_seasons': _safe_int(tv.get('number_of_seasons')),
+            'origin_country': self._get_tv_origin_country(tv_id),
+            'original_language': tv.get('original_language') or '',
+            'original_name': tv.get('original_name') or tv.get('name') or '',
+            'overview': tv.get('overview') or '',
+            'popularity': _safe_float(tv.get('popularity')),
+            'poster_path': tv.get('poster_path'),
+            'production_companies': [],
+            'production_countries': self._get_production_countries('tv', tv_id),
+            'seasons': self._get_tv_seasons_summary(tv_id),
+            'spoken_languages': self._get_spoken_languages('tv', tv_id),
+            'status': tv.get('status') or '',
+            'tagline': tv.get('tagline') or '',
+            'type': tv.get('type') or '',
+            'vote_average': _safe_float(tv.get('vote_average')),
+            'vote_count': _safe_int(tv.get('vote_count')),
+            'credits': {'cast': [], 'crew': []},
+            'videos': {'results': []},
+            'keywords': {'results': []},
+            'external_ids': {},
+            'recommendations': {'page': 1, 'results': [], 'total_pages': 0, 'total_results': 0},
+            'similar': {'page': 1, 'results': [], 'total_pages': 0, 'total_results': 0},
+
+            'reviews': {'results': []},
+            'images': {'backdrops': [], 'posters': []},
+            'translations': {'translations': []},
+            'watch_providers': self._get_watch_providers('tv', tv_id),
+            'content_ratings': self._get_tv_content_ratings(tv_id),
+            'aggregate_credits': {'cast': [], 'crew': []},
         }
+
+    def _paged_table_query(self, table, order_by, page=1, conditions=None, query_params=None):
+        conditions = conditions or []
+        query_params = query_params or []
+        page = int(page or 1)
+        offset = (page - 1) * 20
+        where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ''
+        with tmdb_db_cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) AS count FROM {table}{where_clause}", query_params)
+            total_results = cur.fetchone()['count']
+            total_pages = (total_results + 19) // 20
+            cur.execute(f"SELECT * FROM {table}{where_clause} ORDER BY {order_by} LIMIT 20 OFFSET %s", list(query_params) + [offset])
+            rows = cur.fetchall()
+        return page, rows, total_pages, total_results
 
     def get_popular_movies(self, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT COUNT(*) FROM {self.movie_table}")
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.movie_table} ORDER BY popularity DESC LIMIT 20 OFFSET %s", (offset,))
-                    movies = cur.fetchall()
-            finally:
-                conn.close()
+            page, movies, total_pages, total_results = self._paged_table_query(self.movie_table, 'popularity DESC', page=page)
             return {
                 'page': page,
-                'results': [self._movie_to_dict(m) for m in movies],
+                'results': [self._movie_summary(m) for m in movies],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
@@ -284,20 +633,10 @@ class TMDBDBClient:
 
     def get_top_rated_movies(self, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT COUNT(*) FROM {self.movie_table}")
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.movie_table} ORDER BY vote_average DESC, popularity DESC LIMIT 20 OFFSET %s", (offset,))
-                    movies = cur.fetchall()
-            finally:
-                conn.close()
+            page, movies, total_pages, total_results = self._paged_table_query(self.movie_table, 'vote_average DESC, popularity DESC', page=page)
             return {
                 'page': page,
-                'results': [self._movie_to_dict(m) for m in movies],
+                'results': [self._movie_summary(m) for m in movies],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
@@ -307,20 +646,10 @@ class TMDBDBClient:
 
     def get_upcoming_movies(self, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT COUNT(*) FROM {self.movie_table}")
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.movie_table} ORDER BY release_date DESC, popularity DESC LIMIT 20 OFFSET %s", (offset,))
-                    movies = cur.fetchall()
-            finally:
-                conn.close()
+            page, movies, total_pages, total_results = self._paged_table_query(self.movie_table, 'release_date DESC, popularity DESC', page=page)
             return {
                 'page': page,
-                'results': [self._movie_to_dict(m) for m in movies],
+                'results': [self._movie_summary(m) for m in movies],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
@@ -333,20 +662,10 @@ class TMDBDBClient:
 
     def get_popular_series(self, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT COUNT(*) FROM {self.tv_table}")
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.tv_table} ORDER BY popularity DESC LIMIT 20 OFFSET %s", (offset,))
-                    series = cur.fetchall()
-            finally:
-                conn.close()
+            page, series, total_pages, total_results = self._paged_table_query(self.tv_table, 'popularity DESC', page=page)
             return {
                 'page': page,
-                'results': [self._tv_to_dict(s) for s in series],
+                'results': [self._tv_summary(s) for s in series],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
@@ -356,20 +675,10 @@ class TMDBDBClient:
 
     def get_top_rated_series(self, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT COUNT(*) FROM {self.tv_table}")
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.tv_table} ORDER BY vote_average DESC, popularity DESC LIMIT 20 OFFSET %s", (offset,))
-                    series = cur.fetchall()
-            finally:
-                conn.close()
+            page, series, total_pages, total_results = self._paged_table_query(self.tv_table, 'vote_average DESC, popularity DESC', page=page)
             return {
                 'page': page,
-                'results': [self._tv_to_dict(s) for s in series],
+                'results': [self._tv_summary(s) for s in series],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
@@ -385,18 +694,13 @@ class TMDBDBClient:
 
     def get_similar_movies(self, movie_id, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {self.movie_table} WHERE id != %s ORDER BY popularity DESC LIMIT 20", (movie_id,))
-                    movies = cur.fetchall()
-            finally:
-                conn.close()
+            related_ids = self._get_related_ids(self.movie_similar_table, 'from_movie_id', 'to_movie_id', movie_id)
+            movies = self._fetch_many_payloads(self.movie_table, related_ids[:20])
             return {
                 'page': page,
                 'results': [self._movie_to_dict(m) for m in movies],
                 'total_pages': 1,
-                'total_results': len(movies)
+                'total_results': len(related_ids)
             }
         except Exception as e:
             print(f"Error in TMDBDBClient.get_similar_movies: {e}")
@@ -404,18 +708,13 @@ class TMDBDBClient:
 
     def get_similar_series(self, series_id, page=1, params=None):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {self.tv_table} WHERE id != %s ORDER BY popularity DESC LIMIT 20", (series_id,))
-                    series = cur.fetchall()
-            finally:
-                conn.close()
+            related_ids = self._get_related_ids(self.tv_similar_table, 'from_tv_id', 'to_tv_id', series_id)
+            series = self._fetch_many_payloads(self.tv_table, related_ids[:20])
             return {
                 'page': page,
                 'results': [self._tv_to_dict(s) for s in series],
                 'total_pages': 1,
-                'total_results': len(series)
+                'total_results': len(related_ids)
             }
         except Exception as e:
             print(f"Error in TMDBDBClient.get_similar_series: {e}")
@@ -423,13 +722,7 @@ class TMDBDBClient:
 
     def get_movie_genres(self):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT id, name FROM {self.genre_table} WHERE media_type = 'movie'")
-                    genres = cur.fetchall()
-            finally:
-                conn.close()
+            genres = self._fetch_all(f"SELECT id, name FROM {self.genre_table} WHERE media_type = 'movie' ORDER BY name")
             return {'genres': [{'id': g['id'], 'name': g['name']} for g in genres]}
         except Exception as e:
             print(f"Error in TMDBDBClient.get_movie_genres: {e}")
@@ -437,13 +730,7 @@ class TMDBDBClient:
 
     def get_series_genres(self):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT id, name FROM {self.genre_table} WHERE media_type = 'tv'")
-                    genres = cur.fetchall()
-            finally:
-                conn.close()
+            genres = self._fetch_all(f"SELECT id, name FROM {self.genre_table} WHERE media_type = 'tv' ORDER BY name")
             return {'genres': [{'id': g['id'], 'name': g['name']} for g in genres]}
         except Exception as e:
             print(f"Error in TMDBDBClient.get_series_genres: {e}")
@@ -453,157 +740,88 @@ class TMDBDBClient:
         if params is None:
             params = {}
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    base_query = f"SELECT * FROM {self.movie_table}"
-                    count_query = f"SELECT COUNT(*) FROM {self.movie_table}"
-                    conditions = []
-                    query_params = []
-                    
-                    if 'primary_release_date.gte' in params:
-                        conditions.append("release_date >= %s")
-                        query_params.append(params['primary_release_date.gte'])
-                    if 'primary_release_date.lte' in params:
-                        conditions.append("release_date <= %s")
-                        query_params.append(params['primary_release_date.lte'])
-                    if 'with_genres' in params:
-                        genre_ids = [int(g) for g in str(params['with_genres']).split(',') if str(g).strip().isdigit()]
-                        if genre_ids:
-                            conditions.append("genres::text ~ %s")
-                            query_params.append('(' + '|'.join([f'\\"id\\": {gid}' for gid in genre_ids]) + ')')
-                    
-                    if 'sort_by' in params and 'primary_release_date.desc' in params['sort_by']:
-                        order_by = "ORDER BY release_date DESC, popularity DESC"
-                    else:
-                        order_by = "ORDER BY popularity DESC"
-                    
-                    page = int(params.get('page', 1))
-                    offset = (page - 1) * 20
-                    
-                    if conditions:
-                        where_clause = " WHERE " + " AND ".join(conditions)
-                    else:
-                        where_clause = ""
-                    
-                    cur.execute(count_query + where_clause, query_params)
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    
-                    cur.execute(base_query + where_clause + " " + order_by + " LIMIT 20 OFFSET %s", query_params + [offset])
-                    movies = cur.fetchall()
-            finally:
-                conn.close()
+            conditions = []
+            query_params = []
+            if 'primary_release_date.gte' in params:
+                conditions.append('release_date >= %s')
+                query_params.append(params['primary_release_date.gte'])
+            if 'primary_release_date.lte' in params:
+                conditions.append('release_date <= %s')
+                query_params.append(params['primary_release_date.lte'])
+            if 'with_genres' in params:
+                genre_ids = [int(g) for g in str(params['with_genres']).split(',') if str(g).strip().isdigit()]
+                if genre_ids:
+                    conditions.append(f"id IN (SELECT movie_id FROM {self.movie_genre_table} WHERE genre_id = ANY(%s))")
+                    query_params.append(genre_ids)
+            order_by = 'release_date DESC, popularity DESC' if 'sort_by' in params and 'primary_release_date.desc' in params['sort_by'] else 'popularity DESC'
+            page, movies, total_pages, total_results = self._paged_table_query(self.movie_table, order_by, page=params.get('page', 1), conditions=conditions, query_params=query_params)
             return {
                 'page': page,
-                'results': [self._movie_to_dict(m) for m in movies],
+                'results': [self._movie_summary(m) for m in movies],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
         except Exception as e:
             print(f"Error in TMDBDBClient.discover_movies: {e}")
-            return {'page': page, 'results': [], 'total_pages': 0, 'total_results': 0}
+            return {'page': params.get('page', 1) if params else 1, 'results': [], 'total_pages': 0, 'total_results': 0}
 
     def discover_series(self, params=None):
         if params is None:
             params = {}
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    base_query = f"SELECT * FROM {self.tv_table}"
-                    count_query = f"SELECT COUNT(*) FROM {self.tv_table}"
-                    conditions = []
-                    query_params = []
-                    
-                    if 'air_date.gte' in params:
-                        conditions.append("first_air_date >= %s")
-                        query_params.append(params['air_date.gte'])
-                    if 'air_date.lte' in params:
-                        conditions.append("first_air_date <= %s")
-                        query_params.append(params['air_date.lte'])
-                    if 'with_genres' in params:
-                        genre_ids = [int(g) for g in str(params['with_genres']).split(',') if str(g).strip().isdigit()]
-                        if genre_ids:
-                            conditions.append("genres::text ~ %s")
-                            query_params.append('(' + '|'.join([f'\\"id\\": {gid}' for gid in genre_ids]) + ')')
-                        order_by = "ORDER BY first_air_date DESC, popularity DESC"
-                    else:
-                        order_by = "ORDER BY popularity DESC"
-                    
-                    page = int(params.get('page', 1))
-                    offset = (page - 1) * 20
-                    
-                    if conditions:
-                        where_clause = " WHERE " + " AND ".join(conditions)
-                    else:
-                        where_clause = ""
-                    
-                    cur.execute(count_query + where_clause, query_params)
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    
-                    cur.execute(base_query + where_clause + " " + order_by + " LIMIT 20 OFFSET %s", query_params + [offset])
-                    series = cur.fetchall()
-            finally:
-                conn.close()
+            conditions = []
+            query_params = []
+            if 'air_date.gte' in params:
+                conditions.append('first_air_date >= %s')
+                query_params.append(params['air_date.gte'])
+            if 'air_date.lte' in params:
+                conditions.append('first_air_date <= %s')
+                query_params.append(params['air_date.lte'])
+            if 'with_genres' in params:
+                genre_ids = [int(g) for g in str(params['with_genres']).split(',') if str(g).strip().isdigit()]
+                if genre_ids:
+                    conditions.append(f"id IN (SELECT tv_id FROM {self.tv_genre_table} WHERE genre_id = ANY(%s))")
+                    query_params.append(genre_ids)
+            order_by = 'first_air_date DESC, popularity DESC' if 'sort_by' in params and 'first_air_date.desc' in params['sort_by'] else 'popularity DESC'
+            page, series, total_pages, total_results = self._paged_table_query(self.tv_table, order_by, page=params.get('page', 1), conditions=conditions, query_params=query_params)
             return {
                 'page': page,
-                'results': [self._tv_to_dict(s) for s in series],
+                'results': [self._tv_summary(s) for s in series],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
         except Exception as e:
             print(f"Error in TMDBDBClient.discover_series: {e}")
-            return {'page': page, 'results': [], 'total_pages': 0, 'total_results': 0}
+            return {'page': params.get('page', 1) if params else 1, 'results': [], 'total_pages': 0, 'total_results': 0}
 
     def get_movie_details(self, movie_id):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {self.movie_table} WHERE id = %s", (movie_id,))
-                    movie = cur.fetchone()
-            finally:
-                conn.close()
-            return self._movie_to_dict(movie)
+            movie = self._fetch_one(f"SELECT * FROM {self.movie_table} WHERE id = %s", (movie_id,))
+            return self._movie_to_dict(movie) if movie else None
         except Exception as e:
             print(f"Error in TMDBDBClient.get_movie_details: {e}")
             return None
 
     def get_series_details(self, series_id):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {self.tv_table} WHERE id = %s", (series_id,))
-                    series = cur.fetchone()
-            finally:
-                conn.close()
-
+            series = self._fetch_one(f"SELECT * FROM {self.tv_table} WHERE id = %s", (series_id,))
             if not series:
                 return None
 
             series_dict = self._tv_to_dict(series)
-            seasons = _json_or_default(series_dict.get('seasons'), [])
-            series_dict['seasons'] = seasons if isinstance(seasons, list) else []
-            if isinstance(series_dict['seasons'], list):
+            seasons = series_dict.get('seasons') or []
+            if isinstance(seasons, list):
                 missing_seasons = []
-                for season in series_dict['seasons']:
+                for season in seasons:
                     if not isinstance(season, dict):
                         continue
                     season_number = season.get('season_number')
                     if season_number in (None, 0):
                         continue
-                    conn = get_tmdb_db_connection()
-                    try:
-                        with conn.cursor() as cur:
-                            cur.execute(f"SELECT COUNT(*) FROM {self.season_table} WHERE tv_id = %s AND season_number = %s", (series_id, season_number))
-                            season_count = cur.fetchone()['count']
-                            cur.execute(f"SELECT COUNT(*) FROM {self.episode_table} WHERE tv_id = %s AND season_number = %s", (series_id, season_number))
-                            episode_count = cur.fetchone()['count']
-                    finally:
-                        conn.close()
+                    season_count_row = self._fetch_one(f"SELECT COUNT(*) AS count FROM {self.season_table} WHERE tv_id = %s AND season_number = %s", (series_id, season_number))
+                    episode_count_row = self._fetch_one(f"SELECT COUNT(*) AS count FROM {self.episode_table} WHERE tv_id = %s AND season_number = %s", (series_id, season_number))
+                    season_count = season_count_row['count'] if season_count_row else 0
+                    episode_count = episode_count_row['count'] if episode_count_row else 0
                     if season_count == 0 or episode_count == 0:
                         missing_seasons.append(season_number)
 
@@ -625,46 +843,48 @@ class TMDBDBClient:
 
     def get_season_details(self, series_id, season_number):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {self.season_table} WHERE tv_id = %s AND season_number = %s", (series_id, season_number))
-                    season = cur.fetchone()
-                    cur.execute(f"SELECT * FROM {self.episode_table} WHERE tv_id = %s AND season_number = %s ORDER BY episode_number", (series_id, season_number))
-                    episodes = cur.fetchall()
-            finally:
-                conn.close()
+            with tmdb_db_cursor() as cur:
+                cur.execute(f"SELECT * FROM {self.season_table} WHERE tv_id = %s AND season_number = %s", (series_id, season_number))
+                season = cur.fetchone()
+                cur.execute(f"SELECT * FROM {self.episode_table} WHERE tv_id = %s AND season_number = %s ORDER BY episode_number", (series_id, season_number))
+                episodes = cur.fetchall()
 
             if season and episodes:
                 self._track_db_usage('season', entity_id=series_id, detail=f'season:{season_number}')
-                season_dict = dict(season)
-                season_dict['air_date'] = _date_to_iso(season_dict.get('air_date'))
-                season_dict['overview'] = season_dict.get('overview') or ''
-                season_dict['poster_path'] = season_dict.get('poster_path')
-                season_dict['name'] = season_dict.get('name') or f"Season {season_number}"
-                season_dict['season_number'] = season_dict.get('season_number', season_number)
-                season_dict['vote_average'] = season_dict.get('vote_average') or 0
-                season_dict['external_ids'] = _json_or_default(season_dict.get('external_ids'), {})
-                season_dict['images'] = _json_or_default(season_dict.get('images'), {'posters': []})
-                season_dict['videos'] = _json_or_default(season_dict.get('videos'), {'results': []})
-                season_dict['credits'] = _json_or_default(season_dict.get('credits'), {'cast': [], 'crew': []})
-                season_dict['episodes'] = []
+                season_dict = {
+                    'id': season.get('id') or (series_id * 1000 + season_number),
+                    'air_date': _date_to_iso(season.get('air_date')),
+                    'name': season.get('name') or f"Season {season_number}",
+                    'overview': season.get('overview') or '',
+                    'poster_path': season.get('poster_path'),
+                    'season_number': season.get('season_number', season_number),
+                    'vote_average': _safe_float(season.get('vote_average')),
+                    'external_ids': {},
+                    'images': {'posters': [], 'backdrops': []},
+                    'videos': {'results': []},
+                    'credits': {'cast': [], 'crew': []},
+                    'episodes': [],
+                }
                 for episode in episodes:
-                    episode_dict = dict(episode)
-                    episode_dict['air_date'] = _date_to_iso(episode_dict.get('air_date'))
-                    episode_dict['overview'] = episode_dict.get('overview') or ''
-                    episode_dict['still_path'] = episode_dict.get('still_path')
-                    episode_dict['name'] = episode_dict.get('name') or f"Episode {episode_dict.get('episode_number', '')}"
-                    episode_dict['vote_average'] = episode_dict.get('vote_average') or 0
-                    episode_dict['vote_count'] = episode_dict.get('vote_count') or 0
-                    episode_dict['runtime'] = episode_dict.get('runtime')
-                    episode_dict['season_number'] = episode_dict.get('season_number', season_number)
-                    episode_dict['crew'] = _json_or_default(episode_dict.get('crew'), [])
-                    episode_dict['guest_stars'] = _json_or_default(episode_dict.get('guest_stars'), [])
-                    episode_dict['external_ids'] = _json_or_default(episode_dict.get('external_ids'), {})
-                    episode_dict['images'] = _json_or_default(episode_dict.get('images'), {'stills': []})
-                    episode_dict['videos'] = _json_or_default(episode_dict.get('videos'), {'results': []})
-                    season_dict['episodes'].append(episode_dict)
+                    season_dict['episodes'].append({
+                        'id': episode.get('id') or (series_id * 100000 + season_number * 1000 + (episode.get('episode_number') or 0)),
+                        'air_date': _date_to_iso(episode.get('air_date')),
+                        'episode_number': episode.get('episode_number'),
+                        'name': episode.get('name') or f"Episode {episode.get('episode_number', '')}",
+                        'overview': episode.get('overview') or '',
+                        'production_code': episode.get('production_code') or '',
+                        'runtime': episode.get('runtime'),
+                        'season_number': episode.get('season_number', season_number),
+                        'show_id': series_id,
+                        'still_path': episode.get('still_path'),
+                        'vote_average': _safe_float(episode.get('vote_average')),
+                        'vote_count': _safe_int(episode.get('vote_count')),
+                        'crew': [],
+                        'guest_stars': [],
+                        'external_ids': {},
+                        'images': {'stills': []},
+                        'videos': {'results': []},
+                    })
                 season_dict['episode_count'] = len(season_dict['episodes'])
                 return season_dict
 
@@ -689,21 +909,17 @@ class TMDBDBClient:
 
     def search_movies(self, query, page=1):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    search_pattern = f"%{query}%"
-                    cur.execute(f"SELECT COUNT(*) FROM {self.movie_table} WHERE title ILIKE %s OR original_title ILIKE %s", (search_pattern, search_pattern))
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.movie_table} WHERE title ILIKE %s OR original_title ILIKE %s ORDER BY popularity DESC LIMIT 20 OFFSET %s", (search_pattern, search_pattern, offset))
-                    movies = cur.fetchall()
-            finally:
-                conn.close()
+            search_pattern = f"%{query}%"
+            page, movies, total_pages, total_results = self._paged_table_query(
+                self.movie_table,
+                'popularity DESC',
+                page=page,
+                conditions=['(title ILIKE %s OR original_title ILIKE %s)'],
+                query_params=[search_pattern, search_pattern],
+            )
             return {
                 'page': page,
-                'results': [self._movie_to_dict(m) for m in movies],
+                'results': [self._movie_summary(m) for m in movies],
                 'total_pages': total_pages,
                 'total_results': total_results
             }
@@ -713,21 +929,17 @@ class TMDBDBClient:
 
     def search_series(self, query, page=1):
         try:
-            conn = get_tmdb_db_connection()
-            try:
-                with conn.cursor() as cur:
-                    search_pattern = f"%{query}%"
-                    cur.execute(f"SELECT COUNT(*) FROM {self.tv_table} WHERE name ILIKE %s OR original_name ILIKE %s", (search_pattern, search_pattern))
-                    total_results = cur.fetchone()['count']
-                    total_pages = (total_results + 19) // 20
-                    offset = (page - 1) * 20
-                    cur.execute(f"SELECT * FROM {self.tv_table} WHERE name ILIKE %s OR original_name ILIKE %s ORDER BY popularity DESC LIMIT 20 OFFSET %s", (search_pattern, search_pattern, offset))
-                    series = cur.fetchall()
-            finally:
-                conn.close()
+            search_pattern = f"%{query}%"
+            page, series, total_pages, total_results = self._paged_table_query(
+                self.tv_table,
+                'popularity DESC',
+                page=page,
+                conditions=['(name ILIKE %s OR original_name ILIKE %s)'],
+                query_params=[search_pattern, search_pattern],
+            )
             return {
                 'page': page,
-                'results': [self._tv_to_dict(s) for s in series],
+                'results': [self._tv_summary(s) for s in series],
                 'total_pages': total_pages,
                 'total_results': total_results
             }

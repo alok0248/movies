@@ -1,144 +1,124 @@
-
 {% extends 'base.html' %}
 
 {% block content %}
-{% if movie_rows and movie_rows.0 and movie_rows.0.items and movie_rows.0.items.0 %}
-{% with hero_movie=movie_rows.0.items.0 %}
-<div class="hero-section" {% if hero_movie.backdrop_path or hero_movie.poster_path %}style="background-image: url('{{ settings.TMDB_IMAGE_BASE_URL }}{{ hero_movie.backdrop_path|default:hero_movie.poster_path }}');"{% endif %}>
-    <div class="hero-overlay"></div>
-    <div class="hero-content">
-        <h1 class="hero-title">{{ hero_movie.title }}</h1>
-        <div class="hero-meta">
-            {% if hero_movie.release_date %}<span>{{ hero_movie.release_date|slice:":4" }}</span>{% endif %}
-            {% if hero_movie.vote_average %}<span style="color: #46d369;">★ {{ hero_movie.vote_average|floatformat:1 }}</span>{% endif %}
-        </div>
-        <p class="hero-description">{{ hero_movie.overview|default:'' }}</p>
-        <div class="d-flex gap-3">
-            {% if hero_movie.slug %}
-            <a href="{% url 'movie_detail' hero_movie.slug %}" class="hero-btn hero-btn-primary">
-                ▶ Watch
-            </a>
-            {% endif %}
-        </div>
+<div id="home-shell" class="py-5 text-center">
+    <div class="container">
+        <h1 class="hero-title mb-3">Loading your homepage...</h1>
+        <p class="text-muted mb-0">The page shell is ready. Content is loading in the background.</p>
     </div>
 </div>
-{% endwith %}
-{% endif %}
 
-{% if top_movies %}
-<h2 class="section-title">Top Movies</h2>
-<div class="row-container" data-auto-scroll="true">
-    <button class="scroll-btn left">&lsaquo;</button>
-    <div class="scroll-container" id="top-movies-scroll">
-        {% include 'core/_movie_cards.html' with movies=top_movies %}
-    </div>
-    <button class="scroll-btn right">&rsaquo;</button>
-</div>
-{% endif %}
-
-{% if top_series %}
-<h2 class="section-title">Top Series</h2>
-<div class="row-container" data-auto-scroll="true">
-    <button class="scroll-btn left">&lsaquo;</button>
-    <div class="scroll-container" id="top-series-scroll">
-        {% include 'core/_series_cards.html' with series=top_series %}
-    </div>
-    <button class="scroll-btn right">&rsaquo;</button>
-</div>
-{% endif %}
-
-{% for row_data in movie_rows %}
-<h2 class="section-title">{{ row_data.row.title }}</h2>
-<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}" data-auto-scroll="{{ row_data.row.auto_scroll|yesno:"true,false" }}">
-    <button class="scroll-btn left">&lsaquo;</button>
-    <div class="scroll-container" id="movie-row-{{ row_data.row.id }}">
-        {% include 'core/_movie_cards.html' with movies=row_data.items %}
-    </div>
-    <button class="scroll-btn right">&rsaquo;</button>
-</div>
-{% endfor %}
-
-{% for row_data in series_rows %}
-<h2 class="section-title">{{ row_data.row.title }}</h2>
-<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}" data-auto-scroll="{{ row_data.row.auto_scroll|yesno:"true,false" }}">
-    <button class="scroll-btn left">&lsaquo;</button>
-    <div class="scroll-container" id="series-row-{{ row_data.row.id }}">
-        {% include 'core/_series_cards.html' with series=row_data.items %}
-    </div>
-    <button class="scroll-btn right">&rsaquo;</button>
-</div>
-{% endfor %}
+<div id="home-content" aria-live="polite"></div>
 
 <script>
 let autoScrollIntervals = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Track scroll position and load more when reaching end of row
+    loadHomeContent();
+});
+
+function loadHomeContent() {
+    fetch('{% url "home_initial_data" %}', {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Homepage data request failed');
+        }
+        return response.json();
+    })
+    .then(data => {
+        const shell = document.getElementById('home-shell');
+        const content = document.getElementById('home-content');
+
+        if (shell) shell.style.display = 'none';
+        content.innerHTML = data.html || '<div class="container py-5 text-center text-muted">No content available right now.</div>';
+        initializeHomeRows();
+
+        if (typeof initScrollButtons === 'function') {
+            initScrollButtons();
+        }
+    })
+    .catch(error => {
+        console.error('Error loading homepage content:', error);
+        const content = document.getElementById('home-content');
+        content.innerHTML = '<div class="container py-5 text-center text-danger">Unable to load homepage content. Please refresh the page.</div>';
+    });
+}
+
+function initializeHomeRows() {
+    autoScrollIntervals.forEach(intervalId => clearInterval(intervalId));
+    autoScrollIntervals = [];
+
     const rowContainers = document.querySelectorAll('.row-container');
-    
+
     rowContainers.forEach(container => {
         const scrollContainer = container.querySelector('.scroll-container');
         const rowId = container.dataset.rowId;
-        let currentPage = parseInt(container.dataset.currentPage);
-        const totalPages = parseInt(container.dataset.totalPages);
+        let currentPage = parseInt(container.dataset.currentPage || '1');
+        const totalPages = parseInt(container.dataset.totalPages || '1');
         let isLoading = false;
-        
+
+        if (!scrollContainer) return;
+
         scrollContainer.addEventListener('scroll', () => {
             const scrollLeft = scrollContainer.scrollLeft;
             const scrollWidth = scrollContainer.scrollWidth;
             const clientWidth = scrollContainer.clientWidth;
-            
-            // Load more when scrolled to 80% of content
+
             if (rowId && scrollLeft + clientWidth >= scrollWidth * 0.8 && !isLoading && currentPage < totalPages) {
-                loadMoreContent(container, rowId, currentPage + 1);
-                currentPage++;
-                container.dataset.currentPage = currentPage;
+                isLoading = true;
+                loadMoreContent(container, rowId, currentPage + 1)
+                    .finally(() => {
+                        currentPage++;
+                        container.dataset.currentPage = currentPage;
+                        isLoading = false;
+                    });
             }
         });
 
-        // Auto-scroll for this row if enabled
         if (container.dataset.autoScroll === 'true') {
             let scrollDirection = 1;
-            let scrollSpeed = 1;
-            
+            const scrollSpeed = 1;
+
             const autoScroll = () => {
                 const scrollLeft = scrollContainer.scrollLeft;
                 const scrollWidth = scrollContainer.scrollWidth;
                 const clientWidth = scrollContainer.clientWidth;
-                
+
                 if (scrollLeft >= scrollWidth - clientWidth - 10) {
                     scrollDirection = -1;
                 } else if (scrollLeft <= 10) {
                     scrollDirection = 1;
                 }
-                
+
                 scrollContainer.scrollLeft += scrollDirection * scrollSpeed;
             };
-            
-            const intervalId = setInterval(autoScroll, 50);
+
+            let intervalId = setInterval(autoScroll, 50);
             autoScrollIntervals.push(intervalId);
-            
-            // Pause auto-scroll on hover
+
             container.addEventListener('mouseenter', () => {
                 clearInterval(intervalId);
             });
-            
+
             container.addEventListener('mouseleave', () => {
-                const newIntervalId = setInterval(autoScroll, 50);
-                autoScrollIntervals.push(newIntervalId);
+                intervalId = setInterval(autoScroll, 50);
+                autoScrollIntervals.push(intervalId);
             });
         }
     });
-});
+}
 
 function loadMoreContent(container, rowId, page) {
-    const isLoading = container.dataset.isLoading === 'true';
-    if (isLoading) return;
-    
+    if (container.dataset.isLoading === 'true') return Promise.resolve();
+
     container.dataset.isLoading = 'true';
     const scrollContainer = container.querySelector('.scroll-container');
-    
-    fetch(`{% url 'load_more_row_content' 0 %}`.replace('0', rowId) + `?page=${page}`, {
+
+    return fetch(`{% url 'load_more_row_content' 0 %}`.replace('0', rowId) + `?page=${page}`, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
         }
@@ -152,12 +132,14 @@ function loadMoreContent(container, rowId, page) {
                 scrollContainer.appendChild(tempDiv.firstChild);
             }
         }
-        
-        // Update total pages
-        container.dataset.totalPages = data.totalPages;
-        
-        // Re-initialize scroll buttons
-        initScrollButtons();
+
+        if (data.totalPages) {
+            container.dataset.totalPages = data.totalPages;
+        }
+
+        if (typeof initScrollButtons === 'function') {
+            initScrollButtons();
+        }
     })
     .catch(error => {
         console.error('Error loading more content:', error);

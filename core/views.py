@@ -18,10 +18,10 @@ import requests
 import calendar
 from bs4 import BeautifulSoup
 from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache
-from .tmdb_client import get_data_client, get_tmdb_db_connection
+from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
-    BrandingSettingsForm, DisplaySettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
+    BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
     PlayerSettingsForm, AdsSettingsForm, URLBlockingSettingsForm, EmailSettingsForm
 )
 
@@ -195,6 +195,7 @@ def get_content_row_items(row, page=1):
         return cached_data
 
     client = get_data_client()
+    fallback_client = TMDBClient()
     params = {'page': page}
 
     # Add region filter
@@ -232,6 +233,8 @@ def get_content_row_items(row, page=1):
             data = client.get_now_playing_movies(page=page, params=params)
         else:  # genre or custom
             data = client.discover_movies(params)
+            if not data.get('results') and client.__class__ is not TMDBClient:
+                data = fallback_client.discover_movies(params)
     else:  # tv
         if row.row_type == 'popular':
             data = client.get_popular_series(page=page, params=params)
@@ -243,6 +246,8 @@ def get_content_row_items(row, page=1):
             data = client.get_airing_today_series(page=page, params=params)
         else:  # genre or custom
             data = client.discover_series(params)
+            if not data.get('results') and client.__class__ is not TMDBClient:
+                data = fallback_client.discover_series(params)
 
     # Process results and add necessary fields for templates
     items = []
@@ -308,18 +313,21 @@ def permission_denied_view(request, exception=None):
     return render(request, 'core/403.html', status=403)
 
 
-def index(request):
-    # Get active ContentRows
+def _build_home_data():
     movie_rows = ContentRow.objects.filter(media_type='movie', is_active=True)
     series_rows = ContentRow.objects.filter(media_type='tv', is_active=True)
     site_settings = SiteSettings.get_settings()
-    
-    # Preload current month and nearby calendar data
-    _seed_calendar_month_window()
-    today = datetime.date.today()
-    current_month_data = get_calendar_month_data(today.year, today.month)
 
-    # Fetch initial items for each row
+    current_month_data = {
+        'year': datetime.date.today().year,
+        'month': datetime.date.today().month,
+        'month_name': calendar.month_name[datetime.date.today().month],
+        'first_day': None,
+        'last_day': None,
+        'movies': [],
+        'series': [],
+    }
+
     movie_rows_data = []
     for row in movie_rows:
         items, total_pages = get_content_row_items(row, page=1)
@@ -339,13 +347,11 @@ def index(request):
             'total_pages': total_pages,
             'current_page': 1
         })
-    
-    # Fetch top movies and series
+
     client = get_data_client()
     top_movies = []
     top_series = []
-    
-    # Check if curated movie IDs are set
+
     if site_settings.curated_top_movie_ids:
         top_movies_cache_key = f"curated_top_movies_{site_settings.curated_top_movie_ids[:100]}"
         cached_top_movies = cache.get(top_movies_cache_key)
@@ -354,14 +360,12 @@ def index(request):
         else:
             try:
                 movie_ids = [int(x.strip()) for x in site_settings.curated_top_movie_ids.split(',') if x.strip().isdigit()]
-                for movie_id in movie_ids:
-                    item = client.get_movie_details(movie_id)
-                    if item:
+                if hasattr(client, 'get_movies_by_ids'):
+                    batched_movies = client.get_movies_by_ids(movie_ids)
+                    for item in batched_movies:
                         processed_item = item.copy()
                         processed_item['title'] = item.get('title', 'Unknown Title')
-                        processed_slug = slugify(processed_item['title'])
-                        if not processed_slug:
-                            processed_slug = f"movie-{item.get('id', 'unknown')}"
+                        processed_slug = slugify(processed_item['title']) or f"movie-{item.get('id', 'unknown')}"
                         processed_item['slug'] = processed_slug
                         processed_item['year'] = item.get('release_date', '')[:4] if item.get('release_date') else ''
                         processed_item['vote_average'] = item.get('vote_average', 0)
@@ -372,11 +376,27 @@ def index(request):
                         processed_item['release_date'] = item.get('release_date')
                         processed_item['media_type'] = 'movie'
                         top_movies.append(processed_item)
+                else:
+                    for movie_id in movie_ids:
+                        item = client.get_movie_details(movie_id)
+                        if item:
+                            processed_item = item.copy()
+                            processed_item['title'] = item.get('title', 'Unknown Title')
+                            processed_slug = slugify(processed_item['title']) or f"movie-{item.get('id', 'unknown')}"
+                            processed_item['slug'] = processed_slug
+                            processed_item['year'] = item.get('release_date', '')[:4] if item.get('release_date') else ''
+                            processed_item['vote_average'] = item.get('vote_average', 0)
+                            processed_item['cover_url'] = f"{settings.TMDB_IMAGE_BASE_URL}{item['poster_path']}" if item.get('poster_path') else None
+                            processed_item['id'] = item.get('id')
+                            processed_item['poster_path'] = item.get('poster_path')
+                            processed_item['overview'] = item.get('overview', '')
+                            processed_item['release_date'] = item.get('release_date')
+                            processed_item['media_type'] = 'movie'
+                            top_movies.append(processed_item)
                 cache.set(top_movies_cache_key, top_movies, 3600)
             except Exception as e:
                 print(f"Error fetching curated top movies: {e}")
-    
-    # If no curated movies, use top rated
+
     if not top_movies:
         top_movies_cache_key = 'top_movies'
         cached_top_movies = cache.get(top_movies_cache_key)
@@ -388,9 +408,7 @@ def index(request):
                 for item in data.get('results', []):
                     processed_item = item.copy()
                     processed_item['title'] = item.get('title', 'Unknown Title')
-                    processed_slug = slugify(processed_item['title'])
-                    if not processed_slug:
-                        processed_slug = f"movie-{item.get('id', 'unknown')}"
+                    processed_slug = slugify(processed_item['title']) or f"movie-{item.get('id', 'unknown')}"
                     processed_item['slug'] = processed_slug
                     processed_item['year'] = item.get('release_date', '')[:4] if item.get('release_date') else ''
                     processed_item['vote_average'] = item.get('vote_average', 0)
@@ -404,8 +422,7 @@ def index(request):
                 cache.set(top_movies_cache_key, top_movies, 3600)
             except Exception as e:
                 print(f"Error fetching top movies: {e}")
-    
-    # Check if curated series IDs are set
+
     if site_settings.curated_top_series_ids:
         top_series_cache_key = f"curated_top_series_{site_settings.curated_top_series_ids[:100]}"
         cached_top_series = cache.get(top_series_cache_key)
@@ -414,14 +431,12 @@ def index(request):
         else:
             try:
                 series_ids = [int(x.strip()) for x in site_settings.curated_top_series_ids.split(',') if x.strip().isdigit()]
-                for series_id in series_ids:
-                    item = client.get_series_details(series_id)
-                    if item:
+                if hasattr(client, 'get_series_by_ids'):
+                    batched_series = client.get_series_by_ids(series_ids)
+                    for item in batched_series:
                         processed_item = item.copy()
                         processed_item['title'] = item.get('name', 'Unknown Title')
-                        processed_slug = slugify(processed_item['title'])
-                        if not processed_slug:
-                            processed_slug = f"series-{item.get('id', 'unknown')}"
+                        processed_slug = slugify(processed_item['title']) or f"series-{item.get('id', 'unknown')}"
                         processed_item['slug'] = processed_slug
                         processed_item['vote_average'] = item.get('vote_average', 0)
                         processed_item['cover_url'] = f"{settings.TMDB_IMAGE_BASE_URL}{item['poster_path']}" if item.get('poster_path') else None
@@ -431,11 +446,26 @@ def index(request):
                         processed_item['first_air_date'] = item.get('first_air_date')
                         processed_item['media_type'] = 'tv'
                         top_series.append(processed_item)
+                else:
+                    for series_id in series_ids:
+                        item = client.get_series_details(series_id)
+                        if item:
+                            processed_item = item.copy()
+                            processed_item['title'] = item.get('name', 'Unknown Title')
+                            processed_slug = slugify(processed_item['title']) or f"series-{item.get('id', 'unknown')}"
+                            processed_item['slug'] = processed_slug
+                            processed_item['vote_average'] = item.get('vote_average', 0)
+                            processed_item['cover_url'] = f"{settings.TMDB_IMAGE_BASE_URL}{item['poster_path']}" if item.get('poster_path') else None
+                            processed_item['id'] = item.get('id')
+                            processed_item['poster_path'] = item.get('poster_path')
+                            processed_item['overview'] = item.get('overview', '')
+                            processed_item['first_air_date'] = item.get('first_air_date')
+                            processed_item['media_type'] = 'tv'
+                            top_series.append(processed_item)
                 cache.set(top_series_cache_key, top_series, 3600)
             except Exception as e:
                 print(f"Error fetching curated top series: {e}")
-    
-    # If no curated series, use top rated
+
     if not top_series:
         top_series_cache_key = 'top_series'
         cached_top_series = cache.get(top_series_cache_key)
@@ -447,9 +477,7 @@ def index(request):
                 for item in data.get('results', []):
                     processed_item = item.copy()
                     processed_item['title'] = item.get('name', 'Unknown Title')
-                    processed_slug = slugify(processed_item['title'])
-                    if not processed_slug:
-                        processed_slug = f"series-{item.get('id', 'unknown')}"
+                    processed_slug = slugify(processed_item['title']) or f"series-{item.get('id', 'unknown')}"
                     processed_item['slug'] = processed_slug
                     processed_item['vote_average'] = item.get('vote_average', 0)
                     processed_item['cover_url'] = f"{settings.TMDB_IMAGE_BASE_URL}{item['poster_path']}" if item.get('poster_path') else None
@@ -463,13 +491,26 @@ def index(request):
             except Exception as e:
                 print(f"Error fetching top series: {e}")
 
-    return render(request, 'core/index.html', {
+    return {
         'movie_rows': movie_rows_data,
         'series_rows': series_rows_data,
         'top_movies': top_movies,
         'top_series': top_series,
         'current_month_data': current_month_data,
-    })
+    }
+
+def index(request):
+    return render(request, 'core/index.html')
+
+
+def home_initial_data(request):
+    try:
+        context = _build_home_data()
+        html = render_to_string('core/_home_content.html', context, request=request)
+        return JsonResponse({'html': html})
+    except Exception as e:
+        print(f"Error loading homepage data: {e}")
+        return JsonResponse({'html': '', 'error': 'Unable to load homepage data right now.'}, status=500)
 
 
 def is_staff_or_superuser(user):
@@ -484,6 +525,7 @@ def admin_dashboard(request):
 
 def movie_list(request):
     client = get_data_client()
+    search_client = TMDBClient()
     site_settings = SiteSettings.get_settings()
 
     search_query = request.GET.get('search', '')
@@ -504,7 +546,7 @@ def movie_list(request):
             params['with_genres'] = genre_id
 
         if search_query:
-            data = client.search_movies(search_query, page=page)
+            data = search_client.search_movies(search_query, page=page)
         else:
             if genre_id:
                 data = client.discover_movies(params)
@@ -575,6 +617,7 @@ def movie_list(request):
 
 def series_list(request):
     client = get_data_client()
+    search_client = TMDBClient()
     site_settings = SiteSettings.get_settings()
 
     # Get filters
@@ -583,10 +626,11 @@ def series_list(request):
     sort_by = request.GET.get('sort', '')
     order = request.GET.get('order', 'desc')
     filter_type = request.GET.get('filter_type', '')
+    provider_slug = request.GET.get('provider', '')
     page = int(request.GET.get('page', 1))
     
     # Create cache key based on all filters and page
-    cache_key = f"series_list_{search_query}_{genre_id}_{sort_by}_{order}_{filter_type}_{page}"
+    cache_key = f"series_list_{search_query}_{genre_id}_{sort_by}_{order}_{filter_type}_{provider_slug}_{page}"
     cached_result = cache.get(cache_key)
     if cached_result:
         items, total_pages, all_genres = cached_result
@@ -599,7 +643,7 @@ def series_list(request):
 
         # Handle search
         if search_query:
-            data = client.search_series(search_query, page=page)
+            data = search_client.search_series(search_query, page=page)
         else:
             # If genre is selected, always use discover endpoint
             if genre_id:
@@ -633,6 +677,9 @@ def series_list(request):
             processed_item['first_air_date'] = item.get('first_air_date')
             processed_item['media_type'] = 'tv'
             items.append(processed_item)
+
+        if provider_slug:
+            items = [item for item in items if _provider_slug_matches(item, provider_slug)]
 
         total_pages = data.get('total_pages', 1)
 
@@ -774,12 +821,15 @@ def movie_detail_by_id(request, movie_id):
         # Cache for 1 hour
         cache.set(cache_key, (processed_movie, more_movies, watch_providers), 3600)
     
+    if site_settings.url_format == 'slug':
+        return redirect('movie_detail', movie_slug=processed_movie['slug'])
+
     # Get player configurations
     active_player = site_settings.active_movie_player
     all_players = PlayerConfiguration.objects.filter(
         media_type__in=['movie', 'both'],
         is_active=True
-    )
+    ).order_by('order', 'id')
     return render(request, 'core/movie_detail.html', {
         'movie': processed_movie,
         'more_movies': more_movies,
@@ -804,13 +854,20 @@ def movie_detail(request, movie_slug):
         search_query = movie_slug.replace('-', ' ')
         
         # Search for movies by name
-        search_results = client.search_movies(search_query)
+        search_results = TMDBClient().search_movies(search_query)
         
-        # Find the first matching movie (we'll just take the first result for now)
+        # Find the best matching movie
         movie_id = None
         movie = None
         if search_results.get('results'):
-            movie_id = search_results['results'][0]['id']
+            selected_result = next(
+                (
+                    result for result in search_results['results']
+                    if slugify(result.get('title', '')) == movie_slug
+                ),
+                search_results['results'][0]
+            )
+            movie_id = selected_result['id']
             movie = client.get_movie_details(movie_id)
         
         if not movie:
@@ -874,12 +931,15 @@ def movie_detail(request, movie_slug):
         # Cache for 1 hour
         cache.set(cache_key, (processed_movie, more_movies, movie_id, watch_providers), 3600)
 
+    if site_settings.url_format == 'id' and movie_id is not None:
+        return redirect('movie_detail_by_id', movie_id=movie_id)
+
     # Get player configurations
     active_player = site_settings.active_movie_player
     all_players = PlayerConfiguration.objects.filter(
         media_type__in=['movie', 'both'],
         is_active=True
-    )
+    ).order_by('order', 'id')
     return render(request, 'core/movie_detail.html', {
         'movie': processed_movie,
         'more_movies': more_movies,
@@ -987,12 +1047,15 @@ def series_detail_by_id(request, series_id):
         # Cache for 1 hour
         cache.set(cache_key, (processed_series, seasons, episodes, more_series, watch_providers), 3600)
     
+    if site_settings.url_format == 'slug':
+        return redirect(f"{redirect('series_detail', series_slug=processed_series['slug']).url}?season={season_number}&episode={episode_number}")
+
     # Get player configurations
     active_player = site_settings.active_tv_player
     all_players = PlayerConfiguration.objects.filter(
         media_type__in=['tv', 'both'],
         is_active=True
-    )
+    ).order_by('order', 'id')
     return render(request, 'core/series_detail.html', {
         'series': processed_series,
         'seasons': seasons,
@@ -1035,13 +1098,20 @@ def series_detail(request, series_slug):
         search_query = series_slug.replace('-', ' ')
         
         # Search for series by name
-        search_results = client.search_series(search_query)
+        search_results = TMDBClient().search_series(search_query)
         
-        # Find the first matching series
+        # Find the best matching series
         series_id = None
         series_details = None
         if search_results.get('results'):
-            series_id = search_results['results'][0]['id']
+            selected_result = next(
+                (
+                    result for result in search_results['results']
+                    if slugify(result.get('name', '')) == series_slug
+                ),
+                search_results['results'][0]
+            )
+            series_id = selected_result['id']
             series_details = client.get_series_details(series_id)
         
         if not series_details:
@@ -1123,12 +1193,15 @@ def series_detail(request, series_slug):
         # Cache for 1 hour
         cache.set(cache_key, (processed_series, seasons, episodes, more_series, series_id, watch_providers), 3600)
 
+    if site_settings.url_format == 'id' and series_id is not None:
+        return redirect(f"{redirect('series_detail_by_id', series_id=series_id).url}?season={season_number}&episode={episode_number}")
+
     # Get player configurations
     active_player = site_settings.active_tv_player
     all_players = PlayerConfiguration.objects.filter(
         media_type__in=['tv', 'both'],
         is_active=True
-    )
+    ).order_by('order', 'id')
     return render(request, 'core/series_detail.html', {
         'series': processed_series,
         'seasons': seasons,
@@ -1310,6 +1383,25 @@ def email_settings(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def footer_settings(request):
+    site_settings = SiteSettings.get_settings()
+    if request.method == 'POST':
+        form = FooterSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_dashboard')
+    else:
+        form = FooterSettingsForm(instance=site_settings)
+    return render(request, 'core/settings_section.html', {
+        'form': form,
+        'title': 'Footer Settings',
+        'description': 'Edit all footer sections including links, genres, countries, subscribe block, logo area, copyright, and disclaimer.',
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def data_source_usage_stats(request):
     api_keys = TMDBApiKey.objects.all().order_by('-usage_count', '-is_active', '-created_at')
     usage_logs = DataSourceUsageLog.objects.all().order_by('-last_used_at', '-usage_count')
@@ -1445,6 +1537,40 @@ def toggle_hide_live_tv(request):
         return JsonResponse({'success': True, 'message': 'Live TV setting updated!', 'hide_live_tv': settings_obj.hide_live_tv})
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error updating setting: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def toggle_ads(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    try:
+        settings_obj = SiteSettings.get_settings()
+        enabled_value = request.POST.get('enabled')
+        if enabled_value is None:
+            return JsonResponse({'success': False, 'message': 'Missing enabled state'})
+        settings_obj.enable_sidebar_ads = str(enabled_value).lower() in ['true', '1', 'yes', 'on']
+        settings_obj.save()
+        return JsonResponse({'success': True, 'message': 'Ads setting updated!', 'enable_sidebar_ads': settings_obj.enable_sidebar_ads})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error updating ads setting: {str(e)}'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def toggle_footer(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    try:
+        settings_obj = SiteSettings.get_settings()
+        enabled_value = request.POST.get('enabled')
+        if enabled_value is None:
+            return JsonResponse({'success': False, 'message': 'Missing enabled state'})
+        settings_obj.footer_enabled = str(enabled_value).lower() in ['true', '1', 'yes', 'on']
+        settings_obj.save()
+        return JsonResponse({'success': True, 'message': 'Footer setting updated!', 'footer_enabled': settings_obj.footer_enabled})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error updating footer setting: {str(e)}'})
 
 
 @login_required
@@ -1904,6 +2030,7 @@ def fetch_wikipedia(request):
 
 def search(request):
     client = get_data_client()
+    search_client = TMDBClient()
     site_settings = SiteSettings.get_settings()
     search_query = request.GET.get('q', '')
     
@@ -1918,7 +2045,7 @@ def search(request):
 
         if search_query:
             # Search for movies
-            movie_data = client.search_movies(search_query)
+            movie_data = search_client.search_movies(search_query)
             for item in movie_data.get('results', []):
                 processed_item = item.copy()
                 processed_item['title'] = item.get('title', 'Unknown Title')
@@ -1937,7 +2064,7 @@ def search(request):
                 movie_items.append(processed_item)
 
             # Search for series
-            series_data = client.search_series(search_query)
+            series_data = search_client.search_series(search_query)
             for item in series_data.get('results', []):
                 processed_item = item.copy()
                 processed_item['title'] = item.get('name', 'Unknown Title')
@@ -2045,6 +2172,7 @@ def calendar_movies(request):
         return JsonResponse(cached, safe=False)
     
     client = get_data_client()
+    fallback_client = TMDBClient()
     movies = []
     
     try:
@@ -2065,6 +2193,8 @@ def calendar_movies(request):
         while current_page <= max_pages:
             params['page'] = current_page
             data = client.discover_movies(params)
+            if not data.get('results') and client.__class__ is not TMDBClient:
+                data = fallback_client.discover_movies(params)
             page_results = data.get('results', [])
             if not page_results:
                 break
@@ -2082,6 +2212,7 @@ def calendar_movies(request):
 def upcoming(request):
     """View to show upcoming movies and series grouped by date"""
     client = get_data_client()
+    fallback_client = TMDBClient()
     
     # Get dates from query params or use default
     start_date = request.GET.get('start')
@@ -2119,6 +2250,8 @@ def upcoming(request):
             while current_page <= max_pages:
                 params['page'] = current_page
                 data = client.discover_movies(params)
+                if not data.get('results') and client.__class__ is not TMDBClient:
+                    data = fallback_client.discover_movies(params)
                 page_results = data.get('results', [])
                 if not page_results:
                     break
@@ -2144,6 +2277,8 @@ def upcoming(request):
             while current_page <= max_pages:
                 params['page'] = current_page
                 data = client.discover_series(params)
+                if not data.get('results') and client.__class__ is not TMDBClient:
+                    data = fallback_client.discover_series(params)
                 page_results = data.get('results', [])
                 if not page_results:
                     break
@@ -2200,6 +2335,7 @@ def calendar_series(request):
         return JsonResponse(cached, safe=False)
     
     client = get_data_client()
+    fallback_client = TMDBClient()
     series = []
     
     try:
@@ -2220,6 +2356,8 @@ def calendar_series(request):
         while current_page <= max_pages:
             params['page'] = current_page
             data = client.discover_series(params)
+            if not data.get('results') and client.__class__ is not TMDBClient:
+                data = fallback_client.discover_series(params)
             page_results = data.get('results', [])
             if not page_results:
                 break
@@ -2427,10 +2565,13 @@ def player_create(request):
     if request.method == 'POST':
         form = PlayerConfigurationForm(request.POST)
         if form.is_valid():
-            form.save()
+            player = form.save(commit=False)
+            if not player.custom_iframe_id_type:
+                player.custom_iframe_id_type = 'tmdb'
+            player.save()
             return redirect('player_list')
     else:
-        form = PlayerConfigurationForm()
+        form = PlayerConfigurationForm(initial={'custom_iframe_id_type': 'tmdb'})
     return render(request, 'core/player_form.html', {'form': form, 'action': 'Create'})
 
 

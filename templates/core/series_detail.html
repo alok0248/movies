@@ -150,7 +150,7 @@
                 </div>
                 {% endif %}
                 {% endwith %}
-                <div class="d-flex gap-3 align-items-center">
+                <div class="d-flex gap-3 align-items-center flex-wrap">
                     {% if all_players %}
                     <button id="play-button" class="btn btn-primary btn-lg">
                         <i class="fas fa-play me-2"></i> Play Now
@@ -170,6 +170,39 @@
                         <i class="fas fa-info-circle me-2"></i> Wikipedia
                     </button>
                 </div>
+                {% if all_players %}
+                <div style="margin-top: 1rem;">
+                    <div style="color: #b3b3b3; font-size: 0.95rem; margin-bottom: 0.6rem;">Available Server</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.6rem;">
+                        {% for player in all_players %}
+                        <button
+                            type="button"
+                            class="server-select-btn"
+                            data-player-id="{{ player.id }}"
+                            {% if request.user.is_staff or request.user.is_superuser %}data-player-edit-url="{% url 'player_edit' player.id %}"{% endif %}
+                            title="Server {{ forloop.counter }} - {{ player.name }}{% if request.user.is_staff or request.user.is_superuser %} (Right-click to edit){% endif %}"
+                            style="min-width: 64px; height: 44px; padding: 0 0.9rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: #fff; font-weight: 700; font-size: 0.95rem; transition: all 0.2s ease;"
+                        >
+                            {{ forloop.counter }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% if request.user.is_staff or request.user.is_superuser %}
+                <div id="adminIframePreviewBox" style="margin-top: 1rem; padding: 1rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                        <div>
+                            <div style="color: #ffffff; font-weight: 700;">Admin iframe preview</div>
+                            <div id="adminIframePreviewMeta" style="color: #b3b3b3; font-size: 0.9rem;"></div>
+                        </div>
+                        <a id="adminIframeEditLink" href="#" class="btn btn-sm btn-outline-light" target="_blank" rel="noopener">Edit selected player</a>
+                    </div>
+                    <div style="border-radius: 10px; overflow: hidden; background: #000; aspect-ratio: 16 / 9;">
+                        <iframe id="adminIframePreview" style="width: 100%; height: 100%; border: 0;" loading="lazy" referrerpolicy="no-referrer"></iframe>
+                    </div>
+                </div>
+                {% endif %}
+                {% endif %}
                         <div class="watchlist-warning text-danger" style="display: none; font-size: 1rem; margin-top: 1rem;">
                             You need to login to add to the list
                         </div>
@@ -267,7 +300,7 @@
                 {% if s.cover_url %}
                 <div class="card-image-container">
                     <!-- Only the poster area links to detail page -->
-                    <a href="{% url 'series_detail' s.slug %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                    <a href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
                     <img src="{{ s.cover_url }}" class="card-image" alt="{{ s.title }}" loading="lazy">
                     <div class="rating-badge">
                         {% if s.vote_average %}
@@ -282,7 +315,7 @@
                             <p class="hover-description">{{ s.plot|truncatewords:30 }}</p>
                             {% endif %}
                             <div class="hover-actions">
-                                <button class="hover-play-btn" onclick="window.location.href='{% url 'series_detail' s.slug %}'">▶ Play</button>
+                                <button class="hover-play-btn" onclick="window.location.href='{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}'">▶ Play</button>
                                 <button class="hover-watchlist-btn" 
                                         data-tmdb-id="{{ s.id }}" 
                                         data-media-type="tv" 
@@ -299,7 +332,7 @@
                 </div>
                 {% endif %}
                 <div class="card-info">
-                    <a href="{% url 'series_detail' s.slug %}" style="text-decoration: none; color: inherit;">
+                    <a href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}" style="text-decoration: none; color: inherit;">
                         <h5 class="card-title">{{ s.title }}</h5>
                         <p class="card-year">
                             {% if s.first_air_date %}
@@ -332,14 +365,19 @@ const playerConfigs = {
         height: "{{ player.player_height|default:'600px' }}",
         frameborder: {{ player.frameborder|default:0 }},
         allowfullscreen: {% if player.allowfullscreen %}true{% else %}false{% endif %},
-        customIframeUrl: "{{ player.custom_iframe_url|default:''|escapejs }}"
+        customIframeIdType: "{{ player.custom_iframe_id_type|default:'tmdb'|escapejs }}",
+        customIframeUrl: "{{ player.custom_iframe_url|default:''|escapejs }}",
+        customMovieIframeUrl: "{{ player.custom_movie_iframe_url|default:''|escapejs }}",
+        customTvIframeUrl: "{{ player.custom_tv_iframe_url|default:''|escapejs }}"
     },
     {% endfor %}
 };
 
 const SERIES_TMDB_ID = {{ series_id }};
+const SERIES_IMDB_ID = "{{ series.imdb_id|default:''|escapejs }}";
 const seriesTitle = "{{ series.title|escapejs }}";
 const seriesYear = "{{ series.first_air_date|slice:':4' }}";
+const isAdminUser = {% if request.user.is_staff or request.user.is_superuser %}true{% else %}false{% endif %};
 
 let currentSeason = {{ current_season }};
 let currentEpisode = {{ current_episode }};
@@ -348,18 +386,64 @@ let playerLoaded = false;
 let wikipediaLoaded = false;
 let currentEpisodesData = [];
 let currentPlayerId = {% if active_player %}{{ active_player.id }}{% elif all_players %}{{ all_players.0.id }}{% else %}null{% endif %};
+let playButtonClicked = false;
+
+function updateServerButtonState() {
+    document.querySelectorAll('.server-select-btn').forEach(button => {
+        const isActive = String(button.dataset.playerId) === String(currentPlayerId);
+        button.style.background = isActive ? '#ffffff' : 'rgba(255,255,255,0.1)';
+        button.style.color = isActive ? '#111111' : '#ffffff';
+        button.style.borderColor = isActive ? '#ffffff' : 'rgba(255,255,255,0.2)';
+    });
+}
+
+function updateAdminIframePreview() {
+    if (!isAdminUser) {
+        return;
+    }
+
+    const previewBox = document.getElementById('adminIframePreviewBox');
+    const previewFrame = document.getElementById('adminIframePreview');
+    const previewMeta = document.getElementById('adminIframePreviewMeta');
+    const editLink = document.getElementById('adminIframeEditLink');
+    const activeButton = document.querySelector(`.server-select-btn[data-player-id="${currentPlayerId}"]`);
+    const playerConfig = playerConfigs[currentPlayerId];
+
+    if (!previewBox || !previewFrame || !previewMeta || !editLink || !activeButton || !playerConfig) {
+        return;
+    }
+
+    previewBox.style.display = 'block';
+    editLink.href = activeButton.dataset.playerEditUrl || '#';
+
+    if (!playButtonClicked) {
+        previewFrame.removeAttribute('src');
+        previewMeta.textContent = `${playerConfig.name || 'Selected player'} • Click Play to load iframe preview`;
+        return;
+    }
+
+    const previewUrl = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
+    previewFrame.src = previewUrl;
+    previewMeta.textContent = `${playerConfig.name || 'Selected player'} • ${previewUrl}`;
+}
 
 // Function to build player URL based on config
-function getPlayerUrl(playerConfig, mediaType, mediaId, season, episode) {
-    // If custom iframe URL is set, use that with placeholders
-    if (playerConfig.customIframeUrl) {
-        let url = playerConfig.customIframeUrl;
-        url = url.replace('{tmdb_id}', mediaId);
-        if (season) {
-            url = url.replace('{season}', season);
+function getPlayerUrl(playerConfig, mediaType, mediaId, season, episode, imdbId = '') {
+    const customUrl = mediaType === 'movie'
+        ? (playerConfig.customMovieIframeUrl || playerConfig.customIframeUrl)
+        : (playerConfig.customTvIframeUrl || playerConfig.customIframeUrl);
+
+    if (customUrl) {
+        const selectedId = playerConfig.customIframeIdType === 'imdb' && imdbId ? imdbId : mediaId;
+        let url = customUrl;
+        url = url.replaceAll('{tmdb_id}', mediaId || '');
+        url = url.replaceAll('{imdb_id}', imdbId || '');
+        url = url.replaceAll('{content_id}', selectedId || '');
+        if (season !== undefined && season !== null) {
+            url = url.replaceAll('{season}', season);
         }
-        if (episode) {
-            url = url.replace('{episode}', episode);
+        if (episode !== undefined && episode !== null) {
+            url = url.replaceAll('{episode}', episode);
         }
         console.log('Custom Player URL:', url);
         return url;
@@ -413,8 +497,11 @@ function updatePlayerUrl() {
     playerIframe.frameBorder = playerConfig.frameborder;
     playerIframe.allowFullscreen = playerConfig.allowfullscreen;
     
-    playerIframe.src = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode);
+    playerIframe.src = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
     playerLoaded = true;
+    if (playButtonClicked) {
+        updateAdminIframePreview();
+    }
     
     // Update URL without reloading page
     const newUrl = `${window.location.pathname}?season=${currentSeason}&episode=${currentEpisode}`;
@@ -538,6 +625,34 @@ window.addEventListener('popstate', (e) => {
     }
 });
 
+document.querySelectorAll('.server-select-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        currentPlayerId = this.dataset.playerId;
+        updateServerButtonState();
+        updateAdminIframePreview();
+        if (playButtonClicked) {
+            const playerSection = document.getElementById('player-section');
+            if (playerSection.style.display === 'none') {
+                playerSection.style.display = 'block';
+            }
+            updatePlayerUrl();
+        }
+    });
+
+    if (isAdminUser) {
+        button.addEventListener('contextmenu', function(event) {
+            event.preventDefault();
+            const editUrl = this.dataset.playerEditUrl;
+            if (editUrl) {
+                window.open(editUrl, '_blank');
+            }
+        });
+    }
+});
+
+updateServerButtonState();
+updateAdminIframePreview();
+
 document.getElementById('play-button').addEventListener('click', function() {
     const playerSection = document.getElementById('player-section');
     const playerIframe = document.getElementById('player-iframe');
@@ -556,12 +671,15 @@ document.getElementById('play-button').addEventListener('click', function() {
     playerIframe.frameBorder = playerConfig.frameborder;
     playerIframe.allowFullscreen = playerConfig.allowfullscreen;
     
+    playButtonClicked = true;
     playerSection.style.display = 'block';
     playerSection.scrollIntoView({ behavior: 'instant', block: 'start' });
     
     // Always reload player on play button click
-    playerIframe.src = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode);
+    playerIframe.src = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
     playerLoaded = true;
+    updateServerButtonState();
+    updateAdminIframePreview();
 });
 
 document.getElementById('popoutSeriesBtn').addEventListener('click', function() {
@@ -570,7 +688,7 @@ document.getElementById('popoutSeriesBtn').addEventListener('click', function() 
         return;
     }
     
-    const playerUrl = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode);
+    const playerUrl = getPlayerUrl(playerConfig, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
     if (seriesPopupWindow && !seriesPopupWindow.closed) {
         seriesPopupWindow.focus();
         return;

@@ -1127,6 +1127,55 @@
         {% block content %}{% endblock %}
     </div>
 
+    {% if site_settings.footer_enabled and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    {% block footer %}
+    <footer class="site-footer">
+        <div class="container-fluid px-0">
+            <div class="row g-4 align-items-start">
+                <div class="col-12 col-md-6 col-lg-2">
+                    <div class="site-footer-title">{{ site_settings.footer_links_title }}</div>
+                    <ul class="site-footer-list">
+                        {% for item in site_settings.footer_links.splitlines %}
+                            {% if item %}<li><a href="#">{{ item }}</a></li>{% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-12 col-md-6 col-lg-2">
+                    <div class="site-footer-title">{{ site_settings.footer_genres_title }}</div>
+                    <ul class="site-footer-list">
+                        {% for item in site_settings.footer_genres.splitlines %}
+                            {% if item %}<li><a href="#">{{ item }}</a></li>{% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-12 col-md-6 col-lg-2">
+                    <div class="site-footer-title">{{ site_settings.footer_countries_title }}</div>
+                    <ul class="site-footer-list">
+                        {% for item in site_settings.footer_countries.splitlines %}
+                            {% if item %}<li><a href="#">{{ item }}</a></li>{% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-12 col-lg-4">
+                    <div class="site-footer-title text-center text-lg-start">{{ site_settings.footer_subscribe_title }}</div>
+                    <div class="site-footer-subscribe-text">{{ site_settings.footer_subscribe_text }}</div>
+                    <form class="site-footer-subscribe-form" onsubmit="return false;">
+                        <input type="email" placeholder="{{ site_settings.footer_subscribe_placeholder }}">
+                        <button type="button">{{ site_settings.footer_subscribe_button_text }}</button>
+                    </form>
+                </div>
+                <div class="col-12 col-lg-2 text-lg-end">
+                    <div class="site-footer-brand">{{ site_settings.footer_logo_text|safe }}</div>
+                    <div class="site-footer-brand-tagline">{{ site_settings.footer_logo_tagline }}</div>
+                    <div class="site-footer-copy">{{ site_settings.footer_copyright_text }}</div>
+                    <div class="site-footer-disclaimer mt-2">{{ site_settings.footer_disclaimer_text }}</div>
+                </div>
+            </div>
+        </div>
+    </footer>
+    {% endblock %}
+    {% endif %}
+
     <!-- Blurred Modal -->
     <div id="modalBackdrop" class="modal-backdrop"></div>
     <div id="detailModal" class="detail-modal">
@@ -1571,6 +1620,26 @@
             }
         }
 
+        const detailUrlFormat = '{{ site_settings.url_format|default:"slug" }}';
+
+        function buildMovieDetailUrl(movie) {
+            const slug = (movie.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `movie-${movie.id}`;
+            return detailUrlFormat === 'id' ? `/movies/id/${movie.id}/` : `/movies/${slug}/`;
+        }
+
+        function buildSeriesDetailUrl(show) {
+            const title = show.name || show.title || 'Unknown Title';
+            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `series-${show.id}`;
+            return detailUrlFormat === 'id' ? `/series/id/${show.id}/` : `/series/${slug}/`;
+        }
+
+        function buildDetailUrl(data) {
+            if (data.media_type === 'tv' || data.name || data.first_air_date) {
+                return buildSeriesDetailUrl(data);
+            }
+            return buildMovieDetailUrl(data);
+        }
+
         function showPopup(event, dateKey, fixed = false) {
             const popup = document.getElementById('calendarDatePopup');
             const dateTitle = document.getElementById('popupDateTitle');
@@ -1593,7 +1662,7 @@
                 movies.forEach(movie => {
                     const li = document.createElement('li');
                     li.style.marginBottom = '4px';
-                    li.innerHTML = `<a href="/movies/id/${movie.id}/" style="color: white; text-decoration: none;">• ${movie.title}</a>`;
+                    li.innerHTML = `<a href="${buildMovieDetailUrl(movie)}" style="color: white; text-decoration: none;">• ${movie.title}</a>`;
                     popupMoviesList.appendChild(li);
                 });
             }
@@ -1609,7 +1678,7 @@
                     const title = show.name || show.title || 'Unknown Title';
                     const li = document.createElement('li');
                     li.style.marginBottom = '4px';
-                    li.innerHTML = `<a href="/series/id/${show.id}/" style="color: white; text-decoration: none;">• ${title}</a>`;
+                    li.innerHTML = `<a href="${buildSeriesDetailUrl(show)}" style="color: white; text-decoration: none;">• ${title}</a>`;
                     popupSeriesList.appendChild(li);
                 });
             }
@@ -1654,7 +1723,7 @@
             const wrapper = document.createElement('div');
             wrapper.className = 'card-wrapper';
             
-            const slug = movie.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `movie-${movie.id}`;
+            const detailUrl = buildMovieDetailUrl(movie);
             
             let posterUrl = '';
             if (movie.poster_path) {
@@ -1666,14 +1735,14 @@
             wrapper.innerHTML = `
                 <div class="movie-card">
                     <div class="card-image-container">
-                        <a href="/movie/${slug}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                        <a href="${detailUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
                         <img src="${posterUrl}" class="card-image" alt="${movie.title}" loading="lazy">
                         ${movie.vote_average ? `<div class="rating-badge">★ ${movie.vote_average.toFixed(1)}</div>` : ''}
                         <div class="card-hover-overlay">
                             <div class="hover-content">
                                 ${movie.overview ? `<p class="hover-description">${movie.overview.substring(0, 100)}...</p>` : ''}
                                 <div class="hover-actions">
-                                    <button class="hover-play-btn" onclick="window.location.href='/movie/${slug}'">▶ Play</button>
+                                    <button class="hover-play-btn" onclick="window.location.href='${detailUrl}'">▶ Play</button>
                                     <button class="hover-watchlist-btn" data-tmdb-id="${movie.id}" data-media-type="movie" data-title="${movie.title.replace(/"/g, '&quot;')}" data-poster-path="${movie.poster_path || ''}">
                                         <span class="watchlist-icon">+</span>
                                     </button>
@@ -1682,7 +1751,7 @@
                         </div>
                     </div>
                     <div class="card-info">
-                        <a href="/movie/${slug}" style="text-decoration: none; color: inherit;">
+                        <a href="${detailUrl}" style="text-decoration: none; color: inherit;">
                             <h5 class="card-title">${movie.title}</h5>
                             <p class="card-year">${movie.release_date ? movie.release_date.substring(0, 4) : ''}</p>
                         </a>
@@ -1698,7 +1767,7 @@
             wrapper.className = 'card-wrapper';
             
             const title = show.name || show.title || 'Unknown Title';
-            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `series-${show.id}`;
+            const detailUrl = buildSeriesDetailUrl(show);
             
             let posterUrl = '';
             if (show.poster_path) {
@@ -1710,14 +1779,14 @@
             wrapper.innerHTML = `
                 <div class="movie-card">
                     <div class="card-image-container">
-                        <a href="/series/${slug}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                        <a href="${detailUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
                         <img src="${posterUrl}" class="card-image" alt="${title}" loading="lazy">
                         ${show.vote_average ? `<div class="rating-badge">★ ${show.vote_average.toFixed(1)}</div>` : ''}
                         <div class="card-hover-overlay">
                             <div class="hover-content">
                                 ${show.overview ? `<p class="hover-description">${show.overview.substring(0, 100)}...</p>` : ''}
                                 <div class="hover-actions">
-                                    <button class="hover-play-btn" onclick="window.location.href='/series/${slug}'">▶ Play</button>
+                                    <button class="hover-play-btn" onclick="window.location.href='${detailUrl}'">▶ Play</button>
                                     <button class="hover-watchlist-btn" data-tmdb-id="${show.id}" data-media-type="tv" data-title="${title.replace(/"/g, '&quot;')}" data-poster-path="${show.poster_path || ''}">
                                         <span class="watchlist-icon">+</span>
                                     </button>
@@ -1726,7 +1795,7 @@
                         </div>
                     </div>
                     <div class="card-info">
-                        <a href="/series/${slug}" style="text-decoration: none; color: inherit;">
+                        <a href="${detailUrl}" style="text-decoration: none; color: inherit;">
                             <h5 class="card-title">${title}</h5>
                             <p class="card-year">${show.first_air_date ? show.first_air_date.substring(0, 4) : ''}</p>
                         </a>
@@ -1781,19 +1850,8 @@
 
             // Play button
             const playBtn = document.getElementById('modalPlayBtn');
-            // Generate slug
-            let slug = '';
-            if (data.title) {
-                slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-            } else if (data.name) {
-                slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-            }
-            
-            if (data.media_type === 'movie' || data.title) {
-                playBtn.onclick = () => window.location.href = '{% url "movie_detail" "0" %}'.replace('0', slug);
-            } else {
-                playBtn.onclick = () => window.location.href = '{% url "series_detail" "0" %}'.replace('0', slug);
-            }
+            const detailUrl = buildDetailUrl(data);
+            playBtn.onclick = () => window.location.href = detailUrl;
 
             document.body.style.overflow = 'hidden';
         }

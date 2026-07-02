@@ -31,6 +31,7 @@ class SiteSettingsForm(forms.ModelForm):
             'active_movie_player',
             'active_tv_player',
             'watch_region',
+            'url_format',
             'tmdb_db_host',
             'tmdb_db_port',
             'tmdb_db_name',
@@ -64,6 +65,7 @@ class SiteSettingsForm(forms.ModelForm):
             'active_movie_player': forms.Select(attrs={'class': 'form-select', 'title': 'Select the default player to use for movies'}),
             'active_tv_player': forms.Select(attrs={'class': 'form-select', 'title': 'Select the default player to use for TV shows'}),
             'watch_region': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., US, GB, IN', 'title': 'Enter your region for watch provider information'}),
+            'url_format': forms.Select(attrs={'class': 'form-select', 'title': 'Choose whether to use title slugs or TMDB IDs in movie/series detail page URLs'}),
             'tmdb_db_host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'localhost'}),
             'tmdb_db_port': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '5432'}),
             'tmdb_db_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
@@ -81,6 +83,53 @@ class BrandingSettingsForm(forms.ModelForm):
             'brand_color': forms.TextInput(attrs={'type': 'color', 'class': 'form-control form-control-color'}),
             'brand_name': forms.TextInput(attrs={'class': 'form-control'}),
             'brand_tagline': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class FooterSettingsForm(forms.ModelForm):
+    footer_title = forms.CharField(
+        label='Footer Title',
+        help_text='Primary footer heading.',
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    footer_description = forms.CharField(
+        label='Footer Description',
+        help_text='Short supporting footer text.',
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    footer_bottom_text = forms.CharField(
+        label='Footer Bottom Text',
+        help_text='Bottom-right supporting line.',
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'footer_enabled',
+            'footer_title', 'footer_description', 'footer_bottom_text',
+            'footer_links_title', 'footer_links',
+            'footer_genres_title', 'footer_genres',
+            'footer_countries_title', 'footer_countries',
+            'footer_subscribe_title', 'footer_subscribe_text', 'footer_subscribe_placeholder', 'footer_subscribe_button_text',
+            'footer_logo_text', 'footer_logo_tagline', 'footer_copyright_text', 'footer_disclaimer_text'
+        ]
+        widgets = {
+            'footer_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'footer_links_title': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_links': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'footer_genres_title': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_genres': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'footer_countries_title': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_countries': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'footer_subscribe_title': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_subscribe_text': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'footer_subscribe_placeholder': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_subscribe_button_text': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_logo_text': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_logo_tagline': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_copyright_text': forms.TextInput(attrs={'class': 'form-control'}),
+            'footer_disclaimer_text': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
 
@@ -192,6 +241,11 @@ class ContentRowForm(forms.ModelForm):
 
 
 class PlayerConfigurationForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['custom_iframe_id_type'].initial = self.initial.get('custom_iframe_id_type', 'tmdb') or 'tmdb'
+        self.fields['custom_iframe_id_type'].required = False
+
     class Meta:
         model = PlayerConfiguration
         fields = [
@@ -207,14 +261,28 @@ class PlayerConfigurationForm(forms.ModelForm):
             'player_height',
             'frameborder',
             'allowfullscreen',
-            'custom_iframe_url'
+            'custom_iframe_id_type',
+            'custom_iframe_url',
+            'custom_movie_iframe_url',
+            'custom_tv_iframe_url'
         ]
         widgets = {
             'player_color': forms.TextInput(attrs={'placeholder': 'e.g., e50914 (no #)'}),
             'player_width': forms.TextInput(attrs={'placeholder': 'e.g., 100%, 800px'}),
             'player_height': forms.TextInput(attrs={'placeholder': 'e.g., 600px, 100%'}),
+            'custom_iframe_id_type': forms.Select(attrs={'class': 'form-select'}),
             'custom_iframe_url': forms.Textarea(attrs={
-                'placeholder': 'Custom iframe URL (e.g., https://example.com/embed/{tmdb_id}?s={season}&e={episode})',
+                'placeholder': 'Shared iframe URL (used when movie/TV specific URL is empty)',
+                'rows': 3,
+                'style': 'width: 100%;'
+            }),
+            'custom_movie_iframe_url': forms.Textarea(attrs={
+                'placeholder': 'Movie iframe URL, e.g. https://example.com/movie/{content_id}',
+                'rows': 3,
+                'style': 'width: 100%;'
+            }),
+            'custom_tv_iframe_url': forms.Textarea(attrs={
+                'placeholder': 'TV iframe URL, e.g. https://example.com/tv/{content_id}/{season}/{episode}',
                 'rows': 3,
                 'style': 'width: 100%;'
             }),
