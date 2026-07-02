@@ -2,23 +2,257 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">{{ action }} Content Row</h1>
-    <div class="d-flex justify-content-between mb-3">
+    <h1 class="mb-4" style="color: #fff;">{{ action }} Content Row</h1>
+    <div class="d-flex justify-content-between mb-4">
         <a href="{% url 'content_row_list' %}" class="btn btn-secondary">&larr; Back to Content Rows</a>
     </div>
     
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-body">
+    <div class="row g-4">
+        <div class="col-12 col-lg-10">
+            <div class="card" style="background: linear-gradient(135deg, #1f2937 0%, #111827 100%); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 40px rgba(0,0,0,0.4);">
+                <div class="card-body p-4">
                     <form method="post">
                         {% csrf_token %}
-                        {{ form.as_p }}
-                        <button type="submit" class="btn btn-primary mt-3">Save</button>
+                        
+                        <!-- Basic Settings Section -->
+                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
+                            <i class="fas fa-cog me-2" style="color: #8b5cf6;"></i> Basic Settings
+                        </h4>
+                        
+                        <div class="row g-3 mb-4">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.title.id_for_label }}" class="form-label text-white">
+                                    {{ form.title.label }}
+                                </label>
+                                {{ form.title }}
+                                {% if form.title.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.title.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.order.id_for_label }}" class="form-label text-white">
+                                    {{ form.order.label }}
+                                </label>
+                                {{ form.order }}
+                                {% if form.order.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.order.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.media_type.id_for_label }}" class="form-label text-white">
+                                    {{ form.media_type.label }}
+                                </label>
+                                {{ form.media_type }}
+                                {% if form.media_type.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.media_type.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.row_type.id_for_label }}" class="form-label text-white">
+                                    {{ form.row_type.label }}
+                                </label>
+                                {{ form.row_type }}
+                                {% if form.row_type.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.row_type.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Advanced Filters Section -->
+                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
+                            <i class="fas fa-filter me-2" style="color: #10b981;"></i> Filters
+                        </h4>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.genre_tmdb_id.id_for_label }}" class="form-label text-white">
+                                    {{ form.genre_tmdb_id.label }}
+                                </label>
+                                {{ form.genre_tmdb_id }}
+                                {% if form.genre_tmdb_id.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.genre_tmdb_id.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.region.id_for_label }}" class="form-label text-white">
+                                    {{ form.region.label }}
+                                </label>
+                                {{ form.region }}
+                                {% if form.region.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.region.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.language.id_for_label }}" class="form-label text-white">
+                                    {{ form.language.label }}
+                                </label>
+                                {{ form.language }}
+                                {% if form.language.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.language.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.sort_by.id_for_label }}" class="form-label text-white">
+                                    {{ form.sort_by.label }}
+                                </label>
+                                {{ form.sort_by }}
+                                {% if form.sort_by.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.sort_by.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- More Filters & Items -->
+                        <div class="mb-4">
+                            <label for="{{ form.filter_params.id_for_label }}" class="form-label text-white">
+                                {{ form.filter_params.label }}
+                            </label>
+                            {{ form.filter_params }}
+                            {% if form.filter_params.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.filter_params.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Display Settings Section -->
+                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
+                            <i class="fas fa-eye me-2" style="color: #f59e0b;"></i> Display Settings
+                        </h4>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.items_per_page.id_for_label }}" class="form-label text-white">
+                                    {{ form.items_per_page.label }}
+                                </label>
+                                {{ form.items_per_page }}
+                                {% if form.items_per_page.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.items_per_page.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Toggle Settings -->
+                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
+                            <i class="fas fa-toggle-on me-2" style="color: #ec4899;"></i> Toggles
+                        </h4>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.is_active }}
+                                    <label for="{{ form.is_active.id_for_label }}" class="form-check-label text-white">
+                                        {{ form.is_active.label }}
+                                    </label>
+                                </div>
+                                {% if form.is_active.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.is_active.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.auto_scroll }}
+                                    <label for="{{ form.auto_scroll.id_for_label }}" class="form-check-label text-white">
+                                        {{ form.auto_scroll.label }}
+                                    </label>
+                                </div>
+                                {% if form.auto_scroll.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.auto_scroll.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-3 mt-5 pt-3" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
+                            <button type="submit" class="btn btn-primary btn-lg px-5" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; border-radius: 12px; font-weight: 700;">
+                                <i class="fas fa-save me-2"></i> Save Content Row
+                            </button>
+                            <a href="{% url 'content_row_list' %}" class="btn btn-outline-light btn-lg px-5" style="border-radius: 12px; border-width: 2px;">
+                                Cancel
+                            </a>
+                        </div>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+    /* Form styles */
+    .form-control, .form-select {
+        background-color: rgba(0,0,0,0.5);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #ffffff;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus, .form-select:focus {
+        background-color: rgba(0,0,0,0.7);
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25);
+        color: #ffffff;
+    }
+
+    .form-control::placeholder {
+        color: #9ca3af;
+    }
+
+    .form-label {
+        font-weight: 600;
+        font-size: 0.95rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-check-input {
+        background-color: rgba(0,0,0,0.5);
+        border-color: rgba(255,255,255,0.2);
+        width: 1.25rem;
+        height: 1.25rem;
+        cursor: pointer;
+    }
+
+    .form-check-input:checked {
+        background-color: #8b5cf6;
+        border-color: #8b5cf6;
+    }
+
+    .form-check-input:focus {
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25);
+    }
+
+    .form-check-label {
+        color: #ffffff;
+        font-weight: 500;
+        cursor: pointer;
+        margin-left: 0.5rem;
+        font-size: 1rem;
+    }
+</style>
 {% endblock %}

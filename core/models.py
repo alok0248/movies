@@ -437,6 +437,7 @@ class CalendarMonthCache(models.Model):
 class ProviderItem(models.Model):
     name = models.CharField(max_length=255, unique=True)
     slug = models.SlugField(max_length=255, unique=True)
+    url = models.URLField(max_length=500, blank=True, null=True, help_text="Provider's homepage or official website")
     is_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

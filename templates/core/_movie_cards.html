@@ -20,7 +20,6 @@
                     <p class="hover-description">{{ movie.plot|truncatewords:30 }}</p>
                     {% endif %}
                     <div class="hover-actions">
-                        <button class="hover-play-btn" onclick="window.location.href='{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}'">▶ Play</button>
                         <button class="hover-watchlist-btn" 
                                 data-tmdb-id="{{ movie.id }}" 
                                 data-media-type="movie" 

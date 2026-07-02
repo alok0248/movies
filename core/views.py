@@ -824,6 +824,12 @@ def movie_detail_by_id(request, movie_id):
     if site_settings.url_format == 'slug':
         return redirect('movie_detail', movie_slug=processed_movie['slug'])
 
+    # Get provider URLs
+    provider_urls = {
+        provider.name.lower(): provider.url
+        for provider in ProviderItem.objects.exclude(url__isnull=True).exclude(url='')
+    }
+
     # Get player configurations
     active_player = site_settings.active_movie_player
     all_players = PlayerConfiguration.objects.filter(
@@ -837,7 +843,8 @@ def movie_detail_by_id(request, movie_id):
         'watch_region': site_settings.watch_region or 'US',
         'active_player': active_player,
         'all_players': all_players,
-        'movie_id': movie_id
+        'movie_id': movie_id,
+        'provider_urls': provider_urls
     })
 
 def movie_detail(request, movie_slug):
@@ -934,6 +941,12 @@ def movie_detail(request, movie_slug):
     if site_settings.url_format == 'id' and movie_id is not None:
         return redirect('movie_detail_by_id', movie_id=movie_id)
 
+    # Get provider URLs
+    provider_urls = {
+        provider.name.lower(): provider.url
+        for provider in ProviderItem.objects.exclude(url__isnull=True).exclude(url='')
+    }
+
     # Get player configurations
     active_player = site_settings.active_movie_player
     all_players = PlayerConfiguration.objects.filter(
@@ -947,7 +960,8 @@ def movie_detail(request, movie_slug):
         'watch_region': site_settings.watch_region or 'US',
         'active_player': active_player,
         'all_players': all_players,
-        'movie_id': movie_id
+        'movie_id': movie_id,
+        'provider_urls': provider_urls
     })
 
 
@@ -1050,6 +1064,12 @@ def series_detail_by_id(request, series_id):
     if site_settings.url_format == 'slug':
         return redirect(f"{redirect('series_detail', series_slug=processed_series['slug']).url}?season={season_number}&episode={episode_number}")
 
+    # Get provider URLs
+    provider_urls = {
+        provider.name.lower(): provider.url
+        for provider in ProviderItem.objects.exclude(url__isnull=True).exclude(url='')
+    }
+
     # Get player configurations
     active_player = site_settings.active_tv_player
     all_players = PlayerConfiguration.objects.filter(
@@ -1067,7 +1087,8 @@ def series_detail_by_id(request, series_id):
         'watch_region': site_settings.watch_region or 'US',
         'active_player': active_player,
         'all_players': all_players,
-        'series_id': series_id
+        'series_id': series_id,
+        'provider_urls': provider_urls
     })
 
 def series_season_episodes(request, series_id, season_number):
@@ -1196,6 +1217,12 @@ def series_detail(request, series_slug):
     if site_settings.url_format == 'id' and series_id is not None:
         return redirect(f"{redirect('series_detail_by_id', series_id=series_id).url}?season={season_number}&episode={episode_number}")
 
+    # Get provider URLs
+    provider_urls = {
+        provider.name.lower(): provider.url
+        for provider in ProviderItem.objects.exclude(url__isnull=True).exclude(url='')
+    }
+
     # Get player configurations
     active_player = site_settings.active_tv_player
     all_players = PlayerConfiguration.objects.filter(
@@ -1213,7 +1240,8 @@ def series_detail(request, series_slug):
         'watch_region': site_settings.watch_region or 'US',
         'active_player': active_player,
         'all_players': all_players,
-        'series_id': series_id
+        'series_id': series_id,
+        'provider_urls': provider_urls
     })
 
 

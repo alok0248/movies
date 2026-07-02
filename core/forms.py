@@ -236,7 +236,18 @@ class ContentRowForm(forms.ModelForm):
             'order'
         ]
         widgets = {
-            'filter_params': forms.Textarea(attrs={'rows': 4, 'cols': 80})
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter row title'}),
+            'media_type': forms.Select(attrs={'class': 'form-select'}),
+            'row_type': forms.Select(attrs={'class': 'form-select'}),
+            'genre_tmdb_id': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'TMDB Genre ID'}),
+            'region': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., US, GB, IN'}),
+            'language': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., en-US, es-ES'}),
+            'sort_by': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., popularity.desc, vote_average.desc'}),
+            'filter_params': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'JSON e.g., {"vote_average.gte": 7}'}),
+            'items_per_page': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Number of items per page'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'auto_scroll': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'order': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Display order'}),
         }
 
 
@@ -312,10 +323,11 @@ class TMDBApiKeyEditForm(forms.ModelForm):
 class ProviderItemForm(forms.ModelForm):
     class Meta:
         model = ProviderItem
-        fields = ['name', 'slug', 'is_enabled']
+        fields = ['name', 'slug', 'url', 'is_enabled']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Provider name'}),
             'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'provider-slug'}),
+            'url': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'https://example.com'}),
             'is_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 

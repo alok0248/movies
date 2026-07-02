@@ -116,7 +116,15 @@
                             <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
                                 {% for provider in region_data.flatrate %}
                                 {% if provider.logo_path %}
-                                <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px;">
+                                    {% with provider_url=provider_urls|get_item:provider.provider_name.lower %}
+                                        {% if provider_url %}
+                                            <a href="{{ provider_url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ provider.provider_name }}">
+                                        {% endif %}
+                                            <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px; cursor: {% if provider_url %}pointer{% else %}default{% endif %};">
+                                        {% if provider_url %}
+                                            </a>
+                                        {% endif %}
+                                    {% endwith %}
                                 {% endif %}
                                 {% endfor %}
                             </div>
@@ -128,7 +136,15 @@
                             <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
                                 {% for provider in region_data.rent %}
                                 {% if provider.logo_path %}
-                                <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px;">
+                                    {% with provider_url=provider_urls|get_item:provider.provider_name.lower %}
+                                        {% if provider_url %}
+                                            <a href="{{ provider_url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ provider.provider_name }}">
+                                        {% endif %}
+                                            <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px; cursor: {% if provider_url %}pointer{% else %}default{% endif %};">
+                                        {% if provider_url %}
+                                            </a>
+                                        {% endif %}
+                                    {% endwith %}
                                 {% endif %}
                                 {% endfor %}
                             </div>
@@ -140,7 +156,15 @@
                             <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
                                 {% for provider in region_data.buy %}
                                 {% if provider.logo_path %}
-                                <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px;">
+                                    {% with provider_url=provider_urls|get_item:provider.provider_name.lower %}
+                                        {% if provider_url %}
+                                            <a href="{{ provider_url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ provider.provider_name }}">
+                                        {% endif %}
+                                            <img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.provider_name }}" title="{{ provider.provider_name }}" style="width: 36px; height: 36px; border-radius: 8px; cursor: {% if provider_url %}pointer{% else %}default{% endif %};">
+                                        {% if provider_url %}
+                                            </a>
+                                        {% endif %}
+                                    {% endwith %}
                                 {% endif %}
                                 {% endfor %}
                             </div>
