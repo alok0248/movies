@@ -41,7 +41,19 @@ def _provider_slug_matches(item, provider_slug):
         except Exception:
             watch_providers = {}
     results = watch_providers.get('results', {}) if isinstance(watch_providers, dict) else {}
-    for region_data in results.values():
+
+    if provider_slug == 'no-provider':
+        if results == [] or results == {}:
+            return True
+        for region_data in results.values() if isinstance(results, dict) else []:
+            if not isinstance(region_data, dict):
+                continue
+            for section in ['flatrate', 'rent', 'buy', 'ads', 'free']:
+                if region_data.get(section):
+                    return False
+        return True
+
+    for region_data in results.values() if isinstance(results, dict) else []:
         if not isinstance(region_data, dict):
             continue
         for section in ['flatrate', 'rent', 'buy', 'ads', 'free']:
@@ -51,6 +63,31 @@ def _provider_slug_matches(item, provider_slug):
                 if slug == provider_slug:
                     return True
     return False
+
+
+def _store_calendar_month_data(year, month, calendar_data):
+    CalendarMonthCache.objects.update_or_create(
+        year=year,
+        month=month,
+        defaults={
+            'month_name': calendar_data['month_name'],
+            'first_day': calendar_data['first_day'],
+            'last_day': calendar_data['last_day'],
+            'movies': calendar_data['movies'],
+            'series': calendar_data['series'],
+        }
+    )
+
+
+def _seed_calendar_month_window():
+    today = datetime.date.today()
+    base_month = today.year * 12 + today.month - 1
+    for offset in range(-2, 3):
+        target = base_month + offset
+        year = target // 12
+        month = (target % 12) + 1
+        if not CalendarMonthCache.objects.filter(year=year, month=month).exists():
+            get_calendar_month_data(year, month)
 
 
 def get_calendar_month_data(year, month):
