@@ -46,3 +46,5 @@ test/
 
 # Unused scripts
 scripts/
+push_to_github.bat
+ubuntu_setup.sh
