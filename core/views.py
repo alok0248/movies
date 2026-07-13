@@ -2141,7 +2141,41 @@ def android_app_endpoint(request, app_slug):
             unique_visitor_log.unique_visitor_count += 1
             unique_visitor_log.save(update_fields=['unique_visitor_count', 'updated_at'])
 
-    return JsonResponse(android_app.json_payload, safe=isinstance(android_app.json_payload, dict))
+    # Build movie_servers and series_servers from PlayerConfiguration
+    android_players = PlayerConfiguration.objects.filter(use_for_android=True, is_active=True).order_by('order', 'name')
+    movie_servers = []
+    series_servers = []
+    for player in android_players:
+        # Get movie URL
+        if player.media_type in ['movie', 'both']:
+            movie_url = player.custom_movie_iframe_url or player.custom_iframe_url
+            if not movie_url:
+                # Use default Vidking movie URL as fallback
+                movie_url = "https://www.vidking.net/embed/movie/{tmdb_id}"
+                if player.player_color:
+                    movie_url += f"?color={player.player_color}"
+            movie_servers.append({
+                "name": player.name,
+                "url_template": movie_url
+            })
+        # Get series URL
+        if player.media_type in ['tv', 'both']:
+            tv_url = player.custom_tv_iframe_url or player.custom_iframe_url
+            if not tv_url:
+                # Use default Vidking TV URL as fallback
+                tv_url = "https://www.vidking.net/embed/tv/{tmdb_id}/{season}/{episode}"
+                if player.player_color:
+                    tv_url += f"?color={player.player_color}"
+            series_servers.append({
+                "name": player.name,
+                "url_template": tv_url
+            })
+    # Update the payload
+    response_payload = android_app.json_payload.copy() if isinstance(android_app.json_payload, dict) else android_app.json_payload
+    if isinstance(response_payload, dict):
+        response_payload['movie_servers'] = movie_servers
+        response_payload['series_servers'] = series_servers
+    return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
 
 
 def ajax_login(request):

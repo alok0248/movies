@@ -336,26 +336,17 @@
 
                     <div class="row mb-4">
                         <div class="col-md-3 mb-3 mb-md-0 d-flex align-items-center">
-                            {{ form.auto_play }}
-                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.auto_play.id_for_label }}">Auto Play</label>
-                        </div>
-                        <div class="col-md-3 mb-3 mb-md-0 d-flex align-items-center">
-                            {{ form.next_episode }}
-                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.next_episode.id_for_label }}">Next Episode</label>
-                        </div>
-                        <div class="col-md-3 mb-3 mb-md-0 d-flex align-items-center">
-                            {{ form.episode_selector }}
-                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.episode_selector.id_for_label }}">Episode Selector</label>
+                            {{ form.use_for_android }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.use_for_android.id_for_label }}">Use for Android</label>
                         </div>
                         <div class="col-md-3">
                             <label for="{{ form.frameborder.id_for_label }}" class="form-label">Frameborder</label>
                             {{ form.frameborder }}
                         </div>
-                    </div>
-
-                    <div class="d-flex align-items-center">
-                        {{ form.allowfullscreen }}
-                        <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.allowfullscreen.id_for_label }}">Allow Fullscreen</label>
+                        <div class="col-md-6 mb-3 mb-md-0 d-flex align-items-center">
+                            {{ form.allowfullscreen }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.allowfullscreen.id_for_label }}">Allow Fullscreen</label>
+                        </div>
                     </div>
                 </div>
 

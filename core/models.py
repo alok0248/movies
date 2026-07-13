@@ -282,12 +282,10 @@ class PlayerConfiguration(models.Model):
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='both')
     is_active = models.BooleanField(default=True, help_text="Whether this configuration is active")
     order = models.IntegerField(default=0, help_text="Display order for dropdown")
+    use_for_android = models.BooleanField(default=False, help_text="Use this player configuration for Android app endpoints")
     
     # Vidking Player options
     player_color = models.CharField(max_length=10, blank=True, null=True, help_text="Primary color (hex without #, e.g., e50914)")
-    auto_play = models.BooleanField(default=False, help_text="Enable auto-play feature")
-    next_episode = models.BooleanField(default=False, help_text="Show next episode button (TV only)")
-    episode_selector = models.BooleanField(default=False, help_text="Enable episode selection menu (TV only)")
     
     # Player size options
     player_width = models.CharField(max_length=20, default='100%', help_text="Player width (e.g., 100%, 800px)")
@@ -365,12 +363,6 @@ class PlayerConfiguration(models.Model):
             # Remove # from color if present
             clean_color = self.player_color.replace('#', '')
             params.append(f"color={clean_color}")
-        if self.auto_play:
-            params.append("autoPlay=true")
-        if self.next_episode and media_type == 'tv':
-            params.append("nextEpisode=true")
-        if self.episode_selector and media_type == 'tv':
-            params.append("episodeSelector=true")
         
         if params:
             url += f"?{'&'.join(params)}"
