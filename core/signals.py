@@ -13,7 +13,7 @@ def update_android_apps_json_payload():
     movie_servers = []
     series_servers = []
 
-    for player in android_players:
+    for idx, player in enumerate(android_players, start=1):
         # Process movie server
         if player.media_type in ['movie', 'both']:
             movie_url = player.custom_movie_iframe_url or player.custom_iframe_url
@@ -27,7 +27,7 @@ def update_android_apps_json_payload():
                                    .replace("{content_id}", "{id}")\
                                    .replace("{imdb_id}", "{id}")
             movie_servers.append({
-                "name": player.name,
+                "name": f"Player {idx}",
                 "url_template": movie_url
             })
         # Process series server
@@ -43,7 +43,7 @@ def update_android_apps_json_payload():
                            .replace("{content_id}", "{id}")\
                            .replace("{imdb_id}", "{id}")
             series_servers.append({
-                "name": player.name,
+                "name": f"Player {len(series_servers) + 1}",
                 "url_template": tv_url
             })
 
