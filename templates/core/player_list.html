@@ -17,9 +17,7 @@
                     <th>Media Type</th>
                     <th>Active</th>
                     <th>Color</th>
-                    <th>Auto Play</th>
-                    <th>Next Episode</th>
-                    <th>Episode Selector</th>
+                    <th>Use for Android</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -44,21 +42,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if player.auto_play %}
-                            <span class="badge bg-info">Yes</span>
-                        {% else %}
-                            <span class="badge bg-secondary">No</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if player.next_episode %}
-                            <span class="badge bg-info">Yes</span>
-                        {% else %}
-                            <span class="badge bg-secondary">No</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if player.episode_selector %}
+                        {% if player.use_for_android %}
                             <span class="badge bg-info">Yes</span>
                         {% else %}
                             <span class="badge bg-secondary">No</span>
@@ -71,7 +55,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center">No player configurations found. Create one to get started!</td>
+                    <td colspan="7" class="text-center">No player configurations found. Create one to get started!</td>
                 </tr>
                 {% endfor %}
             </tbody>
