@@ -1404,6 +1404,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initThemeToggle();
             initScrollButtons();
+            updateAllDatesToBrowserTime();
 
             const calendarBtn = document.getElementById('navCalendarBtn');
             if (calendarBtn) {
@@ -1501,6 +1502,29 @@
         function formatMonthYear(date) {
             const options = { year: 'numeric', month: 'long' };
             return date.toLocaleDateString('en-US', options);
+        }
+
+        function formatDateTimeForDisplay(dateString) {
+            const date = new Date(dateString);
+            if (isNaN(date)) return dateString;
+            const options = { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true
+            };
+            return date.toLocaleString(undefined, options);
+        }
+
+        function updateAllDatesToBrowserTime() {
+            document.querySelectorAll('[data-datetime]').forEach(el => {
+                const isoString = el.getAttribute('data-datetime');
+                if (isoString) {
+                    el.textContent = formatDateTimeForDisplay(isoString);
+                }
+            });
         }
 
         function navigateMonth(direction) {

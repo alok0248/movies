@@ -86,8 +86,8 @@
                                                            onchange="toggleApiKey({{ key.id }})">
                                                 </div>
                                             </td>
-                                            <td class="api-key-created">{{ key.created_at|date:"Y-m-d H:i" }}</td>
-                                            <td class="api-key-last-used">{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d H:i" }}{% else %}Never{% endif %}</td>
+                                            <td class="api-key-created" data-datetime="{{ key.created_at|date:"c" }}">{{ key.created_at|date:"Y-m-d H:i" }}</td>
+                                            <td class="api-key-last-used">{% if key.last_used_at %}<span data-datetime="{{ key.last_used_at|date:"c" }}">{{ key.last_used_at|date:"Y-m-d H:i" }}</span>{% else %}Never{% endif %}</td>
                                             <td>
                                                 <div class="d-flex gap-2 flex-wrap">
                                                     <button class="btn btn-outline-info btn-sm" onclick="startEditApiKey({{ key.id }})">
