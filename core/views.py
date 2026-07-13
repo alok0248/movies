@@ -1911,6 +1911,39 @@ def android_app_integration_guide(request, app_id):
 @csrf_exempt
 @require_http_methods(['GET'])
 def android_app_endpoint(request, app_slug):
+    # Helper function to parse allowed values (supports comma-separated lists and ranges like 225-250)
+    def parse_allowed_values(allowed_str):
+        allowed = []
+        if not allowed_str:
+            return allowed
+        
+        # Split by commas and clean up
+        parts = [p.strip() for p in allowed_str.split(',') if p.strip()]
+        
+        for part in parts:
+            # Check if it's a range (like 225-250 or #225-#250)
+            if '-' in part:
+                # Strip any # prefixes
+                range_parts = [p.strip().lstrip('#') for p in part.split('-', 1) if p.strip()]
+                if len(range_parts) == 2:
+                    try:
+                        start = int(range_parts[0])
+                        end = int(range_parts[1])
+                        for num in range(start, end + 1):
+                            allowed.append(str(num))
+                            allowed.append(f"#{num}")
+                    except ValueError:
+                        # If not numeric, just add as-is
+                        allowed.append(part)
+            else:
+                # Single value, add both with and without #
+                stripped = part.lstrip('#')
+                allowed.append(part)
+                if stripped != part:
+                    allowed.append(stripped)
+        
+        return allowed
+    
     # Helper function to log failed attempts
     def log_failed_attempt(reason, android_app_obj=None, req_identity='', build_id=''):
         ip = request.META.get('REMOTE_ADDR', '')
@@ -1963,9 +1996,21 @@ def android_app_endpoint(request, app_slug):
         or request.GET.get('package')
         or ''
     ).strip()
-    if not request_identity or request_identity != (android_app.allowed_endpoint or '').strip():
+    
+    allowed_endpoints = parse_allowed_values(android_app.allowed_endpoint)
+    # If allowed_endpoint is not empty, check if request_identity is in allowed_endpoints
+    if allowed_endpoints and request_identity not in allowed_endpoints:
         log_failed_attempt('identity_invalid', android_app_obj=android_app, req_identity=request_identity)
         return HttpResponseForbidden('Endpoint identity is not allowed for this app')
+    
+    # Also handle the case where allowed_endpoint is empty (allow all?) Wait, original code checked if not request_identity OR not equal!
+    if not allowed_endpoints:
+        # Original behavior: if allowed_endpoint is empty, require request_identity to be empty? Or let's keep original behavior but allow the parsing?
+        # Wait let's check original code: "if not request_identity or request_identity != (android_app.allowed_endpoint or '').strip():"
+        # So let's preserve that: if allowed_endpoint is empty, then only allow request_identity to be empty?
+        if request_identity:
+            log_failed_attempt('identity_invalid', android_app_obj=android_app, req_identity=request_identity)
+            return HttpResponseForbidden('Endpoint identity is not allowed for this app')
 
     build_identifier = (
         request.headers.get('X-Android-Build')
@@ -1973,12 +2018,12 @@ def android_app_endpoint(request, app_slug):
         or 'unknown-build'
     ).strip() or 'unknown-build'
 
-    allowed_build_id = (android_app.allowed_build_id or '').strip()
-    if allowed_build_id and build_identifier != allowed_build_id:
+    allowed_build_ids = parse_allowed_values(android_app.allowed_build_id)
+    if allowed_build_ids and build_identifier not in allowed_build_ids:
         response_payload = {
             'status': 'update_required',
             'message': 'Update the app with the latest APK URL.',
-            'expected_build_id': allowed_build_id,
+            'expected_build_id': android_app.allowed_build_id,
         }
         if android_app.apk_file:
             response_payload['apk_url'] = request.build_absolute_uri(android_app.apk_file.url)
