@@ -82,8 +82,13 @@
 
             <div class="card bg-dark border-secondary shadow-sm mt-4">
                 <div class="card-body">
-                    <h5 class="text-white mb-1">Failed Connection Attempts</h5>
-                    <div class="text-secondary small mb-3">Recent failed attempts to connect to this endpoint (last 50).</div>
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">Failed Connection Attempts</h5>
+                            <div class="text-secondary small">Recent failed attempts to connect to this endpoint (last 5).</div>
+                        </div>
+                        <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="btn btn-sm btn-outline-danger">View All</a>
+                    </div>
                     {% if failed_attempts %}
                     <div class="table-responsive">
                         <table class="table table-dark table-hover mb-0 align-middle small">

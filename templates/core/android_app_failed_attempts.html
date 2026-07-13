@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1">Failed Connection Attempts</h1>
+            <p class="text-secondary mb-0">{{ android_app.name }}</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'android_app_dashboard_detail' android_app.id %}" class="btn btn-outline-light">&larr; Back to Analytics</a>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm">
+        <div class="card-body">
+            {% if failed_attempts %}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Reason</th>
+                            <th>IP Address</th>
+                            <th>Request Identity</th>
+                            <th>Build ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in failed_attempts %}
+                        <tr>
+                            <td>{{ attempt.attempted_at }}</td>
+                            <td>
+                                <span class="badge bg-danger">{{ attempt.get_failure_reason_display }}</span>
+                            </td>
+                            <td>{{ attempt.ip_address|default:'-' }}</td>
+                            <td>{{ attempt.request_identity|default:'-' }}</td>
+                            <td>{{ attempt.build_identifier|default:'-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-secondary">No failed attempts recorded yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

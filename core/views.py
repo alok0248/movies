@@ -1845,7 +1845,7 @@ def android_app_dashboard(request, app_id=None):
         )
         build_chart_labels = [item['build_identifier'] for item in build_summary[:10]]
         build_chart_values = [item['total_connections'] or 0 for item in build_summary[:10]]
-        failed_attempts = selected_app.failed_attempts.all()[:50]
+        failed_attempts = selected_app.failed_attempts.all()[:5]
 
     summary_rows = []
     for app in apps:
@@ -1866,6 +1866,17 @@ def android_app_dashboard(request, app_id=None):
         'build_chart_values_json': json.dumps(build_chart_values),
         'build_summary': build_summary,
         'app_endpoint': app_endpoint,
+        'failed_attempts': failed_attempts,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_failed_attempts(request, app_id):
+    android_app = get_object_or_404(AndroidApp, id=app_id)
+    failed_attempts = android_app.failed_attempts.all()
+    return render(request, 'core/android_app_failed_attempts.html', {
+        'android_app': android_app,
         'failed_attempts': failed_attempts,
     })
 
