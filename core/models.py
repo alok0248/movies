@@ -573,6 +573,35 @@ class AndroidAppBuildLog(models.Model):
         return f"{self.android_app.name} - {self.build_identifier} - {self.access_date}"
 
 
+class AndroidAppFailedAttempt(models.Model):
+    FAILURE_REASON_CHOICES = [
+        ('auth_missing', 'Missing Authorization Header'),
+        ('auth_invalid_format', 'Invalid Authorization Format'),
+        ('auth_invalid_creds', 'Invalid Credentials'),
+        ('identity_invalid', 'Invalid Endpoint Identity'),
+        ('app_inactive', 'App Not Active'),
+        ('app_not_found', 'App Not Found'),
+    ]
+    
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='failed_attempts', blank=True, null=True)
+    app_slug = models.CharField(max_length=255, blank=True, null=True)
+    failure_reason = models.CharField(max_length=50, choices=FAILURE_REASON_CHOICES)
+    request_identity = models.CharField(max_length=500, blank=True, default='')
+    build_identifier = models.CharField(max_length=255, blank=True, default='')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, default='')
+    attempted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-attempted_at']
+        verbose_name = 'Android App Failed Attempt'
+        verbose_name_plural = 'Android App Failed Attempts'
+
+    def __str__(self):
+        app_name = self.android_app.name if self.android_app else self.app_slug or 'Unknown'
+        return f"{app_name} - {self.get_failure_reason_display()} - {self.attempted_at}"
+
+
 class DataSourceUsageLog(models.Model):
     SOURCE_CHOICES = [
         ('db', 'Database'),

@@ -21,7 +21,7 @@ import requests
 import calendar
 import base64
 from bs4 import BeautifulSoup
-from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog
+from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
@@ -1832,6 +1832,7 @@ def android_app_dashboard(request, app_id=None):
     build_summary = []
     build_chart_labels = []
     build_chart_values = []
+    failed_attempts = []
     if selected_app:
         logs = selected_app.access_logs.order_by('access_date')
         chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in logs]
@@ -1844,6 +1845,7 @@ def android_app_dashboard(request, app_id=None):
         )
         build_chart_labels = [item['build_identifier'] for item in build_summary[:10]]
         build_chart_values = [item['total_connections'] or 0 for item in build_summary[:10]]
+        failed_attempts = selected_app.failed_attempts.all()[:50]
 
     summary_rows = []
     for app in apps:
@@ -1864,6 +1866,7 @@ def android_app_dashboard(request, app_id=None):
         'build_chart_values_json': json.dumps(build_chart_values),
         'build_summary': build_summary,
         'app_endpoint': app_endpoint,
+        'failed_attempts': failed_attempts,
     })
 
 
@@ -1897,10 +1900,36 @@ def android_app_integration_guide(request, app_id):
 @csrf_exempt
 @require_http_methods(['GET'])
 def android_app_endpoint(request, app_slug):
-    android_app = get_object_or_404(AndroidApp, slug=app_slug, is_active=True)
+    # Helper function to log failed attempts
+    def log_failed_attempt(reason, android_app_obj=None, req_identity='', build_id=''):
+        ip = request.META.get('REMOTE_ADDR', '')
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        AndroidAppFailedAttempt.objects.create(
+            android_app=android_app_obj,
+            app_slug=app_slug,
+            failure_reason=reason,
+            request_identity=req_identity,
+            build_identifier=build_id,
+            ip_address=ip,
+            user_agent=user_agent
+        )
+    
+    # Try to get the app first
+    try:
+        android_app = AndroidApp.objects.get(slug=app_slug, is_active=True)
+    except AndroidApp.DoesNotExist:
+        # Check if app exists but is inactive
+        try:
+            inactive_app = AndroidApp.objects.get(slug=app_slug)
+            log_failed_attempt('app_inactive', android_app_obj=inactive_app)
+            return HttpResponseForbidden('App is inactive')
+        except AndroidApp.DoesNotExist:
+            log_failed_attempt('app_not_found')
+            return HttpResponseNotFound('App not found')
 
     auth_header = request.META.get('HTTP_AUTHORIZATION', '')
     if not auth_header.startswith('Basic '):
+        log_failed_attempt('auth_missing', android_app_obj=android_app)
         response = HttpResponseForbidden('Authentication required')
         response['WWW-Authenticate'] = 'Basic realm="Android App Endpoint"'
         return response
@@ -1909,9 +1938,11 @@ def android_app_endpoint(request, app_slug):
         decoded = base64.b64decode(auth_header.split(' ', 1)[1]).decode('utf-8')
         username, password = decoded.split(':', 1)
     except Exception:
+        log_failed_attempt('auth_invalid_format', android_app_obj=android_app)
         return HttpResponseForbidden('Invalid credentials format')
 
     if username != android_app.access_username or password != android_app.access_password:
+        log_failed_attempt('auth_invalid_creds', android_app_obj=android_app)
         return HttpResponseForbidden('Invalid credentials')
 
     request_identity = (
@@ -1922,6 +1953,7 @@ def android_app_endpoint(request, app_slug):
         or ''
     ).strip()
     if not request_identity or request_identity != (android_app.allowed_endpoint or '').strip():
+        log_failed_attempt('identity_invalid', android_app_obj=android_app, req_identity=request_identity)
         return HttpResponseForbidden('Endpoint identity is not allowed for this app')
 
     build_identifier = (

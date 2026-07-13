@@ -1,5 +1,37 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt
+
+
+@admin.register(AndroidApp)
+class AndroidAppAdmin(admin.ModelAdmin):
+    list_display = ('name', 'slug', 'is_active', 'total_connections', 'last_accessed_at', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'slug', 'access_username')
+    readonly_fields = ('total_connections', 'last_accessed_at', 'created_at', 'updated_at')
+
+
+@admin.register(AndroidAppAccessLog)
+class AndroidAppAccessLogAdmin(admin.ModelAdmin):
+    list_display = ('android_app', 'access_date', 'connection_count', 'last_accessed_at')
+    list_filter = ('access_date', 'android_app')
+    search_fields = ('android_app__name',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(AndroidAppBuildLog)
+class AndroidAppBuildLogAdmin(admin.ModelAdmin):
+    list_display = ('android_app', 'build_identifier', 'access_date', 'connection_count', 'last_accessed_at')
+    list_filter = ('access_date', 'android_app')
+    search_fields = ('android_app__name', 'build_identifier')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(AndroidAppFailedAttempt)
+class AndroidAppFailedAttemptAdmin(admin.ModelAdmin):
+    list_display = ('android_app', 'app_slug', 'failure_reason', 'ip_address', 'attempted_at')
+    list_filter = ('failure_reason', 'attempted_at', 'android_app')
+    search_fields = ('app_slug', 'ip_address', 'request_identity', 'build_identifier')
+    readonly_fields = ('attempted_at',)
 
 
 @admin.register(ContentRow)
