@@ -246,35 +246,135 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const dailyLabels = {{ chart_labels_json|safe }};
-const dailyValues = {{ chart_values_json|safe }};
-const uniqueLabels = {{ unique_chart_labels_json|safe }};
-const uniqueValues = {{ unique_chart_values_json|safe }};
-const buildLabels = {{ build_chart_labels_json|safe }};
-const buildValues = {{ build_chart_values_json|safe }};
+let dailyChart, uniqueChart, buildChart;
 const chartText = '#cbd5e1';
 const gridColor = 'rgba(148, 163, 184, 0.16)';
 
-if (document.getElementById('dailyConnectionsChart')) {
-    new Chart(document.getElementById('dailyConnectionsChart'), {
-        type: 'line',
-        data: { labels: dailyLabels, datasets: [{ label: 'Connections', data: dailyValues, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
-    });
+function initializeCharts() {
+    const dailyLabels = {{ chart_labels_json|safe }};
+    const dailyValues = {{ chart_values_json|safe }};
+    const uniqueLabels = {{ unique_chart_labels_json|safe }};
+    const uniqueValues = {{ unique_chart_values_json|safe }};
+    const buildLabels = {{ build_chart_labels_json|safe }};
+    const buildValues = {{ build_chart_values_json|safe }};
+
+    if (document.getElementById('dailyConnectionsChart')) {
+        dailyChart = new Chart(document.getElementById('dailyConnectionsChart'), {
+            type: 'line',
+            data: { labels: dailyLabels, datasets: [{ label: 'Connections', data: dailyValues, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+        });
+    }
+    if (document.getElementById('dailyUniqueVisitorsChart')) {
+        uniqueChart = new Chart(document.getElementById('dailyUniqueVisitorsChart'), {
+            type: 'line',
+            data: { labels: uniqueLabels, datasets: [{ label: 'Unique Visitors', data: uniqueValues, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+        });
+    }
+    if (document.getElementById('buildConnectionsChart')) {
+        buildChart = new Chart(document.getElementById('buildConnectionsChart'), {
+            type: 'bar',
+            data: { labels: buildLabels, datasets: [{ label: 'Connections', data: buildValues, backgroundColor: '#22c55e', borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+        });
+    }
 }
-if (document.getElementById('dailyUniqueVisitorsChart')) {
-    new Chart(document.getElementById('dailyUniqueVisitorsChart'), {
-        type: 'line',
-        data: { labels: uniqueLabels, datasets: [{ label: 'Unique Visitors', data: uniqueValues, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
-    });
+
+function updateDashboard(data) {
+    // Update the big numbers
+    const totalConnectionsEl = document.querySelector('.card.bg-dark.border-secondary.h-100 .display-6.text-white');
+    if (totalConnectionsEl) {
+        totalConnectionsEl.textContent = data.total_connections;
+    }
+    const uniqueVisitorsEl = Array.from(document.querySelectorAll('.card.bg-dark.border-secondary.h-100 .display-6.text-white')).find(el => 
+        el.parentElement.textContent.includes('Total Unique Visitors')
+    );
+    if (uniqueVisitorsEl) {
+        uniqueVisitorsEl.textContent = data.total_unique_visitors;
+    }
+
+    // Update charts
+    if (dailyChart) {
+        dailyChart.data.labels = data.chart_labels;
+        dailyChart.data.datasets[0].data = data.chart_values;
+        dailyChart.update();
+    }
+    if (uniqueChart) {
+        uniqueChart.data.labels = data.unique_chart_labels;
+        uniqueChart.data.datasets[0].data = data.unique_chart_values;
+        uniqueChart.update();
+    }
+    if (buildChart) {
+        buildChart.data.labels = data.build_chart_labels;
+        buildChart.data.datasets[0].data = data.build_chart_values;
+        buildChart.update();
+    }
+
+    // Update failed attempts table
+    const failedTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[0];
+    if (failedTbody && data.failed_attempts.length) {
+        failedTbody.innerHTML = data.failed_attempts.map(attempt => `
+            <tr>
+                <td data-datetime="${attempt.attempted_at}">${new Date(attempt.attempted_at).toLocaleString()}</td>
+                <td><span class="badge bg-danger">${attempt.failure_reason_display}</span></td>
+                <td>${attempt.ip_address || '-'}</td>
+                <td>${attempt.request_identity || '-'}</td>
+                <td>${attempt.build_identifier || '-'}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Update recent devices table
+    const devicesTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[1];
+    if (devicesTbody && data.recent_devices.length) {
+        devicesTbody.innerHTML = data.recent_devices.map(device => `
+            <tr>
+                <td><code class="text-info">${device.user_id}</code></td>
+                <td>${device.device_model || '-'}</td>
+                <td>${device.os_version || '-'}</td>
+                <td>${device.total_visits}</td>
+                <td data-datetime="${device.last_seen_at}">${new Date(device.last_seen_at).toLocaleString()}</td>
+                <td data-datetime="${device.first_seen_at}">${new Date(device.first_seen_at).toLocaleString()}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Update recent visits table
+    const visitsTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[2];
+    if (visitsTbody && data.recent_visits.length) {
+        visitsTbody.innerHTML = data.recent_visits.map(visit => `
+            <tr>
+                <td data-datetime="${visit.visited_at}">${new Date(visit.visited_at).toLocaleString()}</td>
+                <td><code class="text-info">${visit.device__user_id}</code></td>
+                <td>${visit.device_model || '-'}</td>
+                <td>${visit.os_version || '-'}</td>
+                <td>${visit.build_identifier || '-'}</td>
+                <td>${visit.ip_address || '-'}</td>
+            </tr>
+        `).join('');
+    }
 }
-if (document.getElementById('buildConnectionsChart')) {
-    new Chart(document.getElementById('buildConnectionsChart'), {
-        type: 'bar',
-        data: { labels: buildLabels, datasets: [{ label: 'Connections', data: buildValues, backgroundColor: '#22c55e', borderRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
-    });
-}
+
+// Initialize charts when DOM loads
+document.addEventListener('DOMContentLoaded', () => {
+    initializeCharts();
+    
+    // Start polling if selected app exists
+    {% if selected_app %}
+    const pollUrl = "{% url 'ajax_android_app_dashboard' selected_app.id %}";
+    setInterval(async () => {
+        try {
+            const response = await fetch(pollUrl);
+            if (response.ok) {
+                const data = await response.json();
+                updateDashboard(data);
+            }
+        } catch (err) {
+            console.error('Error updating dashboard:', err);
+        }
+    }, 5000); // Update every 5 seconds
+    {% endif %}
+});
 </script>
 {% endblock %}

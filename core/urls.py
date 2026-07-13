@@ -44,6 +44,7 @@ urlpatterns = [
     path('admin-dashboard/android-apps/<int:app_id>/analytics/', views.android_app_dashboard, name='android_app_dashboard_detail'),
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
     path('admin-dashboard/android-apps/<int:app_id>/integration-guide/', views.android_app_integration_guide, name='android_app_integration_guide'),
+    path('admin-dashboard/android-apps/<int:app_id>/analytics/json/', views.ajax_android_app_dashboard, name='ajax_android_app_dashboard'),
     path('api/android-apps/<slug:app_slug>/', views.android_app_endpoint, name='android_app_endpoint'),
     path('movies/', views.movie_list, name='movie_list'),
     path('movies/id/<int:movie_id>/', views.movie_detail_by_id, name='movie_detail_by_id'),

@@ -1930,6 +1930,61 @@ def android_app_integration_guide(request, app_id):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_android_app_dashboard(request, app_id):
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+    logs = selected_app.access_logs.order_by('access_date')
+    chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in logs]
+    chart_values = [log.connection_count for log in logs]
+    build_summary = list(
+        selected_app.build_logs.values('build_identifier').annotate(
+            total_connections=models.Sum('connection_count')
+        ).order_by('-total_connections', 'build_identifier')
+    )
+    build_chart_labels = [item['build_identifier'] for item in build_summary[:10]]
+    build_chart_values = [item['total_connections'] or 0 for item in build_summary[:10]]
+    failed_attempts = list(selected_app.failed_attempts.all()[:5].values(
+        'attempted_at', 'failure_reason', 'ip_address', 'request_identity', 'build_identifier'
+    ))
+    # Convert failed_attempts datetime to iso string
+    for attempt in failed_attempts:
+        attempt['attempted_at'] = attempt['attempted_at'].isoformat()
+        attempt['failure_reason_display'] = dict(AndroidAppFailedAttempt.FAILURE_REASON_CHOICES).get(attempt['failure_reason'])
+
+    recent_devices = list(selected_app.devices.all()[:10].values(
+        'user_id', 'device_model', 'os_version', 'total_visits', 'last_seen_at', 'first_seen_at'
+    ))
+    for device in recent_devices:
+        device['last_seen_at'] = device['last_seen_at'].isoformat()
+        device['first_seen_at'] = device['first_seen_at'].isoformat()
+
+    recent_visits = list(selected_app.device_visits.select_related('device').all()[:20].values(
+        'visited_at', 'device__user_id', 'device_model', 'os_version', 'build_identifier', 'ip_address'
+    ))
+    for visit in recent_visits:
+        visit['visited_at'] = visit['visited_at'].isoformat()
+
+    unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
+    unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
+    unique_chart_values = [log.unique_visitor_count for log in unique_logs]
+
+    return JsonResponse({
+        'total_connections': selected_app.total_connections,
+        'total_unique_visitors': selected_app.devices.count(),
+        'chart_labels': chart_labels,
+        'chart_values': chart_values,
+        'unique_chart_labels': unique_chart_labels,
+        'unique_chart_values': unique_chart_values,
+        'build_chart_labels': build_chart_labels,
+        'build_chart_values': build_chart_values,
+        'failed_attempts': failed_attempts,
+        'recent_devices': recent_devices,
+        'recent_visits': recent_visits,
+        'last_accessed_at': selected_app.last_accessed_at.isoformat() if selected_app.last_accessed_at else None
+    })
+
+
 @csrf_exempt
 @require_http_methods(['GET'])
 def android_app_endpoint(request, app_slug):
