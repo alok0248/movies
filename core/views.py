@@ -2151,9 +2151,11 @@ def android_app_endpoint(request, app_slug):
             movie_url = player.custom_movie_iframe_url or player.custom_iframe_url
             if not movie_url:
                 # Use default Vidking movie URL as fallback
-                movie_url = "https://www.vidking.net/embed/movie/{tmdb_id}"
+                movie_url = "https://www.vidking.net/embed/movie/{id}"
                 if player.player_color:
                     movie_url += f"?color={player.player_color}"
+            # Replace all relevant placeholders with {id}
+            movie_url = movie_url.replace("{tmdb_id}", "{id}").replace("{content_id}", "{id}").replace("{imdb_id}", "{id}")
             movie_servers.append({
                 "name": player.name,
                 "url_template": movie_url
@@ -2163,9 +2165,11 @@ def android_app_endpoint(request, app_slug):
             tv_url = player.custom_tv_iframe_url or player.custom_iframe_url
             if not tv_url:
                 # Use default Vidking TV URL as fallback
-                tv_url = "https://www.vidking.net/embed/tv/{tmdb_id}/{season}/{episode}"
+                tv_url = "https://www.vidking.net/embed/tv/{id}/{season}/{episode}"
                 if player.player_color:
                     tv_url += f"?color={player.player_color}"
+            # Replace all relevant placeholders with {id}
+            tv_url = tv_url.replace("{tmdb_id}", "{id}").replace("{content_id}", "{id}").replace("{imdb_id}", "{id}")
             series_servers.append({
                 "name": player.name,
                 "url_template": tv_url
