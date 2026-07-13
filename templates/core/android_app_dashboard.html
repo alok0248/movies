@@ -132,6 +132,88 @@
                     {% endif %}
                 </div>
             </div>
+            
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">Recent Devices</h5>
+                            <div class="text-secondary small">Last 10 unique devices</div>
+                        </div>
+                    </div>
+                    {% if recent_devices %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle small">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Device Model</th>
+                                    <th>OS Version</th>
+                                    <th>Total Visits</th>
+                                    <th>Last Seen</th>
+                                    <th>First Seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for device in recent_devices %}
+                                <tr>
+                                    <td><code class="text-info">{{ device.user_id }}</code></td>
+                                    <td>{{ device.device_model|default:"-" }}</td>
+                                    <td>{{ device.os_version|default:"-" }}</td>
+                                    <td>{{ device.total_visits }}</td>
+                                    <td>{{ device.last_seen_at }}</td>
+                                    <td>{{ device.first_seen_at }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-secondary">No devices recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">Recent Visits</h5>
+                            <div class="text-secondary small">Last 20 device visits</div>
+                        </div>
+                    </div>
+                    {% if recent_visits %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle small">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User ID</th>
+                                    <th>Device Model</th>
+                                    <th>OS Version</th>
+                                    <th>Build ID</th>
+                                    <th>IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for visit in recent_visits %}
+                                <tr>
+                                    <td>{{ visit.visited_at }}</td>
+                                    <td><code class="text-info">{{ visit.device.user_id }}</code></td>
+                                    <td>{{ visit.device_model|default:"-" }}</td>
+                                    <td>{{ visit.os_version|default:"-" }}</td>
+                                    <td>{{ visit.build_identifier }}</td>
+                                    <td>{{ visit.ip_address|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-secondary">No visits recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
             {% else %}
             <div class="card bg-dark border-secondary shadow-sm"><div class="card-body text-center py-5 text-secondary">Create an Android app to start tracking its endpoint usage.</div></div>
             {% endif %}

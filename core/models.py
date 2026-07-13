@@ -610,19 +610,21 @@ class AndroidAppFailedAttempt(models.Model):
 
 class AndroidAppDevice(models.Model):
     android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='devices')
-    android_id = models.CharField(max_length=255, db_index=True)  # Unique per device/app?
+    user_id = models.CharField(max_length=255, db_index=True)  # Unique per device/app (Android ID or UUID)
+    device_model = models.CharField(max_length=255, blank=True, default='')  # Device model (e.g. Pixel 7 Pro)
+    os_version = models.CharField(max_length=50, blank=True, default='')  # Android OS version (e.g. 13, 14)
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(auto_now=True)
     total_visits = models.PositiveIntegerField(default=0)
     
     class Meta:
-        unique_together = ('android_app', 'android_id')
+        unique_together = ('android_app', 'user_id')
         ordering = ['-last_seen_at']
         verbose_name = 'Android App Device'
         verbose_name_plural = 'Android App Devices'
     
     def __str__(self):
-        return f"{self.android_app.name} - {self.android_id}"
+        return f"{self.android_app.name} - {self.user_id}"
 
 
 class AndroidAppDailyUniqueVisitor(models.Model):
@@ -649,6 +651,8 @@ class AndroidAppDeviceVisit(models.Model):
     build_identifier = models.CharField(max_length=255, blank=True, default='')
     request_identity = models.CharField(max_length=500, blank=True, default='')
     ip_address = models.GenericIPAddressField(blank=True, null=True)
+    device_model = models.CharField(max_length=255, blank=True, default='')
+    os_version = models.CharField(max_length=50, blank=True, default='')
     
     class Meta:
         ordering = ['-visited_at']
@@ -656,7 +660,7 @@ class AndroidAppDeviceVisit(models.Model):
         verbose_name_plural = 'Android App Device Visits'
     
     def __str__(self):
-        return f"{self.device.android_id} - {self.visited_at}"
+        return f"{self.device.user_id} - {self.visited_at}"
 
 
 class DataSourceUsageLog(models.Model):

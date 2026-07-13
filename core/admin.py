@@ -36,9 +36,9 @@ class AndroidAppFailedAttemptAdmin(admin.ModelAdmin):
 
 @admin.register(AndroidAppDevice)
 class AndroidAppDeviceAdmin(admin.ModelAdmin):
-    list_display = ('android_app', 'android_id', 'total_visits', 'last_seen_at', 'first_seen_at')
-    list_filter = ('android_app', 'last_seen_at')
-    search_fields = ('android_app__name', 'android_id')
+    list_display = ('android_app', 'user_id', 'device_model', 'os_version', 'total_visits', 'last_seen_at', 'first_seen_at')
+    list_filter = ('android_app', 'last_seen_at', 'os_version')
+    search_fields = ('android_app__name', 'user_id', 'device_model')
     readonly_fields = ('first_seen_at', 'last_seen_at')
 
 
@@ -52,9 +52,9 @@ class AndroidAppDailyUniqueVisitorAdmin(admin.ModelAdmin):
 
 @admin.register(AndroidAppDeviceVisit)
 class AndroidAppDeviceVisitAdmin(admin.ModelAdmin):
-    list_display = ('device', 'android_app', 'visited_at', 'build_identifier', 'ip_address')
-    list_filter = ('android_app', 'visited_at')
-    search_fields = ('device__android_id', 'android_app__name', 'build_identifier', 'ip_address')
+    list_display = ('device', 'android_app', 'visited_at', 'build_identifier', 'device_model', 'os_version', 'ip_address')
+    list_filter = ('android_app', 'visited_at', 'os_version')
+    search_fields = ('device__user_id', 'android_app__name', 'build_identifier', 'device_model', 'ip_address')
     readonly_fields = ('visited_at',)
 
 

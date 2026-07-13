@@ -1835,6 +1835,8 @@ def android_app_dashboard(request, app_id=None):
     build_chart_labels = []
     build_chart_values = []
     failed_attempts = []
+    recent_devices = []
+    recent_visits = []
     total_unique_visitors = 0
     if selected_app:
         logs = selected_app.access_logs.order_by('access_date')
@@ -1854,6 +1856,10 @@ def android_app_dashboard(request, app_id=None):
         unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
         unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
         unique_chart_values = [log.unique_visitor_count for log in unique_logs]
+        
+        # Get recent devices and visits
+        recent_devices = selected_app.devices.all()[:10]
+        recent_visits = selected_app.device_visits.select_related('device').all()[:20]
         
         # Calculate total unique visitors
         total_unique_visitors = selected_app.devices.count()
@@ -1881,6 +1887,8 @@ def android_app_dashboard(request, app_id=None):
         'app_endpoint': app_endpoint,
         'failed_attempts': failed_attempts,
         'total_unique_visitors': total_unique_visitors,
+        'recent_devices': recent_devices,
+        'recent_visits': recent_visits,
     })
 
 
@@ -2066,22 +2074,41 @@ def android_app_endpoint(request, app_slug):
     android_app.save(update_fields=['total_connections', 'last_accessed_at', 'updated_at'])
     
     # Handle Android ID tracking for unique visitors
-    android_id = (
-        request.headers.get('X-Android-Id') or
-        request.headers.get('X-Android-Device-Id') or
-        request.GET.get('android_id') or
-        request.GET.get('device_id') or
+    # Read user_id from headers first, then query params
+    user_id = (
+        request.headers.get('X-Android-User-ID') or 
+        request.GET.get('user_id') or 
+        ''
+    ).strip()
+    
+    # Read device and os from headers or query params
+    device_model = (
+        request.headers.get('X-Android-Device') or 
+        request.GET.get('device') or 
+        ''
+    ).strip()
+    
+    os_version = (
+        request.headers.get('X-Android-OS-Version') or 
+        request.GET.get('os') or 
         ''
     ).strip()
     
     ip_address = request.META.get('REMOTE_ADDR', None)
     
-    if android_id:
+    if user_id:
         # Get or create device
         device, created = AndroidAppDevice.objects.get_or_create(
             android_app=android_app,
-            android_id=android_id
+            user_id=user_id
         )
+        # Update device model and os version if they changed or are new
+        if device_model and device.device_model != device_model:
+            device.device_model = device_model
+            device.save(update_fields=['device_model', 'last_seen_at'])
+        if os_version and device.os_version != os_version:
+            device.os_version = os_version
+            device.save(update_fields=['os_version', 'last_seen_at'])
         # Increment total visits for device
         device.total_visits += 1
         device.save(update_fields=['total_visits', 'last_seen_at'])
@@ -2092,7 +2119,9 @@ def android_app_endpoint(request, app_slug):
             android_app=android_app,
             build_identifier=build_identifier,
             request_identity=request_identity,
-            ip_address=ip_address
+            ip_address=ip_address,
+            device_model=device_model,
+            os_version=os_version
         )
         
         # Check if this is a new unique visitor for today
