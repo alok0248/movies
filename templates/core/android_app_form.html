@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5" style="max-width: 980px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1"><i class="fab fa-android me-2 text-success"></i>{{ action }} Android App</h1>
+            <p class="text-secondary mb-0">Store app credentials, allowed endpoint identity, build requirements, APK, and the JSON payload served by the protected API.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">&larr; Back to Android Apps</a>
+            <a href="{% url 'android_app_dashboard' %}" class="btn btn-outline-info">Analytics Dashboard</a>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-lg">
+        <div class="card-body p-4 p-lg-5">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.slug.label }}</label>
+                        {{ form.slug }}
+                        <div class="form-text text-secondary">Leave blank to auto-generate from the Android app name.</div>
+                        {% if form.slug.errors %}<div class="text-danger small mt-1">{{ form.slug.errors|join:', ' }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.allowed_endpoint.label }}</label>
+                        {{ form.allowed_endpoint }}
+                        <div class="form-text text-secondary">Only requests that identify this saved app endpoint value will receive the JSON response.</div>
+                        {% if form.allowed_endpoint.errors %}<div class="text-danger small mt-1">{{ form.allowed_endpoint.errors|join:', ' }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.allowed_build_id.label }}</label>
+                        {{ form.allowed_build_id }}
+                        <div class="form-text text-secondary">If the build id does not match, the endpoint returns an update-app message and APK URL.</div>
+                        {% if form.allowed_build_id.errors %}<div class="text-danger small mt-1">{{ form.allowed_build_id.errors|join:', ' }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label text-white">{{ form.apk_file.label }}</label>
+                        {{ form.apk_file }}
+                        <div class="form-text text-secondary">Upload the APK that should be returned when the client must update.</div>
+                        {% if android_app and android_app.apk_file %}
+                        <div class="mt-2"><a href="{{ android_app.apk_file.url }}" class="link-info" target="_blank" rel="noopener">Current APK</a></div>
+                        {% endif %}
+                        {% if form.apk_file.errors %}<div class="text-danger small mt-1">{{ form.apk_file.errors|join:', ' }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.access_username.label }}</label>
+                        {{ form.access_username }}
+                        {% if form.access_username.errors %}<div class="text-danger small mt-1">{{ form.access_username.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.access_password.label }}</label>
+                        {{ form.access_password }}
+                        {% if form.access_password.errors %}<div class="text-danger small mt-1">{{ form.access_password.errors|join:', ' }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label text-white">{{ form.json_payload_input.label }}</label>
+                        {{ form.json_payload_input }}
+                        <div class="form-text text-secondary">{{ form.json_payload_input.help_text }}</div>
+                        {% if form.json_payload_input.errors %}<div class="text-danger small mt-1">{{ form.json_payload_input.errors|join:', ' }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            {{ form.is_active }}
+                            <label class="form-check-label text-white" for="{{ form.is_active.id_for_label }}">Active endpoint</label>
+                        </div>
+                        {% if form.is_active.errors %}<div class="text-danger small mt-1">{{ form.is_active.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                </div>
+
+                {% if android_app %}
+                <div class="mt-4 p-3 rounded-3 border border-secondary-subtle bg-black bg-opacity-25">
+                    <div class="text-secondary small mb-2">Protected endpoint</div>
+                    <code class="text-info">/api/android-apps/{{ android_app.slug }}/</code>
+                </div>
+                {% endif %}
+
+                <div class="d-flex gap-2 mt-4 flex-wrap">
+                    <button type="submit" class="btn btn-success px-4">Save Android App</button>
+                    <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

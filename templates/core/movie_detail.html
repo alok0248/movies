@@ -313,10 +313,14 @@ const playerConfigs = {
         height: "{{ player.player_height|default:'600px' }}",
         frameborder: {{ player.frameborder|default:0 }},
         allowfullscreen: {% if player.allowfullscreen %}true{% else %}false{% endif %},
+        customIframeMode: "{{ player.custom_iframe_mode|default:'url'|escapejs }}",
         customIframeIdType: "{{ player.custom_iframe_id_type|default:'tmdb'|escapejs }}",
         customIframeUrl: "{{ player.custom_iframe_url|default:''|escapejs }}",
         customMovieIframeUrl: "{{ player.custom_movie_iframe_url|default:''|escapejs }}",
-        customTvIframeUrl: "{{ player.custom_tv_iframe_url|default:''|escapejs }}"
+        customTvIframeUrl: "{{ player.custom_tv_iframe_url|default:''|escapejs }}",
+        customIframeHtml: "{{ player.custom_iframe_html|default:''|escapejs }}",
+        customMovieIframeHtml: "{{ player.custom_movie_iframe_html|default:''|escapejs }}",
+        customTvIframeHtml: "{{ player.custom_tv_iframe_html|default:''|escapejs }}"
     },
     {% endfor %}
 };
@@ -371,20 +375,66 @@ function updateAdminIframePreview() {
     previewMeta.textContent = `${playerConfig.name || 'Selected player'} • ${previewUrl}`;
 }
 
+function getPlayerContent(playerConfig, mediaType, mediaId, season, episode, imdbId = '') {
+    // First check if we're in full HTML mode
+    if (playerConfig.customIframeMode === 'full') {
+        const customHtml = mediaType === 'movie'
+            ? (playerConfig.customMovieIframeHtml || playerConfig.customIframeHtml)
+            : (playerConfig.customTvIframeHtml || playerConfig.customIframeHtml);
+        
+        if (customHtml) {
+            const selectedId = playerConfig.customIframeIdType === 'imdb' && imdbId ? imdbId : mediaId;
+            let html = customHtml;
+            html = html.replaceAll('{tmdb_id}', mediaId || '');
+            html = html.replaceAll('{imdb_id}', imdbId || '');
+            html = html.replaceAll('{content_id}', selectedId || '');
+            if (season !== undefined && season !== null) {
+                html = html.replaceAll('{season}', season);
+            }
+            if (episode !== undefined && episode !== null) {
+                html = html.replaceAll('{episode}', episode);
+            }
+            console.log('Custom Player HTML:', html);
+            return { type: 'html', content: html };
+        }
+    }
+    
+    // Otherwise URL mode
+    return { type: 'url', content: getPlayerUrl(playerConfig, mediaType, mediaId, season, episode, imdbId) };
+}
+
 function loadMoviePlayer() {
-    const moviePlayer = document.getElementById('moviePlayer');
+    const playerContainer = document.getElementById('playerContainer');
     const playerConfig = playerConfigs[currentPlayerId];
     if (!playerConfig) {
         return;
     }
 
-    const playerContainer = document.getElementById('playerContainer');
     playerContainer.style.width = playerConfig.width;
     playerContainer.style.height = playerConfig.height;
 
-    moviePlayer.frameBorder = playerConfig.frameborder;
-    moviePlayer.allowFullscreen = playerConfig.allowfullscreen;
-    moviePlayer.src = getPlayerUrl(playerConfig, 'movie', movieId, null, null, movieImdbId);
+    const playerContent = getPlayerContent(playerConfig, 'movie', movieId, null, null, movieImdbId);
+    
+    // Clear existing content
+    playerContainer.innerHTML = '';
+    
+    if (playerContent.type === 'html') {
+        playerContainer.innerHTML = playerContent.content;
+    } else {
+        const iframe = document.createElement('iframe');
+        iframe.id = 'moviePlayer';
+        iframe.style.position = 'absolute';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.frameBorder = playerConfig.frameborder;
+        iframe.allowFullscreen = playerConfig.allowfullscreen;
+        iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+        iframe.src = playerContent.content;
+        playerContainer.appendChild(iframe);
+    }
+    
     playerLoaded = true;
     updateServerButtonState();
     updateAdminIframePreview();

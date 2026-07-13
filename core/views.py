@@ -1,7 +1,7 @@
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -12,17 +12,21 @@ from django.utils import timezone
 from django.core.mail import send_mail
 from django.core.cache import cache
 from django.db.models import Sum
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.db import models
 import json
 import datetime
 import requests
 import calendar
+import base64
 from bs4 import BeautifulSoup
-from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache
+from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, AdsSettingsForm, URLBlockingSettingsForm, EmailSettingsForm
+    PlayerSettingsForm, AdsSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm
 )
 
 
@@ -1728,6 +1732,7 @@ def content_row_delete(request, row_id):
     return render(request, 'core/content_row_delete.html', {'content_row': content_row})
 
 
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def provider_item_list(request):
@@ -1755,6 +1760,210 @@ def provider_item_sync(request):
     from .provider_sync import sync_provider_items_once
     sync_provider_items_once()
     return redirect('provider_item_list')
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_list(request):
+    apps = AndroidApp.objects.all().order_by('name')
+    totals = AndroidAppAccessLog.objects.values('android_app').annotate(total=models.Sum('connection_count'))
+    totals_map = {item['android_app']: item['total'] or 0 for item in totals}
+    return render(request, 'core/android_app_list.html', {
+        'apps': apps,
+        'totals_map': totals_map,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def toggle_android_app(request, app_id):
+    if request.method == 'POST':
+        android_app = get_object_or_404(AndroidApp, id=app_id)
+        android_app.is_active = not android_app.is_active
+        android_app.save(update_fields=['is_active', 'updated_at'])
+        return redirect('android_app_list')
+    return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_create(request):
+    if request.method == 'POST':
+        form = AndroidAppForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            return redirect('android_app_list')
+    else:
+        form = AndroidAppForm()
+    return render(request, 'core/android_app_form.html', {'form': form, 'action': 'Create'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_edit(request, app_id):
+    android_app = get_object_or_404(AndroidApp, id=app_id)
+    if request.method == 'POST':
+        form = AndroidAppForm(request.POST, request.FILES, instance=android_app)
+        if form.is_valid():
+            form.save()
+            return redirect('android_app_list')
+    else:
+        form = AndroidAppForm(instance=android_app)
+    return render(request, 'core/android_app_form.html', {
+        'form': form,
+        'action': 'Edit',
+        'android_app': android_app,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_dashboard(request, app_id=None):
+    apps = AndroidApp.objects.all().order_by('name')
+    selected_app = None
+    if app_id is not None:
+        selected_app = get_object_or_404(AndroidApp, id=app_id)
+    elif apps:
+        selected_app = apps.first()
+
+    chart_labels = []
+    chart_values = []
+    app_endpoint = None
+    build_summary = []
+    build_chart_labels = []
+    build_chart_values = []
+    if selected_app:
+        logs = selected_app.access_logs.order_by('access_date')
+        chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in logs]
+        chart_values = [log.connection_count for log in logs]
+        app_endpoint = request.build_absolute_uri(f"/api/android-apps/{selected_app.slug}/")
+        build_summary = list(
+            selected_app.build_logs.values('build_identifier').annotate(
+                total_connections=models.Sum('connection_count')
+            ).order_by('-total_connections', 'build_identifier')
+        )
+        build_chart_labels = [item['build_identifier'] for item in build_summary[:10]]
+        build_chart_values = [item['total_connections'] or 0 for item in build_summary[:10]]
+
+    summary_rows = []
+    for app in apps:
+        total_connections = app.access_logs.aggregate(total=models.Sum('connection_count'))['total'] or 0
+        summary_rows.append({
+            'app': app,
+            'total_connections': total_connections,
+            'last_accessed_at': app.last_accessed_at,
+        })
+
+    return render(request, 'core/android_app_dashboard.html', {
+        'apps': apps,
+        'selected_app': selected_app,
+        'summary_rows': summary_rows,
+        'chart_labels_json': json.dumps(chart_labels),
+        'chart_values_json': json.dumps(chart_values),
+        'build_chart_labels_json': json.dumps(build_chart_labels),
+        'build_chart_values_json': json.dumps(build_chart_values),
+        'build_summary': build_summary,
+        'app_endpoint': app_endpoint,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_integration_guide(request, app_id):
+    android_app = get_object_or_404(AndroidApp, id=app_id)
+    app_endpoint = request.build_absolute_uri(f"/api/android-apps/{android_app.slug}/")
+    sample_success_payload = json.dumps(android_app.json_payload, indent=2)
+    sample_update_payload = {
+        'status': 'update_required',
+        'message': 'Update the app with the latest APK URL.',
+        'expected_build_id': android_app.allowed_build_id or 'your-build-id',
+    }
+    if android_app.apk_file:
+        sample_update_payload['apk_url'] = request.build_absolute_uri(android_app.apk_file.url)
+
+    basic_auth_value = base64.b64encode(
+        f"{android_app.access_username}:{android_app.access_password}".encode('utf-8')
+    ).decode('utf-8')
+
+    return render(request, 'core/android_app_integration_guide.html', {
+        'android_app': android_app,
+        'app_endpoint': app_endpoint,
+        'sample_success_payload': sample_success_payload,
+        'sample_update_payload_json': json.dumps(sample_update_payload, indent=2),
+        'basic_auth_value': basic_auth_value,
+    })
+
+
+@csrf_exempt
+@require_http_methods(['GET'])
+def android_app_endpoint(request, app_slug):
+    android_app = get_object_or_404(AndroidApp, slug=app_slug, is_active=True)
+
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Basic '):
+        response = HttpResponseForbidden('Authentication required')
+        response['WWW-Authenticate'] = 'Basic realm="Android App Endpoint"'
+        return response
+
+    try:
+        decoded = base64.b64decode(auth_header.split(' ', 1)[1]).decode('utf-8')
+        username, password = decoded.split(':', 1)
+    except Exception:
+        return HttpResponseForbidden('Invalid credentials format')
+
+    if username != android_app.access_username or password != android_app.access_password:
+        return HttpResponseForbidden('Invalid credentials')
+
+    request_identity = (
+        request.headers.get('X-Android-App')
+        or request.headers.get('X-Android-Package')
+        or request.GET.get('app')
+        or request.GET.get('package')
+        or ''
+    ).strip()
+    if not request_identity or request_identity != (android_app.allowed_endpoint or '').strip():
+        return HttpResponseForbidden('Endpoint identity is not allowed for this app')
+
+    build_identifier = (
+        request.headers.get('X-Android-Build')
+        or request.GET.get('build')
+        or 'unknown-build'
+    ).strip() or 'unknown-build'
+
+    allowed_build_id = (android_app.allowed_build_id or '').strip()
+    if allowed_build_id and build_identifier != allowed_build_id:
+        response_payload = {
+            'status': 'update_required',
+            'message': 'Update the app with the latest APK URL.',
+            'expected_build_id': allowed_build_id,
+        }
+        if android_app.apk_file:
+            response_payload['apk_url'] = request.build_absolute_uri(android_app.apk_file.url)
+        return JsonResponse(response_payload, status=426)
+
+    today = timezone.localdate()
+    log_entry, _ = AndroidAppAccessLog.objects.get_or_create(
+        android_app=android_app,
+        access_date=today,
+        defaults={'connection_count': 0},
+    )
+    log_entry.connection_count += 1
+    log_entry.save(update_fields=['connection_count', 'last_accessed_at'])
+
+    build_log_entry, _ = AndroidAppBuildLog.objects.get_or_create(
+        android_app=android_app,
+        build_identifier=build_identifier,
+        access_date=today,
+        defaults={'connection_count': 0},
+    )
+    build_log_entry.connection_count += 1
+    build_log_entry.save(update_fields=['connection_count', 'last_accessed_at'])
+
+    android_app.total_connections = (android_app.total_connections or 0) + 1
+    android_app.last_accessed_at = timezone.now()
+    android_app.save(update_fields=['total_connections', 'last_accessed_at', 'updated_at'])
+
+    return JsonResponse(android_app.json_payload, safe=isinstance(android_app.json_payload, dict))
 
 
 def ajax_login(request):
@@ -1842,13 +2051,13 @@ def reset_password(request, uidb64, token):
 def ajax_toggle_watchlist(request):
     if not request.user.is_authenticated:
         return JsonResponse({'success': False, 'message': 'You need to login to add to the watch list'})
-    
+
     if request.method == 'POST':
         tmdb_id = int(request.POST.get('tmdb_id'))
         media_type = request.POST.get('media_type')
         title = request.POST.get('title')
         poster_path = request.POST.get('poster_path')
-        
+
         watchlist_item, created = WatchList.objects.get_or_create(
             user=request.user,
             tmdb_id=tmdb_id,
@@ -1858,12 +2067,12 @@ def ajax_toggle_watchlist(request):
                 'poster_path': poster_path
             }
         )
-        
+
         if created:
             return JsonResponse({'success': True, 'action': 'added', 'message': 'Added to watchlist'})
-        else:
-            watchlist_item.delete()
-            return JsonResponse({'success': True, 'action': 'removed', 'message': 'Removed from watchlist'})
+
+        return JsonResponse({'success': True, 'action': 'exists', 'message': 'Already in watchlist'})
+
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 
@@ -1879,7 +2088,7 @@ def ajax_check_watchlist(request):
         media_type=media_type
     ).exists()
     return JsonResponse({'in_watchlist': in_watchlist})
-
+4
 
 @login_required
 def watchlist(request):

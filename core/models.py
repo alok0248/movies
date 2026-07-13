@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils.text import slugify
+import secrets
 
 
 class ContentRow(models.Model):
@@ -271,6 +273,10 @@ class PlayerConfiguration(models.Model):
         ('tmdb', 'TMDB ID'),
         ('imdb', 'IMDb ID'),
     ]
+    IFRAME_MODE_CHOICES = [
+        ('url', 'URL Mode - Enter URL, system creates iframe'),
+        ('full', 'Full HTML Mode - Enter complete iframe HTML'),
+    ]
     
     name = models.CharField(max_length=100, help_text="Name to identify this player configuration")
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='both')
@@ -291,11 +297,19 @@ class PlayerConfiguration(models.Model):
     frameborder = models.IntegerField(default=0, help_text="iframe frameborder attribute")
     allowfullscreen = models.BooleanField(default=True, help_text="Enable fullscreen mode")
     
+    # Custom iframe mode and fields
+    custom_iframe_mode = models.CharField(max_length=10, choices=IFRAME_MODE_CHOICES, default='url', help_text="Choose whether to use a simple URL (system creates iframe) or full HTML iframe code", db_column='custom_type')
+    
     # Custom iframe URL (overrides Vidking)
     custom_iframe_id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES, default='tmdb', help_text="Choose whether custom iframe placeholders should use the TMDB ID or IMDb ID")
     custom_iframe_url = models.TextField(blank=True, null=True, help_text="Shared custom iframe URL. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}, {season}, {episode}")
     custom_movie_iframe_url = models.TextField(blank=True, null=True, help_text="Movie-specific custom iframe URL. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}")
     custom_tv_iframe_url = models.TextField(blank=True, null=True, help_text="TV-specific custom iframe URL. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}, {season}, {episode}")
+    
+    # Full iframe HTML fields
+    custom_iframe_html = models.TextField(blank=True, null=True, help_text="Shared full custom iframe HTML. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}, {season}, {episode}")
+    custom_movie_iframe_html = models.TextField(blank=True, null=True, help_text="Movie-specific full custom iframe HTML. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}")
+    custom_tv_iframe_html = models.TextField(blank=True, null=True, help_text="TV-specific full custom iframe HTML. Use placeholders: {content_id}, {tmdb_id}, {imdb_id}, {season}, {episode}")
     
     class Meta:
         ordering = ['order', 'name']
@@ -313,6 +327,18 @@ class PlayerConfiguration(models.Model):
     def __str__(self):
         return f"{self.name} ({self.get_media_type_display()})"
     
+    def _replace_placeholders(self, text, tmdb_id, season=None, episode=None, imdb_id=None):
+        selected_id = imdb_id if getattr(self, 'custom_iframe_id_type', 'tmdb') == 'imdb' and imdb_id else tmdb_id
+        result = text
+        result = result.replace('{tmdb_id}', str(tmdb_id or ''))
+        result = result.replace('{imdb_id}', str(imdb_id or ''))
+        result = result.replace('{content_id}', str(selected_id or ''))
+        if season is not None:
+            result = result.replace('{season}', str(season))
+        if episode is not None:
+            result = result.replace('{episode}', str(episode))
+        return result
+
     def get_player_url(self, media_type, tmdb_id, season=None, episode=None, imdb_id=None):
         custom_url = self.custom_iframe_url
         if media_type == 'movie' and self.custom_movie_iframe_url:
@@ -322,16 +348,7 @@ class PlayerConfiguration(models.Model):
 
         # If custom iframe URL is set, use that with placeholders
         if custom_url:
-            selected_id = imdb_id if getattr(self, 'custom_iframe_id_type', 'tmdb') == 'imdb' and imdb_id else tmdb_id
-            url = custom_url
-            url = url.replace('{tmdb_id}', str(tmdb_id or ''))
-            url = url.replace('{imdb_id}', str(imdb_id or ''))
-            url = url.replace('{content_id}', str(selected_id or ''))
-            if season is not None:
-                url = url.replace('{season}', str(season))
-            if episode is not None:
-                url = url.replace('{episode}', str(episode))
-            return url
+            return self._replace_placeholders(custom_url, tmdb_id, season, episode, imdb_id)
         
         # Otherwise use Vidking player
         base_url = "https://www.vidking.net/embed"
@@ -359,6 +376,27 @@ class PlayerConfiguration(models.Model):
             url += f"?{'&'.join(params)}"
         
         return url
+
+    def get_player_html(self, media_type, tmdb_id, season=None, episode=None, imdb_id=None):
+        # Check if we're in Full HTML mode first
+        if self.custom_iframe_mode == 'full':
+            custom_html = self.custom_iframe_html
+            if media_type == 'movie' and self.custom_movie_iframe_html:
+                custom_html = self.custom_movie_iframe_html
+            elif media_type == 'tv' and self.custom_tv_iframe_html:
+                custom_html = self.custom_tv_iframe_html
+            
+            if custom_html:
+                return self._replace_placeholders(custom_html, tmdb_id, season, episode, imdb_id)
+        
+        # Otherwise fall back to URL mode
+        player_url = self.get_player_url(media_type, tmdb_id, season, episode, imdb_id)
+        if not player_url:
+            return None
+        
+        # Build the standard iframe
+        allowfullscreen_attr = 'allowfullscreen' if self.allowfullscreen else ''
+        return f'<iframe src="{player_url}" width="{self.player_width}" height="{self.player_height}" frameborder="{self.frameborder}" {allowfullscreen_attr}></iframe>'
 
 
 class ImportLog(models.Model):
@@ -463,6 +501,76 @@ class TMDBApiKey(models.Model):
 
     def __str__(self):
         return f"TMDB API Key: {self.key[:10]}..."
+
+
+class AndroidApp(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
+    access_username = models.CharField(max_length=255)
+    access_password = models.CharField(max_length=255)
+    allowed_endpoint = models.CharField(max_length=500, blank=True, default='')
+    allowed_build_id = models.CharField(max_length=255, blank=True, default='')
+    apk_file = models.FileField(upload_to='android_apks/', blank=True, null=True)
+    json_payload = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    total_connections = models.PositiveIntegerField(default=0)
+    last_accessed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Android App'
+        verbose_name_plural = 'Android Apps'
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or secrets.token_hex(4)
+            slug = base_slug
+            counter = 2
+            while AndroidApp.objects.exclude(pk=self.pk).filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+
+class AndroidAppAccessLog(models.Model):
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='access_logs')
+    access_date = models.DateField()
+    connection_count = models.PositiveIntegerField(default=0)
+    last_accessed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('android_app', 'access_date')
+        ordering = ['-access_date']
+        verbose_name = 'Android App Access Log'
+        verbose_name_plural = 'Android App Access Logs'
+
+    def __str__(self):
+        return f"{self.android_app.name} - {self.access_date}"
+
+
+class AndroidAppBuildLog(models.Model):
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='build_logs')
+    build_identifier = models.CharField(max_length=255)
+    access_date = models.DateField()
+    connection_count = models.PositiveIntegerField(default=0)
+    last_accessed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('android_app', 'build_identifier', 'access_date')
+        ordering = ['-access_date', 'build_identifier']
+        verbose_name = 'Android App Build Log'
+        verbose_name_plural = 'Android App Build Logs'
+
+    def __str__(self):
+        return f"{self.android_app.name} - {self.build_identifier} - {self.access_date}"
 
 
 class DataSourceUsageLog(models.Model):

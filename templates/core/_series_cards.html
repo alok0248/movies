@@ -1,50 +1,47 @@
 
 {% for s in series %}
 <div class="card-wrapper">
-    <a class="movie-card d-block text-decoration-none text-reset" href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}">
+    <div class="movie-card d-block text-decoration-none text-reset">
         {% if s.cover_url %}
         <div class="card-image-container">
-            <img src="{{ s.cover_url }}" class="card-image" alt="{{ s.title }}" loading="lazy">
+            <a class="card-image-link d-block" href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}">
+                <img src="{{ s.cover_url }}" class="card-image" alt="{{ s.title }}" loading="lazy">
+            </a>
+
+            {# Show only the release year on the image so tiles stay clean and focused. #}
+            {% if s.first_air_date or s.year %}
             <div class="rating-badge">
-                {% if s.vote_average %}
-                ★ {{ s.vote_average|floatformat:1 }}
-                {% endif %}
-            </div>
-            <div class="card-hover-overlay">
-                <div class="hover-content">
-                    {% if s.overview %}
-                    <p class="hover-description">{{ s.overview|truncatewords:30 }}</p>
-                    {% elif s.plot %}
-                    <p class="hover-description">{{ s.plot|truncatewords:30 }}</p>
-                    {% endif %}
-                    <div class="hover-actions">
-                        <button class="hover-watchlist-btn" 
-                                type="button"
-                                onclick="event.preventDefault(); event.stopPropagation();"
-                                data-tmdb-id="{{ s.id }}" 
-                                data-media-type="tv" 
-                                data-title="{{ s.title|escapejs }}" 
-                                data-poster-path="{{ s.poster_path|default:'' }}">
-                            <span class="watchlist-icon">+</span>
-                        </button>
-                    </div>
-                    <div class="watchlist-warning text-danger" style="display: none; font-size: 0.8rem; margin-top: 0.5rem;">
-                        You need to login to add to the list
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        <div class="card-info">
-            <h5 class="card-title">{{ s.title }}</h5>
-            <p class="card-year">
                 {% if s.first_air_date %}
                 {{ s.first_air_date|slice:":4" }}
                 {% elif s.year %}
                 {{ s.year }}
                 {% endif %}
-            </p>
+            </div>
+            {% endif %}
+
+            {# Keep the add-to-watchlist action directly on the poster without affecting the details link. #}
+            <button class="hover-watchlist-btn card-watchlist-btn"
+                    type="button"
+                    data-tmdb-id="{{ s.id }}"
+                    data-media-type="tv"
+                    data-title="{{ s.title|escapejs }}"
+                    data-poster-path="{{ s.poster_path|default:'' }}"
+                    aria-label="Add {{ s.title }} to watchlist">
+                <span class="watchlist-icon">+</span>
+            </button>
+
+            <div class="watchlist-warning text-danger" style="display: none; font-size: 0.8rem; margin-top: 0.5rem;">
+                You need to login to add to the list
+            </div>
         </div>
-    </a>
+        {% endif %}
+
+        {# Keep the title below the poster while the poster itself remains the details link. #}
+        <div class="card-info">
+            <h5 class="card-title">
+                <a class="text-decoration-none text-reset" href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' s.id %}{% else %}{% url 'series_detail' s.slug %}{% endif %}">{{ s.title }}</a>
+            </h5>
+        </div>
+    </div>
 </div>
 {% endfor %}

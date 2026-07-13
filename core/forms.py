@@ -1,5 +1,6 @@
 from django import forms
-from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, AndroidApp
+import json
 
 
 class SiteSettingsForm(forms.ModelForm):
@@ -272,15 +273,20 @@ class PlayerConfigurationForm(forms.ModelForm):
             'player_height',
             'frameborder',
             'allowfullscreen',
+            'custom_iframe_mode',
             'custom_iframe_id_type',
             'custom_iframe_url',
             'custom_movie_iframe_url',
-            'custom_tv_iframe_url'
+            'custom_tv_iframe_url',
+            'custom_iframe_html',
+            'custom_movie_iframe_html',
+            'custom_tv_iframe_html'
         ]
         widgets = {
             'player_color': forms.TextInput(attrs={'placeholder': 'e.g., e50914 (no #)'}),
             'player_width': forms.TextInput(attrs={'placeholder': 'e.g., 100%, 800px'}),
             'player_height': forms.TextInput(attrs={'placeholder': 'e.g., 600px, 100%'}),
+            'custom_iframe_mode': forms.Select(attrs={'class': 'form-select'}),
             'custom_iframe_id_type': forms.Select(attrs={'class': 'form-select'}),
             'custom_iframe_url': forms.Textarea(attrs={
                 'placeholder': 'Shared iframe URL (used when movie/TV specific URL is empty)',
@@ -288,16 +294,76 @@ class PlayerConfigurationForm(forms.ModelForm):
                 'style': 'width: 100%;'
             }),
             'custom_movie_iframe_url': forms.Textarea(attrs={
-                'placeholder': 'Movie iframe URL, e.g. https://example.com/movie/{content_id}',
+                'placeholder': 'Movie iframe URL, e.g. https://vidcore.net/movie/{imdb_id}?autoPlay=true&title=true&hideserver=true&poster=true',
                 'rows': 3,
                 'style': 'width: 100%;'
             }),
             'custom_tv_iframe_url': forms.Textarea(attrs={
-                'placeholder': 'TV iframe URL, e.g. https://example.com/tv/{content_id}/{season}/{episode}',
+                'placeholder': 'TV iframe URL, e.g. https://vidcore.net/tv/{imdb_id}/{season}/{episode}?autoPlay=true&title=true&hideserver=true&poster=true',
                 'rows': 3,
                 'style': 'width: 100%;'
             }),
+            'custom_iframe_html': forms.Textarea(attrs={
+                'placeholder': 'Shared full iframe HTML',
+                'rows': 5,
+                'style': 'width: 100%; font-family: monospace;'
+            }),
+            'custom_movie_iframe_html': forms.Textarea(attrs={
+                'placeholder': 'Movie-specific full iframe HTML',
+                'rows': 5,
+                'style': 'width: 100%; font-family: monospace;'
+            }),
+            'custom_tv_iframe_html': forms.Textarea(attrs={
+                'placeholder': 'TV-specific full iframe HTML',
+                'rows': 5,
+                'style': 'width: 100%; font-family: monospace;'
+            }),
         }
+
+
+class AndroidAppForm(forms.ModelForm):
+    json_payload_input = forms.CharField(
+        label='JSON Data',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 12, 'placeholder': '{\n  "key": "value"\n}'}),
+        help_text='Paste valid JSON that should be returned by this Android app endpoint.'
+    )
+
+    class Meta:
+        model = AndroidApp
+        fields = ['name', 'slug', 'allowed_endpoint', 'allowed_build_id', 'apk_file', 'access_username', 'access_password', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Android app name'}),
+            'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'auto-generated-if-empty'}),
+            'allowed_endpoint': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'com.example.app or package/build endpoint'}),
+            'allowed_build_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '1.0.0, 102, build-2026-07'}),
+            'apk_file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'access_username': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint username'}),
+            'access_password': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint password'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields['json_payload_input'].initial = json.dumps(self.instance.json_payload, indent=2)
+
+    def clean_json_payload_input(self):
+        value = self.cleaned_data['json_payload_input']
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise forms.ValidationError(f'Invalid JSON: {exc}')
+        if not isinstance(parsed, (dict, list)):
+            raise forms.ValidationError('JSON data must be an object or array.')
+        self.cleaned_data['parsed_json_payload'] = parsed
+        return value
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.json_payload = self.cleaned_data['parsed_json_payload']
+        if commit:
+            instance.save()
+        return instance
 
 
 class TMDBApiKeyForm(forms.ModelForm):

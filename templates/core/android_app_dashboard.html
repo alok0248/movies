@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1"><i class="fas fa-chart-line me-2 text-info"></i>Android Endpoint Analytics</h1>
+            <p class="text-secondary mb-0">Daily and build-wise connection reporting for saved Android app endpoints.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">&larr; Android Apps</a>
+            <a href="{% url 'android_app_create' %}" class="btn btn-success">+ Create Android App</a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-white fw-semibold">Saved Endpoints</div>
+                <div class="list-group list-group-flush rounded-bottom">
+                    {% for app in apps %}
+                    <a href="{% url 'android_app_dashboard_detail' app.id %}" class="list-group-item list-group-item-action bg-dark text-white border-secondary {% if selected_app and selected_app.id == app.id %}active{% endif %}">
+                        <div class="fw-semibold">{{ app.name }}</div>
+                        <div class="small opacity-75">{{ app.slug }}</div>
+                    </a>
+                    {% empty %}
+                    <div class="list-group-item bg-dark text-secondary border-secondary">No apps saved.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            {% if selected_app %}
+            <div class="row g-4 mb-1">
+                <div class="col-md-4">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Total Connections</div><div class="display-6 text-white">{{ selected_app.total_connections }}</div></div></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Builds Seen</div><div class="display-6 text-white">{{ build_summary|length }}</div></div></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Endpoint Status</div><div class="mt-2">{% if selected_app.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Disabled</span>{% endif %}</div></div></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">{{ selected_app.name }}</h5>
+                            <div class="text-secondary small">Daily endpoint connections</div>
+                        </div>
+                        <a href="{% url 'android_app_edit' selected_app.id %}" class="btn btn-sm btn-outline-warning">Edit App</a>
+                    </div>
+                    <div style="height: 300px;"><canvas id="dailyConnectionsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="text-white mb-1">Connections by Build</h5>
+                    <div class="text-secondary small mb-3">Build identity is supplied through the <code>X-Android-Build</code> request header.</div>
+                    <div style="height: 280px;"><canvas id="buildConnectionsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <h5 class="text-white mb-0">Endpoint Configuration</h5>
+                        <a href="{% url 'android_app_integration_guide' selected_app.id %}" class="btn btn-sm btn-outline-info">View Connection Guide</a>
+                    </div>
+                    <div class="row g-3 small">
+                        <div class="col-md-6"><div class="text-secondary">API URL</div><code class="text-info text-break">{{ app_endpoint }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Allowed app/build identity</div><code class="text-white text-break">{{ selected_app.allowed_endpoint|default:'Not configured' }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Allowed build ID</div><code class="text-white text-break">{{ selected_app.allowed_build_id|default:'Not configured' }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Username</div><code class="text-white">{{ selected_app.access_username }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Last accessed</div><span class="text-white">{{ selected_app.last_accessed_at|default:'Never' }}</span></div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card bg-dark border-secondary shadow-sm"><div class="card-body text-center py-5 text-secondary">Create an Android app to start tracking its endpoint usage.</div></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3">All Endpoint Totals</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead><tr><th>App</th><th>Status</th><th>Total Connections</th><th>Last Accessed</th><th></th></tr></thead>
+                    <tbody>
+                        {% for row in summary_rows %}
+                        <tr>
+                            <td><div class="fw-semibold">{{ row.app.name }}</div><div class="text-secondary small">{{ row.app.slug }}</div></td>
+                            <td>{% if row.app.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Disabled</span>{% endif %}</td>
+                            <td>{{ row.total_connections }}</td>
+                            <td>{{ row.last_accessed_at|default:'Never' }}</td>
+                            <td><a class="btn btn-sm btn-outline-info" href="{% url 'android_app_dashboard_detail' row.app.id %}">View</a></td>
+                        </tr>
+                        {% empty %}<tr><td colspan="5" class="text-secondary text-center py-4">No endpoint activity yet.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const dailyLabels = {{ chart_labels_json|safe }};
+const dailyValues = {{ chart_values_json|safe }};
+const buildLabels = {{ build_chart_labels_json|safe }};
+const buildValues = {{ build_chart_values_json|safe }};
+const chartText = '#cbd5e1';
+const gridColor = 'rgba(148, 163, 184, 0.16)';
+
+if (document.getElementById('dailyConnectionsChart')) {
+    new Chart(document.getElementById('dailyConnectionsChart'), {
+        type: 'line',
+        data: { labels: dailyLabels, datasets: [{ label: 'Connections', data: dailyValues, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+    });
+}
+if (document.getElementById('buildConnectionsChart')) {
+    new Chart(document.getElementById('buildConnectionsChart'), {
+        type: 'bar',
+        data: { labels: buildLabels, datasets: [{ label: 'Connections', data: buildValues, backgroundColor: '#22c55e', borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5" style="max-width: 1100px;">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+        <div>
+            <h1 class="text-white mb-1"><i class="fas fa-plug me-2 text-info"></i>{{ android_app.name }} Integration Guide</h1>
+            <p class="text-secondary mb-0">Use this reference to implement the protected Android configuration endpoint.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'android_app_dashboard_detail' android_app.id %}" class="btn btn-outline-light">&larr; Analytics</a>
+            <a href="{% url 'android_app_edit' android_app.id %}" class="btn btn-outline-warning">Edit App</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info border-0 bg-info bg-opacity-10 text-info-emphasis">
+        The endpoint only returns the configured JSON when Basic Auth, app identity, and build ID match this saved Android app.
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="text-white">1. Request</h5>
+            <div class="row g-3 small">
+                <div class="col-md-6"><div class="text-secondary">Method</div><code class="text-white">GET</code></div>
+                <div class="col-md-6"><div class="text-secondary">Endpoint</div><code class="text-info text-break">{{ app_endpoint }}</code></div>
+                <div class="col-md-6"><div class="text-secondary">App identity header</div><code class="text-white">X-Android-App: {{ android_app.allowed_endpoint }}</code></div>
+                <div class="col-md-6"><div class="text-secondary">Build header</div><code class="text-white">X-Android-Build: {{ android_app.allowed_build_id|default:'your-build-id' }}</code></div>
+            </div>
+            <div class="mt-3 text-secondary small">The app identity can also be sent as <code>?app=</code>. The build can also be sent as <code>?build=</code>.</div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="text-white">2. Authentication</h5>
+            <p class="text-secondary small">Send HTTP Basic Authentication with the saved endpoint credentials.</p>
+            <pre class="bg-black rounded p-3 mb-0 text-info text-break"><code>Authorization: Basic {{ basic_auth_value }}</code></pre>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="text-white">3. Full cURL Example</h5>
+            <pre class="bg-black rounded p-3 mb-0 text-info text-break"><code>curl -u {{ android_app.access_username }}:{{ android_app.access_password }} \
+  -H "X-Android-App: {{ android_app.allowed_endpoint }}" \
+  -H "X-Android-Build: {{ android_app.allowed_build_id|default:'your-build-id' }}" \
+  "{{ app_endpoint }}"</code></pre>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card bg-dark border-success shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="text-success">200: Configuration response</h5>
+                    <p class="text-secondary small">Returned when endpoint credentials, app identity, and build are accepted.</p>
+                    <pre class="bg-black rounded p-3 mb-0 text-info text-break"><code>{{ sample_success_payload }}</code></pre>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card bg-dark border-warning shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="text-warning">426: Update required</h5>
+                    <p class="text-secondary small">Returned when the supplied build ID does not match the saved build ID.</p>
+                    <pre class="bg-black rounded p-3 mb-0 text-info text-break"><code>{{ sample_update_payload_json }}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white">4. Android handling</h5>
+            <div class="text-secondary small">On HTTP <code>200</code>, parse the JSON payload and continue normally. On HTTP <code>426</code>, parse the update payload, display its message, and open the returned <code>apk_url</code> when available. HTTP <code>403</code> means the credentials or identity were rejected. HTTP <code>404</code> means the endpoint is disabled or does not exist.</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

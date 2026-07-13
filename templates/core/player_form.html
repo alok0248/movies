@@ -1,108 +1,461 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1 class="mb-4">{{ action }} Player Configuration</h1>
-    <div class="d-flex justify-content-between mb-3">
-        <a href="{% url 'player_list' %}" class="btn btn-secondary">&larr; Back to Players</a>
+<style>
+    .form-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 3rem 1rem;
+    }
+    .page-header {
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .page-subtitle {
+        color: #94a3b8;
+        margin: 0.35rem 0 0;
+        font-size: 0.98rem;
+    }
+    .panel-card {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 14px;
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.32);
+        overflow: hidden;
+    }
+    .panel-body {
+        padding: 1.5rem;
+    }
+    .section-card {
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+        background: rgba(15, 23, 42, 0.55);
+    }
+    .section-card.section-general {
+        border-color: rgba(56, 189, 248, 0.22);
+        background: linear-gradient(180deg, rgba(8, 47, 73, 0.30), rgba(15, 23, 42, 0.65));
+    }
+    .section-card.section-player {
+        border-color: rgba(251, 191, 36, 0.24);
+        background: linear-gradient(180deg, rgba(69, 26, 3, 0.24), rgba(15, 23, 42, 0.65));
+    }
+    .section-card.section-custom {
+        border-color: rgba(129, 140, 248, 0.24);
+        background: linear-gradient(180deg, rgba(49, 46, 129, 0.22), rgba(15, 23, 42, 0.65));
+    }
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 0.35rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+    .section-subtitle {
+        color: #94a3b8;
+        font-size: 0.92rem;
+        margin-bottom: 1rem;
+    }
+    .section-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #fff;
+    }
+    .badge-general { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+    .badge-player { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .badge-custom { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #e2e8f0;
+    }
+    .form-control,
+    .form-select,
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.96)) !important;
+        background-color: #0f172a !important;
+        border: 1px solid rgba(71, 85, 105, 0.75) !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+        border-radius: 10px !important;
+        padding: 0.8rem 0.95rem;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    textarea.form-control,
+    textarea {
+        min-height: 132px;
+        line-height: 1.55;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.88rem;
+    }
+    .form-control::placeholder,
+    textarea::placeholder,
+    input[type="text"]::placeholder,
+    input[type="number"]::placeholder {
+        color: #7c8aa0 !important;
+        -webkit-text-fill-color: #7c8aa0 !important;
+    }
+    .form-control:hover,
+    .form-select:hover,
+    input[type="text"]:hover,
+    input[type="number"]:hover,
+    textarea:hover,
+    select:hover {
+        border-color: rgba(100, 116, 139, 0.95) !important;
+        background: linear-gradient(180deg, rgba(7, 12, 27, 0.98), rgba(15, 23, 42, 0.98)) !important;
+        background-color: #111827 !important;
+    }
+    .form-control:focus,
+    .form-select:focus,
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus,
+    select:focus {
+        border-color: #6366f1 !important;
+        background: linear-gradient(180deg, rgba(9, 14, 30, 1), rgba(17, 24, 39, 1)) !important;
+        background-color: #111827 !important;
+        box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+    }
+    .form-select option {
+        background: #0f172a;
+        color: #f8fafc;
+    }
+    .form-check-input {
+        background: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        width: 1.1rem;
+        height: 1.1rem;
+    }
+    .form-check-input:checked {
+        background-color: #6366f1;
+        border-color: #6366f1;
+    }
+    .form-check-label {
+        color: #cbd5e1;
+        font-weight: 500;
+    }
+    .input-group-text {
+        background: rgba(30, 41, 59, 0.95) !important;
+        border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        color: #cbd5e1 !important;
+        border-radius: 10px 0 0 10px !important;
+    }
+    .helper-box {
+        margin-top: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.72);
+        color: #cbd5e1;
+        font-size: 0.92rem;
+    }
+    .helper-box strong {
+        color: #f8fafc;
+    }
+    .mode-box {
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    .mode-url {
+        background: linear-gradient(180deg, rgba(8, 47, 73, 0.28), rgba(15, 23, 42, 0.6));
+        border-color: rgba(56, 189, 248, 0.22);
+    }
+    .mode-html {
+        background: linear-gradient(180deg, rgba(49, 46, 129, 0.22), rgba(15, 23, 42, 0.6));
+        border-color: rgba(129, 140, 248, 0.24);
+    }
+    .mode-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 0.35rem;
+    }
+    .mode-note {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    .example-label {
+        display: inline-block;
+        margin-bottom: 0.45rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #93c5fd;
+    }
+    .placeholder-code {
+        background: #020617;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 10px;
+        padding: 0.9rem 1rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.84rem;
+        line-height: 1.55;
+        color: #e2e8f0;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .token {
+        color: #a5b4fc;
+        font-weight: 700;
+    }
+    .tips-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+    .tip-chip {
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 10px;
+        padding: 0.75rem 0.85rem;
+        background: rgba(2, 6, 23, 0.55);
+        color: #cbd5e1;
+        font-size: 0.88rem;
+    }
+    .tip-chip code {
+        color: #f8fafc;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        border: none;
+        padding: 0.8rem 2rem;
+        font-weight: 700;
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+    }
+    .btn-secondary {
+        background: rgba(51, 65, 85, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        color: #f8fafc;
+        border-radius: 10px;
+    }
+    .btn-secondary:hover {
+        background: rgba(71, 85, 105, 0.95);
+        color: #fff;
+    }
+</style>
+
+<div class="form-container">
+    <div class="page-header">
+        <div>
+            <h1 class="mb-0" style="font-weight:800; color:#f8fafc;">{{ action }} Player Configuration</h1>
+            <p class="page-subtitle">Configure player behavior, iframe mode, and reusable movie or TV embed patterns.</p>
+        </div>
+        <a href="{% url 'player_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Players
+        </a>
     </div>
-    
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-body">
-                    <form method="post">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            {{ form.name.label_tag }}
+
+    <div class="panel-card">
+        <div class="panel-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="section-card section-general">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">1</span>
+                        <span>General Settings</span>
+                    </div>
+                    <div class="section-subtitle">Basic player identity, visibility, and where it should appear.</div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Player Name</label>
                             {{ form.name }}
                         </div>
-                        <div class="mb-3">
-                            {{ form.media_type.label_tag }}
+                        <div class="col-md-6">
+                            <label for="{{ form.media_type.id_for_label }}" class="form-label">Media Type</label>
                             {{ form.media_type }}
                         </div>
-                        <div class="mb-3 form-check">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0 d-flex align-items-center">
                             {{ form.is_active }}
-                            {{ form.is_active.label_tag }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.is_active.id_for_label }}">Active</label>
                         </div>
-                        <div class="mb-3">
-                            {{ form.order.label_tag }}
+                        <div class="col-md-6">
+                            <label for="{{ form.order.id_for_label }}" class="form-label">Display Order</label>
                             {{ form.order }}
                         </div>
-                        
-                        <h4 class="mt-4 mb-3">Vidking Player Options</h4>
-                        <div class="mb-3">
-                            {{ form.player_color.label_tag }}
-                            {{ form.player_color }}
+                    </div>
+                </div>
+
+                <div class="section-card section-player">
+                    <div class="section-title">
+                        <span class="section-badge badge-player">2</span>
+                        <span>Player Options</span>
+                    </div>
+                    <div class="section-subtitle">Control size, playback behavior, and standard iframe settings.</div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <label for="{{ form.player_color.id_for_label }}" class="form-label">Player Color</label>
+                            <div class="input-group">
+                                <div class="input-group-text">#</div>
+                                {{ form.player_color }}
+                            </div>
                         </div>
-                        <div class="mb-3 form-check">
-                            {{ form.auto_play }}
-                            {{ form.auto_play.label_tag }}
-                        </div>
-                        <div class="mb-3 form-check">
-                            {{ form.next_episode }}
-                            {{ form.next_episode.label_tag }} (TV only)
-                        </div>
-                        <div class="mb-3 form-check">
-                            {{ form.episode_selector }}
-                            {{ form.episode_selector.label_tag }} (TV only)
-                        </div>
-                        
-                        <h4 class="mt-4 mb-3">Player Size & Iframe Options</h4>
-                        <div class="mb-3">
-                            {{ form.player_width.label_tag }}
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <label for="{{ form.player_width.id_for_label }}" class="form-label">Player Width</label>
                             {{ form.player_width }}
                         </div>
-                        <div class="mb-3">
-                            {{ form.player_height.label_tag }}
+                        <div class="col-md-4">
+                            <label for="{{ form.player_height.id_for_label }}" class="form-label">Player Height</label>
                             {{ form.player_height }}
                         </div>
-                        <div class="mb-3">
-                            {{ form.frameborder.label_tag }}
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-3 mb-3 mb-md-0 d-flex align-items-center">
+                            {{ form.auto_play }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.auto_play.id_for_label }}">Auto Play</label>
+                        </div>
+                        <div class="col-md-3 mb-3 mb-md-0 d-flex align-items-center">
+                            {{ form.next_episode }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.next_episode.id_for_label }}">Next Episode</label>
+                        </div>
+                        <div class="col-md-3 mb-3 mb-md-0 d-flex align-items-center">
+                            {{ form.episode_selector }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.episode_selector.id_for_label }}">Episode Selector</label>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="{{ form.frameborder.id_for_label }}" class="form-label">Frameborder</label>
                             {{ form.frameborder }}
                         </div>
-                        <div class="mb-3 form-check">
-                            {{ form.allowfullscreen }}
-                            {{ form.allowfullscreen.label_tag }}
-                        </div>
-                        
-                        <h4 class="mt-4 mb-3">Custom Iframe Player</h4>
-                        <div class="mb-3">
-                            {{ form.custom_iframe_id_type.label_tag }}
-                            {{ form.custom_iframe_id_type }}
-                            <div class="form-text">
-                                Select which ID should be used for <code>{content_id}</code>. Use <code>{tmdb_id}</code> or <code>{imdb_id}</code> directly if the player requires a specific one.
-                            </div>
-                        </div>
+                    </div>
 
-                        <div id="shared-iframe-box" class="mb-3">
-                            {{ form.custom_iframe_url.label_tag }}
+                    <div class="d-flex align-items-center">
+                        {{ form.allowfullscreen }}
+                        <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.allowfullscreen.id_for_label }}">Allow Fullscreen</label>
+                    </div>
+                </div>
+
+                <div class="section-card section-custom">
+                    <div class="section-title">
+                        <span class="section-badge badge-custom">3</span>
+                        <span>Custom Player Settings</span>
+                    </div>
+                    <div class="section-subtitle">Use a simple URL pattern or paste a full iframe HTML block with placeholders.</div>
+
+                    <div class="mb-4">
+                        <label for="{{ form.custom_iframe_mode.id_for_label }}" class="form-label">Custom Player Mode</label>
+                        {{ form.custom_iframe_mode }}
+                    </div>
+
+                    <div id="id-type-section">
+                        <label for="{{ form.custom_iframe_id_type.id_for_label }}" class="form-label">ID Type for <code class="text-white">{content_id}</code></label>
+                        {{ form.custom_iframe_id_type }}
+                        <div class="helper-box">
+                            <strong>Placeholder behavior:</strong> <code>{content_id}</code> will use either TMDB ID or IMDb ID based on this setting. You can still use <code>{tmdb_id}</code> or <code>{imdb_id}</code> directly when a provider requires a specific one.
+                        </div>
+                    </div>
+
+                    <div class="tips-grid">
+                        <div class="tip-chip"><code>{content_id}</code> main content ID</div>
+                        <div class="tip-chip"><code>{tmdb_id}</code> TMDB-only player</div>
+                        <div class="tip-chip"><code>{imdb_id}</code> IMDb-only player</div>
+                        <div class="tip-chip"><code>{season}</code> and <code>{episode}</code> for TV URLs</div>
+                    </div>
+
+                    <div id="url-mode-container" class="mode-box mode-url mt-4">
+                        <div class="mode-title">URL Mode</div>
+                        <div class="mode-note">Enter only the URL pattern. The system builds the iframe for you.</div>
+
+                        <div id="shared-url-section">
+                            <label for="{{ form.custom_iframe_url.id_for_label }}" class="form-label">Shared Iframe URL</label>
                             {{ form.custom_iframe_url }}
-                            <div class="form-text">
-                                Used for movie and TV when a separate box is not needed.
-                            </div>
+                            <div class="helper-box">Used for both movies and TV unless the media-specific fields below are filled.</div>
                         </div>
 
-                        <div id="movie-iframe-box" class="mb-3" style="display: none;">
+                        <div class="mt-3" id="movie-url-section">
                             <label for="{{ form.custom_movie_iframe_url.id_for_label }}" class="form-label">Movie Iframe URL</label>
                             {{ form.custom_movie_iframe_url }}
-                            <div class="form-text">
-                                Movie-specific iframe URL. Supports <code>{content_id}</code>, <code>{tmdb_id}</code>, and <code>{imdb_id}</code>.
+                            <div class="mt-2">
+                                <span class="example-label">Movie Example</span>
+                                <div class="placeholder-code">https://vidcore.net/movie/<span class="token">{imdb_id}</span>?autoPlay=true&amp;title=true&amp;hideserver=true&amp;poster=true</div>
                             </div>
                         </div>
 
-                        <div id="tv-iframe-box" class="mb-3" style="display: none;">
-                            <label for="{{ form.custom_tv_iframe_url.id_for_label }}" class="form-label">TV Show Iframe URL</label>
+                        <div class="mt-3" id="tv-url-section">
+                            <label for="{{ form.custom_tv_iframe_url.id_for_label }}" class="form-label">TV Iframe URL</label>
                             {{ form.custom_tv_iframe_url }}
-                            <div class="form-text">
-                                TV-specific iframe URL. Supports <code>{content_id}</code>, <code>{tmdb_id}</code>, <code>{imdb_id}</code>, <code>{season}</code>, and <code>{episode}</code>.
+                            <div class="mt-2">
+                                <span class="example-label">TV Example</span>
+                                <div class="placeholder-code">https://vidcore.net/tv/<span class="token">{imdb_id}</span>/<span class="token">{season}</span>/<span class="token">{episode}</span>?autoPlay=true&amp;title=true&amp;hideserver=true&amp;poster=true</div>
                             </div>
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary mt-3">Save</button>
-                    </form>
+                    </div>
+
+                    <div id="html-mode-container" class="mode-box mode-html mt-4" style="display: none;">
+                        <div class="mode-title">Full HTML Mode</div>
+                        <div class="mode-note">Paste the full iframe HTML exactly as you want it rendered. Placeholders still work here.</div>
+
+                        <div id="shared-html-section">
+                            <label for="{{ form.custom_iframe_html.id_for_label }}" class="form-label">Shared Full Iframe HTML</label>
+                            {{ form.custom_iframe_html }}
+                        </div>
+
+                        <div class="mt-3" id="movie-html-section">
+                            <label for="{{ form.custom_movie_iframe_html.id_for_label }}" class="form-label">Movie Full Iframe HTML</label>
+                            {{ form.custom_movie_iframe_html }}
+                        </div>
+
+                        <div class="mt-3" id="tv-html-section">
+                            <label for="{{ form.custom_tv_iframe_html.id_for_label }}" class="form-label">TV Full Iframe HTML</label>
+                            {{ form.custom_tv_iframe_html }}
+                        </div>
+
+                        <div class="mt-3">
+                            <span class="example-label">Full HTML Example</span>
+                            <div class="placeholder-code">&lt;iframe
+  src=&quot;https://vidcore.net/movie/<span class="token">{imdb_id}</span>?autoPlay=true&amp;title=true&amp;hideserver=true&amp;poster=true&quot;
+  width=&quot;100%&quot;
+  height=&quot;100%&quot;
+  frameborder=&quot;0&quot;
+  allowfullscreen
+  allow=&quot;autoplay; fullscreen; picture-in-picture&quot;&gt;
+&lt;/iframe&gt;</div>
+                        </div>
+
+                        <div class="helper-box">
+                            <strong>Use Full HTML Mode when:</strong> the provider gives you a complete embed code, extra attributes are required, or you want full manual control over the iframe markup.
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <div class="mt-4 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -110,27 +463,68 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const mediaTypeField = document.getElementById('{{ form.media_type.id_for_label }}');
-    const sharedBox = document.getElementById('shared-iframe-box');
-    const movieBox = document.getElementById('movie-iframe-box');
-    const tvBox = document.getElementById('tv-iframe-box');
+    const modeField = document.getElementById('{{ form.custom_iframe_mode.id_for_label }}');
 
-    function toggleIframeBoxes() {
-        const value = mediaTypeField ? mediaTypeField.value : '';
+    const sharedUrlSection = document.getElementById('shared-url-section');
+    const movieUrlSection = document.getElementById('movie-url-section');
+    const tvUrlSection = document.getElementById('tv-url-section');
+    const sharedHtmlSection = document.getElementById('shared-html-section');
+    const movieHtmlSection = document.getElementById('movie-html-section');
+    const tvHtmlSection = document.getElementById('tv-html-section');
+    const urlModeContainer = document.getElementById('url-mode-container');
+    const htmlModeContainer = document.getElementById('html-mode-container');
+    const idTypeSection = document.getElementById('id-type-section');
 
+    function toggleIframeSections() {
+        if (!mediaTypeField) return;
+        const value = mediaTypeField.value;
         if (value === 'both') {
-            if (sharedBox) sharedBox.style.display = 'none';
-            if (movieBox) movieBox.style.display = '';
-            if (tvBox) tvBox.style.display = '';
+            if (sharedUrlSection) sharedUrlSection.style.display = 'none';
+            if (movieUrlSection) movieUrlSection.style.display = 'block';
+            if (tvUrlSection) tvUrlSection.style.display = 'block';
+            if (sharedHtmlSection) sharedHtmlSection.style.display = 'none';
+            if (movieHtmlSection) movieHtmlSection.style.display = 'block';
+            if (tvHtmlSection) tvHtmlSection.style.display = 'block';
         } else {
-            if (sharedBox) sharedBox.style.display = '';
-            if (movieBox) movieBox.style.display = 'none';
-            if (tvBox) tvBox.style.display = 'none';
+            if (sharedUrlSection) sharedUrlSection.style.display = 'block';
+            if (movieUrlSection) movieUrlSection.style.display = 'none';
+            if (tvUrlSection) tvUrlSection.style.display = 'none';
+            if (sharedHtmlSection) sharedHtmlSection.style.display = 'block';
+            if (movieHtmlSection) movieHtmlSection.style.display = 'none';
+            if (tvHtmlSection) tvHtmlSection.style.display = 'none';
+        }
+    }
+
+    function toggleModeSections() {
+        if (!modeField) return;
+        const value = modeField.value;
+
+        idTypeSection.style.display = 'block';
+
+        if (value === 'url') {
+            urlModeContainer.style.display = 'block';
+            urlModeContainer.style.opacity = '1';
+            urlModeContainer.style.borderColor = 'rgba(56, 189, 248, 0.28)';
+
+            htmlModeContainer.style.display = 'none';
+            htmlModeContainer.style.opacity = '1';
+        } else {
+            htmlModeContainer.style.display = 'block';
+            htmlModeContainer.style.opacity = '1';
+            htmlModeContainer.style.borderColor = 'rgba(129, 140, 248, 0.34)';
+
+            urlModeContainer.style.display = 'none';
+            urlModeContainer.style.opacity = '1';
         }
     }
 
     if (mediaTypeField) {
-        mediaTypeField.addEventListener('change', toggleIframeBoxes);
-        toggleIframeBoxes();
+        mediaTypeField.addEventListener('change', toggleIframeSections);
+        toggleIframeSections();
+    }
+    if (modeField) {
+        modeField.addEventListener('change', toggleModeSections);
+        toggleModeSections();
     }
 });
 </script>
