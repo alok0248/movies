@@ -608,6 +608,57 @@ class AndroidAppFailedAttempt(models.Model):
         return f"{app_name} - {self.get_failure_reason_display()} - {self.attempted_at}"
 
 
+class AndroidAppDevice(models.Model):
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='devices')
+    android_id = models.CharField(max_length=255, db_index=True)  # Unique per device/app?
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    total_visits = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        unique_together = ('android_app', 'android_id')
+        ordering = ['-last_seen_at']
+        verbose_name = 'Android App Device'
+        verbose_name_plural = 'Android App Devices'
+    
+    def __str__(self):
+        return f"{self.android_app.name} - {self.android_id}"
+
+
+class AndroidAppDailyUniqueVisitor(models.Model):
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='daily_unique_visitors')
+    access_date = models.DateField()
+    unique_visitor_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('android_app', 'access_date')
+        ordering = ['-access_date']
+        verbose_name = 'Android App Daily Unique Visitor'
+        verbose_name_plural = 'Android App Daily Unique Visitors'
+    
+    def __str__(self):
+        return f"{self.android_app.name} - {self.access_date}: {self.unique_visitor_count} unique visitors"
+
+
+class AndroidAppDeviceVisit(models.Model):
+    device = models.ForeignKey(AndroidAppDevice, on_delete=models.CASCADE, related_name='visits')
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='device_visits')
+    visited_at = models.DateTimeField(auto_now_add=True)
+    build_identifier = models.CharField(max_length=255, blank=True, default='')
+    request_identity = models.CharField(max_length=500, blank=True, default='')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-visited_at']
+        verbose_name = 'Android App Device Visit'
+        verbose_name_plural = 'Android App Device Visits'
+    
+    def __str__(self):
+        return f"{self.device.android_id} - {self.visited_at}"
+
+
 class DataSourceUsageLog(models.Model):
     SOURCE_CHOICES = [
         ('db', 'Database'),

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit
 
 
 @admin.register(AndroidApp)
@@ -32,6 +32,30 @@ class AndroidAppFailedAttemptAdmin(admin.ModelAdmin):
     list_filter = ('failure_reason', 'attempted_at', 'android_app')
     search_fields = ('app_slug', 'ip_address', 'request_identity', 'build_identifier')
     readonly_fields = ('attempted_at',)
+
+
+@admin.register(AndroidAppDevice)
+class AndroidAppDeviceAdmin(admin.ModelAdmin):
+    list_display = ('android_app', 'android_id', 'total_visits', 'last_seen_at', 'first_seen_at')
+    list_filter = ('android_app', 'last_seen_at')
+    search_fields = ('android_app__name', 'android_id')
+    readonly_fields = ('first_seen_at', 'last_seen_at')
+
+
+@admin.register(AndroidAppDailyUniqueVisitor)
+class AndroidAppDailyUniqueVisitorAdmin(admin.ModelAdmin):
+    list_display = ('android_app', 'access_date', 'unique_visitor_count')
+    list_filter = ('android_app', 'access_date')
+    search_fields = ('android_app__name',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(AndroidAppDeviceVisit)
+class AndroidAppDeviceVisitAdmin(admin.ModelAdmin):
+    list_display = ('device', 'android_app', 'visited_at', 'build_identifier', 'ip_address')
+    list_filter = ('android_app', 'visited_at')
+    search_fields = ('device__android_id', 'android_app__name', 'build_identifier', 'ip_address')
+    readonly_fields = ('visited_at',)
 
 
 @admin.register(ContentRow)

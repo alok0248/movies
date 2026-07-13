@@ -21,7 +21,7 @@ import requests
 import calendar
 import base64
 from bs4 import BeautifulSoup
-from .models import SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
@@ -1828,11 +1828,14 @@ def android_app_dashboard(request, app_id=None):
 
     chart_labels = []
     chart_values = []
+    unique_chart_labels = []
+    unique_chart_values = []
     app_endpoint = None
     build_summary = []
     build_chart_labels = []
     build_chart_values = []
     failed_attempts = []
+    total_unique_visitors = 0
     if selected_app:
         logs = selected_app.access_logs.order_by('access_date')
         chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in logs]
@@ -1846,6 +1849,14 @@ def android_app_dashboard(request, app_id=None):
         build_chart_labels = [item['build_identifier'] for item in build_summary[:10]]
         build_chart_values = [item['total_connections'] or 0 for item in build_summary[:10]]
         failed_attempts = selected_app.failed_attempts.all()[:5]
+        
+        # Get unique visitor data
+        unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
+        unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
+        unique_chart_values = [log.unique_visitor_count for log in unique_logs]
+        
+        # Calculate total unique visitors
+        total_unique_visitors = selected_app.devices.count()
 
     summary_rows = []
     for app in apps:
@@ -1862,11 +1873,14 @@ def android_app_dashboard(request, app_id=None):
         'summary_rows': summary_rows,
         'chart_labels_json': json.dumps(chart_labels),
         'chart_values_json': json.dumps(chart_values),
+        'unique_chart_labels_json': json.dumps(unique_chart_labels),
+        'unique_chart_values_json': json.dumps(unique_chart_values),
         'build_chart_labels_json': json.dumps(build_chart_labels),
         'build_chart_values_json': json.dumps(build_chart_values),
         'build_summary': build_summary,
         'app_endpoint': app_endpoint,
         'failed_attempts': failed_attempts,
+        'total_unique_visitors': total_unique_visitors,
     })
 
 
@@ -2050,6 +2064,53 @@ def android_app_endpoint(request, app_slug):
     android_app.total_connections = (android_app.total_connections or 0) + 1
     android_app.last_accessed_at = timezone.now()
     android_app.save(update_fields=['total_connections', 'last_accessed_at', 'updated_at'])
+    
+    # Handle Android ID tracking for unique visitors
+    android_id = (
+        request.headers.get('X-Android-Id') or
+        request.headers.get('X-Android-Device-Id') or
+        request.GET.get('android_id') or
+        request.GET.get('device_id') or
+        ''
+    ).strip()
+    
+    ip_address = request.META.get('REMOTE_ADDR', None)
+    
+    if android_id:
+        # Get or create device
+        device, created = AndroidAppDevice.objects.get_or_create(
+            android_app=android_app,
+            android_id=android_id
+        )
+        # Increment total visits for device
+        device.total_visits += 1
+        device.save(update_fields=['total_visits', 'last_seen_at'])
+        
+        # Record individual visit
+        AndroidAppDeviceVisit.objects.create(
+            device=device,
+            android_app=android_app,
+            build_identifier=build_identifier,
+            request_identity=request_identity,
+            ip_address=ip_address
+        )
+        
+        # Check if this is a new unique visitor for today
+        today_visits = AndroidAppDeviceVisit.objects.filter(
+            android_app=android_app,
+            visited_at__date=today,
+            device=device
+        ).count()
+        
+        if today_visits == 1:
+            # First visit today, increment unique count
+            unique_visitor_log, _ = AndroidAppDailyUniqueVisitor.objects.get_or_create(
+                android_app=android_app,
+                access_date=today,
+                defaults={'unique_visitor_count': 0}
+            )
+            unique_visitor_log.unique_visitor_count += 1
+            unique_visitor_log.save(update_fields=['unique_visitor_count', 'updated_at'])
 
     return JsonResponse(android_app.json_payload, safe=isinstance(android_app.json_payload, dict))
 

@@ -32,13 +32,16 @@
         <div class="col-lg-9">
             {% if selected_app %}
             <div class="row g-4 mb-1">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Total Connections</div><div class="display-6 text-white">{{ selected_app.total_connections }}</div></div></div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Total Unique Visitors</div><div class="display-6 text-white">{{ total_unique_visitors }}</div></div></div>
+                </div>
+                <div class="col-md-3">
                     <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Builds Seen</div><div class="display-6 text-white">{{ build_summary|length }}</div></div></div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Endpoint Status</div><div class="mt-2">{% if selected_app.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Disabled</span>{% endif %}</div></div></div>
                 </div>
             </div>
@@ -53,6 +56,14 @@
                         <a href="{% url 'android_app_edit' selected_app.id %}" class="btn btn-sm btn-outline-warning">Edit App</a>
                     </div>
                     <div style="height: 300px;"><canvas id="dailyConnectionsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="text-white mb-1">Daily Unique Visitors</h5>
+                    <div class="text-secondary small mb-3">Number of unique Android devices visiting each day.</div>
+                    <div style="height: 280px;"><canvas id="dailyUniqueVisitorsChart"></canvas></div>
                 </div>
             </div>
 
@@ -155,6 +166,8 @@
 <script>
 const dailyLabels = {{ chart_labels_json|safe }};
 const dailyValues = {{ chart_values_json|safe }};
+const uniqueLabels = {{ unique_chart_labels_json|safe }};
+const uniqueValues = {{ unique_chart_values_json|safe }};
 const buildLabels = {{ build_chart_labels_json|safe }};
 const buildValues = {{ build_chart_values_json|safe }};
 const chartText = '#cbd5e1';
@@ -164,6 +177,13 @@ if (document.getElementById('dailyConnectionsChart')) {
     new Chart(document.getElementById('dailyConnectionsChart'), {
         type: 'line',
         data: { labels: dailyLabels, datasets: [{ label: 'Connections', data: dailyValues, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+    });
+}
+if (document.getElementById('dailyUniqueVisitorsChart')) {
+    new Chart(document.getElementById('dailyUniqueVisitorsChart'), {
+        type: 'line',
+        data: { labels: uniqueLabels, datasets: [{ label: 'Unique Visitors', data: uniqueValues, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
     });
 }
