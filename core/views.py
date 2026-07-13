@@ -1935,7 +1935,7 @@ def android_app_integration_guide(request, app_id):
 def android_app_endpoint(request, app_slug):
     # Helper function to parse allowed values (supports comma-separated lists and ranges like 225-250)
     def parse_allowed_values(allowed_str):
-        allowed = []
+        allowed = set()
         if not allowed_str:
             return allowed
         
@@ -1952,17 +1952,17 @@ def android_app_endpoint(request, app_slug):
                         start = int(range_parts[0])
                         end = int(range_parts[1])
                         for num in range(start, end + 1):
-                            allowed.append(str(num))
-                            allowed.append(f"#{num}")
+                            allowed.add(str(num))
+                            allowed.add(f"#{num}")
                     except ValueError:
                         # If not numeric, just add as-is
-                        allowed.append(part)
+                        allowed.add(part)
             else:
                 # Single value, add both with and without #
                 stripped = part.lstrip('#')
-                allowed.append(part)
+                allowed.add(part)
                 if stripped != part:
-                    allowed.append(stripped)
+                    allowed.add(stripped)
         
         return allowed
     
