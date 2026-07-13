@@ -22,8 +22,20 @@
             <div class="row g-3 small">
                 <div class="col-md-6"><div class="text-secondary">Method</div><code class="text-white">GET</code></div>
                 <div class="col-md-6"><div class="text-secondary">Endpoint</div><code class="text-info text-break">{{ app_endpoint }}</code></div>
-                <div class="col-md-6"><div class="text-secondary">App identity header</div><code class="text-white">X-Android-App: {{ android_app.allowed_endpoint }}</code></div>
-                <div class="col-md-6"><div class="text-secondary">Build header</div><code class="text-white">X-Android-Build: {{ android_app.allowed_build_id|default:'your-build-id' }}</code></div>
+                <div class="col-md-6">
+                    <div class="text-secondary">App identity header</div>
+                    <code class="text-white">X-Android-App: [your-app-identity]</code>
+                    <div class="text-secondary small mt-1">
+                        Supports comma-separated lists (e.g., #225, #226, #227) and ranges (e.g., #225-#250)
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Build header</div>
+                    <code class="text-white">X-Android-Build: [your-build-id]</code>
+                    <div class="text-secondary small mt-1">
+                        Supports comma-separated lists and ranges (e.g., 1-10)
+                    </div>
+                </div>
             </div>
             <div class="mt-3 text-secondary small">The app identity can also be sent as <code>?app=</code>. The build can also be sent as <code>?build=</code>.</div>
         </div>

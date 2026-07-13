@@ -508,8 +508,14 @@ class AndroidApp(models.Model):
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     access_username = models.CharField(max_length=255)
     access_password = models.CharField(max_length=255)
-    allowed_endpoint = models.CharField(max_length=500, blank=True, default='')
-    allowed_build_id = models.CharField(max_length=255, blank=True, default='')
+    allowed_endpoint = models.CharField(
+        max_length=500, blank=True, default='',
+        help_text="Allowed app/build identity. Supports comma-separated lists and ranges (e.g., #225, #226, #227 or #225-#250)"
+    )
+    allowed_build_id = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="Allowed build identifier. Supports comma-separated lists and ranges (e.g., 1.0.0, 1.0.1 or 1-10)"
+    )
     apk_file = models.FileField(upload_to='android_apks/', blank=True, null=True)
     json_payload = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
