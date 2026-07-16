@@ -655,6 +655,54 @@ class AndroidAppDeviceVisit(models.Model):
         return f"{self.device.user_id} - {self.visited_at}"
 
 
+class WebsiteVisitor(models.Model):
+    visitor_id = models.UUIDField(unique=True, db_index=True)
+    user = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='website_visitors'
+    )
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    last_path = models.CharField(max_length=500, blank=True, default='')
+    total_visits = models.PositiveIntegerField(default=0)
+    last_ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, default='')
+    
+    class Meta:
+        ordering = ['-last_seen_at']
+        verbose_name = 'Website Visitor'
+        verbose_name_plural = 'Website Visitors'
+    
+    def __str__(self):
+        return str(self.visitor_id)
+
+
+class WebsiteVisitorVisit(models.Model):
+    visitor = models.ForeignKey(
+        WebsiteVisitor,
+        related_name='visits',
+        on_delete=models.CASCADE
+    )
+    visited_at = models.DateTimeField(auto_now_add=True)
+    path = models.CharField(max_length=500)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-visited_at']
+        verbose_name = 'Website Visitor Visit'
+        verbose_name_plural = 'Website Visitor Visits'
+        indexes = [
+            models.Index(fields=['visited_at']),
+            models.Index(fields=['path']),
+        ]
+    
+    def __str__(self):
+        return f"{self.visitor.visitor_id} - {self.path} - {self.visited_at}"
+
+
 class DataSourceUsageLog(models.Model):
     SOURCE_CHOICES = [
         ('db', 'Database'),

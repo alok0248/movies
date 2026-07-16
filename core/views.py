@@ -11,7 +11,8 @@ from django.utils.text import slugify
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.core.cache import cache
-from django.db.models import Sum
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncDate
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
@@ -21,7 +22,7 @@ import requests
 import calendar
 import base64
 from bs4 import BeautifulSoup
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
@@ -3160,4 +3161,112 @@ def ajax_toggle_navbar_item(request):
         navbar_item.is_active = not navbar_item.is_active
         navbar_item.save()
         return JsonResponse({'success': True, 'is_active': navbar_item.is_active})
-    return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def web_management_dashboard(request):
+    # Get initial data for first render
+    total_visitors = WebsiteVisitor.objects.count()
+    total_pageviews = WebsiteVisitorVisit.objects.count()
+    
+    today = timezone.localdate()
+    visitors_today = WebsiteVisitor.objects.filter(last_seen_at__date=today).count()
+    pageviews_today = WebsiteVisitorVisit.objects.filter(visited_at__date=today).count()
+    
+    # Daily data for last 30 days
+    daily_visits = (
+        WebsiteVisitorVisit.objects
+        .annotate(day=TruncDate('visited_at'))
+        .values('day')
+        .annotate(unique_visitors=Count('visitor', distinct=True), pageviews=Count('id'))
+        .order_by('day')
+    )
+    chart_labels = [entry['day'].strftime('%Y-%m-%d') for entry in daily_visits]
+    unique_chart_values = [entry['unique_visitors'] for entry in daily_visits]
+    pageview_chart_values = [entry['pageviews'] for entry in daily_visits]
+    
+    # Top routes
+    top_routes = (
+        WebsiteVisitorVisit.objects
+        .values('path')
+        .annotate(pageviews=Count('id'))
+        .order_by('-pageviews')[:10]
+    )
+    
+    # Recent activity
+    recent_activity = (
+        WebsiteVisitorVisit.objects
+        .select_related('visitor')
+        .order_by('-visited_at')[:20]
+    )
+    
+    return render(request, 'core/web_management_dashboard.html', {
+        'total_visitors': total_visitors,
+        'total_pageviews': total_pageviews,
+        'visitors_today': visitors_today,
+        'pageviews_today': pageviews_today,
+        'chart_labels_json': json.dumps(chart_labels),
+        'unique_chart_values_json': json.dumps(unique_chart_values),
+        'pageview_chart_values_json': json.dumps(pageview_chart_values),
+        'top_routes': top_routes,
+        'recent_activity': recent_activity
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_web_management_dashboard(request):
+    total_visitors = WebsiteVisitor.objects.count()
+    total_pageviews = WebsiteVisitorVisit.objects.count()
+    
+    today = timezone.localdate()
+    visitors_today = WebsiteVisitor.objects.filter(last_seen_at__date=today).count()
+    pageviews_today = WebsiteVisitorVisit.objects.filter(visited_at__date=today).count()
+    
+    # Daily data
+    daily_visits = (
+        WebsiteVisitorVisit.objects
+        .annotate(day=TruncDate('visited_at'))
+        .values('day')
+        .annotate(unique_visitors=Count('visitor', distinct=True), pageviews=Count('id'))
+        .order_by('day')
+    )
+    chart_labels = [entry['day'].strftime('%Y-%m-%d') for entry in daily_visits]
+    unique_chart_values = [entry['unique_visitors'] for entry in daily_visits]
+    pageview_chart_values = [entry['pageviews'] for entry in daily_visits]
+    
+    # Top routes
+    top_routes = list(
+        WebsiteVisitorVisit.objects
+        .values('path')
+        .annotate(pageviews=Count('id'))
+        .order_by('-pageviews')[:10]
+    )
+    
+    # Recent activity
+    recent_activity = list(
+        WebsiteVisitorVisit.objects
+        .select_related('visitor')
+        .order_by('-visited_at')[:20]
+        .values('visitor__visitor_id', 'path', 'visited_at')
+    )
+    # Convert datetime to iso string
+    for activity in recent_activity:
+        activity['visited_at'] = activity['visited_at'].isoformat()
+    
+    return JsonResponse({
+        'metrics': {
+            'total_visitors': total_visitors,
+            'total_pageviews': total_pageviews,
+            'visitors_today': visitors_today,
+            'pageviews_today': pageviews_today
+        },
+        'charts': {
+            'labels': chart_labels,
+            'unique_visitors': unique_chart_values,
+            'pageviews': pageview_chart_values
+        },
+        'top_routes': top_routes,
+        'recent_activity': recent_activity
+    })

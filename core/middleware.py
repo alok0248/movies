@@ -1,7 +1,10 @@
 
 from django.shortcuts import redirect
 from django.conf import settings
-from .models import SiteSettings
+from django.utils import timezone
+from .models import SiteSettings, WebsiteVisitor, WebsiteVisitorVisit
+import uuid
+
 
 class URLBlockMiddleware:
     def __init__(self, get_response):
@@ -40,6 +43,7 @@ class URLBlockMiddleware:
 
         return self.get_response(request)
 
+
 class EmailSettingsMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -59,3 +63,96 @@ class EmailSettingsMiddleware:
             pass
         
         return self.get_response(request)
+
+
+class WebsiteVisitorTrackingMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        # Skip tracking for excluded paths
+        excluded_paths = [
+            '/admin/',
+            '/admin-dashboard/',
+            '/api/',
+            '/static/',
+            '/media/',
+            '/favicon.ico',
+            '/manifest.json',
+            '/service-worker.js'
+        ]
+        path = request.path
+        if any(path.startswith(excluded) for excluded in excluded_paths):
+            return self.get_response(request)
+        
+        # Only track GET and HEAD requests
+        if request.method not in ['GET', 'HEAD']:
+            return self.get_response(request)
+        
+        # Get visitor id from cookie
+        visitor_id_str = request.COOKIES.get('website_visitor_id', '')
+        visitor = None
+        set_cookie = False
+        new_visitor_id = None
+        
+        try:
+            if visitor_id_str:
+                # Try to parse UUID
+                visitor_id = uuid.UUID(visitor_id_str)
+                # Try to get existing visitor
+                try:
+                    visitor = WebsiteVisitor.objects.get(visitor_id=visitor_id)
+                except WebsiteVisitor.DoesNotExist:
+                    # Visitor not found, create new
+                    new_visitor_id = visitor_id
+                    set_cookie = True
+            else:
+                # No visitor id, create new
+                new_visitor_id = uuid.uuid4()
+                set_cookie = True
+        except ValueError:
+            # Invalid UUID, create new
+            new_visitor_id = uuid.uuid4()
+            set_cookie = True
+        
+        # Create visitor if needed
+        if visitor is None and new_visitor_id is not None:
+            visitor = WebsiteVisitor.objects.create(
+                visitor_id=new_visitor_id,
+                user=request.user if request.user.is_authenticated else None
+            )
+        elif visitor is not None:
+            # Update existing visitor
+            update_fields = ['last_seen_at', 'total_visits', 'last_path']
+            if request.user.is_authenticated and visitor.user != request.user:
+                visitor.user = request.user
+                update_fields.append('user')
+            visitor.last_path = path
+            visitor.total_visits += 1
+            visitor.last_ip_address = request.META.get('REMOTE_ADDR')
+            visitor.user_agent = request.META.get('HTTP_USER_AGENT', '')
+            visitor.save(update_fields=update_fields)
+        
+        # Record visit
+        if visitor is not None:
+            WebsiteVisitorVisit.objects.create(
+                visitor=visitor,
+                path=path,
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+        
+        # Get response
+        response = self.get_response(request)
+        
+        # Set cookie if needed
+        if set_cookie and new_visitor_id is not None:
+            response.set_cookie(
+                'website_visitor_id',
+                str(new_visitor_id),
+                httponly=True,
+                samesite='Lax',
+                secure=request.is_secure(),
+                max_age=60*60*24*365*2  # 2 years
+            )
+        
+        return response

@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1"><i class="fas fa-chart-line me-2 text-blue-400"></i>Web Management</h1>
+            <p class="text-secondary mb-0">Track public website visitors and pageview analytics in real-time.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light">&larr; Admin Dashboard</a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-1">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Total Visitors</div>
+                    <div id="total-visitors" class="display-6 text-white">{{ total_visitors }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Visitors Today</div>
+                    <div id="visitors-today" class="display-6 text-white">{{ visitors_today }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Total Pageviews</div>
+                    <div id="total-pageviews" class="display-6 text-white">{{ total_pageviews }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Pageviews Today</div>
+                    <div id="pageviews-today" class="display-6 text-white">{{ pageviews_today }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-1">Daily Unique Visitors</h5>
+            <div class="text-secondary small mb-3">Unique website visitors by day.</div>
+            <div style="height: 280px;"><canvas id="dailyUniqueVisitorsChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-1">Daily Pageviews</h5>
+            <div class="text-secondary small mb-3">Total pageviews by day.</div>
+            <div style="height: 280px;"><canvas id="dailyPageviewsChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3">Top Public Routes</h5>
+            {% if top_routes %}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle small">
+                    <thead>
+                        <tr>
+                            <th>Route</th>
+                            <th>Pageviews</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top-routes-tbody">
+                        {% for route in top_routes %}
+                        <tr>
+                            <td><code class="text-info">{{ route.path }}</code></td>
+                            <td>{{ route.pageviews }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-secondary">No routes recorded yet.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3">Recent Activity</h5>
+            {% if recent_activity %}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle small">
+                    <thead>
+                        <tr>
+                            <th>Visitor ID</th>
+                            <th>Path</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-activity-tbody">
+                        {% for activity in recent_activity %}
+                        <tr>
+                            <td><code class="text-info">{{ activity.visitor.visitor_id }}</code></td>
+                            <td><code class="text-white">{{ activity.path }}</code></td>
+                            <td data-datetime="{{ activity.visited_at|date:'c' }}">{{ activity.visited_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-secondary">No activity recorded yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let uniqueVisitorsChart, pageviewsChart;
+const chartText = '#cbd5e1';
+const gridColor = 'rgba(148, 163, 184, 0.16)';
+
+function formatBrowserLocalTime(timestamp) {
+    return timestamp ? new Date(timestamp).toLocaleString() : '-';
+}
+
+function initializeCharts() {
+    const chartLabels = {{ chart_labels_json|safe }};
+    const uniqueValues = {{ unique_chart_values_json|safe }};
+    const pageviewValues = {{ pageview_chart_values_json|safe }};
+
+    if (document.getElementById('dailyUniqueVisitorsChart')) {
+        uniqueVisitorsChart = new Chart(document.getElementById('dailyUniqueVisitorsChart'), {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: 'Unique Visitors',
+                    data: uniqueValues,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.18)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: chartText } } },
+                scales: {
+                    x: { ticks: { color: chartText }, grid: { color: gridColor } },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: chartText, precision: 0 },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    }
+
+    if (document.getElementById('dailyPageviewsChart')) {
+        pageviewsChart = new Chart(document.getElementById('dailyPageviewsChart'), {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: 'Pageviews',
+                    data: pageviewValues,
+                    borderColor: '#a855f7',
+                    backgroundColor: 'rgba(168, 85, 247, 0.18)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: chartText } } },
+                scales: {
+                    x: { ticks: { color: chartText }, grid: { color: gridColor } },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: chartText, precision: 0 },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateDashboard(data) {
+    // Update metric cards
+    document.getElementById('total-visitors').textContent = data.metrics.total_visitors;
+    document.getElementById('visitors-today').textContent = data.metrics.visitors_today;
+    document.getElementById('total-pageviews').textContent = data.metrics.total_pageviews;
+    document.getElementById('pageviews-today').textContent = data.metrics.pageviews_today;
+
+    // Update charts
+    if (uniqueVisitorsChart) {
+        uniqueVisitorsChart.data.labels = data.charts.labels;
+        uniqueVisitorsChart.data.datasets[0].data = data.charts.unique_visitors;
+        uniqueVisitorsChart.update();
+    }
+    if (pageviewsChart) {
+        pageviewsChart.data.labels = data.charts.labels;
+        pageviewsChart.data.datasets[0].data = data.charts.pageviews;
+        pageviewsChart.update();
+    }
+
+    // Update top routes
+    const topRoutesTbody = document.getElementById('top-routes-tbody');
+    if (topRoutesTbody && data.top_routes.length) {
+        topRoutesTbody.innerHTML = data.top_routes.map(route => `
+            <tr>
+                <td><code class="text-info">${route.path}</code></td>
+                <td>${route.pageviews}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Update recent activity
+    const recentActivityTbody = document.getElementById('recent-activity-tbody');
+    if (recentActivityTbody && data.recent_activity.length) {
+        recentActivityTbody.innerHTML = data.recent_activity.map(activity => `
+            <tr>
+                <td><code class="text-info">${activity.visitor__visitor_id}</code></td>
+                <td><code class="text-white">${activity.path}</code></td>
+                <td data-datetime="${activity.visited_at}">${formatBrowserLocalTime(activity.visited_at)}</td>
+            </tr>
+        `).join('');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initializeCharts();
+
+    // Convert existing recent activity timestamps to local time
+    document.querySelectorAll('[data-datetime]').forEach(el => {
+        const timestamp = el.getAttribute('data-datetime');
+        if (timestamp) {
+            el.textContent = formatBrowserLocalTime(timestamp);
+        }
+    });
+
+    const pollUrl = "{% url 'ajax_web_management_dashboard' %}";
+    setInterval(async () => {
+        try {
+            const response = await fetch(pollUrl);
+            if (response.ok) {
+                const data = await response.json();
+                updateDashboard(data);
+            }
+        } catch (err) {
+            console.error('Error updating dashboard:', err);
+        }
+    }, 5000); // Update every 5 seconds
+});
+</script>
+{% endblock %}

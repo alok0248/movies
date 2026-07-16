@@ -57,6 +57,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.EmailSettingsMiddleware',
     'core.middleware.URLBlockMiddleware',
+    'core.middleware.WebsiteVisitorTrackingMiddleware',
 ]
 
 ROOT_URLCONF = 'movie_portal.urls'
