@@ -49,3 +49,6 @@ test/
 scripts/
 push_to_github.bat
 ubuntu_setup.sh
+
+# Corrupt git backup
+.git.corrupt/
