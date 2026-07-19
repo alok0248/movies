@@ -22,6 +22,8 @@ import requests
 import calendar
 import base64
 from bs4 import BeautifulSoup
+import psutil
+import platform
 from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
@@ -3269,4 +3271,116 @@ def ajax_web_management_dashboard(request):
         },
         'top_routes': top_routes,
         'recent_activity': recent_activity
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def system_resource_dashboard(request):
+    # Get initial system stats
+    cpu_percent = psutil.cpu_percent(interval=1)
+    cpu_count = psutil.cpu_count(logical=True)
+    cpu_freq = psutil.cpu_freq()
+    
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    
+    disk = psutil.disk_usage('/')
+    disk_io = psutil.disk_io_counters()
+    
+    network_io = psutil.net_io_counters()
+    
+    boot_time = datetime.datetime.fromtimestamp(psutil.boot_time())
+    uptime = datetime.datetime.now() - boot_time
+    
+    return render(request, 'core/system_resource_dashboard.html', {
+        'cpu_percent': cpu_percent,
+        'cpu_count': cpu_count,
+        'cpu_freq_current': cpu_freq.current if cpu_freq else 0,
+        'cpu_freq_max': cpu_freq.max if cpu_freq else 0,
+        'memory_total': memory.total,
+        'memory_used': memory.used,
+        'memory_percent': memory.percent,
+        'memory_available': memory.available,
+        'swap_total': swap.total,
+        'swap_used': swap.used,
+        'swap_percent': swap.percent,
+        'disk_total': disk.total,
+        'disk_used': disk.used,
+        'disk_percent': disk.percent,
+        'disk_free': disk.free,
+        'disk_read_bytes': disk_io.read_bytes if disk_io else 0,
+        'disk_write_bytes': disk_io.write_bytes if disk_io else 0,
+        'network_sent_bytes': network_io.bytes_sent if network_io else 0,
+        'network_recv_bytes': network_io.bytes_recv if network_io else 0,
+        'boot_time': boot_time,
+        'uptime_days': uptime.days,
+        'uptime_hours': uptime.seconds // 3600,
+        'uptime_minutes': (uptime.seconds % 3600) // 60,
+        'os_name': platform.system(),
+        'os_version': platform.version(),
+        'os_architecture': platform.architecture()[0],
+        'python_version': platform.python_version()
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_system_resource_dashboard(request):
+    # Get real-time system stats
+    cpu_percent = psutil.cpu_percent(interval=0.5)
+    cpu_count = psutil.cpu_count(logical=True)
+    cpu_freq = psutil.cpu_freq()
+    
+    memory = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    
+    disk = psutil.disk_usage('/')
+    disk_io = psutil.disk_io_counters()
+    
+    network_io = psutil.net_io_counters()
+    
+    boot_time = datetime.datetime.fromtimestamp(psutil.boot_time())
+    uptime = datetime.datetime.now() - boot_time
+    
+    return JsonResponse({
+        'cpu': {
+            'percent': cpu_percent,
+            'count': cpu_count,
+            'freq_current': cpu_freq.current if cpu_freq else 0,
+            'freq_max': cpu_freq.max if cpu_freq else 0
+        },
+        'memory': {
+            'total': memory.total,
+            'used': memory.used,
+            'percent': memory.percent,
+            'available': memory.available
+        },
+        'swap': {
+            'total': swap.total,
+            'used': swap.used,
+            'percent': swap.percent
+        },
+        'disk': {
+            'total': disk.total,
+            'used': disk.used,
+            'percent': disk.percent,
+            'free': disk.free,
+            'read_bytes': disk_io.read_bytes if disk_io else 0,
+            'write_bytes': disk_io.write_bytes if disk_io else 0
+        },
+        'network': {
+            'sent_bytes': network_io.bytes_sent if network_io else 0,
+            'recv_bytes': network_io.bytes_recv if network_io else 0
+        },
+        'system': {
+            'boot_time': boot_time.isoformat(),
+            'uptime_days': uptime.days,
+            'uptime_hours': uptime.seconds // 3600,
+            'uptime_minutes': (uptime.seconds % 3600) // 60,
+            'os_name': platform.system(),
+            'os_version': platform.version(),
+            'os_architecture': platform.architecture()[0],
+            'python_version': platform.python_version()
+        }
     })

@@ -5,3 +5,4 @@ oracledb
 pyodbc
 django-mssql-backend
 pandas
+psutil

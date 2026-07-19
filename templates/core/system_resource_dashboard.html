@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1"><i class="fas fa-server me-2 text-pink-400"></i>System Resources</h1>
+            <p class="text-secondary mb-0">Monitor CPU, Memory, Disk, Network, and system information in real-time.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light">&larr; Admin Dashboard</a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-1">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">CPU Usage</div>
+                    <div id="cpu-percent" class="display-6 text-white">{{ cpu_percent }}%</div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div id="cpu-progress" class="progress-bar bg-danger" role="progressbar" style="width: {{ cpu_percent }}%;" aria-valuenow="{{ cpu_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="text-secondary small mt-1">
+                        <span id="cpu-cores">{{ cpu_count }} Cores</span> • <span id="cpu-freq">{{ cpu_freq_current|floatformat:0 }} / {{ cpu_freq_max|floatformat:0 }} MHz</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Memory Usage</div>
+                    <div id="memory-percent" class="display-6 text-white">{{ memory_percent }}%</div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div id="memory-progress" class="progress-bar bg-warning" role="progressbar" style="width: {{ memory_percent }}%;" aria-valuenow="{{ memory_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="text-secondary small mt-1">
+                        <span id="memory-used">{{ memory_used|filesizeformat }}</span> / <span id="memory-total">{{ memory_total|filesizeformat }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Disk Usage</div>
+                    <div id="disk-percent" class="display-6 text-white">{{ disk_percent }}%</div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div id="disk-progress" class="progress-bar bg-primary" role="progressbar" style="width: {{ disk_percent }}%;" aria-valuenow="{{ disk_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="text-secondary small mt-1">
+                        <span id="disk-used">{{ disk_used|filesizeformat }}</span> / <span id="disk-total">{{ disk_total|filesizeformat }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Uptime</div>
+                    <div id="uptime" class="display-6 text-white">{{ uptime_days }}d {{ uptime_hours }}h {{ uptime_minutes }}m</div>
+                    <div class="text-secondary small mt-2">
+                        Booted: <span id="boot-time">{{ boot_time|date:"F j, Y, g:i a" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-4">
+        <div class="col-lg-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="text-white mb-1">CPU & Memory History</h5>
+                    <div class="text-secondary small mb-3">Real-time usage over last 30 seconds.</div>
+                    <div style="height: 300px;"><canvas id="cpuMemoryChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="text-white mb-1">Network & Disk I/O</h5>
+                    <div class="text-secondary small mb-3">Data sent/received and disk read/write.</div>
+                    <div style="height: 300px;"><canvas id="ioChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3">System Information</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle small">
+                    <tbody>
+                        <tr>
+                            <td class="text-secondary">Operating System</td>
+                            <td id="os-name">{{ os_name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">OS Version</td>
+                            <td id="os-version">{{ os_version }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Architecture</td>
+                            <td id="os-arch">{{ os_architecture }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Python Version</td>
+                            <td id="python-version">{{ python_version }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Swap Usage</td>
+                            <td id="swap-usage">
+                                <span id="swap-percent">{{ swap_percent }}%</span> • <span id="swap-used">{{ swap_used|filesizeformat }}</span> / <span id="swap-total">{{ swap_total|filesizeformat }}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Network Sent</td>
+                            <td id="network-sent">{{ network_sent_bytes|filesizeformat }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Network Received</td>
+                            <td id="network-recv">{{ network_recv_bytes|filesizeformat }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Disk Read</td>
+                            <td id="disk-read">{{ disk_read_bytes|filesizeformat }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-secondary">Disk Written</td>
+                            <td id="disk-write">{{ disk_write_bytes|filesizeformat }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let cpuMemoryChart, ioChart;
+const chartText = '#cbd5e1';
+const gridColor = 'rgba(148, 163, 184, 0.16)';
+const maxDataPoints = 30;
+
+// Initialize data arrays
+let cpuData = Array(maxDataPoints).fill(0);
+let memoryData = Array(maxDataPoints).fill(0);
+let networkSentData = Array(maxDataPoints).fill(0);
+let networkRecvData = Array(maxDataPoints).fill(0);
+let diskReadData = Array(maxDataPoints).fill(0);
+let diskWriteData = Array(maxDataPoints).fill(0);
+let timeLabels = Array(maxDataPoints).fill('');
+
+// Previous values to calculate deltas
+let prevNetworkSent = 0;
+let prevNetworkRecv = 0;
+let prevDiskRead = 0;
+let prevDiskWrite = 0;
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function initializeCharts() {
+    // Initialize time labels
+    for (let i = 0; i < maxDataPoints; i++) {
+        const time = new Date(Date.now() - (maxDataPoints - i) * 2000);
+        timeLabels[i] = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // CPU & Memory Chart
+    if (document.getElementById('cpuMemoryChart')) {
+        cpuMemoryChart = new Chart(document.getElementById('cpuMemoryChart'), {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [
+                    {
+                        label: 'CPU %',
+                        data: cpuData,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Memory %',
+                        data: memoryData,
+                        borderColor: '#eab308',
+                        backgroundColor: 'rgba(234, 179, 8, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: chartText } } },
+                scales: {
+                    x: { ticks: { color: chartText, maxRotation: 0 }, grid: { color: gridColor } },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: chartText, callback: value => value + '%' },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    }
+
+    // I/O Chart
+    if (document.getElementById('ioChart')) {
+        ioChart = new Chart(document.getElementById('ioChart'), {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [
+                    {
+                        label: 'Network Sent (KB/s)',
+                        data: networkSentData,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2
+                    },
+                    {
+                        label: 'Network Received (KB/s)',
+                        data: networkRecvData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: chartText } } },
+                scales: {
+                    x: { ticks: { color: chartText, maxRotation: 0 }, grid: { color: gridColor } },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: chartText },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateDashboard(data) {
+    // Update CPU metric
+    document.getElementById('cpu-percent').textContent = data.cpu.percent + '%';
+    document.getElementById('cpu-progress').style.width = data.cpu.percent + '%';
+    document.getElementById('cpu-cores').textContent = data.cpu.count + ' Cores';
+    document.getElementById('cpu-freq').textContent = Math.round(data.cpu.freq_current) + ' / ' + Math.round(data.cpu.freq_max) + ' MHz';
+    
+    // Update Memory metric
+    document.getElementById('memory-percent').textContent = data.memory.percent + '%';
+    document.getElementById('memory-progress').style.width = data.memory.percent + '%';
+    document.getElementById('memory-used').textContent = formatBytes(data.memory.used);
+    document.getElementById('memory-total').textContent = formatBytes(data.memory.total);
+    
+    // Update Disk metric
+    document.getElementById('disk-percent').textContent = data.disk.percent + '%';
+    document.getElementById('disk-progress').style.width = data.disk.percent + '%';
+    document.getElementById('disk-used').textContent = formatBytes(data.disk.used);
+    document.getElementById('disk-total').textContent = formatBytes(data.disk.total);
+    
+    // Update Uptime
+    document.getElementById('uptime').textContent = data.system.uptime_days + 'd ' + data.system.uptime_hours + 'h ' + data.system.uptime_minutes + 'm';
+    document.getElementById('boot-time').textContent = new Date(data.system.boot_time).toLocaleString();
+    
+    // Update System Info
+    document.getElementById('os-name').textContent = data.system.os_name;
+    document.getElementById('os-version').textContent = data.system.os_version;
+    document.getElementById('os-arch').textContent = data.system.os_architecture;
+    document.getElementById('python-version').textContent = data.system.python_version;
+    document.getElementById('swap-percent').textContent = data.swap.percent + '%';
+    document.getElementById('swap-used').textContent = formatBytes(data.swap.used);
+    document.getElementById('swap-total').textContent = formatBytes(data.swap.total);
+    document.getElementById('network-sent').textContent = formatBytes(data.network.sent_bytes);
+    document.getElementById('network-recv').textContent = formatBytes(data.network.recv_bytes);
+    document.getElementById('disk-read').textContent = formatBytes(data.disk.read_bytes);
+    document.getElementById('disk-write').textContent = formatBytes(data.disk.write_bytes);
+
+    // Update charts with deltas
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    // Calculate deltas for network and disk (bytes per 2 seconds)
+    const deltaNetworkSent = prevNetworkSent > 0 ? (data.network.sent_bytes - prevNetworkSent) : 0;
+    const deltaNetworkRecv = prevNetworkRecv > 0 ? (data.network.recv_bytes - prevNetworkRecv) : 0;
+    const deltaDiskRead = prevDiskRead > 0 ? (data.disk.read_bytes - prevDiskRead) : 0;
+    const deltaDiskWrite = prevDiskWrite > 0 ? (data.disk.write_bytes - prevDiskWrite) : 0;
+    
+    // Convert to KB/s
+    const networkSentKBS = Math.max(0, deltaNetworkSent / 2 / 1024);
+    const networkRecvKBS = Math.max(0, deltaNetworkRecv / 2 / 1024);
+    
+    // Save current values for next delta
+    prevNetworkSent = data.network.sent_bytes;
+    prevNetworkRecv = data.network.recv_bytes;
+    prevDiskRead = data.disk.read_bytes;
+    prevDiskWrite = data.disk.write_bytes;
+    
+    // Update data arrays
+    cpuData.shift();
+    cpuData.push(data.cpu.percent);
+    memoryData.shift();
+    memoryData.push(data.memory.percent);
+    networkSentData.shift();
+    networkSentData.push(networkSentKBS);
+    networkRecvData.shift();
+    networkRecvData.push(networkRecvKBS);
+    timeLabels.shift();
+    timeLabels.push(timeLabel);
+    
+    // Update charts
+    if (cpuMemoryChart) {
+        cpuMemoryChart.data.labels = [...timeLabels];
+        cpuMemoryChart.data.datasets[0].data = [...cpuData];
+        cpuMemoryChart.data.datasets[1].data = [...memoryData];
+        cpuMemoryChart.update('none');
+    }
+    if (ioChart) {
+        ioChart.data.labels = [...timeLabels];
+        ioChart.data.datasets[0].data = [...networkSentData];
+        ioChart.data.datasets[1].data = [...networkRecvData];
+        ioChart.update('none');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initializeCharts();
+    
+    // Initialize previous values from initial data
+    prevNetworkSent = {{ network_sent_bytes }};
+    prevNetworkRecv = {{ network_recv_bytes }};
+    prevDiskRead = {{ disk_read_bytes }};
+    prevDiskWrite = {{ disk_write_bytes }};
+    
+    // Set initial chart values
+    cpuData[maxDataPoints - 1] = {{ cpu_percent }};
+    memoryData[maxDataPoints - 1] = {{ memory_percent }};
+    
+    const pollUrl = "{% url 'ajax_system_resource_dashboard' %}";
+    setInterval(async () => {
+        try {
+            const response = await fetch(pollUrl);
+            if (response.ok) {
+                const data = await response.json();
+                updateDashboard(data);
+            }
+        } catch (err) {
+            console.error('Error updating system resource dashboard:', err);
+        }
+    }, 2000); // Update every 2 seconds
+});
+</script>
+{% endblock %}
