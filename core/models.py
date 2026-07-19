@@ -387,8 +387,10 @@ class PlayerConfiguration(models.Model):
             return None
         
         # Build the standard iframe
-        allowfullscreen_attr = 'allowfullscreen' if self.allowfullscreen else ''
-        return f'<iframe src="{player_url}" width="{self.player_width}" height="{self.player_height}" frameborder="{self.frameborder}" {allowfullscreen_attr}></iframe>'
+        fullscreen_attrs = ''
+        if self.allowfullscreen:
+            fullscreen_attrs = 'allowfullscreen webkitallowfullscreen mozallowfullscreen'
+        return f'<iframe src="{player_url}" width="{self.player_width}" height="{self.player_height}" frameborder="{self.frameborder}" {fullscreen_attrs} allow="autoplay; fullscreen; picture-in-picture"></iframe>'
 
 
 class ImportLog(models.Model):
