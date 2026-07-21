@@ -3165,20 +3165,37 @@ def ajax_toggle_navbar_item(request):
         return JsonResponse({'success': True, 'is_active': navbar_item.is_active})
 
 
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def web_management_dashboard(request):
-    # Get initial data for first render
-    total_visitors = WebsiteVisitor.objects.count()
-    total_pageviews = WebsiteVisitorVisit.objects.count()
-    
+def _get_web_management_dashboard_payload():
     today = timezone.localdate()
-    visitors_today = WebsiteVisitor.objects.filter(last_seen_at__date=today).count()
-    pageviews_today = WebsiteVisitorVisit.objects.filter(visited_at__date=today).count()
-    
-    # Daily data for last 30 days
+    now = timezone.now()
+    one_hour_ago = now - datetime.timedelta(hours=1)
+
+    human_visits = WebsiteVisitorVisit.objects.filter(is_bot=False)
+    bot_visits = WebsiteVisitorVisit.objects.filter(is_bot=True)
+
+    total_visitors = WebsiteVisitor.objects.filter(
+        models.Q(visits__isnull=True) | models.Q(visits__is_bot=False)
+    ).distinct().count()
+    total_pageviews = human_visits.count()
+    visitors_today = WebsiteVisitor.objects.filter(
+        visits__is_bot=False,
+        visits__visited_at__date=today
+    ).distinct().count()
+    pageviews_today = human_visits.filter(visited_at__date=today).count()
+
+    bot_total_visits = bot_visits.count()
+    bot_visits_today = bot_visits.filter(visited_at__date=today).count()
+    bot_visits_last_hour = bot_visits.filter(visited_at__gte=one_hour_ago).count()
+    bot_unique_ips = list(
+        bot_visits.exclude(ip_address__isnull=True)
+        .exclude(ip_address='')
+        .values_list('ip_address', flat=True)
+        .distinct()
+        .order_by('ip_address')
+    )
+
     daily_visits = (
-        WebsiteVisitorVisit.objects
+        human_visits
         .annotate(day=TruncDate('visited_at'))
         .values('day')
         .annotate(unique_visitors=Count('visitor', distinct=True), pageviews=Count('id'))
@@ -3187,90 +3204,101 @@ def web_management_dashboard(request):
     chart_labels = [entry['day'].strftime('%Y-%m-%d') for entry in daily_visits]
     unique_chart_values = [entry['unique_visitors'] for entry in daily_visits]
     pageview_chart_values = [entry['pageviews'] for entry in daily_visits]
-    
-    # Top routes
-    top_routes = (
-        WebsiteVisitorVisit.objects
+
+    top_routes = list(
+        human_visits
         .values('path')
         .annotate(pageviews=Count('id'))
         .order_by('-pageviews')[:10]
     )
-    
-    # Recent activity
-    recent_activity = (
+
+    recent_activity_queryset = (
         WebsiteVisitorVisit.objects
         .select_related('visitor')
         .order_by('-visited_at')[:20]
     )
-    
-    return render(request, 'core/web_management_dashboard.html', {
-        'total_visitors': total_visitors,
-        'total_pageviews': total_pageviews,
-        'visitors_today': visitors_today,
-        'pageviews_today': pageviews_today,
-        'chart_labels_json': json.dumps(chart_labels),
-        'unique_chart_values_json': json.dumps(unique_chart_values),
-        'pageview_chart_values_json': json.dumps(pageview_chart_values),
+
+    recent_activity = []
+    for activity in recent_activity_queryset:
+        recent_activity.append({
+            'visitor__visitor_id': str(activity.visitor.visitor_id),
+            'path': activity.path,
+            'visited_at': activity.visited_at.isoformat(),
+            'ip_address': activity.ip_address,
+            'is_bot': activity.is_bot,
+        })
+
+    bot_top_ips = list(
+        bot_visits.exclude(ip_address__isnull=True)
+        .exclude(ip_address='')
+        .values('ip_address')
+        .annotate(request_count=Count('id'))
+        .order_by('-request_count', 'ip_address')[:10]
+    )
+
+    return {
+        'metrics': {
+            'total_visitors': total_visitors,
+            'total_pageviews': total_pageviews,
+            'visitors_today': visitors_today,
+            'pageviews_today': pageviews_today,
+            'bot_total_visits': bot_total_visits,
+            'bot_visits_today': bot_visits_today,
+            'bot_visits_last_hour': bot_visits_last_hour,
+            'bot_unique_ip_count': len(bot_unique_ips),
+        },
+        'charts': {
+            'labels': chart_labels,
+            'unique_visitors': unique_chart_values,
+            'pageviews': pageview_chart_values,
+        },
         'top_routes': top_routes,
-        'recent_activity': recent_activity
+        'recent_activity': recent_activity,
+        'bot_top_ips': bot_top_ips,
+        'bot_unique_ips': bot_unique_ips,
+    }
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def web_management_dashboard(request):
+    dashboard = _get_web_management_dashboard_payload()
+    recent_activity_queryset = (
+        WebsiteVisitorVisit.objects
+        .select_related('visitor')
+        .order_by('-visited_at')[:20]
+    )
+
+    return render(request, 'core/web_management_dashboard.html', {
+        'total_visitors': dashboard['metrics']['total_visitors'],
+        'total_pageviews': dashboard['metrics']['total_pageviews'],
+        'visitors_today': dashboard['metrics']['visitors_today'],
+        'pageviews_today': dashboard['metrics']['pageviews_today'],
+        'bot_total_visits': dashboard['metrics']['bot_total_visits'],
+        'bot_visits_today': dashboard['metrics']['bot_visits_today'],
+        'bot_visits_last_hour': dashboard['metrics']['bot_visits_last_hour'],
+        'bot_unique_ip_count': dashboard['metrics']['bot_unique_ip_count'],
+        'chart_labels_json': json.dumps(dashboard['charts']['labels']),
+        'unique_chart_values_json': json.dumps(dashboard['charts']['unique_visitors']),
+        'pageview_chart_values_json': json.dumps(dashboard['charts']['pageviews']),
+        'top_routes': dashboard['top_routes'],
+        'recent_activity': recent_activity_queryset,
+        'bot_top_ips': dashboard['bot_top_ips'],
+        'bot_unique_ips': dashboard['bot_unique_ips'],
     })
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def ajax_web_management_dashboard(request):
-    total_visitors = WebsiteVisitor.objects.count()
-    total_pageviews = WebsiteVisitorVisit.objects.count()
-    
-    today = timezone.localdate()
-    visitors_today = WebsiteVisitor.objects.filter(last_seen_at__date=today).count()
-    pageviews_today = WebsiteVisitorVisit.objects.filter(visited_at__date=today).count()
-    
-    # Daily data
-    daily_visits = (
-        WebsiteVisitorVisit.objects
-        .annotate(day=TruncDate('visited_at'))
-        .values('day')
-        .annotate(unique_visitors=Count('visitor', distinct=True), pageviews=Count('id'))
-        .order_by('day')
-    )
-    chart_labels = [entry['day'].strftime('%Y-%m-%d') for entry in daily_visits]
-    unique_chart_values = [entry['unique_visitors'] for entry in daily_visits]
-    pageview_chart_values = [entry['pageviews'] for entry in daily_visits]
-    
-    # Top routes
-    top_routes = list(
-        WebsiteVisitorVisit.objects
-        .values('path')
-        .annotate(pageviews=Count('id'))
-        .order_by('-pageviews')[:10]
-    )
-    
-    # Recent activity
-    recent_activity = list(
-        WebsiteVisitorVisit.objects
-        .select_related('visitor')
-        .order_by('-visited_at')[:20]
-        .values('visitor__visitor_id', 'path', 'visited_at', 'ip_address')
-    )
-    # Convert datetime to iso string
-    for activity in recent_activity:
-        activity['visited_at'] = activity['visited_at'].isoformat()
-    
+    dashboard = _get_web_management_dashboard_payload()
     return JsonResponse({
-        'metrics': {
-            'total_visitors': total_visitors,
-            'total_pageviews': total_pageviews,
-            'visitors_today': visitors_today,
-            'pageviews_today': pageviews_today
-        },
-        'charts': {
-            'labels': chart_labels,
-            'unique_visitors': unique_chart_values,
-            'pageviews': pageview_chart_values
-        },
-        'top_routes': top_routes,
-        'recent_activity': recent_activity
+        'metrics': dashboard['metrics'],
+        'charts': dashboard['charts'],
+        'top_routes': dashboard['top_routes'],
+        'recent_activity': dashboard['recent_activity'],
+        'bot_top_ips': dashboard['bot_top_ips'],
+        'bot_unique_ips': dashboard['bot_unique_ips'],
     })
 
 

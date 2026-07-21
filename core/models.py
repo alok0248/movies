@@ -135,6 +135,10 @@ class SiteSettings(models.Model):
     
     # Live TV Option
     hide_live_tv = models.BooleanField(default=True, help_text="Hide Live TV from navigation")
+    
+    # Bot Tracking
+    bot_ips = models.TextField(blank=True, null=True, help_text="Comma-separated list of IP addresses for our bot (e.g., 192.168.1.1,10.0.0.1)")
+    bot_user_agents = models.TextField(blank=True, null=True, help_text="Comma-separated list of user-agent strings for our bot")
 
     class Meta:
         verbose_name_plural = "Site Settings"
@@ -691,6 +695,7 @@ class WebsiteVisitorVisit(models.Model):
     visited_at = models.DateTimeField(auto_now_add=True)
     path = models.CharField(max_length=500)
     ip_address = models.GenericIPAddressField(blank=True, null=True)
+    is_bot = models.BooleanField(default=False, help_text="Whether this visit is from our bot")
     
     class Meta:
         ordering = ['-visited_at']

@@ -46,6 +46,41 @@
         </div>
     </div>
 
+    <div class="row g-4 mt-1">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Bot Requests</div>
+                    <div id="bot-total-visits" class="display-6 text-warning">{{ bot_total_visits }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Bot Requests Today</div>
+                    <div id="bot-visits-today" class="display-6 text-warning">{{ bot_visits_today }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Bot Requests Last Hour</div>
+                    <div id="bot-visits-last-hour" class="display-6 text-warning">{{ bot_visits_last_hour }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-secondary small">Unique Bot IPs</div>
+                    <div id="bot-unique-ip-count" class="display-6 text-warning">{{ bot_unique_ip_count }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card bg-dark border-secondary shadow-sm mt-4">
         <div class="card-body">
             <h5 class="text-white mb-1">Daily Unique Visitors</h5>
@@ -90,6 +125,54 @@
         </div>
     </div>
 
+    <div class="row g-4 mt-1">
+        <div class="col-lg-7">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="text-white mb-3">Bot IP Frequency</h5>
+                    {% if bot_top_ips %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle small">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Requests</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bot-top-ips-tbody">
+                                {% for bot_ip in bot_top_ips %}
+                                <tr>
+                                    <td><code class="text-warning">{{ bot_ip.ip_address }}</code></td>
+                                    <td>{{ bot_ip.request_count }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-secondary">No bot requests recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="text-white mb-3">Known Bot IPs</h5>
+                    <div id="bot-unique-ips" class="small text-light">
+                        {% if bot_unique_ips %}
+                            {% for ip in bot_unique_ips %}
+                                <div><code class="text-warning">{{ ip }}</code></div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-secondary">No bot IPs recorded yet.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card bg-dark border-secondary shadow-sm mt-4">
         <div class="card-body">
             <h5 class="text-white mb-3">Recent Activity</h5>
@@ -101,6 +184,7 @@
                             <th>Visitor ID</th>
                             <th>Path</th>
                             <th>IP Address</th>
+                            <th>Type</th>
                             <th>Time</th>
                         </tr>
                     </thead>
@@ -110,6 +194,13 @@
                             <td><code class="text-info">{{ activity.visitor.visitor_id }}</code></td>
                             <td><code class="text-white">{{ activity.path }}</code></td>
                             <td><code class="text-success">{{ activity.ip_address|default:"N/A" }}</code></td>
+                            <td>
+                                {% if activity.is_bot %}
+                                    <span class="badge bg-warning text-dark">Bot</span>
+                                {% else %}
+                                    <span class="badge bg-primary">Human</span>
+                                {% endif %}
+                            </td>
                             <td data-datetime="{{ activity.visited_at|date:'c' }}">{{ activity.visited_at }}</td>
                         </tr>
                         {% endfor %}
@@ -209,6 +300,10 @@ function updateDashboard(data) {
     document.getElementById('visitors-today').textContent = data.metrics.visitors_today;
     document.getElementById('total-pageviews').textContent = data.metrics.total_pageviews;
     document.getElementById('pageviews-today').textContent = data.metrics.pageviews_today;
+    document.getElementById('bot-total-visits').textContent = data.metrics.bot_total_visits;
+    document.getElementById('bot-visits-today').textContent = data.metrics.bot_visits_today;
+    document.getElementById('bot-visits-last-hour').textContent = data.metrics.bot_visits_last_hour;
+    document.getElementById('bot-unique-ip-count').textContent = data.metrics.bot_unique_ip_count;
 
     // Update charts
     if (uniqueVisitorsChart) {
@@ -233,6 +328,29 @@ function updateDashboard(data) {
         `).join('');
     }
 
+    const botTopIpsTbody = document.getElementById('bot-top-ips-tbody');
+    if (botTopIpsTbody) {
+        if (data.bot_top_ips.length) {
+            botTopIpsTbody.innerHTML = data.bot_top_ips.map(botIp => `
+                <tr>
+                    <td><code class="text-warning">${botIp.ip_address}</code></td>
+                    <td>${botIp.request_count}</td>
+                </tr>
+            `).join('');
+        } else {
+            botTopIpsTbody.innerHTML = '<tr><td colspan="2" class="text-secondary text-center py-3">No bot requests recorded yet.</td></tr>';
+        }
+    }
+
+    const botUniqueIps = document.getElementById('bot-unique-ips');
+    if (botUniqueIps) {
+        if (data.bot_unique_ips.length) {
+            botUniqueIps.innerHTML = data.bot_unique_ips.map(ip => `<div><code class="text-warning">${ip}</code></div>`).join('');
+        } else {
+            botUniqueIps.innerHTML = '<div class="text-secondary">No bot IPs recorded yet.</div>';
+        }
+    }
+
     // Update recent activity
     const recentActivityTbody = document.getElementById('recent-activity-tbody');
     if (recentActivityTbody && data.recent_activity.length) {
@@ -241,6 +359,7 @@ function updateDashboard(data) {
                 <td><code class="text-info">${activity.visitor__visitor_id}</code></td>
                 <td><code class="text-white">${activity.path}</code></td>
                 <td><code class="text-success">${activity.ip_address || 'N/A'}</code></td>
+                <td>${activity.is_bot ? '<span class="badge bg-warning text-dark">Bot</span>' : '<span class="badge bg-primary">Human</span>'}</td>
                 <td data-datetime="${activity.visited_at}">${formatBrowserLocalTime(activity.visited_at)}</td>
             </tr>
         `).join('');

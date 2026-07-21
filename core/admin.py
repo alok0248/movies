@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit
 
 
 @admin.register(AndroidApp)
@@ -100,6 +100,9 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ('TMDB Settings', {
             'fields': ('watch_region',),
         }),
+        ('Bot Tracking', {
+            'fields': ('bot_ips', 'bot_user_agents'),
+        }),
     )
 
 
@@ -140,3 +143,19 @@ class NavbarItemAdmin(admin.ModelAdmin):
     list_editable = ('order', 'is_active')
     search_fields = ('name', 'built_in_id', 'url')
     ordering = ('order',)
+
+
+@admin.register(WebsiteVisitor)
+class WebsiteVisitorAdmin(admin.ModelAdmin):
+    list_display = ('visitor_id', 'user', 'first_seen_at', 'last_seen_at', 'total_visits', 'last_ip_address')
+    list_filter = ('first_seen_at', 'last_seen_at')
+    search_fields = ('visitor_id', 'user__username', 'last_ip_address')
+    readonly_fields = ('visitor_id', 'first_seen_at', 'last_seen_at')
+
+
+@admin.register(WebsiteVisitorVisit)
+class WebsiteVisitorVisitAdmin(admin.ModelAdmin):
+    list_display = ('visitor', 'visited_at', 'path', 'ip_address', 'is_bot')
+    list_filter = ('visited_at', 'is_bot')
+    search_fields = ('visitor__visitor_id', 'path', 'ip_address')
+    readonly_fields = ('visited_at',)

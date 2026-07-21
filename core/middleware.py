@@ -15,6 +15,27 @@ def get_client_ip(request):
     return ip
 
 
+def _split_bot_config(raw_value):
+    if not raw_value:
+        return []
+    normalized = raw_value.replace('\n', ',')
+    return [item.strip() for item in normalized.split(',') if item.strip()]
+
+
+def is_bot_request(request, client_ip, site_settings):
+    configured_ips = set(_split_bot_config(site_settings.bot_ips))
+    configured_user_agents = [value.lower() for value in _split_bot_config(site_settings.bot_user_agents)]
+    user_agent = (request.META.get('HTTP_USER_AGENT', '') or '').lower()
+
+    if client_ip and client_ip in configured_ips:
+        return True
+
+    if user_agent and any(bot_signature in user_agent for bot_signature in configured_user_agents):
+        return True
+
+    return False
+
+
 class URLBlockMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -104,6 +125,16 @@ class WebsiteVisitorTrackingMiddleware:
         set_cookie = False
         new_visitor_id = None
         client_ip = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        site_settings = None
+        is_bot = False
+
+        try:
+            site_settings = SiteSettings.get_settings()
+            is_bot = is_bot_request(request, client_ip, site_settings)
+        except Exception:
+            site_settings = None
+            is_bot = False
         
         try:
             if visitor_id_str:
@@ -129,18 +160,22 @@ class WebsiteVisitorTrackingMiddleware:
         if visitor is None and new_visitor_id is not None:
             visitor = WebsiteVisitor.objects.create(
                 visitor_id=new_visitor_id,
-                user=request.user if request.user.is_authenticated else None
+                user=request.user if request.user.is_authenticated else None,
+                last_path=path,
+                total_visits=1,
+                last_ip_address=client_ip,
+                user_agent=user_agent,
             )
         elif visitor is not None:
             # Update existing visitor
-            update_fields = ['last_seen_at', 'total_visits', 'last_path']
+            update_fields = ['last_seen_at', 'total_visits', 'last_path', 'last_ip_address', 'user_agent']
             if request.user.is_authenticated and visitor.user != request.user:
                 visitor.user = request.user
                 update_fields.append('user')
             visitor.last_path = path
             visitor.total_visits += 1
             visitor.last_ip_address = client_ip
-            visitor.user_agent = request.META.get('HTTP_USER_AGENT', '')
+            visitor.user_agent = user_agent
             visitor.save(update_fields=update_fields)
         
         # Record visit
@@ -148,7 +183,8 @@ class WebsiteVisitorTrackingMiddleware:
             WebsiteVisitorVisit.objects.create(
                 visitor=visitor,
                 path=path,
-                ip_address=client_ip
+                ip_address=client_ip,
+                is_bot=is_bot,
             )
         
         # Get response

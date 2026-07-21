@@ -38,11 +38,15 @@ class SiteSettingsForm(forms.ModelForm):
             'tmdb_db_name',
             'tmdb_db_user',
             'tmdb_db_password',
-            'hide_live_tv'
+            'hide_live_tv',
+            'bot_ips',
+            'bot_user_agents'
         ]
         widgets = {
             'sidebar_ads_code': forms.Textarea(attrs={'rows': 10, 'cols': 80, 'class': 'form-control', 'title': 'Enter HTML/JS code for sidebar ads to display on the site'}),
             'blocked_urls': forms.Textarea(attrs={'rows': 6, 'cols': 80, 'class': 'form-control', 'title': 'List of URLs to block (one per line), or "all" to block everything except admin pages'}),
+            'bot_ips': forms.Textarea(attrs={'rows': 4, 'cols': 80, 'class': 'form-control', 'placeholder': '192.168.1.10, 10.0.0.5', 'title': 'Comma-separated or line-separated bot IP addresses to classify as bot traffic'}),
+            'bot_user_agents': forms.Textarea(attrs={'rows': 4, 'cols': 80, 'class': 'form-control', 'placeholder': 'Googlebot, MyCustomCrawler', 'title': 'Comma-separated or line-separated user-agent fragments to classify as bot traffic'}),
             'email_host_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP password or app-specific password'}),
             'curated_top_movie_ids': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'placeholder': 'Comma-separated TMDB IDs, e.g., 123,456,789,987,654', 'class': 'form-control', 'title': 'Manually select which movies appear at the top of the homepage (comma-separated TMDB IDs)'}),
             'curated_top_series_ids': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'placeholder': 'Comma-separated TMDB IDs, e.g., 123,456,789,987,654', 'class': 'form-control', 'title': 'Manually select which TV shows appear at the top of the homepage (comma-separated TMDB IDs)'}),
