@@ -6,6 +6,15 @@ from .models import SiteSettings, WebsiteVisitor, WebsiteVisitorVisit
 import uuid
 
 
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
 class URLBlockMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -94,6 +103,7 @@ class WebsiteVisitorTrackingMiddleware:
         visitor = None
         set_cookie = False
         new_visitor_id = None
+        client_ip = get_client_ip(request)
         
         try:
             if visitor_id_str:
@@ -129,7 +139,7 @@ class WebsiteVisitorTrackingMiddleware:
                 update_fields.append('user')
             visitor.last_path = path
             visitor.total_visits += 1
-            visitor.last_ip_address = request.META.get('REMOTE_ADDR')
+            visitor.last_ip_address = client_ip
             visitor.user_agent = request.META.get('HTTP_USER_AGENT', '')
             visitor.save(update_fields=update_fields)
         
@@ -138,7 +148,7 @@ class WebsiteVisitorTrackingMiddleware:
             WebsiteVisitorVisit.objects.create(
                 visitor=visitor,
                 path=path,
-                ip_address=request.META.get('REMOTE_ADDR')
+                ip_address=client_ip
             )
         
         # Get response
