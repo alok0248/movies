@@ -19,6 +19,13 @@
             </div>
             {% endif %}
 
+            {# Show rating on the right side with star icon #}
+            {% if movie.vote_average %}
+            <div class="rating-badge right">
+                <span>★</span> {{ movie.vote_average|floatformat:1 }}
+            </div>
+            {% endif %}
+
             {# Keep the add-to-watchlist action directly on the poster without affecting the details link. #}
             <button class="hover-watchlist-btn card-watchlist-btn"
                     type="button"
@@ -30,18 +37,14 @@
                 <span class="watchlist-icon">+</span>
             </button>
 
+            {# Hover title that shows after delay #}
+            <div class="card-hover-title">{{ movie.title }}</div>
+
             <div class="watchlist-warning text-danger" style="display: none; font-size: 0.8rem; margin-top: 0.5rem;">
                 You need to login to add to the list
             </div>
         </div>
         {% endif %}
-
-        {# Keep the title below the poster while the poster itself remains the details link. #}
-        <div class="card-info">
-            <h5 class="card-title">
-                <a class="text-decoration-none text-reset" href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}">{{ movie.title }}</a>
-            </h5>
-        </div>
     </div>
 </div>
 {% endfor %}
