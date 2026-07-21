@@ -3251,7 +3251,7 @@ def ajax_web_management_dashboard(request):
         WebsiteVisitorVisit.objects
         .select_related('visitor')
         .order_by('-visited_at')[:20]
-        .values('visitor__visitor_id', 'path', 'visited_at')
+        .values('visitor__visitor_id', 'path', 'visited_at', 'ip_address')
     )
     # Convert datetime to iso string
     for activity in recent_activity:
