@@ -390,11 +390,11 @@ class PlayerConfiguration(models.Model):
         if not player_url:
             return None
         
-        # Build the standard iframe
+        # Build the standard iframe with sandbox to block popups/ads
         fullscreen_attrs = ''
         if self.allowfullscreen:
             fullscreen_attrs = 'allowfullscreen webkitallowfullscreen mozallowfullscreen'
-        return f'<iframe src="{player_url}" width="{self.player_width}" height="{self.player_height}" frameborder="{self.frameborder}" {fullscreen_attrs} allow="autoplay; fullscreen; picture-in-picture"></iframe>'
+        return f'<iframe src="{player_url}" width="{self.player_width}" height="{self.player_height}" frameborder="{self.frameborder}" {fullscreen_attrs} allow="autoplay; fullscreen; picture-in-picture" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups-to-escape-sandbox allow-presentation"></iframe>'
 
 
 class ImportLog(models.Model):

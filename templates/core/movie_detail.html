@@ -419,7 +419,11 @@ function loadMoviePlayer() {
     playerContainer.innerHTML = '';
     
     if (playerContent.type === 'html') {
-        playerContainer.innerHTML = playerContent.content;
+        // If custom HTML, add sandbox to iframes in the content
+        let html = playerContent.content;
+        // Add sandbox attribute to all iframe tags
+        html = html.replace(/<iframe([\s\S]*?)>/gi, '<iframe$1 sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups-to-escape-sandbox allow-presentation">');
+        playerContainer.innerHTML = html;
     } else {
         const iframe = document.createElement('iframe');
         iframe.id = 'moviePlayer';
@@ -435,6 +439,7 @@ function loadMoviePlayer() {
             iframe.setAttribute('mozallowfullscreen', '');
         }
         iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+        iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups-to-escape-sandbox allow-presentation';
         iframe.src = playerContent.content;
         playerContainer.appendChild(iframe);
     }
