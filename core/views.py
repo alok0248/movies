@@ -24,7 +24,7 @@ import base64
 from bs4 import BeautifulSoup
 import psutil
 import platform
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit, Ad, UserActivity, AdImpression)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
@@ -1735,6 +1735,61 @@ def content_row_delete(request, row_id):
     return render(request, 'core/content_row_delete.html', {'content_row': content_row})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_list(request):
+    ads = Ad.objects.all().order_by('order', 'name')
+    return render(request, 'core/ad_list.html', {'ads': ads})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_create(request):
+    if request.method == 'POST':
+        form = AdForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('ad_list')
+    else:
+        form = AdForm()
+    return render(request, 'core/ad_form.html', {'form': form, 'action': 'Create'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_edit(request, ad_id):
+    ad = get_object_or_404(Ad, id=ad_id)
+    if request.method == 'POST':
+        form = AdForm(request.POST, instance=ad)
+        if form.is_valid():
+            form.save()
+            return redirect('ad_list')
+    else:
+        form = AdForm(instance=ad)
+    return render(request, 'core/ad_form.html', {'form': form, 'action': 'Edit'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_delete(request, ad_id):
+    ad = get_object_or_404(Ad, id=ad_id)
+    if request.method == 'POST':
+        ad.delete()
+        return redirect('ad_list')
+    return render(request, 'core/ad_delete.html', {'ad': ad})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_toggle(request, ad_id):
+    ad = get_object_or_404(Ad, id=ad_id)
+    if request.method == 'POST':
+        ad.is_active = not ad.is_active
+        ad.save()
+        return redirect('ad_list')
+    return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
@@ -3119,6 +3174,35 @@ def toggle_player(request, player_id):
         player.save()
         return redirect('player_list')
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+
+@require_http_methods(["POST"])
+def track_user_click(request):
+    """Track user clicks for ad targeting"""
+    user = request.user if request.user.is_authenticated else None
+    ip_address = request.META.get('REMOTE_ADDR')
+    today = timezone.now().date()
+    
+    try:
+        if user:
+            user_activity, created = UserActivity.objects.get_or_create(
+                user=user,
+                activity_date=today,
+                defaults={'ip_address': ip_address}
+            )
+        else:
+            user_activity, created = UserActivity.objects.get_or_create(
+                ip_address=ip_address,
+                activity_date=today,
+                defaults={'user': None}
+            )
+        
+        user_activity.clicks_today += 1
+        user_activity.save(update_fields=['clicks_today'])
+        return JsonResponse({'success': True})
+    except Exception as e:
+        print(f"Error tracking user click: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 @login_required

@@ -30,6 +30,11 @@ urlpatterns = [
     path('admin-dashboard/players/<int:player_id>/edit/', views.player_edit, name='player_edit'),
     path('admin-dashboard/players/<int:player_id>/delete/', views.player_delete, name='player_delete'),
     path('admin-dashboard/players/<int:player_id>/toggle/', views.toggle_player, name='toggle_player'),
+    path('admin-dashboard/ads/', views.ad_list, name='ad_list'),
+    path('admin-dashboard/ads/create/', views.ad_create, name='ad_create'),
+    path('admin-dashboard/ads/<int:ad_id>/edit/', views.ad_edit, name='ad_edit'),
+    path('admin-dashboard/ads/<int:ad_id>/delete/', views.ad_delete, name='ad_delete'),
+    path('admin-dashboard/ads/<int:ad_id>/toggle/', views.ad_toggle, name='ad_toggle'),
     path('admin-dashboard/navbar-items/', views.navbar_item_list, name='navbar_item_list'),
     path('admin-dashboard/navbar-items/create/', views.navbar_item_create, name='navbar_item_create'),
     path('admin-dashboard/navbar-items/<int:item_id>/edit/', views.navbar_item_edit, name='navbar_item_edit'),
@@ -86,4 +91,5 @@ urlpatterns = [
     path('ajax/test-tmdb-api/', views.test_tmdb_api, name='test_tmdb_api'),
     path('ajax/save-db-config/', views.save_db_config, name='save_db_config'),
     path('ajax/toggle-navbar-item/', views.ajax_toggle_navbar_item, name='ajax_toggle_navbar_item'),
+    path('ajax/track-click/', views.track_user_click, name='track_user_click'),
 ]

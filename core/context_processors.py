@@ -1,6 +1,8 @@
-from .models import SiteSettings, NavbarItem, ProviderItem
+from .models import SiteSettings, NavbarItem, ProviderItem, Ad, UserActivity, AdImpression
 from .tmdb_client import get_data_client
 from django.conf import settings as django_settings
+from django.utils import timezone
+import uuid
 
 
 def site_settings(request):
@@ -54,6 +56,95 @@ def site_settings(request):
 
     navbar_items = NavbarItem.objects.filter(is_active=True).order_by('order')
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('name')
+    
+    # Get current path for ad filtering
+    current_path = request.path
+    
+    # Get or create user activity
+    user = request.user if request.user.is_authenticated else None
+    ip_address = request.META.get('REMOTE_ADDR')
+    today = timezone.now().date()
+    
+    user_activity = None
+    if user or ip_address:
+        try:
+            if user:
+                user_activity, created = UserActivity.objects.get_or_create(
+                    user=user,
+                    activity_date=today,
+                    defaults={'ip_address': ip_address}
+                )
+            else:
+                user_activity, created = UserActivity.objects.get_or_create(
+                    ip_address=ip_address,
+                    activity_date=today,
+                    defaults={'user': None}
+                )
+            
+            # Increment pages viewed
+            if user_activity:
+                user_activity.pages_viewed_today += 1
+                user_activity.save(update_fields=['pages_viewed_today'])
+        except Exception as e:
+            print(f"Error tracking user activity: {e}")
+    
+    # Get active ads grouped by position with all filtering logic
+    ads_by_position = {}
+    if settings.enable_ads:
+        active_ads = Ad.objects.filter(is_active=True).order_by('order')
+        
+        for ad in active_ads:
+            # Check allowed pages
+            if ad.allowed_pages:
+                allowed_pages_list = [page.strip() for page in ad.allowed_pages.split(',')]
+                if current_path not in allowed_pages_list:
+                    continue
+            
+            # Check clicks required
+            if user_activity and ad.clicks_required_before_show > 0:
+                if user_activity.clicks_today < ad.clicks_required_before_show:
+                    continue
+            
+            # Check pages viewed required
+            if user_activity and ad.pages_viewed_required_before_show > 0:
+                if user_activity.pages_viewed_today < ad.pages_viewed_required_before_show:
+                    continue
+            
+            # Check max impressions per day
+            if ad.max_impressions_per_day > 0:
+                # Count existing impressions for this ad today for user/IP
+                if user:
+                    impressions_count = AdImpression.objects.filter(
+                        ad=ad,
+                        user=user,
+                        view_date=today
+                    ).count()
+                elif ip_address:
+                    impressions_count = AdImpression.objects.filter(
+                        ad=ad,
+                        ip_address=ip_address,
+                        view_date=today
+                    ).count()
+                else:
+                    impressions_count = 0
+                
+                if impressions_count >= ad.max_impressions_per_day:
+                    continue
+            
+            # Track impression
+            try:
+                AdImpression.objects.create(
+                    ad=ad,
+                    user=user,
+                    ip_address=ip_address
+                )
+            except Exception as e:
+                print(f"Error tracking ad impression: {e}")
+            
+            # Add to ads by position
+            if ad.position not in ads_by_position:
+                ads_by_position[ad.position] = []
+            ads_by_position[ad.position].append(ad)
 
     return {
         'site_settings': settings,
@@ -68,4 +159,5 @@ def site_settings(request):
         'series_genres': series_genres,
         'navbar_items': navbar_items,
         'enabled_providers': enabled_providers,
+        'ads_by_position': ads_by_position,
     }

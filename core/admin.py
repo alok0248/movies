@@ -1,5 +1,38 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, UserActivity
+
+
+@admin.register(Ad)
+class AdAdmin(admin.ModelAdmin):
+    list_display = ('name', 'network', 'position', 'is_active', 'order', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show')
+    list_filter = ('network', 'position', 'is_active')
+    list_editable = ('is_active', 'order', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show')
+    search_fields = ('name',)
+    ordering = ('order',)
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'network', 'position', 'ad_code', 'is_active', 'order')
+        }),
+        ('Targeting', {
+            'fields': ('allowed_pages', 'clicks_required_before_show', 'pages_viewed_required_before_show', 'max_impressions_per_day')
+        }),
+    )
+
+
+@admin.register(UserActivity)
+class UserActivityAdmin(admin.ModelAdmin):
+    list_display = ('user', 'ip_address', 'activity_date', 'clicks_today', 'pages_viewed_today')
+    list_filter = ('activity_date',)
+    search_fields = ('user__username', 'ip_address')
+    readonly_fields = ('activity_date',)
+
+
+@admin.register(AdImpression)
+class AdImpressionAdmin(admin.ModelAdmin):
+    list_display = ('ad', 'user', 'ip_address', 'view_date', 'viewed_at')
+    list_filter = ('view_date', 'ad__name')
+    date_hierarchy = 'viewed_at'
+    search_fields = ('ad__name', 'user__username', 'ip_address')
 
 
 @admin.register(AndroidApp)
@@ -102,6 +135,9 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         }),
         ('Bot Tracking', {
             'fields': ('bot_ips', 'bot_user_agents'),
+        }),
+        ('Ads Settings', {
+            'fields': ('enable_ads', 'ads_head_script', 'ads_body_script', 'enable_android_ads', 'android_ads_config'),
         }),
     )
 

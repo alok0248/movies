@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ site_settings.brand_name }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    {% if site_settings.enable_ads and site_settings.ads_head_script %}
+        {{ site_settings.ads_head_script|safe }}
+    {% endif %}
     <style>
         :root {
             --brand-color: {{ theme_primary }};
@@ -1168,11 +1171,32 @@
     </div>
 
     <div class="content-wrapper">
+        {% if 'above_content' in ads_by_position %}
+            <div class="ad-container-above-content">
+                {% for ad in ads_by_position.above_content %}
+                    {{ ad.ad_code|safe }}
+                {% endfor %}
+            </div>
+        {% endif %}
         {% block content %}{% endblock %}
+        {% if 'below_content' in ads_by_position %}
+            <div class="ad-container-below-content">
+                {% for ad in ads_by_position.below_content %}
+                    {{ ad.ad_code|safe }}
+                {% endfor %}
+            </div>
+        {% endif %}
     </div>
 
     {% if site_settings.footer_enabled and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
     {% block footer %}
+    {% if 'footer' in ads_by_position %}
+        <div class="ad-container-footer">
+            {% for ad in ads_by_position.footer %}
+                {{ ad.ad_code|safe }}
+            {% endfor %}
+        </div>
+    {% endif %}
     <footer class="site-footer">
         <div class="container-fluid px-0">
             <div class="row g-4 align-items-start">
@@ -2104,6 +2128,45 @@
                 });
             });
         }
+
+        // Track user clicks for ad targeting
+        async function trackUserClick() {
+            try {
+                await fetch('{% url "track_user_click" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+            } catch (error) {
+                console.error('Error tracking click:', error);
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Track clicks on any interactive elements
+        document.addEventListener('click', (e) => {
+            // Don't track clicks on certain elements (like the ad itself maybe?)
+            const target = e.target;
+            const ignored = target.closest('.ad-container-above-content, .ad-container-below-content, .ad-container-footer, .theme-toggle');
+            if (!ignored) {
+                trackUserClick();
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', () => {
             updateAllWatchlistButtons();

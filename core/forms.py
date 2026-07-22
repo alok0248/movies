@@ -1,5 +1,5 @@
 from django import forms
-from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, AndroidApp
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, AndroidApp, Ad
 import json
 
 
@@ -411,4 +411,18 @@ class NavbarItemForm(forms.ModelForm):
             'icon': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Font Awesome icon e.g., fas fa-home'}),
             'order': forms.NumberInput(attrs={'class': 'form-control'}),
             'dropdown_items': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'JSON array of dropdown items'}),
+        }
+
+
+class AdForm(forms.ModelForm):
+    class Meta:
+        model = Ad
+        fields = ['name', 'network', 'position', 'ad_code', 'is_active', 'order']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter ad name'}),
+            'network': forms.Select(attrs={'class': 'form-select'}),
+            'position': forms.Select(attrs={'class': 'form-select'}),
+            'ad_code': forms.Textarea(attrs={'rows': 10, 'class': 'form-control', 'placeholder': 'Paste your ad HTML/JS code here'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'order': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Display order'}),
         }

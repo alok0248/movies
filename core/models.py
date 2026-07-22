@@ -139,6 +139,13 @@ class SiteSettings(models.Model):
     # Bot Tracking
     bot_ips = models.TextField(blank=True, null=True, help_text="Comma-separated list of IP addresses for our bot (e.g., 192.168.1.1,10.0.0.1)")
     bot_user_agents = models.TextField(blank=True, null=True, help_text="Comma-separated list of user-agent strings for our bot")
+    
+    # Ads Settings
+    enable_ads = models.BooleanField(default=False, help_text="Enable ads on the website")
+    ads_head_script = models.TextField(blank=True, null=True, help_text="HTML/JS code to add to the <head> tag (e.g., AdSense script)")
+    ads_body_script = models.TextField(blank=True, null=True, help_text="HTML/JS code to add to the <body> tag (e.g., ad units)")
+    enable_android_ads = models.BooleanField(default=False, help_text="Enable ads in the Android app")
+    android_ads_config = models.TextField(blank=True, null=True, help_text="JSON configuration for Android ads")
 
     class Meta:
         verbose_name_plural = "Site Settings"
@@ -150,6 +157,90 @@ class SiteSettings(models.Model):
     def get_settings(cls):
         settings, created = cls.objects.get_or_create(pk=1)
         return settings
+
+
+class Ad(models.Model):
+    NETWORK_CHOICES = [
+        ('google_adsense', 'Google AdSense'),
+        ('amazon_associates', 'Amazon Associates'),
+        ('cj_affiliate', 'CJ Affiliate (Commission Junction)'),
+        ('shareasale', 'ShareASale'),
+        ('rakuten_advertising', 'Rakuten Advertising'),
+        ('ebay_partner_network', 'eBay Partner Network'),
+        ('clickbank', 'ClickBank'),
+        ('maxbounty', 'MaxBounty'),
+        ('mediavine', 'Mediavine'),
+        ('adthrive', 'AdThrive'),
+        ('other', 'Other / Custom'),
+    ]
+    
+    POSITION_CHOICES = [
+        ('head', 'Head (All Pages)'),
+        ('sidebar', 'Sidebar'),
+        ('above_player', 'Above Video Player'),
+        ('below_player', 'Below Video Player'),
+        ('above_content', 'Above Main Content'),
+        ('below_content', 'Below Main Content'),
+        ('footer', 'Footer'),
+        ('popup', 'Popup / Modal'),
+    ]
+    
+    name = models.CharField(max_length=100, help_text='Internal name for this ad (not shown publicly)')
+    network = models.CharField(max_length=50, choices=NETWORK_CHOICES, default='other', help_text='Affiliate/Ad network for this ad')
+    position = models.CharField(max_length=50, choices=POSITION_CHOICES, default='sidebar', help_text='Where this ad will appear on the site')
+    ad_code = models.TextField(blank=True, null=True, help_text='HTML/JS ad code from your network')
+    is_active = models.BooleanField(default=True, help_text='Enable or disable this ad')
+    order = models.IntegerField(default=0, help_text='Display order (lower numbers show first)')
+    max_impressions_per_day = models.IntegerField(default=0, help_text='Max number of times this ad can be shown per user per day (0 = unlimited)')
+    clicks_required_before_show = models.IntegerField(default=0, help_text='Number of clicks user has to make on the site before this ad is shown (0 = no requirement)')
+    allowed_pages = models.TextField(blank=True, null=True, help_text='Comma separated list of page paths this ad should appear on (leave blank for all pages, e.g., /, /movies/, /series/)')
+    # Also, maybe add a field for how many pages viewed before showing?
+    pages_viewed_required_before_show = models.IntegerField(default=0, help_text='Number of pages user has to view before this ad is shown (0 = no requirement)')
+    
+    class Meta:
+        ordering = ['order', 'name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_network_display()}) - {self.get_position_display()}"
+
+
+class UserActivity(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activity', null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    activity_date = models.DateField(auto_now_add=True)
+    clicks_today = models.IntegerField(default=0)
+    pages_viewed_today = models.IntegerField(default=0)
+    
+    class Meta:
+        unique_together = (('user', 'activity_date'), ('ip_address', 'activity_date'))
+        indexes = [
+            models.Index(fields=['user', 'activity_date']),
+            models.Index(fields=['ip_address', 'activity_date']),
+        ]
+    
+    def __str__(self):
+        if self.user:
+            return f"Activity for {self.user.username} on {self.activity_date}"
+        else:
+            return f"Activity for IP {self.ip_address} on {self.activity_date}"
+
+
+class AdImpression(models.Model):
+    ad = models.ForeignKey(Ad, on_delete=models.CASCADE, related_name='impressions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ad_impressions', null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+    view_date = models.DateField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['ad', 'view_date']),
+            models.Index(fields=['user', 'view_date']),
+            models.Index(fields=['ip_address', 'view_date']),
+        ]
+    
+    def __str__(self):
+        return f"Impression of {self.ad.name} at {self.viewed_at}"
 
 
 class WatchList(models.Model):
