@@ -17,6 +17,7 @@
                     <th>Network</th>
                     <th>Position</th>
                     <th>Active</th>
+                    <th>Use for Android</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -35,6 +36,13 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if ad.use_for_android %}
+                            <span class="badge bg-info">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <form method="post" action="{% url 'ad_toggle' ad.id %}" style="display: inline;">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-sm {% if ad.is_active %}btn-secondary{% else %}btn-success{% endif %} me-2">
@@ -47,7 +55,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center">No ads found. Create one to get started!</td>
+                    <td colspan="7" class="text-center">No ads found. Create one to get started!</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -196,6 +196,7 @@ class Ad(models.Model):
     allowed_pages = models.TextField(blank=True, null=True, help_text='Comma separated list of page paths this ad should appear on (leave blank for all pages, e.g., /, /movies/, /series/)')
     # Also, maybe add a field for how many pages viewed before showing?
     pages_viewed_required_before_show = models.IntegerField(default=0, help_text='Number of pages user has to view before this ad is shown (0 = no requirement)')
+    use_for_android = models.BooleanField(default=False, help_text='Use this ad in the Android app')
     
     class Meta:
         ordering = ['order', 'name']

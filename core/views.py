@@ -29,7 +29,7 @@ from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, AdsSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm
+    PlayerSettingsForm, AdsSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm
 )
 
 
@@ -2287,11 +2287,25 @@ def android_app_endpoint(request, app_slug):
                 "name": f"Player {len(series_servers) + 1}",  # separate counter for series
                 "url_template": tv_url
             })
+    
+    # Build ads list for Android
+    android_ads = Ad.objects.filter(use_for_android=True, is_active=True).order_by('order', 'name')
+    ads_list = []
+    for idx, ad in enumerate(android_ads, start=1):
+        ads_list.append({
+            "name": ad.name,
+            "network": ad.network,
+            "position": ad.position,
+            "ad_code": ad.ad_code,
+            "order": ad.order
+        })
+    
     # Update the payload
     response_payload = android_app.json_payload.copy() if isinstance(android_app.json_payload, dict) else android_app.json_payload
     if isinstance(response_payload, dict):
         response_payload['movie_servers'] = movie_servers
         response_payload['series_servers'] = series_servers
+        response_payload['ads'] = ads_list
     return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
 
 

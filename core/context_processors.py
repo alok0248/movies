@@ -59,14 +59,15 @@ def site_settings(request):
     
     # Get current path for ad filtering
     current_path = request.path
+    is_admin_page = current_path.startswith('/admin-dashboard/') or current_path.startswith('/ajax/')
     
-    # Get or create user activity
+    # Get or create user activity (don't track on admin pages)
     user = request.user if request.user.is_authenticated else None
     ip_address = request.META.get('REMOTE_ADDR')
     today = timezone.now().date()
     
     user_activity = None
-    if user or ip_address:
+    if not is_admin_page and (user or ip_address):
         try:
             if user:
                 user_activity, created = UserActivity.objects.get_or_create(
@@ -88,9 +89,9 @@ def site_settings(request):
         except Exception as e:
             print(f"Error tracking user activity: {e}")
     
-    # Get active ads grouped by position with all filtering logic
+    # Get active ads grouped by position with all filtering logic (no ads on admin pages)
     ads_by_position = {}
-    if settings.enable_ads:
+    if not is_admin_page and settings.enable_ads:
         active_ads = Ad.objects.filter(is_active=True).order_by('order')
         
         for ad in active_ads:

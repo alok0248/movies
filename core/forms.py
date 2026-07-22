@@ -192,10 +192,13 @@ class PlayerSettingsForm(forms.ModelForm):
 class AdsSettingsForm(forms.ModelForm):
     class Meta:
         model = SiteSettings
-        fields = ['enable_sidebar_ads', 'sidebar_ads_code']
+        fields = ['enable_ads', 'enable_sidebar_ads', 'sidebar_ads_code', 'ads_head_script', 'ads_body_script']
         widgets = {
+            'enable_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'enable_sidebar_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'sidebar_ads_code': forms.Textarea(attrs={'rows': 10, 'class': 'form-control'}),
+            'sidebar_ads_code': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
+            'ads_head_script': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
+            'ads_body_script': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
         }
 
 
@@ -417,7 +420,7 @@ class NavbarItemForm(forms.ModelForm):
 class AdForm(forms.ModelForm):
     class Meta:
         model = Ad
-        fields = ['name', 'network', 'position', 'ad_code', 'is_active', 'order']
+        fields = ['name', 'network', 'position', 'ad_code', 'is_active', 'order', 'allowed_pages', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show', 'use_for_android']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter ad name'}),
             'network': forms.Select(attrs={'class': 'form-select'}),
@@ -425,4 +428,9 @@ class AdForm(forms.ModelForm):
             'ad_code': forms.Textarea(attrs={'rows': 10, 'class': 'form-control', 'placeholder': 'Paste your ad HTML/JS code here'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'order': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Display order'}),
+            'allowed_pages': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Comma separated list of page paths, e.g., /, /movies/, /series/'}),
+            'max_impressions_per_day': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Max impressions per user per day (0 for unlimited)'}),
+            'clicks_required_before_show': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Clicks required before showing'}),
+            'pages_viewed_required_before_show': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Pages viewed required before showing'}),
+            'use_for_android': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }

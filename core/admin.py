@@ -4,14 +4,14 @@ from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDB
 
 @admin.register(Ad)
 class AdAdmin(admin.ModelAdmin):
-    list_display = ('name', 'network', 'position', 'is_active', 'order', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show')
-    list_filter = ('network', 'position', 'is_active')
-    list_editable = ('is_active', 'order', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show')
+    list_display = ('name', 'network', 'position', 'is_active', 'order', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show', 'use_for_android')
+    list_filter = ('network', 'position', 'is_active', 'use_for_android')
+    list_editable = ('is_active', 'order', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show', 'use_for_android')
     search_fields = ('name',)
     ordering = ('order',)
     fieldsets = (
         (None, {
-            'fields': ('name', 'network', 'position', 'ad_code', 'is_active', 'order')
+            'fields': ('name', 'network', 'position', 'ad_code', 'is_active', 'order', 'use_for_android')
         }),
         ('Targeting', {
             'fields': ('allowed_pages', 'clicks_required_before_show', 'pages_viewed_required_before_show', 'max_impressions_per_day')
