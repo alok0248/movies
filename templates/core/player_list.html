@@ -49,6 +49,12 @@
                         {% endif %}
                     </td>
                     <td>
+                        <form method="post" action="{% url 'toggle_player' player.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm {% if player.is_active %}btn-secondary{% else %}btn-success{% endif %} me-2">
+                                {% if player.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
                         <a href="{% url 'player_edit' player.id %}" class="btn btn-sm btn-warning me-2">Edit</a>
                         <a href="{% url 'player_delete' player.id %}" class="btn btn-sm btn-danger">Delete</a>
                     </td>

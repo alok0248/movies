@@ -3066,7 +3066,7 @@ def extract_video_url(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def player_list(request):
-    players = PlayerConfiguration.objects.all()
+    players = PlayerConfiguration.objects.all().order_by('order', 'id')
     return render(request, 'core/player_list.html', {'players': players})
 
 
@@ -3108,6 +3108,17 @@ def player_delete(request, player_id):
         player.delete()
         return redirect('player_list')
     return render(request, 'core/player_delete.html', {'player': player})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def toggle_player(request, player_id):
+    if request.method == 'POST':
+        player = get_object_or_404(PlayerConfiguration, id=player_id)
+        player.is_active = not player.is_active
+        player.save()
+        return redirect('player_list')
+    return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
 @login_required

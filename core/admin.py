@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit
 
 
 @admin.register(AndroidApp)
@@ -159,3 +159,11 @@ class WebsiteVisitorVisitAdmin(admin.ModelAdmin):
     list_filter = ('visited_at', 'is_bot')
     search_fields = ('visitor__visitor_id', 'path', 'ip_address')
     readonly_fields = ('visited_at',)
+
+
+@admin.register(PlayerConfiguration)
+class PlayerConfigurationAdmin(admin.ModelAdmin):
+    list_display = ('name', 'media_type', 'is_active', 'order', 'use_for_android')
+    list_filter = ('media_type', 'is_active', 'use_for_android')
+    list_editable = ('order', 'is_active')
+    search_fields = ('name',)

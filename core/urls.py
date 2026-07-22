@@ -29,6 +29,7 @@ urlpatterns = [
     path('admin-dashboard/players/create/', views.player_create, name='player_create'),
     path('admin-dashboard/players/<int:player_id>/edit/', views.player_edit, name='player_edit'),
     path('admin-dashboard/players/<int:player_id>/delete/', views.player_delete, name='player_delete'),
+    path('admin-dashboard/players/<int:player_id>/toggle/', views.toggle_player, name='toggle_player'),
     path('admin-dashboard/navbar-items/', views.navbar_item_list, name='navbar_item_list'),
     path('admin-dashboard/navbar-items/create/', views.navbar_item_create, name='navbar_item_create'),
     path('admin-dashboard/navbar-items/<int:item_id>/edit/', views.navbar_item_edit, name='navbar_item_edit'),
