@@ -148,11 +148,13 @@ CACHES = {
 # Login URL
 LOGIN_URL = '/login/'
 
-# Security settings for production
+# Security settings for production (configurable via environment variables)
 if ENV == 'prod':
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1', 't')
+    SESSION_COOKIE_SECURE = os.environ.get('DJANGO_SESSION_COOKIE_SECURE', 'True').lower() in ('true', '1', 't')
+    CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'True').lower() in ('true', '1', 't')
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
+    X_FRAME_OPTIONS = os.environ.get('DJANGO_X_FRAME_OPTIONS', 'ALLOWALL')
+else:
+    X_FRAME_OPTIONS = 'ALLOWALL'
