@@ -202,3 +202,24 @@ class WebsiteVisitorTrackingMiddleware:
             )
         
         return response
+
+
+class ContentSecurityPolicyMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        # Set a permissive CSP that allows embedding external video players
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https://image.tmdb.org https://*.codespecters.com; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-src 'self' https://*.vidking.net https://*.vidcore.net https://*.codespecters.com https://*.2embed.cc https://*.vidsrc.me https://*.vidsrc.cc https://*.vidsrc.net https://*.vidsrc.xyz https://*.multiembed.mov https://*.2embed.to https://*.embed.su; "
+            "frame-ancestors 'self'; "
+        )
+        response["Content-Security-Policy"] = csp
+        return response

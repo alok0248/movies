@@ -394,13 +394,17 @@ function getPlayerContent(playerConfig, mediaType, mediaId, season, episode, imd
             if (episode !== undefined && episode !== null) {
                 html = html.replaceAll('{episode}', episode);
             }
+            // Sanitize: remove backticks and extra whitespace around attributes
+            html = html.replace(/`/g, '');
+            html = html.replace(/src\s*=\s*['"]\s*/g, 'src="');
+            html = html.replace(/\s*['"]\s*(?=\s*>|\/>)/g, '"');
             console.log('Custom Player HTML:', html);
             return { type: 'html', content: html };
         }
     }
     
     // Otherwise URL mode
-    return { type: 'url', content: getPlayerUrl(playerConfig, mediaType, mediaId, season, episode, imdbId) };
+    return { type: 'url', content: getPlayerUrl(playerConfig, mediaType, mediaId, season, episode, imdbId).replace(/`/g, '').trim() };
 }
 
 function loadMoviePlayer() {
