@@ -38,7 +38,9 @@ class SiteSettingsForm(forms.ModelForm):
             'tmdb_db_password',
             'hide_live_tv',
             'bot_ips',
-            'bot_user_agents'
+            'bot_user_agents',
+            'adsense_verification_meta',
+            'adsense_client_id'
         ]
         widgets = {
             'blocked_urls': forms.Textarea(attrs={'rows': 6, 'cols': 80, 'class': 'form-control', 'title': 'List of URLs to block (one per line), or "all" to block everything except admin pages'}),
@@ -73,6 +75,8 @@ class SiteSettingsForm(forms.ModelForm):
             'tmdb_db_user': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
             'tmdb_db_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control', 'placeholder': 'tmdb123!'}),
             'hide_live_tv': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to hide Live TV from navigation'}),
+            'adsense_verification_meta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'googlea1b2c3d4e5f6a7b8', 'title': 'Enter the Google AdSense verification meta tag content (the value of the "content" attribute)'}),
+            'adsense_client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ca-pub-1234567890123456', 'title': 'Enter your Google AdSense client ID'}),
         }
 
 

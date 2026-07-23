@@ -136,6 +136,10 @@ class SiteSettings(models.Model):
     
     # Bot Tracking
     bot_ips = models.TextField(blank=True, null=True, help_text="Comma-separated list of IP addresses for our bot (e.g., 192.168.1.1,10.0.0.1)")
+    
+    # Google AdSense
+    adsense_verification_meta = models.CharField(max_length=200, blank=True, null=True, help_text="Google AdSense verification meta tag content (e.g., abcdef123456)")
+    adsense_client_id = models.CharField(max_length=100, blank=True, null=True, help_text="Google AdSense client ID (e.g., ca-pub-1234567890123456)")
     bot_user_agents = models.TextField(blank=True, null=True, help_text="Comma-separated list of user-agent strings for our bot")
 
     class Meta:
