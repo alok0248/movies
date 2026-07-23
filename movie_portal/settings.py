@@ -6,12 +6,6 @@ from db_config import get_db_config
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load local settings first (if exists) for environment-specific config
-try:
-    from movie_portal.settings_local import *
-except ImportError:
-    pass
-
 # Environment (default to 'dev' if not set)
 ENV = os.environ.get('DJANGO_ENV', 'dev')
 
@@ -151,11 +145,20 @@ LOGIN_URL = '/login/'
 
 # Security settings for production (configurable via environment variables)
 if ENV == 'prod':
-    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1', 't')
-    SESSION_COOKIE_SECURE = os.environ.get('DJANGO_SESSION_COOKIE_SECURE', 'True').lower() in ('true', '1', 't')
-    CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'True').lower() in ('true', '1', 't')
+    SECURE_SSL_REDIRECT = False  # Disable for ngrok
+    SESSION_COOKIE_SECURE = False  # Disable for ngrok
+    CSRF_COOKIE_SECURE = False  # Disable for ngrok
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = os.environ.get('DJANGO_X_FRAME_OPTIONS', 'ALLOWALL')
 else:
     X_FRAME_OPTIONS = 'ALLOWALL'
+
+# Trust the proxy (nginx)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Load local settings LAST (if exists) for environment-specific config
+try:
+    from movie_portal.settings_local import *
+except ImportError:
+    pass
