@@ -3,9 +3,9 @@
 {% block content %}
 <div class="container mt-4">
     <h1 class="mb-4">Delete Ad</h1>
-    <div class="card" style="background: #111827; border: 1px solid rgba(255,255,255,0.1);">
+    <div class="card">
         <div class="card-body">
-            <p class="mb-4" style="color: #fff;">Are you sure you want to delete the ad "{{ ad.name }}"?</p>
+            <p class="mb-4">Are you sure you want to delete the ad "{{ ad.name }}"?</p>
             <form method="post">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-danger me-2">Yes, Delete</button>

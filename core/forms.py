@@ -14,8 +14,6 @@ class SiteSettingsForm(forms.ModelForm):
             'text_size',
             'theme_style',
             'font_family',
-            'enable_sidebar_ads',
-            'sidebar_ads_code',
             'brand_name',
             'brand_tagline',
             'brand_color',
@@ -43,7 +41,6 @@ class SiteSettingsForm(forms.ModelForm):
             'bot_user_agents'
         ]
         widgets = {
-            'sidebar_ads_code': forms.Textarea(attrs={'rows': 10, 'cols': 80, 'class': 'form-control', 'title': 'Enter HTML/JS code for sidebar ads to display on the site'}),
             'blocked_urls': forms.Textarea(attrs={'rows': 6, 'cols': 80, 'class': 'form-control', 'title': 'List of URLs to block (one per line), or "all" to block everything except admin pages'}),
             'bot_ips': forms.Textarea(attrs={'rows': 4, 'cols': 80, 'class': 'form-control', 'placeholder': '192.168.1.10, 10.0.0.5', 'title': 'Comma-separated or line-separated bot IP addresses to classify as bot traffic'}),
             'bot_user_agents': forms.Textarea(attrs={'rows': 4, 'cols': 80, 'class': 'form-control', 'placeholder': 'Googlebot, MyCustomCrawler', 'title': 'Comma-separated or line-separated user-agent fragments to classify as bot traffic'}),
@@ -60,7 +57,6 @@ class SiteSettingsForm(forms.ModelForm):
             'text_size': forms.Select(attrs={'class': 'form-select', 'title': 'Select the size of general text on the site'}),
             'theme_style': forms.Select(attrs={'class': 'form-select', 'title': 'Select a pre-defined theme style for your site'}),
             'font_family': forms.Select(attrs={'class': 'form-select', 'title': 'Select the font family to use across the site'}),
-            'enable_sidebar_ads': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to enable sidebar ads on the site'}),
             'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to enable URL blocking for non-admin pages'}),
             'redirect_url': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter the URL to redirect blocked requests to'}),
             'email_host': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP server (e.g., smtp.gmail.com)'}),
@@ -186,19 +182,6 @@ class PlayerSettingsForm(forms.ModelForm):
         widgets = {
             'active_movie_player': forms.Select(attrs={'class': 'form-select'}),
             'active_tv_player': forms.Select(attrs={'class': 'form-select'}),
-        }
-
-
-class AdsSettingsForm(forms.ModelForm):
-    class Meta:
-        model = SiteSettings
-        fields = ['enable_ads', 'enable_sidebar_ads', 'sidebar_ads_code', 'ads_head_script', 'ads_body_script']
-        widgets = {
-            'enable_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'enable_sidebar_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'sidebar_ads_code': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
-            'ads_head_script': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
-            'ads_body_script': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
         }
 
 
@@ -420,17 +403,14 @@ class NavbarItemForm(forms.ModelForm):
 class AdForm(forms.ModelForm):
     class Meta:
         model = Ad
-        fields = ['name', 'network', 'position', 'ad_code', 'is_active', 'order', 'allowed_pages', 'max_impressions_per_day', 'clicks_required_before_show', 'pages_viewed_required_before_show', 'use_for_android']
+        fields = ['name', 'provider', 'script', 'clicks_required', 'is_active', 'use_for_android', 'order']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter ad name'}),
-            'network': forms.Select(attrs={'class': 'form-select'}),
-            'position': forms.Select(attrs={'class': 'form-select'}),
-            'ad_code': forms.Textarea(attrs={'rows': 10, 'class': 'form-control', 'placeholder': 'Paste your ad HTML/JS code here'}),
+            'provider': forms.Select(attrs={'class': 'form-select'}),
+            'script': forms.Textarea(attrs={'rows': 8, 'class': 'form-control', 'placeholder': 'Enter ad script code'}),
+            'clicks_required': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Number of clicks required'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'order': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Display order'}),
-            'allowed_pages': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Comma separated list of page paths, e.g., /, /movies/, /series/'}),
-            'max_impressions_per_day': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Max impressions per user per day (0 for unlimited)'}),
-            'clicks_required_before_show': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Clicks required before showing'}),
-            'pages_viewed_required_before_show': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Pages viewed required before showing'}),
             'use_for_android': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'order': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Display order'}),
         }
+

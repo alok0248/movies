@@ -16,13 +16,6 @@
                 </div>
             </div>
 
-            {% if title == 'Ads Settings' %}
-                <div class="mb-4">
-                    <a href="{% url 'ad_list' %}" class="btn btn-warning px-4">
-                        <i class="fas fa-list me-2"></i> Manage Ads
-                    </a>
-                </div>
-            {% endif %}
             <form method="post" class="needs-validation" novalidate>
                 {% csrf_token %}
                 <div class="card bg-dark border-0 mb-4">

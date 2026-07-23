@@ -1,243 +1,260 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1 class="mb-4" style="color: #fff;">{{ action }} Ad</h1>
-    <div class="d-flex justify-content-between mb-4">
-        <a href="{% url 'ad_list' %}" class="btn btn-secondary">&larr; Back to Ads</a>
+<style>
+    .form-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 3rem 1rem;
+    }
+    .page-header {
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .page-subtitle {
+        color: #94a3b8;
+        margin: 0.35rem 0 0;
+        font-size: 0.98rem;
+    }
+    .panel-card {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 14px;
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.32);
+        overflow: hidden;
+    }
+    .panel-body {
+        padding: 1.5rem;
+    }
+    .section-card {
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+        background: rgba(15, 23, 42, 0.55);
+    }
+    .section-card.section-general {
+        border-color: rgba(56, 189, 248, 0.22);
+        background: linear-gradient(180deg, rgba(8, 47, 73, 0.30), rgba(15, 23, 42, 0.65));
+    }
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 0.35rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+    .section-subtitle {
+        color: #94a3b8;
+        font-size: 0.92rem;
+        margin-bottom: 1rem;
+    }
+    .section-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #fff;
+    }
+    .badge-general { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #e2e8f0;
+    }
+    .form-control,
+    .form-select,
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.96)) !important;
+        background-color: #0f172a !important;
+        border: 1px solid rgba(71, 85, 105, 0.75) !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+        border-radius: 10px !important;
+        padding: 0.8rem 0.95rem;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    textarea.form-control,
+    textarea {
+        min-height: 132px;
+        line-height: 1.55;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.88rem;
+    }
+    .form-control::placeholder,
+    textarea::placeholder,
+    input[type="text"]::placeholder,
+    input[type="number"]::placeholder {
+        color: #7c8aa0 !important;
+        -webkit-text-fill-color: #7c8aa0 !important;
+    }
+    .form-control:hover,
+    .form-select:hover,
+    input[type="text"]:hover,
+    input[type="number"]:hover,
+    textarea:hover,
+    select:hover {
+        border-color: rgba(100, 116, 139, 0.95) !important;
+        background: linear-gradient(180deg, rgba(7, 12, 27, 0.98), rgba(15, 23, 42, 0.98)) !important;
+        background-color: #111827 !important;
+    }
+    .form-control:focus,
+    .form-select:focus,
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus,
+    select:focus {
+        border-color: #6366f1 !important;
+        background: linear-gradient(180deg, rgba(9, 14, 30, 1), rgba(17, 24, 39, 1)) !important;
+        background-color: #111827 !important;
+        box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+    }
+    .form-select option {
+        background: #0f172a;
+        color: #f8fafc;
+    }
+    .form-check-input {
+        background: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        width: 1.1rem;
+        height: 1.1rem;
+    }
+    .form-check-input:checked {
+        background-color: #6366f1;
+        border-color: #6366f1;
+    }
+    .form-check-label {
+        color: #cbd5e1;
+        font-weight: 500;
+    }
+    .helper-box {
+        margin-top: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.72);
+        color: #cbd5e1;
+        font-size: 0.92rem;
+    }
+    .helper-box strong {
+        color: #f8fafc;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        border: none;
+        padding: 0.8rem 2rem;
+        font-weight: 700;
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+    }
+    .btn-secondary {
+        background: rgba(51, 65, 85, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        color: #f8fafc;
+        border-radius: 10px;
+    }
+    .btn-secondary:hover {
+        background: rgba(71, 85, 105, 0.95);
+        color: #fff;
+    }
+</style>
+
+<div class="form-container">
+    <div class="page-header">
+        <div>
+            <h1 class="mb-0" style="font-weight:800; color:#f8fafc;">{{ action }} Ad</h1>
+            <p class="page-subtitle">Configure ad provider, script, and display settings.</p>
+        </div>
+        <a href="{% url 'ad_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Ads
+        </a>
     </div>
-    
-    <div class="row g-4">
-        <div class="col-12 col-lg-10">
-            <div class="card" style="background: linear-gradient(135deg, #1f2937 0%, #111827 100%); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 40px rgba(0,0,0,0.4);">
-                <div class="card-body p-4">
-                    <form method="post">
-                        {% csrf_token %}
-                        
-                        <!-- Basic Settings Section -->
-                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
-                            <i class="fas fa-cog me-2" style="color: #8b5cf6;"></i> Basic Settings
-                        </h4>
-                        
-                        <div class="row g-3 mb-4">
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.name.id_for_label }}" class="form-label text-white">
-                                    {{ form.name.label }}
-                                </label>
-                                {{ form.name }}
-                                {% if form.name.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.name.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.order.id_for_label }}" class="form-label text-white">
-                                    {{ form.order.label }}
-                                </label>
-                                {{ form.order }}
-                                {% if form.order.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.order.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.network.id_for_label }}" class="form-label text-white">
-                                    {{ form.network.label }}
-                                </label>
-                                {{ form.network }}
-                                {% if form.network.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.network.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.position.id_for_label }}" class="form-label text-white">
-                                    {{ form.position.label }}
-                                </label>
-                                {{ form.position }}
-                                {% if form.position.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.position.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
+
+    <div class="panel-card">
+        <div class="panel-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="section-card section-general">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">1</span>
+                        <span>Ad Settings</span>
+                    </div>
+                    <div class="section-subtitle">Basic ad identity, provider, and visibility settings.</div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Ad Name</label>
+                            {{ form.name }}
                         </div>
-
-                        <!-- Ad Code Section -->
-                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
-                            <i class="fas fa-code me-2" style="color: #10b981;"></i> Ad Code
-                        </h4>
-
-                        <div class="mb-4">
-                            <label for="{{ form.ad_code.id_for_label }}" class="form-label text-white">
-                                {{ form.ad_code.label }}
-                            </label>
-                            {{ form.ad_code }}
-                            {% if form.ad_code.errors %}
-                                <div class="text-danger small mt-1">
-                                    {% for error in form.ad_code.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
+                        <div class="col-md-6">
+                            <label for="{{ form.provider.id_for_label }}" class="form-label">Provider</label>
+                            {{ form.provider }}
                         </div>
+                    </div>
 
-                        <!-- Targeting & Limits -->
-                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
-                            <i class="fas fa-bullseye me-2" style="color: #06b6d4;"></i> Targeting & Limits
-                        </h4>
-
-                        <div class="row g-3 mb-4">
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.allowed_pages.id_for_label }}" class="form-label text-white">
-                                    {{ form.allowed_pages.label }}
-                                </label>
-                                {{ form.allowed_pages }}
-                                {% if form.allowed_pages.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.allowed_pages.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.max_impressions_per_day.id_for_label }}" class="form-label text-white">
-                                    {{ form.max_impressions_per_day.label }}
-                                </label>
-                                {{ form.max_impressions_per_day }}
-                                {% if form.max_impressions_per_day.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.max_impressions_per_day.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.clicks_required_before_show.id_for_label }}" class="form-label text-white">
-                                    {{ form.clicks_required_before_show.label }}
-                                </label>
-                                {{ form.clicks_required_before_show }}
-                                {% if form.clicks_required_before_show.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.clicks_required_before_show.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label for="{{ form.pages_viewed_required_before_show.id_for_label }}" class="form-label text-white">
-                                    {{ form.pages_viewed_required_before_show.label }}
-                                </label>
-                                {{ form.pages_viewed_required_before_show }}
-                                {% if form.pages_viewed_required_before_show.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.pages_viewed_required_before_show.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.clicks_required.id_for_label }}" class="form-label">Clicks Required</label>
+                            {{ form.clicks_required }}
                         </div>
-
-                        <!-- Toggle Settings -->
-                        <h4 class="text-white mb-4 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 0.5rem;">
-                            <i class="fas fa-toggle-on me-2" style="color: #ec4899;"></i> Toggles
-                        </h4>
-
-                        <div class="row g-3 mb-4">
-                            <div class="col-12 col-md-6">
-                                <div class="form-check">
-                                    {{ form.is_active }}
-                                    <label for="{{ form.is_active.id_for_label }}" class="form-check-label text-white">
-                                        {{ form.is_active.label }}
-                                    </label>
-                                </div>
-                                {% if form.is_active.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.is_active.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <div class="form-check">
-                                    {{ form.use_for_android }}
-                                    <label for="{{ form.use_for_android.id_for_label }}" class="form-check-label text-white">
-                                        {{ form.use_for_android.label }}
-                                    </label>
-                                </div>
-                                {% if form.use_for_android.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.use_for_android.errors %}{{ error }}{% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.order.id_for_label }}" class="form-label">Display Order</label>
+                            {{ form.order }}
                         </div>
+                    </div>
 
-                        <!-- Submit Buttons -->
-                        <div class="d-flex gap-3 mt-5 pt-3" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
-                            <button type="submit" class="btn btn-primary btn-lg px-5" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; border-radius: 12px; font-weight: 700;">
-                                <i class="fas fa-save me-2"></i> Save Ad
-                            </button>
-                            <a href="{% url 'ad_list' %}" class="btn btn-outline-light btn-lg px-5" style="border-radius: 12px; border-width: 2px;">
-                                Cancel
-                            </a>
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0 d-flex align-items-center">
+                            {{ form.is_active }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.is_active.id_for_label }}">Active</label>
                         </div>
-                    </form>
+                        <div class="col-md-6 d-flex align-items-center">
+                            {{ form.use_for_android }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.use_for_android.id_for_label }}">Use for Android</label>
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <div class="section-card section-general">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">2</span>
+                        <span>Ad Script</span>
+                    </div>
+                    <div class="section-subtitle">Paste your ad provider's script code here.</div>
+
+                    <div>
+                        <label for="{{ form.script.id_for_label }}" class="form-label">Ad Script</label>
+                        {{ form.script }}
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">Save Ad</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
-
-<style>
-    /* Form styles */
-    .form-control, .form-select, textarea {
-        background-color: rgba(0,0,0,0.5);
-        border: 1px solid rgba(255,255,255,0.15);
-        color: #ffffff;
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-    }
-
-    .form-control:focus, .form-select:focus, textarea:focus {
-        background-color: rgba(0,0,0,0.7);
-        border-color: #8b5cf6;
-        box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25);
-        color: #ffffff;
-    }
-
-    .form-control::placeholder {
-        color: #9ca3af;
-    }
-
-    .form-label {
-        font-weight: 600;
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .form-check-input {
-        background-color: rgba(0,0,0,0.5);
-        border-color: rgba(255,255,255,0.2);
-        width: 1.25rem;
-        height: 1.25rem;
-        cursor: pointer;
-    }
-
-    .form-check-input:checked {
-        background-color: #8b5cf6;
-        border-color: #8b5cf6;
-    }
-
-    .form-check-input:focus {
-        border-color: #8b5cf6;
-        box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25);
-    }
-
-    .form-check-label {
-        color: #ffffff;
-        font-weight: 500;
-        cursor: pointer;
-        margin-left: 0.5rem;
-        font-size: 1rem;
-    }
-</style>
 {% endblock %}

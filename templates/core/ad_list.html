@@ -14,8 +14,8 @@
                 <tr>
                     <th>Order</th>
                     <th>Name</th>
-                    <th>Network</th>
-                    <th>Position</th>
+                    <th>Provider</th>
+                    <th>Clicks Required</th>
                     <th>Active</th>
                     <th>Use for Android</th>
                     <th>Actions</th>
@@ -26,8 +26,8 @@
                 <tr>
                     <td>{{ ad.order }}</td>
                     <td>{{ ad.name }}</td>
-                    <td>{{ ad.get_network_display }}</td>
-                    <td>{{ ad.get_position_display }}</td>
+                    <td>{{ ad.get_provider_display }}</td>
+                    <td>{{ ad.clicks_required }}</td>
                     <td>
                         {% if ad.is_active %}
                             <span class="badge bg-success">Yes</span>

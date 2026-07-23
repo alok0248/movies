@@ -76,22 +76,6 @@
         </div>
         
         <div class="col-12 col-md-6 col-lg-4">
-            <a href="{% url 'ads_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #3e2d1b 0%, #1e293b 100%);">
-                <div class="card-header border-0 d-flex justify-content-between align-items-center" style="background: rgba(255,255,255,0.05);">
-                    <h5 class="mb-0 text-white">
-                        <i class="fas fa-ad me-2 text-yellow-400"></i> Ads
-                    </h5>
-                    <div class="form-check form-switch m-0" onclick="event.preventDefault(); event.stopPropagation();">
-                        <input class="form-check-input" type="checkbox" id="ads-toggle" {% if site_settings.enable_sidebar_ads %}checked{% endif %} onchange="toggleAds(this); event.stopPropagation();" onclick="event.stopPropagation();">
-                    </div>
-                </div>
-                <div class="card-body text-white">
-                    <p class="mb-0" style="color: #a0a0b0;">Enable/disable ads and configure sidebar ad code</p>
-                </div>
-            </a>
-        </div>
-        
-        <div class="col-12 col-md-6 col-lg-4">
             <a href="{% url 'url_blocking_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #2e1a1a 0%, #1e293b 100%);">
                 <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
                     <h5 class="mb-0 text-white">
@@ -154,18 +138,18 @@
         </div>
         
         <div class="col-12 col-md-6 col-lg-4">
-            <a href="{% url 'ad_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #3e2d1b 0%, #1e293b 100%);">
+            <a href="{% url 'ad_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #312e81 0%, #1e293b 100%);">
                 <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
                     <h5 class="mb-0 text-white">
-                        <i class="fas fa-ad me-2 text-yellow-400"></i> Ads
+                        <i class="fas fa-ad me-2 text-indigo-400"></i> Ads
                     </h5>
                 </div>
                 <div class="card-body text-white">
-                    <p class="mb-0" style="color: #a0a0b0;">Manage ad configurations, add, edit, delete ads</p>
+                    <p class="mb-0" style="color: #a0a0b0;">Manage ad providers, scripts, and display rules</p>
                 </div>
             </a>
         </div>
-
+        
         <div class="col-12 col-md-6 col-lg-4">
             <a href="{% url 'provider_item_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1f2937 0%, #111827 100%);">
                 <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
@@ -222,30 +206,6 @@
 </div>
 
 <script>
-function toggleAds(toggle) {
-    fetch("{% url 'toggle_ads' %}", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: 'enabled=' + encodeURIComponent(toggle.checked)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            toggle.checked = !toggle.checked;
-            alert(data.message || 'Failed to update ads setting');
-            return;
-        }
-        toggle.checked = !!data.enable_sidebar_ads;
-    })
-    .catch(() => {
-        toggle.checked = !toggle.checked;
-        alert('Failed to update ads setting');
-    });
-}
-
 function toggleFooter(toggle) {
     fetch("{% url 'toggle_footer' %}", {
         method: 'POST',

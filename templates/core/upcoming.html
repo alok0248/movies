@@ -31,62 +31,16 @@
                 </div>
                 
                 {% if releases.movies %}
-                    <div class="mb-4">
-                        <h4 class="text-danger mb-3 font-weight-bold"><i class="fas fa-film mr-2"></i>Movies</h4>
-                        <div class="row">
-                            {% for movie in releases.movies %}
-                                <div class="col-md-3 col-sm-6 col-12 mb-4">
-                                    <a href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}" class="text-decoration-none">
-                                        <div class="card bg-dark text-white border-0 rounded-lg overflow-hidden shadow-lg hover-scale">
-                                            {% if movie.poster_path %}
-                                                <img src="{{ settings.TMDB_IMAGE_BASE_URL }}{{ movie.poster_path }}" class="card-img-top" alt="{{ movie.title }}" style="height: 320px; object-fit: cover;">
-                                            {% else %}
-                                                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 320px;">
-                                                    <i class="fas fa-film fa-3x text-white-50"></i>
-                                                </div>
-                                            {% endif %}
-                                            <div class="card-body p-3">
-                                                <h5 class="card-title font-weight-bold text-truncate mb-1">{{ movie.title }}</h5>
-                                                <div class="d-flex align-items-center text-muted">
-                                                    <i class="fas fa-star text-warning mr-1"></i>
-                                                    <span>{{ movie.vote_average|floatformat:1 }}/10</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
-                            {% endfor %}
-                        </div>
+                    <h4 class="section-title"><i class="fas fa-film mr-2"></i>Movies</h4>
+                    <div class="movie-grid">
+                        {% include 'core/_movie_cards.html' with movies=releases.movies %}
                     </div>
                 {% endif %}
                 
                 {% if releases.series %}
-                    <div>
-                        <h4 class="text-success mb-3 font-weight-bold"><i class="fas fa-tv mr-2"></i>Series</h4>
-                        <div class="row">
-                            {% for show in releases.series %}
-                                <div class="col-md-3 col-sm-6 col-12 mb-4">
-                                    <a href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' show.id %}{% else %}{% url 'series_detail' show.slug %}{% endif %}" class="text-decoration-none">
-                                        <div class="card bg-dark text-white border-0 rounded-lg overflow-hidden shadow-lg hover-scale">
-                                            {% if show.poster_path %}
-                                                <img src="{{ settings.TMDB_IMAGE_BASE_URL }}{{ show.poster_path }}" class="card-img-top" alt="{{ show.name }}" style="height: 320px; object-fit: cover;">
-                                            {% else %}
-                                                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 320px;">
-                                                    <i class="fas fa-tv fa-3x text-white-50"></i>
-                                                </div>
-                                            {% endif %}
-                                            <div class="card-body p-3">
-                                                <h5 class="card-title font-weight-bold text-truncate mb-1">{{ show.name }}</h5>
-                                                <div class="d-flex align-items-center text-muted">
-                                                    <i class="fas fa-star text-warning mr-1"></i>
-                                                    <span>{{ show.vote_average|floatformat:1 }}/10</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
-                            {% endfor %}
-                        </div>
+                    <h4 class="section-title"><i class="fas fa-tv mr-2"></i>Series</h4>
+                    <div class="series-grid">
+                        {% include 'core/_series_cards.html' with series=releases.series %}
                     </div>
                 {% endif %}
             </div>

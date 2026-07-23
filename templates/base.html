@@ -6,9 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ site_settings.brand_name }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    {% if site_settings.enable_ads and site_settings.ads_head_script %}
-        {{ site_settings.ads_head_script|safe }}
-    {% endif %}
     <style>
         :root {
             --brand-color: {{ theme_primary }};
@@ -1171,32 +1168,22 @@
     </div>
 
     <div class="content-wrapper">
-        {% if 'above_content' in ads_by_position %}
-            <div class="ad-container-above-content">
-                {% for ad in ads_by_position.above_content %}
-                    {{ ad.ad_code|safe }}
-                {% endfor %}
-            </div>
-        {% endif %}
         {% block content %}{% endblock %}
-        {% if 'below_content' in ads_by_position %}
-            <div class="ad-container-below-content">
-                {% for ad in ads_by_position.below_content %}
-                    {{ ad.ad_code|safe }}
-                {% endfor %}
-            </div>
-        {% endif %}
     </div>
-
-    {% if site_settings.footer_enabled and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
-    {% block footer %}
-    {% if 'footer' in ads_by_position %}
-        <div class="ad-container-footer">
-            {% for ad in ads_by_position.footer %}
-                {{ ad.ad_code|safe }}
+    
+    <!-- Display eligible ads -->
+    {% if eligible_ads and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+        <div class="container mt-4 mb-4">
+            {% for ad in eligible_ads %}
+                <div class="ad-container mb-4 p-3 rounded" style="border: 1px solid var(--border-color); background: var(--surface);">
+                    {{ ad.script|safe }}
+                </div>
             {% endfor %}
         </div>
     {% endif %}
+
+    {% if site_settings.footer_enabled and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    {% block footer %}
     <footer class="site-footer">
         <div class="container-fluid px-0">
             <div class="row g-4 align-items-start">
@@ -1379,6 +1366,23 @@
     </div>
 
     <script>
+        // Track user clicks for ad targeting
+        let lastClickTime = 0;
+        document.addEventListener('click', function() {
+            const now = Date.now();
+            // Throttle clicks to once per second to prevent abuse
+            if (now - lastClickTime > 1000) {
+                lastClickTime = now;
+                fetch('{% url "track_user_click" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+            }
+        });
+
         function applyTheme(theme) {
             const normalizedTheme = theme === 'light' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', normalizedTheme);
@@ -2129,20 +2133,6 @@
             });
         }
 
-        // Track user clicks for ad targeting
-        async function trackUserClick() {
-            try {
-                await fetch('{% url "track_user_click" %}', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken')
-                    }
-                });
-            } catch (error) {
-                console.error('Error tracking click:', error);
-            }
-        }
-
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -2159,28 +2149,11 @@
         }
 
         // Track clicks on any interactive elements (but not on admin pages)
-        const currentPath = window.location.pathname;
-        const isAdminPage = currentPath.startsWith('/admin-dashboard/') || currentPath.startsWith('/ajax/');
-        document.addEventListener('click', (e) => {
-            if (isAdminPage) {
-                return;
-            }
-            // Don't track clicks on certain elements (like the ad itself maybe?)
-            const target = e.target;
-            const ignored = target.closest('.ad-container-above-content, .ad-container-below-content, .ad-container-footer, .theme-toggle');
-            if (!ignored) {
-                trackUserClick();
-            }
-        });
-
         document.addEventListener('DOMContentLoaded', () => {
             updateAllWatchlistButtons();
             initCardHoverTitles();
         });
     </script>
-    {% if site_settings.enable_ads and site_settings.ads_body_script %}
-        {{ site_settings.ads_body_script|safe }}
-    {% endif %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}
 </body>
