@@ -2307,6 +2307,9 @@ def android_app_endpoint(request, app_slug):
             'name': ad.name,
             'provider': ad.provider,
             'script': ad.script,
+            'image_url': ad.image_url,
+            'link_url': ad.link_url,
+            'alt_text': ad.alt_text,
             'clicks_required': ad.clicks_required,
             'order': ad.order
         })

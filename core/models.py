@@ -157,12 +157,16 @@ class SiteSettings(models.Model):
 class Ad(models.Model):
     PROVIDER_CHOICES = [
         ('google_adsense', 'Google AdSense'),
-        ('custom', 'Custom Script'),
+        ('custom_script', 'Custom Script'),
+        ('custom_image', 'Custom Image/Banner'),
     ]
     
     name = models.CharField(max_length=255, help_text="Name of the ad for internal use")
-    provider = models.CharField(max_length=50, choices=PROVIDER_CHOICES, default='custom')
-    script = models.TextField(help_text="Ad script code")
+    provider = models.CharField(max_length=50, choices=PROVIDER_CHOICES, default='custom_script')
+    script = models.TextField(blank=True, null=True, help_text="Ad script code (for Custom Script and Google AdSense)")
+    image_url = models.URLField(blank=True, null=True, help_text="Image URL for custom banner ad")
+    link_url = models.URLField(blank=True, null=True, help_text="Destination URL for custom banner ad")
+    alt_text = models.CharField(max_length=255, blank=True, null=True, help_text="Alt text for custom banner ad image")
     clicks_required = models.IntegerField(default=0, help_text="Number of user clicks required before showing this ad")
     is_active = models.BooleanField(default=True, help_text="Whether this ad is active and can be shown")
     use_for_android = models.BooleanField(default=False, help_text="Include this ad in Android app responses")

@@ -237,7 +237,7 @@
                     </div>
                 </div>
 
-                <div class="section-card section-general">
+                <div id="script-section" class="section-card section-general">
                     <div class="section-title">
                         <span class="section-badge badge-general">2</span>
                         <span>Ad Script</span>
@@ -249,6 +249,52 @@
                         {{ form.script }}
                     </div>
                 </div>
+
+                <div id="image-section" class="section-card section-general" style="display: none;">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">2</span>
+                        <span>Custom Banner Ad</span>
+                    </div>
+                    <div class="section-subtitle">Configure your custom image banner ad.</div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12 mb-3">
+                            <label for="{{ form.image_url.id_for_label }}" class="form-label">Banner Image URL</label>
+                            {{ form.image_url }}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.link_url.id_for_label }}" class="form-label">Destination URL</label>
+                            {{ form.link_url }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.alt_text.id_for_label }}" class="form-label">Image Alt Text</label>
+                            {{ form.alt_text }}
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const providerSelect = document.getElementById('{{ form.provider.id_for_label }}');
+                        const scriptSection = document.getElementById('script-section');
+                        const imageSection = document.getElementById('image-section');
+                        
+                        function toggleSections() {
+                            if (providerSelect.value === 'custom_image') {
+                                scriptSection.style.display = 'none';
+                                imageSection.style.display = 'block';
+                            } else {
+                                scriptSection.style.display = 'block';
+                                imageSection.style.display = 'none';
+                            }
+                        }
+                        
+                        providerSelect.addEventListener('change', toggleSections);
+                        toggleSections();  // Initial state
+                    });
+                </script>
 
                 <div class="mt-4 d-flex justify-content-end">
                     <button type="submit" class="btn btn-primary">Save Ad</button>

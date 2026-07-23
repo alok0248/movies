@@ -1179,7 +1179,19 @@
         <div class="container mt-4 mb-4">
             {% for ad in eligible_ads %}
                 <div class="ad-container mb-4 p-3 rounded" style="border: 1px solid var(--border-color); background: var(--surface);">
-                    {{ ad.script|safe }}
+                    {% if ad.provider == 'custom_image' %}
+                        {% if ad.link_url %}
+                            <a href="{{ ad.link_url }}" target="_blank" rel="noopener noreferrer">
+                        {% endif %}
+                        {% if ad.image_url %}
+                            <img src="{{ ad.image_url }}" alt="{{ ad.alt_text|default:ad.name }}" class="img-fluid w-100">
+                        {% endif %}
+                        {% if ad.link_url %}
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        {{ ad.script|safe }}
+                    {% endif %}
                 </div>
             {% endfor %}
         </div>

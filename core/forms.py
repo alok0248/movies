@@ -407,11 +407,14 @@ class NavbarItemForm(forms.ModelForm):
 class AdForm(forms.ModelForm):
     class Meta:
         model = Ad
-        fields = ['name', 'provider', 'script', 'clicks_required', 'is_active', 'use_for_android', 'order']
+        fields = ['name', 'provider', 'script', 'image_url', 'link_url', 'alt_text', 'clicks_required', 'is_active', 'use_for_android', 'order']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter ad name'}),
             'provider': forms.Select(attrs={'class': 'form-select'}),
             'script': forms.Textarea(attrs={'rows': 8, 'class': 'form-control', 'placeholder': 'Enter ad script code'}),
+            'image_url': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'Enter banner image URL'}),
+            'link_url': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'Enter destination URL'}),
+            'alt_text': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter image alt text'}),
             'clicks_required': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Number of clicks required'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'use_for_android': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
