@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import TemplateView
 from . import views
 from . import local_player
+from . import streaming_views
 
 handler404 = 'core.views.page_not_found_view'
 handler403 = 'core.views.permission_denied_view'
@@ -119,6 +120,7 @@ urlpatterns = [
     path('ajax/videasy-sources/', views.videasy_sources_view, name='videasy_sources'),
     path('api/series-extractor/', views.series_extractor_view, name='series_extractor'),
     path('ajax/player-sources/', views.player_sources_view, name='player_sources'),
+    path('ajax/player-sources-stream/', streaming_views.player_sources_stream_view, name='player_sources_stream'),
     path('ajax/player-episodes/', views.player_episodes_view, name='player_episodes'),
     path('ajax/player-subtitles/', views.player_subtitles_view, name='player_subtitles'),
     path('collection/<int:collection_id>/', views.collection_detail, name='collection_detail'),

@@ -1,163 +1,90 @@
-/* ===== Shared Player Core ===== */
-/* Source selection, dual stream, volume controls */
-var _allSources = [];
-var _mainHls = null;
-var _audioHls = null;
-var _audioEl = null;
-var _dualMode = false;
+/* ===== Shared Player Core - Streaming ===== */
+var _allSources = []; var _mainHls = null; var _audioHls = null;
+var _audioEl = null; var _dualMode = false; var _playerPlaying = false;
 
 function _playHls(url, mediaEl) {
-    if (!mediaEl || !url) return;
-    if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
-    if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-        var h = new window.Hls({maxBufferLength:60, maxMaxBufferLength:120});
-        h.loadSource(url);
-        h.attachMedia(mediaEl);
-        h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); });
-        _mainHls = h;
-    } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-        mediaEl.src = url;
-        mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
-    } else {
-        mediaEl.src = url;
-        mediaEl.play().catch(function(){});
-    }
+  if (!mediaEl || !url) return;
+  if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
+  if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
+    var h = new window.Hls({maxBufferLength:60, maxMaxBufferLength:120});
+    h.loadSource(url); h.attachMedia(mediaEl);
+    h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); });
+    _mainHls = h;
+  } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
+    mediaEl.src = url;
+    mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
+  } else { mediaEl.src = url; mediaEl.play().catch(function(){}); }
 }
 
-function _buildSourceList(sources) {
-    _allSources = sources;
-    var box = document.getElementById('sourceSelector');
-    if (!box || !sources.length) return;
-    var html = '<div class="src-label">Available Streams (' + sources.length + ')</div><div class="src-list">';
-    sources.forEach(function(s, i) {
-        var lang = s.language || '';
-        var lbl = '<span class="src-quality">' + (s.quality||'?') + '</span>';
-        if (lang) lbl += ' <span class="src-lang">' + lang + '</span>';
-        lbl += ' <span class="src-server">' + (s.server||'') + '</span>';
-        html += '<div class="src-item' + (i===0?' active':'') + '" data-idx="' + i + '" onclick="selectSource(' + i + ')">' + lbl + '</div>';
-    });
-    html += '</div>';
-    box.innerHTML = html;
-    box.classList.add('open');
+function _addSource(s) { _allSources.push(s); _renderSourceList(); }
+
+function _renderSourceList() {
+  var box = document.getElementById('sourceSelector');
+  if (!box || !_allSources.length) return;
+  var seen = {}; var unique = [];
+  _allSources.forEach(function(s, i) {
+    var k = (s.quality||'?') + '|' + (s.language||'') + '|' + (s.server||'');
+    if (!seen[k]) { seen[k]=1; unique.push({s:s,idx:i}); }
+  });
+  var h = '<div class="src-label">Streams (' + unique.length + ')</div><div class="src-list">';
+  unique.forEach(function(u) {
+    var s=u.s, lang=s.language||'';
+    var l='<span class="src-quality">'+(s.quality||'?')+'</span>';
+    if(lang) l+=' <span class="src-lang">'+lang+'</span>';
+    l+=' <span class="src-server">'+(s.server||'')+'</span>';
+    var a=(u.idx===0)?' active':'';
+    h+='<div class="src-item"'+a+' data-idx='+u.idx+' onclick="selectSource('+u.idx+')">'+l+'</div>';
+  });
+  h+='</div>'; box.innerHTML=h; box.classList.add('open');
 }
 
 function selectSource(idx) {
-    var s = _allSources[idx];
-    if (!s) return;
-    document.querySelectorAll('#sourceSelector .src-item').forEach(function(el) {
-        el.classList.toggle('active', parseInt(el.getAttribute('data-idx')) === idx);
-    });
-    var vid = document.getElementById('mainVideo');
-    if (vid) _playHls(s.url, vid);
+  var s=_allSources[idx]; if(!s) return;
+  document.querySelectorAll('#sourceSelector .src-item').forEach(function(e){
+    e.classList.toggle('active',parseInt(e.getAttribute('data-idx'))===idx);
+  });
+  var v=document.getElementById('mainVideo'); if(v) _playHls(s.url,v);
 }
 
 function _buildDualPanel(sources) {
-    var panel = document.getElementById('dualPanel');
-    if (!panel || !sources.length) return;
-    var vids = sources.filter(function(s){return s.quality && s.quality !== 'Auto';});
-    if (!vids.length) vids = sources;
-    var auds = sources;
-    var vOpts = vids.map(function(s,i){return '<option value="' + i + '"' + (i===0?' selected':'') + '>' + (s.quality||'?') + ' - ' + (s.server||'') + '</option>';}).join('');
-    var aOpts = auds.map(function(s,i){return '<option value="' + i + '"' + (i===Math.min(1,auds.length-1)?' selected':'') + '>' + (s.language||s.quality||'?') + ' - ' + (s.server||'') + '</option>';}).join('');
-    panel.innerHTML = '<div class="dual-row"><label>Video</label><select id="dualVidSel" onchange="switchDualVideo()">' + vOpts + '</select><input type="range" min="0" max="100" value="100" oninput="setDualVol(\'video\',this.value)"><span class="dual-vol" id="dualVidVol">100</span></div>' +
-        '<div class="dual-row"><label>Audio</label><select id="dualAudSel" onchange="switchDualAudio()">' + aOpts + '</select><input type="range" min="0" max="100" value="100" oninput="setDualVol(\'audio\',this.value)"><span class="dual-vol" id="dualAudVol">100</span></div>';
-    panel.classList.add('open');
-    switchDualVideo();
-    switchDualAudio();
+  var p=document.getElementById('dualPanel'); if(!p||!sources.length) return;
+  var vids=sources.filter(function(s){return s.quality&&s.quality!=='Auto';});
+  if(!vids.length) vids=sources; var auds=sources;
+  var vo=vids.map(function(s,i){return '<option value="'+i+'"'+(i===0?' selected':'')+'>'+s.quality+' - '+s.server+'</option>';}).join('');
+  var ao=auds.map(function(s,i){return '<option value="'+i+'"'+(i===Math.min(1,auds.length-1)?' selected':'')+'>'+(s.language||s.quality)+' - '+s.server+'</option>';}).join('');
+  p.innerHTML='<div class="dual-row"><label>Video</label><select id="dualVidSel" onchange="switchDualVideo()">'+vo+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol('video',this.value)"><span class="dual-vol" id="dualVidVol">100</span></div>'+'<div class="dual-row"><label>Audio</label><select id="dualAudSel" onchange="switchDualAudio()">'+ao+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol('audio',this.value)"><span class="dual-vol" id="dualAudVol">100</span></div>';
+  p.classList.add('open'); switchDualVideo(); switchDualAudio();
 }
 
-function switchDualVideo() {
-    var sel = document.getElementById('dualVidSel');
-    if (!sel) return;
-    var idx = parseInt(sel.value);
-    var s = _allSources[idx];
-    if (s) { var vid = document.getElementById('mainVideo'); if (vid) _playHls(s.url, vid); }
-}
-
-function switchDualAudio() {
-    var sel = document.getElementById('dualAudSel');
-    if (!sel) return;
-    var idx = parseInt(sel.value);
-    var s = _allSources[idx];
-    if (!s) return;
-    if (_audioHls) { try{_audioHls.destroy();}catch(e){} _audioHls = null; }
-    if (!_audioEl) {
-        _audioEl = document.createElement('audio');
-        _audioEl.id = 'dualAudio';
-        _audioEl.crossOrigin = 'anonymous';
-        document.body.appendChild(_audioEl);
-    }
-    if (s.url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-        var h = new window.Hls({maxBufferLength:60, maxMaxBufferLength:120});
-        h.loadSource(s.url);
-        h.attachMedia(_audioEl);
-        h.on(window.Hls.Events.MANIFEST_PARSED, function() { _audioEl.play().catch(function(){}); });
-        _audioHls = h;
-    } else {
-        _audioEl.src = s.url;
-        _audioEl.play().catch(function(){});
-    }
-}
-
-function setDualVol(type, val) {
-    val = parseInt(val) / 100;
-    if (type === 'video') {
-        var vid = document.getElementById('mainVideo'); if (vid) vid.volume = val;
-        var el = document.getElementById('dualVidVol'); if (el) el.textContent = Math.round(val * 100);
-    } else {
-        if (_audioEl) _audioEl.volume = val;
-        var el = document.getElementById('dualAudVol'); if (el) el.textContent = Math.round(val * 100);
-    }
-}
-
-function toggleDualMode() {
-    _dualMode = !_dualMode;
-    var btn = document.getElementById('dualToggle');
-    if (btn) btn.classList.toggle('active', _dualMode);
-    var panel = document.getElementById('dualPanel');
-    if (panel) panel.classList.toggle('open', _dualMode);
-    if (_dualMode) {
-        _buildDualPanel(_allSources);
-    } else {
-        if (_audioHls) { try{_audioHls.destroy();}catch(e){} _audioHls = null; }
-        if (_audioEl) { _audioEl.pause(); _audioEl.src = ''; }
-    }
-}
+function switchDualVideo(){var s=document.getElementById('dualVidSel');if(!s)return;var i=parseInt(s.value);var d=_allSources[i];if(d){var v=document.getElementById('mainVideo');if(v)_playHls(d.url,v);}}
+function switchDualAudio(){var s=document.getElementById('dualAudSel');if(!s)return;var i=parseInt(s.value);var d=_allSources[i];if(!d)return;if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.crossOrigin='anonymous';document.body.appendChild(_audioEl);}if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:60,maxMaxBufferLength:120});h.loadSource(d.url);h.attachMedia(_audioEl);h.on(window.Hls.Events.MANIFEST_PARSED,function(){_audioEl.play().catch(function(){});});_audioHls=h;}else{_audioEl.src=d.url;_audioEl.play().catch(function(){});}}
+function setDualVol(t,v){v=parseInt(v)/100;if(t==='video'){var e=document.getElementById('mainVideo');if(e)e.volume=v;var el=document.getElementById('dualVidVol');if(el)el.textContent=Math.round(v*100);}else{if(_audioEl)_audioEl.volume=v;var el=document.getElementById('dualAudVol');if(el)el.textContent=Math.round(v*100);}}
+function toggleDualMode(){_dualMode=!_dualMode;var b=document.getElementById('dualToggle');if(b)b.classList.toggle('active',_dualMode);var p=document.getElementById('dualPanel');if(p)p.classList.toggle('open',_dualMode);if(_dualMode){_buildDualPanel(_allSources);}else{if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(_audioEl){_audioEl.pause();_audioEl.src='';}}}
 
 function _buildVideasyPlayer(container, apiUrl) {
-    fetch(apiUrl).then(function(r){return r.json()}).then(function(data) {
-        if (!data.success || !data.results || !data.results.length) {
-            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem;">No streams found. Try another server.</div>';
-            hidePlayerLoading();
-            return;
-        }
-        var sources = data.results;
-        var vid = document.createElement('video');
-        vid.id = 'mainVideo';
-        vid.controls = true;
-        vid.autoplay = true;
-        vid.playsInline = true;
-        vid.style.cssText = 'width:100%;height:100%;background:#000;display:block;border-radius:16px 16px 0 0;';
-        container.appendChild(vid);
-        var srcDiv = document.createElement('div');
-        srcDiv.id = 'sourceSelector';
-        srcDiv.className = 'src-selector';
-        container.appendChild(srcDiv);
-        var ctrlRow = document.createElement('div');
-        ctrlRow.className = 'player-controls-row';
-        ctrlRow.innerHTML = '<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
-        container.appendChild(ctrlRow);
-        var dualDiv = document.createElement('div');
-        dualDiv.id = 'dualPanel';
-        dualDiv.className = 'dual-panel';
-        container.appendChild(dualDiv);
-        _playHls(sources[0].url, vid);
-        _buildSourceList(sources);
-        vid.addEventListener('playing', function() { hidePlayerLoading(); }, {once: true});
-        vid.addEventListener('error', function() { hidePlayerLoading(); }, {once: true});
-        setTimeout(function() { hidePlayerLoading(); }, 5000);
-    }).catch(function(e) {
-        hidePlayerLoading();
-        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem;">Failed to load streams. Try another server.</div>';
-    });
+  _allSources=[]; _playerPlaying=false;
+  var vid=document.createElement('video'); vid.id='mainVideo'; vid.controls=true; vid.autoplay=true; vid.playsInline=true;
+  vid.style.cssText='width:100%;height:100%;background:#000;display:block;border-radius:16px 16px 0 0;';
+  container.appendChild(vid);
+  var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; container.appendChild(sd);
+  var cr=document.createElement('div'); cr.className='player-controls-row';
+  cr.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
+  container.appendChild(cr);
+  var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; container.appendChild(dp);
+  var streamUrl=apiUrl.replace('/ajax/player-sources/','/ajax/player-sources-stream/');
+  var es=new EventSource(streamUrl);
+  es.onmessage=function(ev){try{var m=JSON.parse(ev.data);
+    if(m.type==='source'){_addSource(m);
+      if(!_playerPlaying){_playerPlaying=true;_playHls(m.url,vid);hidePlayerLoading();}
+      if(_dualMode)_buildDualPanel(_allSources);
+    }else if(m.type==='done'){es.close();}}catch(e){}};
+  es.onerror=function(){es.close();if(!_playerPlaying){
+    fetch(apiUrl).then(function(r){return r.json()}).then(function(d){
+      if(d.success&&d.results&&d.results.length){d.results.forEach(function(s){_addSource(s);});
+        _playerPlaying=true;_playHls(d.results[0].url,vid);hidePlayerLoading();}
+      else{container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';hidePlayerLoading();}
+    }).catch(function(){hidePlayerLoading();});}};
+  vid.addEventListener('playing',function(){hidePlayerLoading();},{once:true});
+  vid.addEventListener('error',function(){hidePlayerLoading();},{once:true});
+  setTimeout(function(){hidePlayerLoading();},8000);
 }
