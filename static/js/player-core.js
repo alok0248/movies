@@ -129,7 +129,7 @@ function _renderSourceList(){
   lh+='<div class="src-dd-menu">';
   languages.forEach(function(l){var cls=l===_selLanguage?' chosen':'';lh+='<div class="src-dd-opt'+cls+'" data-action="pickL" data-value="'+l+'">'+l+'<span class="opt-count">'+lMap[l].length+'</span></div>';});
   lh+='</div></div>';
-  box.innerHTML=qh+lh+'<span class="src-active-info" id="srcInfo"></span><div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
+  box.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>'+qh+lh+'<span class="src-active-info" id="srcInfo"></span>';
   box.classList.add('open');
   _updateSrcInfo();
 }
