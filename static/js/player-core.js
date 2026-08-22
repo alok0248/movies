@@ -10,6 +10,41 @@ function _proxyUrl(url) {
   return url;
 }
 
+/* ===== Buffering Overlay ===== */
+function _showBuf(vid) {
+  var p = vid.parentNode; if (!p) return;
+  var el = document.getElementById('bufOverlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'bufOverlay';
+    el.className = 'buf-overlay';
+    el.innerHTML = '<div class="buf-ring"></div><div class="buf-text">Buffering<span class="player-loading-dots"><span>.</span><span>.</span><span>.</span></span></div><div class="buf-bar-wrap"><div class="buf-bar" id="bufBar"></div></div>';
+    p.appendChild(el);
+  }
+  el.classList.add('show');
+  // Update progress bar
+  _bufInterval = setInterval(function() {
+    var bar = document.getElementById('bufBar');
+    if (!bar || vid.buffered.length === 0) return;
+    var end = vid.buffered.end(vid.buffered.length - 1);
+    var pct = vid.duration ? (end / vid.duration * 100) : 0;
+    bar.style.width = Math.min(pct, 100) + '%';
+  }, 300);
+}
+var _bufInterval = null;
+function _hideBuf() {
+  if (_bufInterval) { clearInterval(_bufInterval); _bufInterval = null; }
+  var el = document.getElementById('bufOverlay');
+  if (el) { el.classList.remove('show'); }
+}
+function _initBufEvents(vid) {
+  vid.addEventListener('waiting', function() { _showBuf(vid); });
+  vid.addEventListener('playing', function() { _hideBuf(); });
+  vid.addEventListener('canplay', function() { _hideBuf(); });
+  vid.addEventListener('seeking', function() { _showBuf(vid); });
+  vid.addEventListener('seeked', function() { _hideBuf(); });
+}
+
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
@@ -122,6 +157,7 @@ function _buildVideasyPlayer(container, apiUrl) {
   var vid=document.createElement('video'); vid.id='mainVideo'; vid.controls=true; vid.autoplay=true; vid.playsInline=true;
   vid.style.cssText='width:100%;height:100%;background:#000;display:block;border-radius:16px 16px 0 0;';
   container.appendChild(vid);
+  _initBufEvents(vid);
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; container.appendChild(sd);
   var cr=document.createElement('div'); cr.className='player-controls-row';
   cr.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
