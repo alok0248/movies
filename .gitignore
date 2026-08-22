@@ -39,7 +39,6 @@ Desktop.ini
 # Environment
 .env
 .env.local
-movie_portal/settings_local.py
 
 # Node (if any)
 node_modules/
