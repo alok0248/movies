@@ -129,7 +129,7 @@ function _renderSourceList(){
   lh+='<div class="src-dd-menu">';
   languages.forEach(function(l){var cls=l===_selLanguage?' chosen':'';lh+='<div class="src-dd-opt'+cls+'" data-action="pickL" data-value="'+l+'">'+l+'<span class="opt-count">'+lMap[l].length+'</span></div>';});
   lh+='</div></div>';
-  box.innerHTML=qh+lh+'<span class="src-active-info" id="srcInfo"></span>';
+  box.innerHTML=qh+lh+'<span class="src-active-info" id="srcInfo"></span><div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
   box.classList.add('open');
   _updateSrcInfo();
 }
@@ -221,11 +221,30 @@ function _buildVideasyPlayer(container, apiUrl) {
   vw.appendChild(vid);
   _initBufEvents(vid);
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
-  var cr=document.createElement('div'); cr.className='player-controls-row';
-  cr.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
-  vw.appendChild(cr);
   var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; vw.appendChild(dp);
   container.appendChild(vw);
+
+  /* Auto-hide controls after 5 seconds, show on mouse move */
+  var _hideTimer = null;
+  var _srcSel = sd;
+  var _dualPnl = dp;
+  function _showControls() {
+    if (_srcSel) _srcSel.classList.remove('player-controls-autohide');
+    if (_dualPnl && _dualPnl.classList.contains('open')) _dualPnl.classList.remove('player-controls-autohide');
+    clearTimeout(_hideTimer);
+    _hideTimer = setTimeout(function() {
+      /* Don't hide if a dropdown is open */
+      var ddOpen = document.querySelector('.src-dd.open');
+      if (ddOpen) { _showControls(); return; }
+      if (_srcSel) _srcSel.classList.add('player-controls-autohide');
+      if (_dualPnl && _dualPnl.classList.contains('open')) _dualPnl.classList.add('player-controls-autohide');
+    }, 5000);
+  }
+  vw.addEventListener('mousemove', _showControls);
+  vw.addEventListener('mouseenter', _showControls);
+  vw.addEventListener('click', _showControls);
+  /* Start hidden, show on first interaction */
+  _srcSel.classList.add('player-controls-autohide');
 
   /* Parse tmdb_id, type, season, episode from apiUrl or global vars */
   var params = {};
