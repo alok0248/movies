@@ -204,12 +204,48 @@ function _buildDualPanel(sources) {
   p.classList.add('open'); switchDualVideo(); switchDualAudio();
 }
 
-function switchDualVideo(){var s=document.getElementById('dualVidSel');if(!s)return;var i=parseInt(s.value);var d=_allSources[i];if(d){var v=document.getElementById('mainVideo');if(v)_playHls(d.url,v);}}
-function switchDualAudio(){var s=document.getElementById('dualAudSel');if(!s)return;var i=parseInt(s.value);var d=_allSources[i];if(!d)return;if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.crossOrigin='anonymous';document.body.appendChild(_audioEl);}if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:300,maxMaxBufferLength:600,
+function switchDualVideo(){
+  var s=document.getElementById('dualVidSel');if(!s)return;var i=parseInt(s.value);var d=_allSources[i];
+  if(d){var v=document.getElementById('mainVideo');if(v){_playHls(d.url,v);
+    /* Sync audio to video position after switch */
+    v.addEventListener('loadedmetadata',function(){
+      if(_audioEl && _dualMode){_audioEl.currentTime=v.currentTime;_audioEl.play().catch(function(){});}
+    },_syncOnceOpts);
+  }}
+}
+var _syncOnceOpts={once:true};
+function switchDualAudio(){
+  var s=document.getElementById('dualAudSel');if(!s)return;var i=parseInt(s.value);var d=_allSources[i];if(!d)return;
+  if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
+  if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.crossOrigin='anonymous';document.body.appendChild(_audioEl);}
+  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:300,maxMaxBufferLength:600,
       xhrSetup:function(xhr,u){if(u&&u.indexOf('/proxy/')===-1){xhr.open('GET','/proxy/'+u.replace('https://','').replace('http://',''),true);}},
       fLoader:function(c){var l=new window.Hls.DefaultConfig.loader(c);var o=l.load.bind(l);l.load=function(cfg,cb,ctx){if(cfg.url&&cfg.url.indexOf('/proxy/')===-1){cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://','');}o(cfg,cb,ctx);};return l;}
-    });var p2=_proxyUrl(d.url);h.loadSource(p2);h.attachMedia(_audioEl);h.on(window.Hls.Events.MANIFEST_PARSED,function(){_audioEl.play().catch(function(){});});_audioHls=h;}else{_audioEl.src=_proxyUrl(d.url);_audioEl.play().catch(function(){});}}
+    });var p2=_proxyUrl(d.url);h.loadSource(p2);h.attachMedia(_audioEl);h.on(window.Hls.Events.MANIFEST_PARSED,function(){_audioEl.play().catch(function(){});});_audioHls=h;
+    /* Sync audio to video position after switch */
+    h.on(window.Hls.Events.MANIFEST_PARSED,function(){
+      var v=document.getElementById('mainVideo');
+      if(v){_audioEl.currentTime=v.currentTime;_audioEl.play().catch(function(){});}
+    });
+  }else{_audioEl.src=_proxyUrl(d.url);_audioEl.play().catch(function(){});}
+}
 function setDualVol(t,v){v=parseInt(v)/100;if(t==='video'){var e=document.getElementById('mainVideo');if(e)e.volume=v;var el=document.getElementById('dualVidVol');if(el)el.textContent=Math.round(v*100);}else{if(_audioEl)_audioEl.volume=v;var el=document.getElementById('dualAudVol');if(el)el.textContent=Math.round(v*100);}}
+
+/* Periodic sync: keep audio aligned with video */
+var _syncInterval=null;
+function _startSync(){
+  if(_syncInterval) return;
+  _syncInterval=setInterval(function(){
+    if(!_dualMode||!_audioEl) return;
+    var v=document.getElementById('mainVideo');
+    if(!v) return;
+    var diff=v.currentTime-_audioEl.currentTime;
+    if(Math.abs(diff)>0.5){_audioEl.currentTime=v.currentTime;}
+    if(v.paused && !_audioEl.paused){_audioEl.pause();}
+    else if(!v.paused && _audioEl.paused){_audioEl.play().catch(function(){});}
+  },1000);
+}
+function _stopSync(){clearInterval(_syncInterval);_syncInterval=null;}
 function toggleDualMode(){
   _dualMode=!_dualMode;
   var b=document.getElementById('dualToggle');
@@ -224,8 +260,8 @@ function toggleDualMode(){
   var info=document.getElementById('srcInfo');
   if(info) info.style.display=_dualMode?'none':'';
   /* Show/hide dual panel */
-  if(_dualMode){_buildDualPanel(_allSources);if(pnl)pnl.classList.add('open');}
-  else{if(pnl)pnl.classList.remove('open');if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(_audioEl){_audioEl.pause();_audioEl.src='';}}
+  if(_dualMode){_buildDualPanel(_allSources);if(pnl)pnl.classList.add('open');_startSync();}
+  else{if(pnl)pnl.classList.remove('open');if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(_audioEl){_audioEl.pause();_audioEl.src='';}_stopSync();}
 }
 
 function _buildVideasyPlayer(container, apiUrl) {
@@ -247,8 +283,7 @@ function _buildVideasyPlayer(container, apiUrl) {
   icon.innerHTML=collapseSvg;
   vw.appendChild(icon);
 
-  /* Timers */
-  var _foldTimer=null, _iconShowTimer=null, _iconHideTimer=null;
+  var _foldTimer=null, _iconHideTimer=null;
   var _state='hidden'; /* hidden | icon | open */
 
   function _setBarVisible(visible){
@@ -256,9 +291,17 @@ function _buildVideasyPlayer(container, apiUrl) {
       sd.classList.remove('folded','folding');
       sd.classList.add('open');
       sd.style.display='flex'; sd.style.opacity='1'; sd.style.transform='';
+      if(dp && dp.classList.contains('open')){
+        dp.classList.remove('folded','folding');
+        dp.style.display='block'; dp.style.opacity='1'; dp.style.transform='';
+      }
     } else {
       sd.classList.add('folding');
-      setTimeout(function(){sd.classList.remove('folding');sd.classList.add('folded');},350);
+      if(dp && dp.classList.contains('open')) dp.classList.add('folding');
+      setTimeout(function(){
+        sd.classList.remove('folding'); sd.classList.add('folded');
+        if(dp && dp.classList.contains('open')){dp.classList.remove('folding');dp.classList.add('folded');}
+      },350);
     }
   }
 
@@ -301,27 +344,33 @@ function _buildVideasyPlayer(container, apiUrl) {
     },5000);
   }
 
-  /* Events */
+  /* === Events === */
+  /* Icon click: always unfold */
   icon.addEventListener('click',function(e){e.stopPropagation();_openBar();});
 
+  /* Player click anywhere: fold everything to icon */
+  vw.addEventListener('click',function(e){
+    if(e.target===icon||icon.contains(e.target)) return;
+    if(_state==='open'){_foldBar();}
+    else if(_state==='hidden'){_showIcon();}
+  });
+
+  vid.addEventListener('click',function(e){
+    if(_state==='open'){_foldBar();}
+    else if(_state==='hidden'){_showIcon();}
+  });
+
+  /* Mouse enter: show icon if hidden */
   vw.addEventListener('mouseenter',function(){
     if(_state==='hidden') _showIcon();
   });
 
+  /* Mouse leave: hide icon faster */
   vw.addEventListener('mouseleave',function(){
     if(_state==='icon'){
       clearTimeout(_iconHideTimer);
       _iconHideTimer=setTimeout(function(){_hideIcon();},1000);
     }
-  });
-
-  vw.addEventListener('click',function(e){
-    if(e.target===icon||icon.contains(e.target)) return;
-    if(_state==='hidden') _showIcon();
-  });
-
-  vid.addEventListener('click',function(e){
-    if(_state==='hidden') _showIcon();
   });
 
   /* Start hidden */
