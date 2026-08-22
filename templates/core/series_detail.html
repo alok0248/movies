@@ -523,7 +523,7 @@ function updatePlayerUrl() {
     var cfg = playerConfigs[currentPlayerId];
     if (!cfg || !container) return;
     var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
-    showPlayerLoading(container);
+    while (container.firstChild) container.removeChild(container.firstChild); showPlayerLoading(container);
     if (content.type === 'html') {
         container.innerHTML = content.content;
         /* For HTML type (local player), hide after a fallback timeout */

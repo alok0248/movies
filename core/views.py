@@ -5735,3 +5735,130 @@ def ajax_send_email(request):
         })
     except Exception as e:
         return JsonResponse({'ok': False, 'message': f'Error sending email: {str(e)}'})
+
+
+
+# ===== Ad verification file management =====
+import os
+
+AD_FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ad-files')
+
+def _ensure_ad_files_dir():
+    os.makedirs(AD_FILES_DIR, exist_ok=True)
+
+def _read_ad_file(filename):
+    path = os.path.join(AD_FILES_DIR, filename)
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    # Fallback to root
+    root_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), filename)
+    if os.path.exists(root_path):
+        with open(root_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    return ''
+
+def _write_ad_file(filename, content):
+    _ensure_ad_files_dir()
+    path = os.path.join(AD_FILES_DIR, filename)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+def _delete_ad_file(filename):
+    path = os.path.join(AD_FILES_DIR, filename)
+    if os.path.exists(path):
+        os.remove(path)
+    # Also remove from root if exists
+    root_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), filename)
+    if os.path.exists(root_path):
+        os.remove(root_path)
+
+def _list_ad_files():
+    _ensure_ad_files_dir()
+    files = []
+    for f in os.listdir(AD_FILES_DIR):
+        if not f.startswith('.'):
+            path = os.path.join(AD_FILES_DIR, f)
+            files.append({
+                'name': f,
+                'size': os.path.getsize(path),
+                'modified': os.path.getmtime(path),
+            })
+    # Also check root for sw.js, ads.txt etc
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for f in ['sw.js', 'ads.txt', 'app-ads.txt']:
+        root_path = os.path.join(root_dir, f)
+        if os.path.exists(root_path) and not any(x['name'] == f for x in files):
+            files.append({
+                'name': f,
+                'size': os.path.getsize(root_path),
+                'modified': os.path.getmtime(root_path),
+                'in_root': True,
+            })
+    files.sort(key=lambda x: x['name'])
+    return files
+
+def serve_sw_js(request):
+    content = _read_ad_file('sw.js')
+    if not content:
+        # Serve the default sw.js from root
+        root_sw = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sw.js')
+        if os.path.exists(root_sw):
+            with open(root_sw, 'r', encoding='utf-8') as f:
+                content = f.read()
+    from django.http import HttpResponse
+    return HttpResponse(content, content_type='application/javascript')
+
+def serve_ads_txt(request):
+    content = _read_ad_file('ads.txt')
+    from django.http import HttpResponse
+    return HttpResponse(content, content_type='text/plain')
+
+def serve_app_ads_txt(request):
+    content = _read_ad_file('app-ads.txt')
+    from django.http import HttpResponse
+    return HttpResponse(content, content_type='text/plain')
+
+def admin_ad_files(request):
+    if not request.user.is_staff:
+        return render(request, '403.html', status=403)
+    files = _list_ad_files()
+    return render(request, 'core/admin_ad_files.html', {
+        'files': files,
+    })
+
+def ajax_save_ad_file(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
+    try:
+        data = json.loads(request.body)
+        filename = data.get('filename', '').strip()
+        content = data.get('content', '')
+        if not filename:
+            return JsonResponse({'ok': False, 'message': 'Filename required'})
+        # Sanitize filename
+        filename = os.path.basename(filename)
+        if '/' in filename or '' in filename:
+            return JsonResponse({'ok': False, 'message': 'Invalid filename'})
+        _write_ad_file(filename, content)
+        return JsonResponse({'ok': True, 'message': f'{filename} saved'})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'message': str(e)})
+
+def ajax_delete_ad_file(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
+    try:
+        data = json.loads(request.body)
+        filename = data.get('filename', '').strip()
+        if not filename:
+            return JsonResponse({'ok': False, 'message': 'Filename required'})
+        filename = os.path.basename(filename)
+        _delete_ad_file(filename)
+        return JsonResponse({'ok': True, 'message': f'{filename} deleted'})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'message': str(e)})

@@ -501,7 +501,7 @@ function loadMoviePlayer() {
     var cfg = playerConfigs[currentPlayerId];
     if (!cfg || !container) return;
     var content = getPlayerContent(cfg, 'movie', movieId, null, null, movieImdbId);
-    showPlayerLoading(container);
+    while (container.firstChild) container.removeChild(container.firstChild); showPlayerLoading(container);
     if (content.type === 'html') {
         container.innerHTML = content.content;
         /* For HTML type (local player), hide after a fallback timeout */
