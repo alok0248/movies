@@ -5821,7 +5821,7 @@ def serve_app_ads_txt(request):
 
 def admin_ad_files(request):
     if not request.user.is_staff:
-        return render(request, '403.html', status=403)
+        return redirect('/admin/')
     files = _list_ad_files()
     return render(request, 'core/admin_ad_files.html', {
         'files': files,
