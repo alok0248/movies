@@ -678,6 +678,11 @@ if (playBtn) {
 
 updateServerButtons();
 
+/* Pre-fetch seed for instant play */
+if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].name === 'Videasy') {
+    fetch('/ajax/prefetch-sources/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv', {mode: 'no-cors'}).catch(function(){});
+}
+
 /* Forward arrow keys to player iframe */
 document.addEventListener('keydown', function(ev) {
     var iframe = document.querySelector('#player-container iframe');

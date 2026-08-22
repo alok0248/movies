@@ -1,5 +1,6 @@
-from django.http import StreamingHttpResponse
+from django.http import StreamingHttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
+from django.core.cache import cache
 import time as _time
 import json as _json
 import logging
@@ -7,22 +8,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _streaming_view_deps():
-    """Import deps from core.views lazily"""
+def _deps():
     from core import views
-    return {
-        '_vk_fetch_tmdb_info': views._vk_fetch_tmdb_info,
-        '_vk_get_seed': views._vk_get_seed,
-        '_vk_fetch_sources_for_server': views._vk_fetch_sources_for_server,
-        '_VIDKING_API_BASE': views._VIDKING_API_BASE,
-        '_VIDKING_SERVERS': views._VIDKING_SERVERS,
-    }
+    return views
 
 
 @require_GET
 def player_sources_stream_view(request):
-    """SSE streaming endpoint - sends sources as each server completes."""
-    deps = _streaming_view_deps()
+    """SSE streaming - plays first source ASAP, extracts rest in background."""
+    V = _deps()
     NL = chr(10) + chr(10)
 
     tmdb_id = request.GET.get('tmdb_id', '')
@@ -44,32 +38,31 @@ def player_sources_stream_view(request):
 
     timestamp = str(int(_time.time() * 1000))
 
-    try:
-        tmdb_info = deps['_vk_fetch_tmdb_info'](tmdb_id, media_type)
-    except Exception:
-        tmdb_info = {'title': '', 'year': '', 'imdbId': ''}
-
-    title = tmdb_info.get('title', '')
-    year = tmdb_info.get('year', '')
-    imdb_id = tmdb_info.get('imdbId', '')
-
-    seed = ''
-    for attempt in range(2):
-        try:
-            seed = deps['_vk_get_seed'](deps['_VIDKING_API_BASE'], tmdb_id)
-            break
-        except Exception:
-            if attempt == 0:
-                _time.sleep(0.3)
-
     def generate():
+        # Yield immediately to flush headers and start connection
+        yield 'data: ' + _json.dumps({'type': 'connecting'}) + NL
         sent = set()
-        for server_name, endpoint in deps['_VIDKING_SERVERS'].items():
+        # Use cached seed if available (saves ~0.7s)
+        seed_cache_key = f'stream_seed_{tmdb_id}'
+        seed = cache.get(seed_cache_key, '')
+        if not seed:
             try:
-                result = deps['_vk_fetch_sources_for_server'](
+                seed = V._vk_get_seed(V._VIDKING_API_BASE, tmdb_id)
+                if seed:
+                    cache.set(seed_cache_key, seed, 300)  # Cache for 5 min
+            except Exception:
+                seed = ''
+
+        if not seed:
+            yield 'data: ' + _json.dumps({'type': 'error', 'message': 'Could not fetch seed'}) + NL
+            return
+
+        for server_name, endpoint in V._VIDKING_SERVERS.items():
+            try:
+                result = V._vk_fetch_sources_for_server(
                     server_name, endpoint, tmdb_id, media_type,
-                    title=title, year=year, season_id=season,
-                    episode_id=episode, imdb_id=imdb_id,
+                    title='', year='', season_id=season,
+                    episode_id=episode, imdb_id='',
                     seed=seed, timestamp=timestamp,
                 )
                 sources = result.get('sources', [])
@@ -89,6 +82,31 @@ def player_sources_stream_view(request):
             except Exception as e:
                 logger.debug('stream: %s failed: %s', server_name, e)
                 continue
-        yield 'data: ' + _json.dumps({'type': 'done', 'title': title, 'year': year, 'tmdbId': tmdb_id}) + NL
+
+        yield 'data: ' + _json.dumps({'type': 'done', 'tmdbId': tmdb_id}) + NL
 
     return StreamingHttpResponse(generate(), content_type='text/event-stream')
+
+
+@require_GET
+def prefetch_sources_view(request):
+    """Warm the seed cache so the streaming endpoint is faster."""
+    V = _deps()
+    tmdb_id = request.GET.get('tmdb_id', '')
+    if not tmdb_id:
+        return JsonResponse({'ok': True})
+    try:
+        tmdb_id = int(tmdb_id)
+    except (ValueError, TypeError):
+        return JsonResponse({'ok': True})
+    
+    seed_cache_key = f'stream_seed_{tmdb_id}'
+    seed = cache.get(seed_cache_key, '')
+    if not seed:
+        try:
+            seed = V._vk_get_seed(V._VIDKING_API_BASE, tmdb_id)
+            if seed:
+                cache.set(seed_cache_key, seed, 300)
+        except Exception:
+            pass
+    return JsonResponse({'ok': True, 'cached': bool(seed)})
