@@ -214,15 +214,18 @@ function toggleDualMode(){_dualMode=!_dualMode;var b=document.getElementById('du
 
 function _buildVideasyPlayer(container, apiUrl) {
   _allSources=[]; _playerPlaying=false;
+  /* Video wrapper to properly contain video + overlay controls */
+  var vw=document.createElement('div'); vw.className='player-video-wrap'; vw.style.cssText='position:relative;width:100%;';
   var vid=document.createElement('video'); vid.id='mainVideo'; vid.controls=true; vid.autoplay=true; vid.playsInline=true;
-  vid.style.cssText='width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;';
-  container.appendChild(vid);
+  vid.style.cssText='width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;object-fit:contain;';
+  vw.appendChild(vid);
   _initBufEvents(vid);
-  var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; container.appendChild(sd);
+  var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
   var cr=document.createElement('div'); cr.className='player-controls-row';
   cr.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
-  container.appendChild(cr);
-  var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; container.appendChild(dp);
+  vw.appendChild(cr);
+  var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; vw.appendChild(dp);
+  container.appendChild(vw);
 
   /* Parse tmdb_id, type, season, episode from apiUrl or global vars */
   var params = {};
