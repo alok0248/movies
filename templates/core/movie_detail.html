@@ -278,16 +278,22 @@ html[data-theme="light"] .det-sidebar-overview{color:rgba(26,26,46,.6)}
 html[data-theme="light"] .det-sidebar-label{color:rgba(26,26,46,.35)}
 html[data-theme="light"] .det-sidebar-chip{background:rgba(0,0,0,.05);color:rgba(26,26,46,.6)}
 /* Source selector */
-.src-selector{margin-top:.5rem;display:none}
-.src-selector.open{display:block}
-.src-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.3);font-weight:700;margin-bottom:.4rem}
-.src-list{display:flex;flex-wrap:wrap;gap:.4rem;max-height:120px;overflow-y:auto;scrollbar-width:thin}
-.src-item{padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:.4rem}
-.src-item:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.9)}
-.src-item.active{background:var(--brand,#e50914);color:#fff;border-color:var(--brand,#e50914)}
-.src-item .src-quality{color:#46d369;font-weight:700}
-.src-item .src-lang{color:rgba(255,255,255,.4);font-size:.65rem}
-.src-item .src-server{color:rgba(255,255,255,.3);font-size:.6rem}
+.src-selector{margin-top:.5rem;display:none;position:relative}
+.src-selector.open{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.src-dd{position:relative;display:inline-block}
+.src-dd-btn{display:inline-flex;align-items:center;gap:.4rem;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:100px}
+.src-dd-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+.src-dd-btn.active{border-color:var(--brand,#e50914);color:var(--brand,#e50914)}
+.src-dd-btn .dd-icon{font-size:.5rem;opacity:.5;transition:transform .2s}
+.src-dd.open .src-dd-btn .dd-icon{transform:rotate(180deg)}
+.src-dd-menu{position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:160px;max-height:220px;overflow-y:auto;background:rgba(18,18,28,.96);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;box-shadow:0 8px 32px rgba(0,0,0,.6);backdrop-filter:blur(12px);display:none}
+.src-dd.open .src-dd-menu{display:block}
+.src-dd-opt{padding:6px 10px;border-radius:6px;color:rgba(255,255,255,.6);font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:space-between}
+.src-dd-opt:hover{background:rgba(255,255,255,.08);color:#fff}
+.src-dd-opt.chosen{color:var(--brand,#e50914);font-weight:700}
+.src-dd-opt .opt-count{font-size:.6rem;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
+.src-dd-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.25);font-weight:700;position:absolute;top:-14px;left:2px;pointer-events:none}
+.src-active-info{font-size:.65rem;color:rgba(255,255,255,.35);margin-left:.25rem}
 .dual-panel{margin-top:.5rem;display:none}
 .dual-panel.open{display:block}
 .dual-row{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;padding:.4rem .6rem;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.04)}
