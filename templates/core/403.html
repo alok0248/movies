@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .access-denied-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 80vh;
+        text-align: center;
+    }
+    .access-denied-content {
+        max-width: 500px;
+        padding: 2rem;
+    }
+    .error-code {
+        font-size: clamp(6rem, 15vw, 12rem);
+        font-weight: 900;
+        background: linear-gradient(135deg, #ff6b35, #f7c59f);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 0.5rem;
+        animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+        0%, 100% {
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+        }
+        50% {
+            text-shadow: 0 0 40px rgba(255, 107, 53, 0.6), 0 0 60px rgba(255, 107, 53, 0.4);
+        }
+    }
+    .access-denied-title {
+        font-size: clamp(1.5rem, 4vw, 2.5rem);
+        color: white;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        animation: fade-in-up 0.8s ease-out 0.2s both;
+    }
+    .access-denied-desc {
+        font-size: 1.1rem;
+        color: #b3b3b3;
+        margin-bottom: 2.5rem;
+        animation: fade-in-up 0.8s ease-out 0.4s both;
+    }
+    .btn-container {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        animation: fade-in-up 0.8s ease-out 0.6s both;
+    }
+    .btn-primary {
+        padding: 0.875rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #e50914, #ff6b6b);
+        border: none;
+        transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 30px rgba(229, 9, 20, 0.4);
+        background: linear-gradient(135deg, #ff1e29, #ff8a8a);
+    }
+    .btn-outline-light {
+        padding: 0.875rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        border-radius: 8px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: transparent;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    .btn-outline-light:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-3px);
+    }
+    @keyframes fade-in-up {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .floating-shapes {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: -1;
+    }
+    .floating-shape {
+        position: absolute;
+        opacity: 0.05;
+        animation: float 15s ease-in-out infinite;
+    }
+    @keyframes float {
+        0%, 100% {
+            transform: translateY(0) rotate(0deg);
+        }
+        50% {
+            transform: translateY(-50px) rotate(180deg);
+        }
+    }
+</style>
+
+<div class="floating-shapes">
+    <div class="floating-shape" style="top: 10%; left: 10%; font-size: 7rem; animation-delay: 0s;">🔒</div>
+    <div class="floating-shape" style="top: 70%; left: 85%; font-size: 6rem; animation-delay: -5s;">🛡️</div>
+    <div class="floating-shape" style="top: 30%; left: 5%; font-size: 5rem; animation-delay: -10s;">🗝️</div>
+    <div class="floating-shape" style="top: 80%; left: 60%; font-size: 6.5rem; animation-delay: -3s;">🚫</div>
+</div>
+
+<div class="container access-denied-container">
+    <div class="access-denied-content">
+        <div class="error-code">403</div>
+        <h1 class="access-denied-title">Access Denied</h1>
+        <p class="access-denied-desc">
+            Sorry, you don't have permission to access this page. Only staff and superusers can view this area.
+        </p>
+        <div class="btn-container">
+            <a href="{% url 'index' %}" class="btn btn-primary">
+                <i class="fas fa-home me-2"></i> Back to Home
+            </a>
+            {% if not user.is_authenticated %}
+                <button class="btn btn-outline-light" onclick="openAuthModal('login')">
+                    <i class="fas fa-sign-in-alt me-2"></i> Sign In
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

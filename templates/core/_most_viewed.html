@@ -1,0 +1,23 @@
+<aside class="most-viewed-sidebar" aria-label="Most viewed">
+    <div class="most-viewed-heading">MOST VIEWED</div>
+    <div class="most-viewed-list">
+        {% for item in most_viewed %}
+        <a class="most-viewed-item" href="{% if item.media_type == 'movie' %}{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' item.id %}{% else %}{% url 'movie_detail' item.slug %}{% endif %}{% else %}{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' item.id %}{% else %}{% url 'series_detail' item.slug %}{% endif %}{% endif %}">
+            <span class="most-viewed-rank">#{{ item.rank }}</span>
+            <span class="most-viewed-poster-wrap">
+                {% if item.cover_url %}<img src="{{ item.cover_url }}" alt="{{ item.title }}" loading="lazy">{% endif %}
+            </span>
+            <span class="most-viewed-copy">
+                <strong>{{ item.title }}</strong>
+                <span class="most-viewed-meta">
+                    {% if item.vote_average %}<em>{{ item.vote_average|floatformat:1 }}/10</em>{% endif %}
+                    {% if item.release_date %}{{ item.release_date|slice:":4" }}{% elif item.first_air_date %}{{ item.first_air_date|slice:":4" }}{% elif item.year %}{{ item.year }}{% endif %}
+                    <b>HD</b>
+                </span>
+            </span>
+        </a>
+        {% empty %}
+        <p class="most-viewed-empty">Popular titles will appear here.</p>
+        {% endfor %}
+    </div>
+</aside>

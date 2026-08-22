@@ -1,0 +1,58 @@
+
+{% for movie in movies %}
+<div class="card-wrapper" data-tmdb-id="{{ movie.id }}">
+    {% if movie.vote_average and movie.vote_average >= 5 %}
+    <div class="rating-badge" title="Rating: {{ movie.vote_average }}/10">
+        <i class="fas fa-star" style="font-size: 0.65rem; margin-right: 3px;"></i>{{ movie.vote_average|floatformat:1 }}
+    </div>
+    {% endif %}
+    <div class="movie-card d-block text-decoration-none text-reset" data-media-type="movie" data-media-id="{{ movie.id }}" data-detail-url="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}">
+        {% if movie.cover_url %}
+        <div class="card-image-container">
+            <a class="card-image-link d-block" href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}" data-tile-link="1">
+                <img data-src="{{ movie.cover_url }}" class="card-image lazy-image" alt="{{ movie.title }}" loading="lazy">
+                <div class="lazy-placeholder" data-placeholder></div>
+            </a>
+            <div class="card-hover-overlay"></div>
+            <div class="card-hover-preview">
+                <div class="preview-actions">
+                    <a class="preview-btn play-btn" href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' movie.id %}{% else %}{% url 'movie_detail' movie.slug %}{% endif %}" title="Play">
+                        <i class="fas fa-play"></i>
+                    </a>
+                    <button class="preview-btn watchlist-btn" data-media-type="movie" data-media-id="{{ movie.id }}" data-title="{{ movie.title }}" data-poster="{{ movie.cover_url }}" title="Add to Watchlist" onclick="toggleWatchlistInline(this, event)">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="preview-btn info-btn" data-media-type="movie" data-media-id="{{ movie.id }}" title="More Info" onclick="openDetailFromCard(this)">
+                        <i class="fas fa-info-circle"></i>
+                    </button>
+                </div>
+                <div class="preview-title"><strong>{{ movie.title }}</strong></div>
+                <div class="preview-meta" style="margin: 4px 0;">
+                    {% if movie.year %}<span>{{ movie.year }}</span>{% endif %}
+                    {% if movie.vote_average %}
+                    <span style="margin-left: 8px;">
+                        <b>HD</b>
+                    </span>
+                    {% endif %}
+                </div>
+                {% if movie.overview %}
+                <div class="preview-plot hover-description" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ movie.overview }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% if tile_ad_every_n and tile_ad_every_n > 0 and forloop.counter|divisibleby:tile_ad_every_n %}
+<div class="card-wrapper tile-ad-placeholder" data-tile-ad-slot="{{ forloop.counter }}">
+    <div class="movie-card tile-ad-card d-block text-decoration-none text-reset" style="opacity:0.85; background: rgba(30,30,30,0.6); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; min-height: 260px;">
+        <div class="card-image-container d-flex align-items-center justify-content-center" style="min-height: 260px;">
+            <div class="text-center p-3 text-muted" style="font-size: 0.85rem;">
+                <i class="fas fa-ad fa-2x mb-2"></i>
+                <div>Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}

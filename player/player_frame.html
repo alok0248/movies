@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Frame</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+  .audio-vis{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#81c784;font-size:.6rem;padding:2px 6px;border-radius:3px;display:none;z-index:3;pointer-events:none}
+  .audio-vis.on{display:block}
+</style>
+</head>
+<body>
+<video id="vid" controls playsinline></video>
+<div class="audio-vis" id="audioVis">AUDIO SYNC</div>
+<video id="audioVid" style="position:absolute;width:0;height:0;visibility:hidden" playsinline></video>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script>
+(function(){
+  var video=document.getElementById("vid");
+  var audioVid=document.getElementById("audioVid");
+  var audioVis=document.getElementById("audioVis");
+  var hls=null,hlsAudio=null;
+  var dualMode=false,audioOffset=0,syncInterval=null,muteEnforceInterval=null;
+  var userVideoVol=0,userAudioVol=1,savedTime=0;
+
+  // Aggressive mute enforcement for video in dual mode
+  function startMuteEnforce(){
+    if(muteEnforceInterval)return;
+    muteEnforceInterval=setInterval(function(){
+      if(dualMode){video.muted=true;video.volume=0}
+    },50);
+  }
+  function stopMuteEnforce(){
+    if(muteEnforceInterval){clearInterval(muteEnforceInterval);muteEnforceInterval=null}
+  }
+  var muteObserver=new MutationObserver(function(){
+    if(dualMode&&(!video.muted||video.volume>0)){video.muted=true;video.volume=0}
+  });
+  muteObserver.observe(video,{attributes:true,attributeFilter:["muted","volume"]});
+
+  // Sync loop
+  function startSync(){
+    if(syncInterval)return;
+    audioVis.classList.add("on");
+    syncInterval=setInterval(function(){
+      if(!dualMode)return;
+      try{
+        var drift=video.currentTime-audioOffset-audioVid.currentTime;
+        if(Math.abs(drift)>0.15)audioVid.currentTime=video.currentTime-audioOffset;
+      }catch(e){}
+    },200);
+  }
+  function stopSync(){
+    if(syncInterval){clearInterval(syncInterval);syncInterval=null}
+    audioVis.classList.remove("on");
+  }
+
+  // Sync handlers
+  video.addEventListener("play",function(){
+    if(dualMode&&audioVid.src){
+      audioVid.currentTime=video.currentTime-audioOffset;
+      audioVid.play().catch(function(){});
+      startSync();
+    }
+  });
+  video.addEventListener("pause",function(){if(dualMode)audioVid.pause()});
+  video.addEventListener("seeking",function(){
+    if(dualMode&&audioVid.src)audioVid.currentTime=video.currentTime-audioOffset;
+  });
+  video.addEventListener("ended",function(){if(dualMode)audioVid.pause();stopSync()});
+
+  // Message handler
+  window.addEventListener("message",function(ev){
+    if(!ev.data)return;
+    var d=ev.data;
+    if(d.type==="play"&&d.url){
+      dualMode=false;stopSync();stopMuteEnforce();
+      video.muted=false;video.volume=1;
+      savedTime=video.currentTime||0;
+      playUrl(d.url);
+    }
+    if(d.type==="playDual"&&d.videoUrl){
+      dualMode=true;stopSync();savedTime=video.currentTime||0;
+      audioOffset=d.offset||0;startMuteEnforce();
+      playDual(d.videoUrl,d.audioUrl);
+    }
+    if(d.type==="setOffset"){
+      audioOffset=d.offset||0;
+      if(dualMode&&audioVid.src)audioVid.currentTime=video.currentTime-audioOffset;
+    }
+    if(d.type==="setVolume"){
+      if(d.target==="video"){userVideoVol=d.volume;if(!dualMode){video.volume=d.volume;video.muted=(d.volume===0)}}
+      else if(d.target==="audio"){userAudioVol=d.volume;audioVid.volume=d.volume;audioVid.muted=(d.volume===0)}
+    }
+    if(d.type==="stop"){
+      if(hls){hls.destroy();hls=null}if(hlsAudio){hlsAudio.destroy();hlsAudio=null}
+      video.pause();video.removeAttribute("src");video.load();
+      audioVid.pause();audioVid.removeAttribute("src");audioVid.load();
+      dualMode=false;stopSync();stopMuteEnforce();video.muted=false;video.volume=1;
+    }
+  });
+
+  // Single play
+  function playUrl(url){
+    if(hls){hls.destroy();hls=null}
+    video.removeAttribute("src");video.load();
+    if(url.indexOf(".m3u8")>-1){
+      loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30})},url,function(h){hls=h},null);
+    }else{video.src=makeProxy(url);video.play().catch(function(){})}
+  }
+
+  // Dual play
+  function playDual(videoUrl,audioUrl){
+    if(hls){hls.destroy();hls=null}if(hlsAudio){hlsAudio.destroy();hlsAudio=null}
+    savedTime=video.currentTime||0;
+    video.removeAttribute("src");video.load();
+    audioVid.removeAttribute("src");audioVid.load();
+    video.muted=true;video.volume=0;
+    audioVid.muted=true;audioVid.volume=0;
+
+    var videoReady=false,audioReady=false;
+    function checkBoth(){
+      if(!videoReady||!audioReady)return;
+      video.currentTime=savedTime;
+      audioVid.currentTime=savedTime-audioOffset;
+      video.play().then(function(){
+        audioVid.volume=userAudioVol;
+        audioVid.muted=(userAudioVol===0);
+        return audioVid.play();
+      }).then(function(){startSync()}).catch(function(){
+        audioVid.volume=userAudioVol;audioVid.muted=false;
+        audioVid.play().catch(function(){});
+      });
+    }
+
+    loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30})},videoUrl,function(h){hls=h},function(){videoReady=true;checkBoth()},true);
+    loadHLS(audioVid,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30})},audioUrl,function(h){hlsAudio=h},function(){audioReady=true;checkBoth()},false);
+  }
+
+  // Generic HLS loader
+  function loadHLS(el,createHls,url,hlsSetter,onReady,enforceMute){
+    var px=makeProxy(url);
+    fetch(px).then(function(r){
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      return r.text();
+    }).then(function(text){
+      var rewritten=rewriteManifest(text,url);
+      var blob=new Blob([rewritten],{type:"application/vnd.apple.mpegurl"});
+      var blobUrl=URL.createObjectURL(blob);
+      var h=createHls();hlsSetter(h);
+      h.on(Hls.Events.MANIFEST_PARSED,function(e,d){if(onReady)onReady()});
+      h.on(Hls.Events.ERROR,function(e,d){
+        if(d.fatal){
+          if(d.type===Hls.ErrorTypes.NETWORK_ERROR)setTimeout(function(){if(h)h.startLoad()},2000);
+          else if(d.type===Hls.ErrorTypes.MEDIA_ERROR)h.recoverMediaError();
+        }
+      });
+      if(enforceMute)h.on(Hls.Events.LEVEL_SWITCHING,function(){el.muted=true;el.volume=0});
+      h.loadSource(blobUrl);h.attachMedia(el);
+      if(enforceMute){el.muted=true;el.volume=0}
+    }).catch(function(){});
+  }
+
+  function makeProxy(url){
+    if(!url)return url;
+    try{var u=new URL(url);return location.origin+"/proxy/"+u.host+u.pathname+u.search}catch(e){return url}
+  }
+  function rewriteManifest(text,origUrl){
+    var lines=text.split("\n"),base=origUrl.substring(0,origUrl.lastIndexOf("/")+1),out=[];
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i].trim();
+      if(line===""){out.push("");continue}
+      if(line.charAt(0)==="#"){
+        out.push(line.replace(/URI="([^"]+)"/gi,function(m,u){
+          var full=u.indexOf("http")===0?u:base+u;return 'URI="'+makeProxy(full)+'"';
+        }));
+      }else{var full=line.indexOf("http")===0?line:base+line;out.push(makeProxy(full))}
+    }
+    return out.join("\n");
+  }
+
+  try{parent.postMessage({type:"frameReady"},"*")}catch(e){}
+})();
+</script>
+</body>
+</html>

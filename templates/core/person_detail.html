@@ -1,0 +1,260 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}{{ person.name }} - Filmography{% endblock %}
+
+{% block content %}
+<style>
+.person-hero {
+    position: relative; width: 100%; min-height: 35vh; overflow: hidden;
+    display: flex; align-items: flex-end;
+    background: var(--bg, #0d0d12);
+}
+.person-hero-content {
+    position: relative; z-index: 1; max-width: 1400px; width: 100%; margin: 0 auto;
+    padding: 3rem 2rem 2rem; display: flex; gap: 2rem; align-items: flex-end;
+}
+.person-photo {
+    flex-shrink: 0; width: 180px; height: 180px; border-radius: 50%;
+    object-fit: cover; border: 3px solid var(--brand, #e50914);
+    box-shadow: 0 8px 40px rgba(0,0,0,.6);
+}
+.person-info h1 {
+    font-size: 2rem; font-weight: 800; color: var(--text, #f0f0f5);
+    margin-bottom: .4rem; line-height: 1.1;
+}
+.person-info .dept {
+    font-size: .82rem; color: var(--brand, #e50914); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem;
+}
+.person-info .meta {
+    font-size: .82rem; color: var(--text-3, #606070); line-height: 1.5;
+}
+.person-info .meta span { color: var(--text-2, #a0a0b0); }
+
+/* Biography */
+.person-bio {
+    max-width: 1400px; margin: 0 auto; padding: 0 2rem 1.5rem;
+}
+.person-bio p {
+    font-size: .88rem; color: var(--text-2, #a0a0b0); line-height: 1.7;
+    max-height: 120px; overflow-y: auto; padding: 1rem 1.2rem;
+    border: 1px solid var(--border, rgba(255,255,255,.06)); border-radius: var(--radius, 12px);
+    background: var(--surface, rgba(255,255,255,.02));
+}
+
+/* Filter Tabs */
+.person-filters {
+    max-width: 1400px; margin: 0 auto; padding: 0 2rem 1rem;
+    display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+}
+.person-filter-tab {
+    padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border, rgba(255,255,255,.08));
+    background: transparent; color: var(--text-2, #a0a0b0); font-size: .82rem;
+    font-weight: 600; cursor: pointer; transition: all .25s; font-family: inherit;
+}
+.person-filter-tab:hover { background: var(--surface-hover, rgba(255,255,255,.06)); color: var(--text, #f0f0f5); }
+.person-filter-tab.active {
+    background: var(--brand, #e50914); color: #fff; border-color: var(--brand, #e50914);
+}
+.person-filter-count {
+    margin-left: auto; font-size: .8rem; color: var(--text-3, #606070);
+}
+
+/* Combined Grid */
+.person-section {
+    max-width: 1400px; margin: 0 auto; padding: 0 2rem 2rem;
+}
+.person-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem .6rem;
+}
+.person-card {
+    text-decoration: none; transition: transform .28s ease, box-shadow .28s ease;
+    border-radius: var(--radius, 8px); min-width: 0;
+}
+.person-card:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.person-card-img {
+    position: relative; overflow: hidden; border-radius: var(--radius, 8px);
+    background: var(--bg-3, #1e1e2a); aspect-ratio: 2/3;
+}
+.person-card-img img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform .35s ease;
+}
+.person-card:hover .person-card-img img { transform: scale(1.06); }
+.person-card-badge {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,.78); backdrop-filter: blur(4px);
+    color: #ffc107; padding: 3px 8px; border-radius: 12px;
+    font-size: .72rem; font-weight: 800; z-index: 2;
+    border: 1px solid rgba(255,255,255,.12);
+}
+.person-card-type {
+    position: absolute; top: 8px; right: 8px;
+    padding: 2px 8px; border-radius: 10px;
+    font-size: .6rem; font-weight: 700; z-index: 2;
+    text-transform: uppercase; letter-spacing: .04em;
+}
+.person-card-type.movie { background: rgba(229,9,20,.85); color: #fff; }
+.person-card-type.tv { background: rgba(39,174,96,.85); color: #fff; }
+.person-card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,.9) 100%);
+    opacity: 0; transition: opacity .3s;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 10px; pointer-events: none; border-radius: var(--radius, 8px);
+}
+.person-card:hover .person-card-overlay { opacity: 1; }
+.person-card-title {
+    font-size: .82rem; font-weight: 700; color: #fff; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.person-card-year { font-size: .7rem; color: rgba(255,255,255,.6); margin-top: 2px; }
+.person-card-role { font-size: .65rem; color: var(--brand, #00c896); margin-top: 2px; }
+
+/* Empty state */
+.person-empty {
+    text-align: center; padding: 3rem 1rem; color: var(--text-3, #606070);
+    font-size: .9rem;
+}
+
+/* Responsive */
+@media(max-width:1200px) { .person-grid { grid-template-columns: repeat(5, 1fr); } }
+@media(max-width:992px) { .person-grid { grid-template-columns: repeat(4, 1fr); } }
+@media(max-width:768px) {
+    .person-hero-content { flex-direction: column; align-items: center; text-align: center; padding: 2rem 1rem 1.5rem; }
+    .person-photo { width: 140px; height: 140px; }
+    .person-grid { grid-template-columns: repeat(3, 1fr); gap: .7rem .5rem; }
+    .person-section { padding: 0 1rem 2rem; }
+    .person-filters { padding: 0 1rem 1rem; }
+}
+@media(max-width:480px) { .person-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; } }
+</style>
+
+<!-- Hero -->
+<div class="person-hero">
+    {% if person.profile_path %}
+    <div style="position:absolute;inset:0;background-size:cover;background-position:center top;filter:blur(40px) brightness(.2);transform:scale(1.2);background-image:url('https://image.tmdb.org/t/p/w500{{ person.profile_path }}')"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.3) 0%,var(--bg,#0d0d12) 100%)"></div>
+    {% endif %}
+    <div class="person-hero-content">
+        {% if person.profile_path %}
+        <img class="person-photo" src="https://image.tmdb.org/t/p/w342{{ person.profile_path }}" alt="{{ person.name }}">
+        {% else %}
+        <div class="person-photo" style="background:var(--bg-3);display:flex;align-items:center;justify-content:center;font-size:3rem;color:var(--text-3);">👤</div>
+        {% endif %}
+        <div class="person-info">
+            <h1>{{ person.name }}</h1>
+            {% if person.known_for_department %}
+            <div class="dept">{{ person.known_for_department }}</div>
+            {% endif %}
+            <div class="meta">
+                {% if person.birthday %}<span>Born:</span> {{ person.birthday }}{% if person.place_of_birth %} in {{ person.place_of_birth }}{% endif %}<br>{% endif %}
+                {% if person.deathday %}<span>Died:</span> {{ person.deathday }}<br>{% endif %}
+                {% if person.also_known_as %}<span>Also known as:</span> {{ person.also_known_as|join:", " }}{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Biography -->
+{% if person.biography %}
+<div class="person-bio">
+    <p>{{ person.biography }}</p>
+</div>
+{% endif %}
+
+<!-- Filter Tabs -->
+<div class="person-filters">
+    <button class="person-filter-tab active" data-filter="all" onclick="filterCredits('all', this)">All</button>
+    <button class="person-filter-tab" data-filter="movie" onclick="filterCredits('movie', this)">Movies{% if movies %} ({{ movies|length }}){% endif %}</button>
+    <button class="person-filter-tab" data-filter="tv" onclick="filterCredits('tv', this)">Series{% if series %} ({{ series|length }}){% endif %}</button>
+    <span class="person-filter-count" id="filterCount">{{ movies|length|add:series|length }} items</span>
+</div>
+
+<!-- Combined Credits Grid -->
+<div class="person-section">
+    <div class="person-grid" id="creditsGrid">
+        <!-- Movies -->
+        {% for m in movies %}
+        <a href="/movies/id/{{ m.id }}/" class="person-card" data-type="movie" title="{{ m.title }}">
+            <div class="person-card-img">
+                {% if m.poster_path %}
+                <img src="https://image.tmdb.org/t/p/w342{{ m.poster_path }}" alt="{{ m.title }}" loading="lazy">
+                {% endif %}
+                {% if m.release_date|is_future_date %}
+                <div class="person-card-badge" style="background:rgba(39,174,96,.85);color:#fff">🎬 Coming Soon</div>
+                {% elif m.vote_average and m.vote_average > 0 %}
+                <div class="person-card-badge">{{ m.vote_average }}</div>
+                {% endif %}
+                <div class="person-card-type movie">Movie</div>
+                <div class="person-card-overlay">
+                    <div class="person-card-title">{{ m.title }}</div>
+                    {% if m.character %}<div class="person-card-role">{{ m.character }}</div>{% endif %}
+                    {% if m.release_date %}<div class="person-card-year">{{ m.release_date|slice:":4" }}</div>{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+
+        <!-- Series -->
+        {% for s in series %}
+        <a href="/series/id/{{ s.id }}/" class="person-card" data-type="tv" title="{{ s.title }}">
+            <div class="person-card-img">
+                {% if s.poster_path %}
+                <img src="https://image.tmdb.org/t/p/w342{{ s.poster_path }}" alt="{{ s.title }}" loading="lazy">
+                {% endif %}
+                {% if s.first_air_date|is_future_date %}
+                <div class="person-card-badge" style="background:rgba(39,174,96,.85);color:#fff">🎬 Coming Soon</div>
+                {% elif s.vote_average and s.vote_average > 0 %}
+                <div class="person-card-badge">{{ s.vote_average }}</div>
+                {% endif %}
+                <div class="person-card-type tv">Series</div>
+                <div class="person-card-overlay">
+                    <div class="person-card-title">{{ s.title }}</div>
+                    {% if s.character %}<div class="person-card-role">{{ s.character }}</div>{% endif %}
+                    {% if s.first_air_date %}<div class="person-card-year">{{ s.first_air_date|slice:":4" }}</div>{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="person-empty" id="noResults" style="display:none">
+        No credits found for this filter.
+    </div>
+</div>
+
+<script>
+var totalMovies = {{ movies|length }};
+var totalSeries = {{ series|length }};
+
+function filterCredits(type, btn) {
+    // Update active tab
+    document.querySelectorAll('.person-filter-tab').forEach(function(t) { t.classList.remove('active'); });
+    btn.classList.add('active');
+
+    var cards = document.querySelectorAll('.person-card');
+    var shown = 0;
+
+    cards.forEach(function(card) {
+        var cardType = card.getAttribute('data-type');
+        if (type === 'all' || cardType === type) {
+            card.style.display = '';
+            shown++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Update count
+    var countEl = document.getElementById('filterCount');
+    countEl.textContent = shown + ' item' + (shown !== 1 ? 's' : '');
+
+    // Show/hide empty state
+    var noResults = document.getElementById('noResults');
+    noResults.style.display = shown === 0 ? 'block' : 'none';
+}
+</script>
+{% endblock %}

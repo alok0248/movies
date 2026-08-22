@@ -1,0 +1,3272 @@
+
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-title" content="{{ site_settings.brand_name }}">
+    {% if site_settings.adsense_verification_meta %}
+    <meta name="google-adsense-account" content="{{ site_settings.adsense_verification_meta }}">
+    {% endif %}
+    <title>{{ site_settings.brand_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script>
+        /* Apply saved theme before paint to prevent flash */
+        (function() {
+            var t = localStorage.getItem('site-theme') || localStorage.getItem('theme_mode') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <style>
+        :root {
+            --brand: {{ theme_primary|default:'#e50914' }};
+            --brand-glow: {{ theme_primary|default:'#e50914' }}44;
+            --transition: background .3s, color .3s, border-color .3s, box-shadow .3s;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 20px;
+            --shadow-card: 0 4px 24px rgba(0,0,0,.4);
+            --shadow-hover: 0 12px 40px rgba(0,0,0,.6);
+            --glass-bg: rgba(18,18,24,.85);
+            --glass-border: rgba(255,255,255,.08);
+            --glass-blur: blur(20px);
+        }
+        html[data-theme="dark"] {
+            --bg: {{ theme_bg|default:'#0d0d12' }};
+            --bg-2: {{ theme_bg_secondary|default:'#16161f' }};
+            --bg-3: #1e1e2a;
+            --surface: rgba(255,255,255,.04);
+            --surface-hover: rgba(255,255,255,.08);
+            --text: #f0f0f5;
+            --text-2: #a0a0b0;
+            --text-3: #606070;
+            --border: rgba(255,255,255,.08);
+            --input-bg: rgba(255,255,255,.05);
+            --nav-bg: rgba(13,13,18,.92);
+            --card-bg: #16161f;
+            --shadow-lg: 0 20px 60px rgba(0,0,0,.5);
+        }
+        html[data-theme="light"] {
+            --bg: #f5f5fa;
+            --bg-2: #ffffff;
+            --bg-3: #eeeef3;
+            --surface: rgba(0,0,0,.03);
+            --surface-hover: rgba(0,0,0,.06);
+            --text: #1a1a2e;
+            --text-2: #555570;
+            --text-3: #888898;
+            --border: rgba(0,0,0,.08);
+            --input-bg: rgba(0,0,0,.04);
+            --nav-bg: rgba(245,245,250,.92);
+            --card-bg: #ffffff;
+            --shadow-lg: 0 20px 60px rgba(0,0,0,.08);
+            --glass-bg: rgba(245,245,250,.85);
+            --glass-border: rgba(0,0,0,.06);
+        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            transition: var(--transition);
+            overflow-x: hidden;
+        }
+        a, button, input, select, textarea { transition: var(--transition); }
+        a { color: var(--brand); text-decoration: none; }
+        a:hover { opacity: .85; }
+        img { max-width: 100%; display: block; }
+
+        /* Navbar */
+        .navbar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: var(--nav-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-bottom: 1px solid var(--glass-border);
+            padding: .6rem 2rem;
+            transition: all .3s ease;
+        }
+        .navbar.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,.3); }
+        .navbar-brand {
+            color: var(--brand) !important;
+            font-weight: 800;
+            font-size: 1.4rem;
+            letter-spacing: -.03em;
+            text-decoration: none;
+        }
+        .navbar-toggler {
+            border: 1px solid var(--border);
+            padding: .4rem .6rem;
+            border-radius: var(--radius-sm);
+        }
+        .navbar-toggler-icon { filter: invert(1); }
+        html[data-theme="light"] .navbar-toggler-icon { filter: invert(0); }
+        .nav-link {
+            color: var(--text-2) !important;
+            font-size: .82rem;
+            font-weight: 500;
+            padding: .5rem .7rem !important;
+            border-radius: var(--radius-sm);
+            transition: all .2s;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: var(--text) !important;
+            background: var(--surface-hover);
+        }
+        .navbar-collapse {
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            margin-top: .5rem;
+        }
+        @media(min-width:992px) {
+            .navbar-collapse { background: transparent; border: none; padding: 0; margin: 0; }
+        }
+        .dropdown-menu {
+            background: var(--bg-2) !important;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-lg);
+            padding: .4rem;
+        }
+        .dropdown-item {
+            color: var(--text-2) !important;
+            border-radius: 6px;
+            padding: .45rem .75rem;
+            font-size: .82rem;
+        }
+        .dropdown-item:hover { background: var(--surface-hover) !important; color: var(--text) !important; }
+        .dropdown-item.active { background: var(--brand) !important; color: #fff !important; }
+        .dropdown-divider { border-color: var(--border); }
+        .dropdown-header { color: var(--text-3); font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; }
+        .genre-dropdown-menu { min-width: 340px; padding: .5rem; }
+        .genre-dropdown-menu .row { margin-inline: 0; }
+        .genre-dropdown-menu .col { padding-inline: .25rem; }
+        .genre-dropdown-menu .dropdown-item { border-radius: 6px; font-size: .76rem; padding: .3rem .5rem; }
+        .provider-dropdown-menu { min-width: 300px; max-width: min(92vw, 440px); max-height: 70vh; overflow-y: auto; padding: .5rem; }
+        .provider-dropdown-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .15rem; }
+        .provider-dropdown-grid .dropdown-item { border-radius: 6px; font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        @media(max-width:576px) { .provider-dropdown-menu { min-width: min(92vw, 320px); } .provider-dropdown-grid { grid-template-columns: 1fr; } }
+
+        /* Search */
+        .search-input {
+            background: var(--input-bg) !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text) !important;
+            border-radius: 10px;
+            font-size: .82rem;
+            padding: .5rem 1rem;
+        }
+        .search-input::placeholder { color: var(--text-3); }
+        .search-input:focus {
+            background: var(--surface-hover) !important;
+            border-color: var(--brand) !important;
+            box-shadow: 0 0 0 3px var(--brand-glow) !important;
+            outline: none;
+            color: var(--text) !important;
+        }
+
+        /* Content */
+        .content-wrapper { padding-top: 3.5rem; }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--brand);
+            border: none;
+            padding: .5rem 1.25rem;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            color: #fff;
+            font-size: .82rem;
+        }
+        .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 4px 16px var(--brand-glow); }
+        .btn-outline-light {
+            color: var(--text-2);
+            border-color: var(--border);
+            border-radius: var(--radius-sm);
+            font-size: .82rem;
+            padding: .4rem 1rem;
+        }
+        html[data-theme="light"] .btn-outline-light { color: var(--text); border-color: var(--border); }
+        .btn-outline-light:hover { background: var(--surface-hover); color: var(--text); border-color: var(--brand); }
+
+        /* Cards */
+        .card-wrapper {
+            flex: 0 0 auto;
+            width: 200px;
+            transition: transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+        }
+        .card-wrapper:hover {
+            transform: translateY(-8px) scale(1.03);
+            z-index: 10;
+        }
+        .netflix-card, .movie-card {
+            background: transparent;
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: none;
+        }
+        .card-image-container { position: relative; overflow: hidden; border-radius: var(--radius); }
+        .card-image {
+            width: 100%;
+            aspect-ratio: 2/3;
+            object-fit: cover;
+            transition: transform .4s cubic-bezier(.4,0,.2,1);
+        }
+        .card-wrapper:hover .card-image { transform: scale(1.08); }
+        .card-info { padding: .6rem .2rem; }
+        .card-title { font-size: .78rem; font-weight: 600; color: var(--text); line-height: 1.3; }
+        .card-year { font-size: .68rem; color: var(--text-3); }
+
+        /* Scroll */
+        .row-container { position: relative; padding: 0 2rem; }
+        .scroll-container {
+            display: flex; overflow-x: auto; gap: .5rem;
+            padding: .8rem 0; scrollbar-width: none; scroll-behavior: smooth;
+        }
+        .scroll-container::-webkit-scrollbar { display: none; }
+        .scroll-btn {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 44px; height: 100%;
+            background: rgba(0,0,0,.5);
+            border: none; color: #fff; font-size: 1.4rem;
+            cursor: pointer; z-index: 20;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity .3s, background .3s;
+            border-radius: var(--radius-sm);
+            backdrop-filter: blur(8px);
+        }
+        html[data-theme="light"] .scroll-btn { background: rgba(255,255,255,.6); color: #111; }
+        .scroll-btn:hover { opacity: 1 !important; background: rgba(0,0,0,.7); }
+        .scroll-btn.left { left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+        .scroll-btn.right { right: 0; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+        .section-title { font-size: 1.1rem; font-weight: 700; margin: 1.5rem 0 .5rem 2rem; color: var(--text); }
+
+        /* Filter */
+        .filter-bar { padding: 1rem 2rem; background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .filter-tab { color: var(--text-3); font-size: .85rem; font-weight: 500; text-decoration: none; padding-bottom: .5rem; border-bottom: 2px solid transparent; }
+        .filter-tab:hover, .filter-tab.active { color: var(--text); }
+        .filter-tab.active { border-bottom-color: var(--brand); }
+
+        /* Forms */
+        .form-select, .form-control {
+            background: var(--input-bg) !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text) !important;
+            border-radius: var(--radius-sm);
+            font-size: .82rem;
+        }
+        .form-select:focus { border-color: var(--brand) !important; }
+        .form-select option { background: var(--bg-2); color: var(--text); }
+
+        /* Modals */
+        .modal-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
+            z-index: 2000; display: none; opacity: 0; transition: opacity .3s;
+        }
+        .modal-backdrop.active { display: block; opacity: 1; }
+        .detail-modal {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(.9);
+            width: 92%; max-width: 960px;
+            border-radius: var(--radius-lg);
+            z-index: 2001; display: none; opacity: 0;
+            transition: all .3s cubic-bezier(.4,0,.2,1);
+            overflow: hidden; background: var(--bg-2); box-shadow: var(--shadow-lg);
+        }
+        .detail-modal.active { display: block; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .modal-hero { position: relative; height: 400px; background-size: cover; background-position: center; }
+        .modal-hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to right, var(--bg-2) 0%, transparent 100%); }
+        .modal-hero-content { position: relative; z-index: 1; padding: 2.5rem; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+        .modal-title { color: var(--text); font-size: 1.8rem; font-weight: 800; }
+        .modal-meta { color: var(--text-2); font-size: .85rem; margin: .5rem 0; }
+        .modal-buttons, .filter-tabs, .genre-tags { display: flex; gap: .8rem; flex-wrap: wrap; }
+        .modal-btn { padding: .6rem 1.5rem; border: none; border-radius: var(--radius-sm); font-weight: 600; font-size: .85rem; cursor: pointer; }
+        .modal-btn.play { background: #fff; color: #000; }
+        html[data-theme="light"] .modal-btn.play { background: #111; color: #fff; }
+        .modal-btn.more { background: var(--surface-hover); color: var(--text-2); border: 1px solid var(--border); }
+        .modal-content { padding: 2rem 2.5rem 2.5rem; background: var(--bg-2); color: var(--text); }
+        .modal-close { color: var(--text-3); font-size: 1.5rem; background: none; border: none; cursor: pointer; }
+        .genre-tag { background: var(--surface); padding: .2rem .7rem; border-radius: 20px; font-size: .8rem; color: var(--text-2); }
+
+        /* Hero */
+        .hero-section { position: relative; height: 75vh; min-height: 400px; background-size: cover; background-position: center; display: flex; align-items: center; }
+        .hero-overlay { position: absolute; inset: 0; background: linear-gradient(to right, rgba(0,0,0,.9) 0%, rgba(0,0,0,.4) 50%, rgba(0,0,0,.1) 100%); }
+        html[data-theme="light"] .hero-overlay { background: linear-gradient(to right, rgba(245,245,250,.95) 0%, rgba(245,245,250,.6) 50%, rgba(245,245,250,.15) 100%); }
+        .hero-content { position: relative; z-index: 1; padding-left: 3rem; max-width: 550px; }
+        .hero-title { font-size: 2.5rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+        .hero-description { color: var(--text-2); font-size: .9rem; line-height: 1.6; margin: .8rem 0 1rem; }
+        .hero-btn-primary, .hero-btn-secondary {
+            display: inline-flex; align-items: center; gap: .5rem;
+            padding: .7rem 1.5rem; border-radius: var(--radius-sm);
+            font-weight: 600; font-size: .85rem; border: none; cursor: pointer;
+        }
+        .hero-btn-primary { background: var(--brand); color: #fff; }
+        .hero-btn-primary:hover { filter: brightness(1.15); transform: translateY(-2px); box-shadow: 0 8px 24px var(--brand-glow); }
+        .hero-btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); }
+        .hero-meta { color: var(--text-2); font-size: .85rem; display: flex; align-items: center; gap: .5rem; margin-bottom: .8rem; }
+
+        /* Grids */
+        .movie-grid, .series-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; padding: 1rem 0;
+        }
+
+        /* Rating */
+        .rating-badge, .card-rating-badge {
+            position: absolute; top: 8px; left: 8px;
+            background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+            color: #ffc107; padding: 3px 8px; border-radius: 20px;
+            font-size: .7rem; font-weight: 700; z-index: 5;
+            display: inline-flex; align-items: center;
+            border: 1px solid rgba(255,255,255,.1);
+        }
+        html[data-theme="light"] .rating-badge, html[data-theme="light"] .card-rating-badge {
+            background: rgba(255,255,255,.9); color: #b45309; border-color: rgba(0,0,0,.06);
+        }
+
+        /* Card hover overlay */
+        .card-hover-overlay {
+            position: absolute; inset: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.9) 100%);
+            opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 3; border-radius: var(--radius);
+        }
+        .card-wrapper:hover .card-hover-overlay { opacity: 1; }
+        .card-hover-preview {
+            position: absolute; left: 0; right: 0; bottom: 0;
+            padding: .8rem 1rem 1rem; opacity: 0; transform: translateY(6px);
+            transition: all .3s ease .05s; pointer-events: auto; z-index: 5;
+        }
+        .card-wrapper:hover .card-hover-preview { opacity: 1; transform: translateY(0); }
+        .preview-title { font-size: .78rem; font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .preview-meta { font-size: .65rem; color: #94a3b8; display: flex; align-items: center; gap: 6px; }
+        .preview-meta b { padding: 1px 5px; background: #ffc400; color: #111; border-radius: 3px; font-size: .55rem; font-weight: 800; }
+        .hover-description { font-size: .65rem; color: #bbb; line-height: 1.4; margin-top: 3px; }
+        .preview-actions { display: flex; gap: 5px; margin-bottom: 5px; }
+        .preview-btn {
+            width: 26px; height: 26px; border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,.5);
+            background: rgba(0,0,0,.4); color: #fff;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: .65rem; backdrop-filter: blur(4px);
+        }
+        .preview-btn:hover { background: #fff; color: #000; border-color: #fff; transform: scale(1.1); }
+        .preview-btn.play-btn:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
+        .card-hover-title { display: none; }
+
+        /* Watchlist btn */
+        .hover-watchlist-btn {
+            width: 32px; height: 32px; background: rgba(0,0,0,.4);
+            color: #fff; border: 1.5px solid rgba(255,255,255,.4);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; backdrop-filter: blur(6px); z-index: 10; font-size: .7rem;
+        }
+        .hover-watchlist-btn.in-watchlist { background: var(--brand); border-color: var(--brand); color: #fff; }
+        .card-watchlist-btn { position: absolute; right: 8px; top: 40px; }
+
+        /* Auth modal */
+        .auth-modal-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,.6);
+            backdrop-filter: blur(16px); z-index: 3000;
+            display: none; opacity: 0; transition: opacity .3s;
+        }
+        .auth-modal-backdrop.active { display: flex; justify-content: center; align-items: center; opacity: 1; }
+        .auth-modal {
+            width: 90%; max-width: 400px; border-radius: var(--radius-lg);
+            background: var(--bg-2); border: 1px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            transform: scale(.92) translateY(20px); opacity: 0;
+            transition: all .4s cubic-bezier(.4,0,.2,1); overflow: hidden; position: relative;
+        }
+        .auth-modal.active { transform: scale(1) translateY(0); opacity: 1; }
+        .auth-modal-close {
+            position: absolute; top: .75rem; right: .75rem;
+            width: 30px; height: 30px; border-radius: 50%;
+            border: none; background: var(--surface);
+            color: var(--text-3); font-size: 1.1rem;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;
+        }
+        .auth-modal-close:hover { background: var(--surface-hover); color: var(--text); }
+        .auth-modal-header { padding: 2rem 1.5rem 0; text-align: center; }
+        .auth-logo-icon {
+            width: 52px; height: 52px; border-radius: 16px;
+            background: var(--brand); display: inline-flex;
+            align-items: center; justify-content: center;
+            margin-bottom: 1rem; color: #fff; font-size: 1.3rem;
+        }
+        .auth-form-title { font-size: 1.4rem; font-weight: 800; color: var(--text); margin-bottom: .2rem; }
+        .auth-form-subtitle { color: var(--text-3); font-size: .85rem; margin-bottom: 0; }
+        .auth-modal-body { padding: 1.25rem 1.5rem 1.5rem; }
+        .auth-form-group { margin-bottom: .8rem; }
+        .auth-form-group label {
+            display: block; font-size: .72rem; font-weight: 600;
+            color: var(--text-3); margin-bottom: .3rem;
+            text-transform: uppercase; letter-spacing: .05em;
+        }
+        .auth-form-input {
+            width: 100%; padding: .7rem 1rem;
+            border-radius: var(--radius-sm);
+            background: var(--input-bg) !important;
+            border: 1.5px solid var(--border) !important;
+            color: var(--text) !important; font-size: .88rem;
+        }
+        .auth-form-input:focus { border-color: var(--brand) !important; box-shadow: 0 0 0 3px var(--brand-glow) !important; }
+        .auth-form-btn {
+            width: 100%; padding: .75rem; margin-top: .6rem;
+            border: none; border-radius: var(--radius-sm);
+            background: var(--brand); color: #fff;
+            font-size: .9rem; font-weight: 700; cursor: pointer;
+        }
+        .auth-form-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .auth-form-message { border-radius: var(--radius-sm); padding: .5rem .8rem; font-size: .82rem; font-weight: 500; margin-top: .6rem; }
+        .auth-form-message.success { background: rgba(70,211,105,.1); color: #46d369; border: 1px solid rgba(70,211,105,.15); }
+        .auth-form-message.error { background: rgba(239,68,68,.1); color: #ef4444; border: 1px solid rgba(239,68,68,.15); }
+        .auth-divider { display: flex; align-items: center; margin: 1rem 0; color: var(--text-3); font-size: .8rem; }
+        .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+        .auth-form-link { color: var(--brand); font-weight: 600; cursor: pointer; }
+
+        /* Footer */
+        .site-footer { margin-top: 3rem; padding: 2.5rem 2rem; background: var(--bg-2); border-top: 1px solid var(--border); color: var(--text-3); }
+        .site-footer-title { color: var(--text); font-weight: 700; margin-bottom: .6rem; font-size: .88rem; }
+        .site-footer-list { list-style: none; padding: 0; }
+        .site-footer-list li { margin-bottom: .35rem; }
+        .site-footer-list a { color: var(--text-3); font-size: .82rem; }
+        .site-footer-list a:hover { color: var(--text); }
+        .site-footer-subscribe-form { display: flex; gap: .6rem; margin-top: .8rem; }
+        .site-footer-subscribe-form input { flex: 1; padding: .6rem .8rem; border-radius: var(--radius-sm); background: var(--input-bg); border: 1px solid var(--border); color: var(--text); font-size: .82rem; }
+        .site-footer-subscribe-form button { border: none; border-radius: var(--radius-sm); padding: .6rem 1rem; background: var(--brand); color: #fff; font-weight: 700; font-size: .82rem; cursor: pointer; }
+        .site-footer-brand { color: var(--brand); font-weight: 800; font-size: 1.1rem; margin-bottom: .3rem; }
+        .site-footer-brand-tagline { color: var(--text-3); font-size: .75rem; }
+        .site-footer-copy { color: var(--text-3); font-size: .72rem; margin-top: .3rem; }
+        .site-footer-disclaimer { font-size: .68rem; color: var(--text-3); opacity: .6; }
+        .site-footer-subscribe-text { font-size: .78rem; color: var(--text-3); margin-top: .3rem; }
+
+        /* Floating Theme Toggle */
+        .theme-toggle {
+            position: fixed; left: 16px; bottom: 24px; z-index: 5000;
+            width: 44px; height: 44px;
+            border-radius: 50%; border: 1px solid var(--glass-border);
+            background: var(--glass-bg); backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: 0 4px 20px rgba(0,0,0,.3);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1.1rem;
+            transition: transform .3s, box-shadow .3s;
+        }
+        .theme-toggle:hover { transform: scale(1.1) rotate(15deg); box-shadow: 0 6px 28px rgba(0,0,0,.4); }
+        @media(max-width:768px) {
+            .theme-toggle { bottom: 5.5rem; left: 12px; width: 40px; height: 40px; font-size: 1rem; }
+        }
+
+        /* Catalog */
+        .catalog-shell { max-width: 1400px; margin: 0 auto; padding: 1.2rem 2rem 3rem; }
+        .catalog-layout { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+        .catalog-main { min-width: 0; }
+        .catalog-heading { font-size: clamp(1.3rem, 2.5vw, 1.8rem); font-weight: 800; color: var(--text); margin-bottom: 1rem; }
+        .catalog-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .8rem; }
+        .catalog-filter-tabs { display: flex; gap: .8rem; flex-wrap: wrap; }
+        .catalog-filter-tabs .filter-tab { font-size: .82rem; padding: .3rem 0 .4rem; }
+        .catalog-filters {
+            display: flex; flex-wrap: wrap; gap: .5rem;
+            margin-bottom: 1rem; padding: .7rem .9rem;
+            background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius);
+        }
+        .catalog-filters .form-control, .catalog-filters .form-select {
+            min-height: 34px; width: auto; min-width: 110px;
+            padding: .3rem .6rem; font-size: .76rem; border-radius: var(--radius-sm);
+        }
+        .catalog-filters .btn { min-height: 34px; padding: .3rem .7rem; font-size: .76rem; border-radius: var(--radius-sm); }
+        .catalog-grid.movie-grid, .catalog-grid.series-grid {
+            grid-template-columns: repeat(6, 1fr); gap: 1rem .6rem;
+        }
+        @media(max-width:1200px) { .catalog-grid.movie-grid, .catalog-grid.series-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media(max-width:992px) { .catalog-grid.movie-grid, .catalog-grid.series-grid { grid-template-columns: repeat(4, 1fr); } }
+        @media(max-width:768px) {
+            .catalog-shell { padding: .8rem 1rem 2rem; }
+            .catalog-grid.movie-grid, .catalog-grid.series-grid { grid-template-columns: repeat(3, 1fr); gap: .7rem .5rem; }
+            .catalog-filters { padding: .5rem .7rem; }
+        }
+        @media(max-width:480px) {
+            .catalog-grid.movie-grid, .catalog-grid.series-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; }
+            .catalog-filters .search-input { min-width: 100%; }
+        }
+        .catalog-grid .card-wrapper { min-width: 0; width: auto; transform: none; }
+        .catalog-grid .card-wrapper:hover { transform: translateY(-6px) scale(1.03); }
+        .catalog-grid .movie-card { background: transparent; box-shadow: none; }
+        .catalog-grid .card-image-container { border-radius: var(--radius-sm); }
+        .catalog-grid .card-title, .catalog-grid .card-info { display: none !important; }
+        .card-image-link { position: relative; z-index: 1; display: block; }
+
+        /* Lazy image */
+        .lazy-placeholder {
+            position: absolute; inset: 0;
+            background: linear-gradient(110deg, var(--bg-3) 8%, var(--bg-2) 18%, var(--bg-3) 33%);
+            background-size: 200% 100%; animation: shimmer 1.4s linear infinite; z-index: 0;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .lazy-image { opacity: 0; transition: opacity .5s, filter .5s; filter: blur(4px); position: relative; z-index: 2; }
+        .lazy-image.loaded { opacity: 1; filter: blur(0); }
+
+        /* Scroll progress */
+        #scrollProgress {
+            position: fixed; top: 0; left: 0;
+            height: 3px; width: 0%;
+            background: linear-gradient(90deg, var(--brand), #f472b6);
+            z-index: 9999; transition: width .08s linear;
+            box-shadow: 0 0 8px var(--brand);
+        }
+
+        /* Back to top */
+        #backToTop {
+            position: fixed; right: 20px; bottom: 24px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: var(--brand); color: #fff; border: none;
+            box-shadow: 0 6px 20px var(--brand-glow);
+            cursor: pointer; z-index: 4500;
+            opacity: 0; visibility: hidden; transform: translateY(10px);
+            transition: all .3s; display: inline-flex; align-items: center; justify-content: center;
+        }
+        #backToTop.visible { opacity: 1; visibility: visible; transform: translateY(0); }
+        #backToTop:hover { transform: translateY(-3px); filter: brightness(1.15); }
+
+        /* Ad countdown */
+        #adCountdownWidget {
+            position: fixed; right: 1rem; bottom: 5rem; z-index: 9990;
+            background: rgba(0,0,0,.8); border: 1px solid var(--glass-border);
+            color: #fff; border-radius: var(--radius);
+            padding: .6rem .9rem; font-size: .78rem; font-weight: 600;
+            box-shadow: 0 8px 28px rgba(0,0,0,.5);
+            display: flex; align-items: center; gap: .5rem;
+            backdrop-filter: blur(6px); max-width: 240px;
+        }
+
+        /* Skeleton */
+        .skeleton-card { background: transparent; border: none !important; }
+        .skeleton-card .card-image-container {
+            aspect-ratio: 2/3;
+            background: linear-gradient(110deg, var(--bg-3) 8%, var(--bg-2) 18%, var(--bg-3) 33%);
+            background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: var(--radius);
+        }
+
+        /* Most viewed sidebar */
+        .most-viewed-sidebar { position: sticky; top: 1.25rem; }
+        .most-viewed-heading {
+            height: 30px; display: flex; align-items: center; justify-content: center;
+            margin-bottom: .6rem; background: var(--bg-3); color: var(--text-3);
+            font-size: .62rem; font-weight: 800; letter-spacing: .08em; border-radius: 4px;
+        }
+        .most-viewed-list { display: flex; flex-direction: column; gap: .6rem; }
+        .most-viewed-item { display: grid; grid-template-columns: 28px 44px 1fr; gap: .4rem; align-items: center; color: var(--text); text-decoration: none; }
+        .most-viewed-rank { width: 24px; height: 24px; display: grid; place-items: center; background: var(--brand); color: #fff; border-radius: 50%; font-size: .65rem; font-weight: 800; }
+        .most-viewed-poster-wrap { width: 44px; height: 62px; overflow: hidden; border-radius: 4px; background: var(--bg-3); }
+        .most-viewed-poster-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .most-viewed-copy strong { display: block; font-size: .72rem; line-height: 1.3; font-weight: 600; }
+        .most-viewed-meta { display: flex; align-items: center; gap: .3rem; margin-top: .2rem; color: var(--text-3); font-size: .65rem; }
+        .most-viewed-meta em { color: #ffc400; font-style: normal; }
+        .most-viewed-empty { color: var(--text-3); font-size: .72rem; }
+
+        /* === RESPONSIVE === */
+        @media(max-width:991px) {
+            .nav-item.dropdown > .nav-link.dropdown-toggle { display: none !important; }
+            .movie-grid, .series-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: .6rem; }
+            .navbar { padding: .5rem 1rem; }
+            .hero-section { height: 55vh; }
+            .hero-title { font-size: 1.8rem; }
+            .hero-content { padding-left: 1.5rem; }
+            .row-container, .site-footer { padding: 0 1rem; }
+            .section-title { margin-left: 1rem; font-size: 1rem; }
+            .site-footer { padding: 2rem 1rem 4rem; }
+        }
+        @media(max-width:768px) {
+            .card-wrapper { width: 130px !important; }
+            .catalog-layout { grid-template-columns: 1fr; }
+            .most-viewed-sidebar { position: static; }
+            .most-viewed-list { display: grid; grid-template-columns: repeat(2, 1fr); }
+        }
+        @media(max-width:480px) {
+            .card-wrapper { width: 110px !important; }
+            .movie-grid, .series-grid { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: .5rem; }
+            .hero-title { font-size: 1.5rem; }
+            .navbar { padding: .4rem .8rem; }
+            .navbar-brand { font-size: 1.2rem; }
+        }
+
+        /* === MOBILE BOTTOM NAV (App-style) === */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            z-index: 9999;
+            background: rgba(10,10,15,.96);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,.06);
+            padding: .2rem 0 calc(.2rem + env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 30px rgba(0,0,0,.4);
+        }
+        html[data-theme="light"] .mobile-bottom-nav { background: rgba(245,245,250,.96); box-shadow: 0 -4px 30px rgba(0,0,0,.08); }
+        .mobile-bottom-nav .nav-items {
+            display: flex; justify-content: space-around; align-items: center;
+            list-style: none; margin: 0; padding: 0;
+        }
+        .mobile-bottom-nav .nav-item a {
+            display: flex; flex-direction: column; align-items: center; gap: 1px;
+            color: var(--text-3); text-decoration: none;
+            font-size: .55rem; font-weight: 500; padding: .25rem .6rem; border-radius: 10px;
+            transition: all .2s; position: relative; -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-bottom-nav .nav-item a .nav-icon { font-size: 1.2rem; transition: transform .2s; }
+        .mobile-bottom-nav .nav-item a:active { transform: scale(.9); }
+        .mobile-bottom-nav .nav-item a.active { color: var(--brand); }
+        .mobile-bottom-nav .nav-item a.active .nav-icon { transform: scale(1.1); }
+        .mobile-bottom-nav .nav-item a.active::after {
+            content: '';
+            position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
+            width: 16px; height: 3px; border-radius: 2px;
+            background: var(--brand, #e50914);
+        }
+
+        /* === MOBILE APP-LIKE UI === */
+        @media(max-width:768px) {
+            .navbar-expand-lg .navbar-collapse { display: none !important; }
+            .navbar-toggler { display: none !important; }
+            .mobile-bottom-nav { display: block; }
+            .navbar { padding: .4rem .8rem; background: rgba(10,10,15,.88) !important; backdrop-filter: blur(16px) !important; }
+            .navbar-brand { font-size: 1.15rem; font-weight: 900; }
+            .content-wrapper { padding-bottom: 3.8rem; }
+            .site-footer { padding-bottom: 5rem; }
+
+            /* App-like cards */
+            .movie-grid, .series-grid { grid-template-columns: repeat(3, 1fr); gap: .4rem; padding: 0 .5rem; }
+            .card-image-container { border-radius: 8px !important; }
+            .card-rating-badge { font-size: .65rem; padding: 2px 6px; }
+            .card-wrapper { transition: transform .2s; }
+            .card-wrapper:active { transform: scale(.96); }
+
+            /* Hero */
+            .hero-title { font-size: 1.4rem; }
+            .hero-subtitle { font-size: .75rem; }
+
+            /* Touch-friendly buttons */
+            .det-btn { padding: 10px 18px; font-size: .8rem; border-radius: 10px; }
+            .det-btn-play { padding: 12px 24px; font-size: .85rem; }
+            .det-btn-ghost { padding: 10px 14px; font-size: .78rem; }
+
+            /* Detail page - full width player, no sidebar */
+            .det-player-layout { flex-direction: column !important; }
+            .det-player-right { width: 100% !important; max-height: none !important; }
+            .det-player-box { max-width: 100% !important; border-radius: 0 !important; }
+            .det-player-section { padding: 0 0 1rem !important; }
+            .det-hero-inner { flex-direction: column; align-items: center; text-align: center; padding: 2rem 1rem 1rem; gap: 1rem; }
+            .det-poster-col { width: 140px; position: static; }
+            .det-poster-wrap { box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+            .det-title { font-size: 1.3rem; }
+            .det-overview { font-size: .82rem; max-width: 100%; }
+            .det-info-grid { grid-template-columns: repeat(2, 1fr); gap: .4rem; }
+            .det-info-card { padding: .7rem; }
+            .det-info-card .ic-value { font-size: .8rem; }
+            .det-actions { justify-content: center; gap: .4rem; }
+            .det-server-pill { padding: 5px 12px; font-size: .72rem; }
+            .det-genre-chips { justify-content: center; }
+            .det-quick-meta { justify-content: center; font-size: .78rem; }
+            .det-content { padding: 0 1rem 2rem; }
+            .det-section { margin-bottom: 1.5rem; }
+            .det-section-head { font-size: 1rem; }
+            .det-trailer-card { flex: 0 0 240px; }
+            .det-person-card { flex: 0 0 85px; }
+            .det-person-img { width: 76px; height: 76px; }
+
+            /* Home page */
+            .home-row-scroll { gap: .4rem; }
+            .home-scroll-btn { display: none !important; }
+            .home-row-header { padding: .6rem 1rem .4rem; font-size: .95rem; }
+
+            /* Catalog */
+            .catalog-filters { flex-wrap: wrap; gap: .3rem; padding: .5rem; }
+            .catalog-filters .form-select, .catalog-filters .search-input { font-size: .78rem; padding: 6px 8px; }
+            .catalog-heading { font-size: 1.1rem; }
+            .catalog-filter-tabs { gap: .3rem; }
+            .filter-tab { font-size: .75rem; padding: .3rem .6rem; }
+
+            /* Search */
+            .search-input { font-size: .85rem; padding: .5rem .8rem; }
+
+            /* Person page */
+            .person-photo { width: 120px; height: 120px; }
+            .person-info h1 { font-size: 1.4rem; }
+            .person-grid { grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+            .person-filters { gap: .3rem; }
+            .person-filter-tab { padding: 6px 14px; font-size: .75rem; }
+
+            /* Scrollbar hide on mobile */
+            ::-webkit-scrollbar { display: none; }
+            * { scrollbar-width: none; }
+
+            /* Prevent overscroll */
+            html, body { overscroll-behavior: none; }
+
+            /* Smooth transitions */
+            a, button { -webkit-tap-highlight-color: transparent; }
+            .movie-card, .person-card { transition: transform .15s; }
+            .movie-card:active, .person-card:active { transform: scale(.97); }
+
+            /* Theme toggle - smaller on mobile */
+            .theme-toggle { width: 36px; height: 36px; font-size: .85rem; bottom: 4.5rem; right: .8rem; }
+        }
+
+        /* Tablet (769px - 1024px) */
+        @media(min-width:769px) and (max-width:1024px) {
+            .movie-grid, .series-grid { grid-template-columns: repeat(5, 1fr); gap: .6rem; }
+            .det-player-right { width: 280px; }
+            .navbar { padding: .5rem 1.5rem; }
+            .home-scroll-btn { width: 28px; height: 28px; }
+        }
+
+        @media(min-width:1441px) {
+            .catalog-grid.movie-grid, .catalog-grid.series-grid { grid-template-columns: repeat(7, 1fr); }
+        }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn .5s ease forwards; }
+        .animate-slide-up { animation: slideUp .6s ease forwards; }
+
+        /* Intersection Observer fade-in */
+        .reveal-on-scroll {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity .6s cubic-bezier(.25,.46,.45,.94), transform .6s cubic-bezier(.25,.46,.45,.94);
+        }
+        .reveal-on-scroll.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Stagger children in grids */
+        .reveal-stagger > * {
+            opacity: 0;
+            transform: translateY(18px) scale(.97);
+            transition: opacity .45s cubic-bezier(.25,.46,.45,.94), transform .45s cubic-bezier(.25,.46,.45,.94);
+        }
+        .reveal-stagger > *.is-visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        /* Page transitions */
+        .page-transition {
+            animation: pageEnter .4s cubic-bezier(.25,.46,.45,.94) forwards;
+        }
+        @keyframes pageEnter {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .page-exit {
+            animation: pageExit .25s ease forwards;
+        }
+        @keyframes pageExit {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-8px); }
+        }
+        /* Section reveal */
+        .section-reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity .5s ease, transform .5s ease;
+        }
+        .section-reveal.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @supports(padding-bottom: env(safe-area-inset-bottom)) {
+            .mobile-bottom-nav { padding-bottom: calc(.3rem + env(safe-area-inset-bottom)); }
+        }
+    </style>
+</head>
+<body>
+    <div id="scrollProgress"></div>
+    <button id="backToTop" type="button" title="Back to top" aria-label="Back to top">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+    </button>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'index' %}" title="Home (clears provider selection)">{{ site_settings.brand_name }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% for item in navbar_items %}
+                        {% if item.built_in_id == 'home' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'index' %}" title="Clear provider selection and return home">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'movies' %}
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'movie_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'movie_list' %}" id="movieDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="movieDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular">Popular</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated">Top Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming">Upcoming</a></li>
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'tv_shows' %}
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'series_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'series_list' %}" id="seriesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="seriesDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular">Popular TV Shows</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today">Airing Today</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air">On The Air</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated">Top Rated TV Shows</a></li>
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'live_tv' and not site_settings.hide_live_tv %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'live_tv' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'watchlist' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" id="navWatchlistBtn" onclick="handleNavWatchlistClick(event)">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'provider' %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="providerDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Choose a streaming provider">
+                                    {% if item.icon %}<i class="{{ item.icon }} me-1"></i>{% endif %}{% if active_provider %}{{ active_provider.name }}{% else %}{{ item.name }}{% endif %}
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-dark provider-dropdown-menu" aria-labelledby="providerDropdown">
+                                    <a class="dropdown-item mb-1{% if not active_provider %} active{% endif %}" href="{% url 'movie_list' %}?clear_provider=1">All Providers</a>
+                                    <div class="dropdown-divider"></div>
+                                    <div class="provider-dropdown-grid">
+                                        {% for provider in enabled_providers %}
+                                        <a class="dropdown-item{% if active_provider.id == provider.id %} active{% endif %}" href="{% if request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' or request.resolver_match.url_name == 'series_detail_by_id' %}{% url 'series_list' %}{% else %}{% url 'movie_list' %}{% endif %}?provider={{ provider.slug }}" title="{{ provider.name }}">{{ provider.name }}</a>
+                                        {% empty %}
+                                        <span class="dropdown-item-text text-muted">No enabled providers. Sync them from Admin.</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </li>
+                        {% elif item.built_in_id == 'genres' %}
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="#" id="genreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark genre-dropdown-menu" aria-labelledby="genreDropdown">
+                                    {% if request.resolver_match.url_name == 'movie_list' or request.resolver_match.url_name == 'movie_detail' %}
+                                        <li><h6 class="dropdown-header">Movie Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% elif request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' %}
+                                        <li><h6 class="dropdown-header">TV Show Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% else %}
+                                        <li><h6 class="dropdown-header">Movie Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in movie_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'movie_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">TV Show Genres</h6></li>
+                                        <li>
+                                            <div class="row px-3">
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:":10" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="col">
+                                                    {% for genre in series_genres|slice:"10:" %}
+                                                    <a class="dropdown-item" href="{% url 'series_list' %}?genre={{ genre.id }}">{{ genre.name }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'calendar' %}
+                            <li class="nav-item">
+                                <button class="nav-link" style="background: transparent; border: none; cursor: pointer;" id="navCalendarBtn" onclick="openCalendarModal()">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </button>
+                            </li>
+                        {% elif item.built_in_id == 'upcoming' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'upcoming' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.item_type == 'custom' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ item.url }}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+
+                <form class="d-flex gap-2 me-3" method="GET" action="{% url 'search' %}">
+                    <input class="form-control search-input" type="search" name="q" placeholder="Search..." aria-label="Search">
+                    <button class="btn btn-primary" type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg></button>
+                </form>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="btn btn-sm" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 10px;font-size:.85rem;cursor:pointer;transition:all .2s">
+                        <i class="fas fa-moon" id="themeIcon"></i>
+                    </button>
+                    {% if user.is_authenticated %}
+                        <div class="dropdown">
+                            <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Hi, {{ user.username }}!
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'watchlist' %}">📋 My Watch List</a></li>
+                                {% if user.is_staff or user.is_superuser %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">📊 Admin Dashboard</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'admin_subscribers' %}">📧 Subscribers</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form method="post" action="{% url 'ajax_logout' %}" style="display:inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="dropdown-item" style="background:none;border:none;width:100%;text-align:left;cursor:pointer;">🚪 Logout</button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    {% else %}
+                        <button class="btn btn-outline-light btn-sm" onclick="openAuthModal('login')">Sign In</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="navWatchlistWarning" class="text-center py-2" style="background: #dc3545; display: none;">
+        You need to login to view your watch list
+    </div>
+
+    <div class="content-wrapper">
+        <!-- Above-content ad slot -->
+        {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+        <div class="container-fluid px-0">
+            <div class="deferred-ad-slot" data-ad-position="above_content_top" data-ad-positions="above_content,head"></div>
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+
+        <!-- Below-content ad slot -->
+        {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+        <div class="container mt-3 mb-3">
+            <div class="deferred-ad-slot" data-ad-position="below_content_main" data-ad-positions="below_content"></div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Deferred ad slot placeholders (no ad HTML loaded until click threshold + consent OK) -->
+    {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+        <div class="container mt-4 mb-4">
+            <!-- Positions: head + sidebar + footer + popup (sitewide slot placeholder) -->
+            <div class="deferred-ad-slot" data-ad-position="sitewide" data-ad-positions="head,sidebar,footer,popup"></div>
+        </div>
+    {% endif %}
+
+    <!-- Auto-click ad infrastructure (no visible widget - runs in background) -->
+    {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    <div id="adCountdownWidget" class="hidden-widget" style="display:none !important; visibility:hidden !important;">
+        <div class="countdown-ring" id="adCountdownRing">10</div>
+        <div class="countdown-label">
+            <strong id="adCountdownTitle">Sponsor</strong>
+            <span id="adCountdownText">Loading...</span>
+        </div>
+    </div>
+    <!-- Consent banner (only shown when require_ad_consent=true and no choice made yet) -->
+    <div id="adConsentBanner" style="display:none; position:fixed; left:1rem; right:1rem; bottom:1rem; z-index:9992; max-width:720px; margin:0 auto; background:rgba(17,24,39,0.98); border:1px solid rgba(255,255,255,0.15); color:#fff; border-radius:14px; padding:1rem 1.25rem; box-shadow:0 16px 48px rgba(0,0,0,0.55); backdrop-filter:blur(8px);">
+        <div class="d-flex flex-column flex-md-row gap-3 align-items-start align-items-md-center justify-content-between">
+            <div style="flex:1; min-width:0;">
+                <div class="fw-bold mb-1" id="adConsentBannerTitle">Privacy &amp; Ads Consent</div>
+                <div class="text-white-50 small" id="adConsentBannerText">Loading…</div>
+            </div>
+            <div class="d-flex gap-2 flex-shrink-0">
+                <button class="btn btn-outline-light btn-sm" id="adConsentDenyBtn" type="button">Decline</button>
+                <button class="btn btn-success btn-sm" id="adConsentAcceptBtn" type="button">Accept Ads</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if site_settings.footer_enabled and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    {% block footer %}
+    <footer class="site-footer">
+        <div class="container-fluid px-0">
+            <div class="row g-4 align-items-start">
+                <div class="col-12 col-md-6 col-lg-2">
+                    {% if site_settings.footer_links_title %}<div class="site-footer-title">{{ site_settings.footer_links_title }}</div>{% endif %}
+                    <ul class="site-footer-list">
+                        <li><a href="{% url 'movie_list' %}">Movies</a></li>
+                        <li><a href="{% url 'series_list' %}">TV-Series</a></li>
+                        <li><a href="#">FAQ's</a></li>
+                        <li><a href="#">DMCA</a></li>
+                        <li><a href="{% url 'unsubscribe_page' %}">Unsubscribe</a></li>
+                    </ul>
+                </div>
+                <div class="col-12 col-md-6 col-lg-2">
+                    <div class="site-footer-title">{{ site_settings.footer_genres_title }}</div>
+                    <ul class="site-footer-list">
+                        {% for item in site_settings.footer_genres.splitlines %}
+                            {% if item %}<li><a href="{% url 'movie_list' %}?genre={{ item|urlencode }}" data-fgenre="{{ item|urlencode }}" class="footer-genre-link">{{ item }}</a></li>{% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-12 col-md-6 col-lg-2">
+                    <div class="site-footer-title">{{ site_settings.footer_countries_title }}</div>
+                    <ul class="site-footer-list">
+                        {% for item in site_settings.footer_countries.splitlines %}
+                            {% if item %}<li><a href="{% url 'movie_list' %}?country={{ item|urlencode }}" data-fcountry="{{ item|urlencode }}" class="footer-country-link">{{ item }}</a></li>{% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-12 col-lg-4">
+                    <div class="site-footer-title text-center text-lg-start">{{ site_settings.footer_subscribe_title }}</div>
+                    {% if site_settings.footer_subscribe_text %}<div class="site-footer-subscribe-text">{{ site_settings.footer_subscribe_text }}</div>{% endif %}
+                    <form class="site-footer-subscribe-form" id="footerSubscribeForm" onsubmit="return false;">
+                        <input type="email" id="footerSubscribeEmail" placeholder="{{ site_settings.footer_subscribe_placeholder }}" required>
+                        <button type="button" id="footerSubscribeBtn" onclick="footerSubscribe()">{{ site_settings.footer_subscribe_button_text }}</button>
+                    </form>
+                    <div id="footerSubMsg" style="font-size:.75rem;margin-top:.4rem;display:none"></div>
+                </div>
+                <div class="col-12 col-lg-2 text-lg-end">
+                    {% if site_settings.footer_logo_text %}<div class="site-footer-brand">{{ site_settings.footer_logo_text|safe }}</div>{% endif %}
+                    {% if site_settings.footer_logo_tagline %}<div class="site-footer-brand-tagline">{{ site_settings.footer_logo_tagline }}</div>{% endif %}
+                    {% if site_settings.footer_copyright_text %}<div class="site-footer-copy">{{ site_settings.footer_copyright_text }}</div>{% endif %}
+                    {% if site_settings.footer_disclaimer_text %}<div class="site-footer-disclaimer mt-2">{{ site_settings.footer_disclaimer_text }}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+    </footer>
+    {% endblock %}
+    {% endif %}
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav">
+        <ul class="nav-items">
+            <li class="nav-item"><a href="{% url 'index' %}" class="active"><span class="nav-icon">🏠</span><span>Home</span></a></li>
+            <li class="nav-item"><a href="{% url 'movie_list' %}"><span class="nav-icon">🎬</span><span>Movies</span></a></li>
+            <li class="nav-item"><a href="{% url 'series_list' %}"><span class="nav-icon">📺</span><span>Series</span></a></li>
+            <li class="nav-item"><a href="{% url 'search' %}"><span class="nav-icon">🔍</span><span>Search</span></a></li>
+            {% if user.is_authenticated %}
+            <li class="nav-item"><a href="{% url 'watchlist' %}"><span class="nav-icon">🔖</span><span>My List</span></a></li>
+            {% else %}
+            <li class="nav-item"><a href="#" onclick="openAuthModal('login');return false;"><span class="nav-icon">👤</span><span>Sign In</span></a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <div id="modalBackdrop" class="modal-backdrop"></div>
+
+    <!-- Floating Theme Toggle -->
+    <button class="theme-toggle" id="floatingThemeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+        <span id="themeIcon">🌙</span>
+    </button>
+    <div id="detailModal" class="detail-modal">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div id="modalHero" class="modal-hero">
+            <div class="modal-hero-content">
+                <h1 id="modalTitle" class="modal-title"></h1>
+                <div id="modalMeta" class="modal-meta"></div>
+                <div class="modal-buttons">
+                    <button class="modal-btn play" id="modalPlayBtn">▶ Play</button>
+                    <button class="modal-btn more">+ My List</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-content">
+            <p id="modalPlot" style="font-size: 1.125rem; line-height: 1.6;"></p>
+            <div id="modalGenres" class="genre-tags"></div>
+        </div>
+    </div>
+
+    <div id="calendarModalBackdrop" class="auth-modal-backdrop" onclick="closeCalendarModal(event)">
+        <div id="calendarModal" class="auth-modal" onclick="event.stopPropagation()" style="max-width: 450px; width: 90%;">
+            <button class="auth-modal-close" onclick="closeCalendarModal()">&times;</button>
+            <h2 class="auth-form-title mb-3" style="font-size: 1.25rem;">📅 Release Calendar</h2>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button class="btn btn-outline-light btn-sm" onclick="navigateMonth(-1)">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="currentMonthYear" class="fw-bold" style="font-size: 1rem; color: var(--text-color);"></div>
+                <button class="btn btn-outline-light btn-sm" onclick="navigateMonth(1)">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            <div class="mb-2">
+                <div class="d-flex justify-content-around mb-1 fw-bold" style="font-size: 0.75rem; color: var(--text-muted);">
+                    <div class="text-center" style="width: 14%;">Sun</div>
+                    <div class="text-center" style="width: 14%;">Mon</div>
+                    <div class="text-center" style="width: 14%;">Tue</div>
+                    <div class="text-center" style="width: 14%;">Wed</div>
+                    <div class="text-center" style="width: 14%;">Thu</div>
+                    <div class="text-center" style="width: 14%;">Fri</div>
+                    <div class="text-center" style="width: 14%;">Sat</div>
+                </div>
+                <div id="calendarGrid" class="d-flex flex-wrap"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="calendarDatePopup" style="display: none; position: fixed; background: var(--surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; max-width: 300px; z-index: 10000; box-shadow: var(--shadow-lg); color: var(--text-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+            <div id="popupDateTitle" style="font-weight: bold; color: var(--text-color);"></div>
+            <button onclick="hidePopup()" style="background: transparent; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; padding: 0;">×</button>
+        </div>
+        <div id="popupMovies" style="margin-bottom: 8px; display: none;">
+            <div style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;"><i class="fas fa-film"></i> Movies</div>
+            <ul id="popupMoviesList" style="list-style: none; margin: 0; padding: 0; font-size: 0.85rem;"></ul>
+        </div>
+        <div id="popupSeries" style="display: none;">
+            <div style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;"><i class="fas fa-tv"></i> TV Shows</div>
+            <ul id="popupSeriesList" style="list-style: none; margin: 0; padding: 0; font-size: 0.85rem;"></ul>
+        </div>
+    </div>
+
+    <div id="authModalBackdrop" class="auth-modal-backdrop" onclick="closeAuthModal(event)">
+        <div id="authModal" class="auth-modal" onclick="event.stopPropagation()">
+            <button class="auth-modal-close" onclick="closeAuthModal()" style="position:absolute;top:1rem;right:1rem;z-index:10;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,0.06);color:var(--text-muted);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='var(--text-color)'" onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='var(--text-muted)'">&times;</button>
+            
+            <!-- Login Form -->
+            <div id="loginForm">
+                <div class="auth-modal-header">
+                    <div class="auth-logo-icon"><i class="fas fa-user-circle"></i></div>
+                    <h2 class="auth-form-title">Welcome back</h2>
+                    <p class="auth-form-subtitle">Sign in to continue to {{ site_settings.brand_name }}</p>
+                </div>
+                <div class="auth-modal-body">
+                    <form id="loginFormElement" onsubmit="handleLogin(event)">
+                        {% csrf_token %}
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Username</label>
+                            <input type="text" class="auth-form-input" id="loginUsername" name="username" placeholder="Enter your username" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Password</label>
+                            <input type="password" class="auth-form-input" id="loginPassword" name="password" placeholder="Enter your password" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:0.25rem;">
+                            <span class="auth-form-link" onclick="switchAuthForm('forgot')" style="font-size:0.82rem;color:var(--brand-color);cursor:pointer;font-weight:500;">Forgot password?</span>
+                        </div>
+                        <div id="loginMessage" class="auth-form-message" style="display: none;"></div>
+                        <button type="submit" class="auth-form-btn">Sign In</button>
+                    </form>
+                    <div class="auth-divider">
+                        <span>New to {{ site_settings.brand_name }}?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('register')" style="color:var(--brand-color);font-weight:600;cursor:pointer;">Create an account</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Register Form -->
+            <div id="registerForm" style="display: none;">
+                <div class="auth-modal-header">
+                    <div class="auth-logo-icon"><i class="fas fa-user-plus"></i></div>
+                    <h2 class="auth-form-title">Create Account</h2>
+                    <p class="auth-form-subtitle">Join {{ site_settings.brand_name }} today</p>
+                </div>
+                <div class="auth-modal-body">
+                    <form id="registerFormElement" onsubmit="handleRegister(event)">
+                        {% csrf_token %}
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Username</label>
+                            <input type="text" class="auth-form-input" id="registerUsername" name="username" placeholder="Choose a username" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Email</label>
+                            <input type="email" class="auth-form-input" id="registerEmail" name="email" placeholder="Enter your email" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Password</label>
+                            <input type="password" class="auth-form-input" id="registerPassword" name="password" placeholder="Create a password" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Confirm Password</label>
+                            <input type="password" class="auth-form-input" id="registerConfirmPassword" name="confirm_password" placeholder="Confirm your password" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div id="registerMessage" class="auth-form-message" style="display: none;"></div>
+                        <button type="submit" class="auth-form-btn">Create Account</button>
+                    </form>
+                    <div class="auth-divider">
+                        <span>Already have an account?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('login')" style="color:var(--brand-color);font-weight:600;cursor:pointer;">Sign in instead</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Forgot Password Form -->
+            <div id="forgotForm" style="display: none;">
+                <div class="auth-modal-header">
+                    <div class="auth-logo-icon"><i class="fas fa-key"></i></div>
+                    <h2 class="auth-form-title">Reset Password</h2>
+                    <p class="auth-form-subtitle">We'll send you a reset link</p>
+                </div>
+                <div class="auth-modal-body">
+                    <form id="forgotFormElement" onsubmit="handleForgotPassword(event)">
+                        {% csrf_token %}
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Email</label>
+                            <input type="email" class="auth-form-input" id="forgotEmail" name="email" placeholder="Enter your registered email" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                        </div>
+                        <div id="forgotMessage" class="auth-form-message" style="display: none;"></div>
+                        <button type="submit" class="auth-form-btn">Send Reset Link</button>
+                    </form>
+                    <div class="auth-divider">
+                        <span>Remember your password?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('login')" style="color:var(--brand-color);font-weight:600;cursor:pointer;">Back to Sign In</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Track user clicks for ad targeting
+        let lastClickTime = 0;
+        document.addEventListener('click', function() {
+            const now = Date.now();
+            // Throttle clicks to once per second to prevent abuse
+            if (now - lastClickTime > 1000) {
+                lastClickTime = now;
+                fetch('{% url "track_user_click" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+            }
+        });
+
+        // Deferred ad loader: click-validating counter, threshold gating, consent, retries, logging.
+        (function () {
+            var DEFERRED_SETTINGS = {{ deferred_ads_settings_json|safe }} || {};
+            var DEFAULT_EVERY_CLICKS = {{ auto_click_every_clicks }};
+            var AUTOCLICK_URLS_ENDPOINT = '{% url "ajax_get_autoclick_ads" %}';
+            var TRACK_CLICK_ENDPOINT = '{% url "track_user_click" %}';
+            var CLICK_STATUS_ENDPOINT = '{% url "ajax_click_status" %}';
+            var RECORD_EVENT_ENDPOINT = '{% url "ajax_record_ad_event" %}';
+            var CONSENT_ENDPOINT = '{% url "ajax_give_ad_consent" %}';
+
+            // Session-cached counters (also persisted in Django session via backend endpoint)
+            var autoclickAdUrls = {{ autoclick_ad_urls_json|safe }} || [];
+            var EVERY_N_CLICKS = Number(DEFAULT_EVERY_CLICKS);
+            if (!Number.isFinite(EVERY_N_CLICKS) || EVERY_N_CLICKS < 1) EVERY_N_CLICKS = 10;
+
+            var clicksSinceLastAd = 0;
+            var adIndex = 0;
+            var adLastTriggeredAt = 0;
+            var lastCountedClickAt = 0;
+            var fetchingAds = false;
+
+            var maxRetries = Number(DEFERRED_SETTINGS.max_ad_load_retries);
+            if (!Number.isFinite(maxRetries) || maxRetries < 0) maxRetries = 3;
+
+            // Deferred ad loader state
+            var clickStatusCache = {
+                session_clicks: Number(DEFERRED_SETTINGS.session_clicks) || 0,
+                today_clicks: Number(DEFERRED_SETTINGS.today_clicks) || 0,
+                effective_threshold: Number(DEFERRED_SETTINGS.effective_threshold) || 0,
+                threshold_met: !!DEFERRED_SETTINGS.can_load_ads || !!(Number(DEFERRED_SETTINGS.today_clicks || 0) >= Number(DEFERRED_SETTINGS.effective_threshold || 0)),
+                consent_required: !!DEFERRED_SETTINGS.require_ad_consent,
+                consent_given: !!DEFERRED_SETTINGS.consent_given,
+                consent_denied: !!DEFERRED_SETTINGS.consent_denied,
+                consent_message: String(DEFERRED_SETTINGS.ad_consent_message || ''),
+                can_load_ads: !!DEFERRED_SETTINGS.can_load_ads,
+                max_retries: maxRetries,
+                slots: null,
+            };
+
+            var slotsRenderedForVersion = -1;
+            var statusCounter = 0;
+            var loadFailures = {}; // slotId -> {attempts, backoff_ms, timer}
+
+            function csrfToken() {
+                try {
+                    var m = document.querySelector('meta[name="csrf-token"]');
+                    if (m) return m.getAttribute('content');
+                } catch (e) {}
+                try {
+                    var parts = (document.cookie || '').split('; ');
+                    for (var i = 0; i < parts.length; i++) {
+                        if (parts[i].indexOf('csrftoken=') === 0) return decodeURIComponent(parts[i].substring(10));
+                    }
+                } catch (e) {}
+                return '';
+            }
+
+            function recordEvent(event, slot, detail) {
+                try {
+                    var body = 'event=' + encodeURIComponent(String(event || ''));
+                    if (slot) body += '&slot=' + encodeURIComponent(String(slot));
+                    if (detail) body += '&detail=' + encodeURIComponent(String(detail));
+                    fetch(RECORD_EVENT_ENDPOINT, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrfToken()
+                        },
+                        body: body
+                    }).catch(function () {});
+                } catch (e) {}
+                try { console.log('[ADS] event=' + event + ' slot=' + (slot || '') + ' detail=' + (detail || '')); } catch (_) {}
+            }
+
+            function hasEligibleAds() {
+                return !!(autoclickAdUrls && autoclickAdUrls.length);
+            }
+
+            function applyEveryClicksFromServer(n) {
+                var val = Number(n);
+                if (!Number.isFinite(val) || val < 1) val = 10;
+                EVERY_N_CLICKS = val;
+            }
+
+            function isTrustedUserClick(event) {
+                if (!event) return false;
+                if (typeof event.isTrusted === 'boolean' && !event.isTrusted) return false;
+                if (typeof event.detail === 'number' && event.detail <= 0) return false;
+                if (event.synthetic) return false;
+                // Exclude non-primary button non-click events
+                if (event && typeof event.button === 'number') {
+                    // button 0 = primary, 1 = middle (wheel), 2 = context menu. We only count primary & middle.
+                    if (event.button !== 0 && event.button !== 1) return false;
+                }
+                return true;
+            }
+
+            function isFormControl(target) {
+                if (!target) return false;
+                try {
+                    // Walk up to include wrappers like <label for="x"> that point to inputs
+                    var cur = target;
+                    for (var hops = 0; hops < 3 && cur; hops++) {
+                        var tag = (cur.tagName || '').toLowerCase();
+                        var type = (cur.getAttribute && cur.getAttribute('type')) || '';
+                        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option' ||
+                            tag === 'button' && cur.type && /^submit|reset$/i.test(cur.type)) {
+                            return true;
+                        }
+                        if (type === 'file' || type === 'checkbox' || type === 'radio') return true;
+                        if (cur.isContentEditable) return true;
+                        cur = cur.parentElement;
+                    }
+                } catch (e) {}
+                return false;
+            }
+
+            function refreshEligibleAds(callback) {
+                if (fetchingAds) { if (callback) callback(); return; }
+                fetchingAds = true;
+                try {
+                    fetch(AUTOCLICK_URLS_ENDPOINT + '?_=' + Date.now(), { method: 'GET', cache: 'no-store' })
+                        .then(function (r) { try { return r.json(); } catch (e) { return { success: false, urls: [], today_clicks: 0, every_clicks: EVERY_N_CLICKS }; } })
+                        .then(function (data) {
+                            if (data && data.success === true) {
+                                autoclickAdUrls = Array.isArray(data.urls) ? data.urls : [];
+                                applyEveryClicksFromServer(data.every_clicks);
+                            }
+                        })
+                        .catch(function () {})
+                        .finally(function () {
+                            fetchingAds = false;
+                            if (callback) callback();
+                        });
+                } catch (e) {
+                    fetchingAds = false;
+                    if (callback) callback();
+                }
+            }
+
+            function pickNextAdUrl() {
+                if (!hasEligibleAds()) return null;
+                var url = autoclickAdUrls[adIndex % autoclickAdUrls.length];
+                adIndex = (adIndex + 1) % autoclickAdUrls.length;
+                return url;
+            }
+
+            function registerClickBackend() {
+                try {
+                    fetch(TRACK_CLICK_ENDPOINT, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrfToken()
+                        }
+                    }).then(function (r) {
+                        try { return r.json(); } catch (_) { return { success: false }; }
+                    }).then(function () {
+                        setTimeout(function () {
+                            refreshEligibleAds();
+                            refreshClickStatus();
+                        }, 250);
+                    }).catch(function () {});
+                } catch (e) {}
+            }
+
+            function triggerAdAction() {
+                var url = pickNextAdUrl();
+                if (!url) return;
+                try {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                } catch (e) {}
+                registerClickBackend();
+            }
+
+            function isAdActionClick(event) {
+                var now = Date.now();
+                if (now - adLastTriggeredAt < 500) return false;
+                if (!hasEligibleAds()) return false;
+                if (EVERY_N_CLICKS < 1) EVERY_N_CLICKS = 1;
+                return clicksSinceLastAd >= EVERY_N_CLICKS;
+            }
+
+            function countClickIfEligible(event) {
+                if (!hasEligibleAds()) return;
+                if (isFormControl(event.target)) return;
+                if (!isTrustedUserClick(event)) {
+                    recordEvent('invalid_click_ignored', 'autoclick',
+                        'isTrusted=' + (event && event.isTrusted) + ';detail=' + (event && event.detail));
+                    return;
+                }
+                var now = Date.now();
+                if (now - lastCountedClickAt <= 1000) return;
+                lastCountedClickAt = now;
+                clicksSinceLastAd += 1;
+            }
+
+            // Capture-phase click handler for click-count based ad auto-open
+            document.addEventListener('click', function (event) {
+                if (!isTrustedUserClick(event)) {
+                    if (!isFormControl(event.target)) {
+                        recordEvent('invalid_click_ignored', 'capture',
+                            'isTrusted=' + (event && event.isTrusted) + ';detail=' + (event && event.detail));
+                    }
+                    return;
+                }
+                countClickIfEligible(event);
+                if (!isAdActionClick(event)) return;
+                adLastTriggeredAt = Date.now();
+                clicksSinceLastAd = 0;
+                triggerAdAction();
+            }, true);
+
+            // ===================== DEFERRED AD SLOT LOADER =====================
+
+            function isSitewidePosition(pos) {
+                return pos === 'head' || pos === 'sidebar' || pos === 'footer' || pos === 'popup';
+            }
+
+            function hydrateSlotContent(slotElement, ads) {
+                if (!slotElement || !Array.isArray(ads) || !ads.length) return;
+                var slotIdAttr = slotElement.getAttribute('data-ad-position') || ('slot_' + Math.floor(Math.random() * 1e9));
+                slotElement.setAttribute('data-ad-position', slotIdAttr);
+                var maxRetriesHere = Number(clickStatusCache.max_retries);
+                if (!Number.isFinite(maxRetriesHere) || maxRetriesHere < 0) maxRetriesHere = 3;
+
+                try {
+                    var frag = document.createDocumentFragment();
+                    for (var i = 0; i < ads.length; i++) {
+                        var wrapper = document.createElement('div');
+                        wrapper.className = 'ad-container mb-4 p-3 rounded hydrated-ad';
+                        wrapper.setAttribute('data-ad-id', String(ads[i].id || ''));
+                        wrapper.setAttribute('data-ad-provider', String(ads[i].provider || ''));
+                        wrapper.setAttribute('data-ad-name', String(ads[i].name || ''));
+                        wrapper.style.border = '1px solid var(--border-color)';
+                        wrapper.style.background = 'var(--surface)';
+                        wrapper.innerHTML = String(ads[i].html || '');
+                        frag.appendChild(wrapper);
+                    }
+                    while (slotElement.firstChild) slotElement.removeChild(slotElement.firstChild);
+                    slotElement.appendChild(frag);
+                    recordEvent('ad_load_success', slotIdAttr, 'ads=' + ads.length);
+                    // Execute deferred script nodes inside the ad (which normally do not run via innerHTML)
+                    activateDeferredScripts(slotElement, slotIdAttr, maxRetriesHere);
+                    // Reload images / assets / iframes via data-src if present (delayed asset markers)
+                    activateDeferredAssets(slotElement, slotIdAttr, maxRetriesHere);
+                } catch (e) {
+                    recordEvent('ad_load_failed_final', slotIdAttr, String(e && e.message || e));
+                }
+            }
+
+            function activateDeferredScripts(root, slotId, maxRetriesHere) {
+                if (!root) return;
+                var scripts = root.querySelectorAll('script');
+                for (var i = 0; i < scripts.length; i++) {
+                    loadScriptElement(scripts[i], slotId, 1, maxRetriesHere, 500);
+                }
+            }
+
+            function loadScriptElement(scriptEl, slotId, attempt, maxAttempts, initialBackoff) {
+                var src = scriptEl.getAttribute('src') || '';
+                var content = scriptEl.textContent || scriptEl.innerText || '';
+                try {
+                    var replacement = document.createElement('script');
+                    var attrs = scriptEl.attributes;
+                    for (var i = 0; i < attrs.length; i++) {
+                        if (attrs[i].name.toLowerCase() === 'src') continue;
+                        replacement.setAttribute(attrs[i].name, attrs[i].value);
+                    }
+                    if (content) {
+                        replacement.text = content;
+                    }
+                    var done = false;
+                    function onFinish(err) {
+                        if (done) return;
+                        done = true;
+                        if (!err) {
+                            recordEvent('ad_load_success', slotId, 'script_loaded src=' + (src || 'inline'));
+                            return;
+                        }
+                        if (attempt <= maxAttempts) {
+                            var nextAttempt = attempt + 1;
+                            var backoff = initialBackoff << 1;
+                            recordEvent('ad_load_failed_retry', slotId,
+                                'src=' + (src || 'inline') + ';attempt=' + attempt + '/' + maxAttempts + ';backoff=' + backoff);
+                            setTimeout(function () {
+                                loadScriptElement(scriptEl, slotId, nextAttempt, maxAttempts, backoff);
+                            }, backoff);
+                        } else {
+                            recordEvent('ad_load_failed_final', slotId,
+                                'src=' + (src || 'inline') + ';attempts=' + attempt);
+                        }
+                    }
+                    if (src) {
+                        replacement.onerror = function () { onFinish(new Error('onerror')); };
+                        replacement.onload = function () { onFinish(null); };
+                        replacement.src = src;
+                    } else {
+                        // inline runs immediately on append
+                        setTimeout(function () { onFinish(null); }, 0);
+                    }
+                    if (scriptEl.parentNode) {
+                        scriptEl.parentNode.insertBefore(replacement, scriptEl);
+                        scriptEl.parentNode.removeChild(scriptEl);
+                    } else if (content) {
+                        (document.head || document.documentElement).appendChild(replacement);
+                    }
+                } catch (e) {
+                    if (attempt <= maxAttempts) {
+                        var nextAttempt = attempt + 1;
+                        var backoff = initialBackoff << 1;
+                        recordEvent('ad_load_failed_retry', slotId,
+                            'exception src=' + (src || 'inline') + ';attempt=' + attempt + '/' + maxAttempts + ';msg=' + (e.message || e));
+                        setTimeout(function () {
+                            loadScriptElement(scriptEl, slotId, nextAttempt, maxAttempts, backoff);
+                        }, backoff);
+                    } else {
+                        recordEvent('ad_load_failed_final', slotId,
+                            'exception src=' + (src || 'inline') + ';msg=' + (e.message || e));
+                    }
+                }
+            }
+
+            function activateDeferredAssets(root, slotId, maxRetriesHere) {
+                if (!root) return;
+                var tags = root.querySelectorAll('img[data-src], iframe[data-src], source[data-src]');
+                for (var i = 0; i < tags.length; i++) {
+                    var el = tags[i];
+                    var realSrc = el.getAttribute('data-src') || '';
+                    if (!realSrc) continue;
+                    loadAssetWithRetry(el, realSrc, slotId, 1, maxRetriesHere, 400);
+                }
+            }
+
+            function loadAssetWithRetry(el, src, slotId, attempt, maxAttempts, backoff) {
+                try {
+                    var realTag = el.tagName.toLowerCase();
+                    var done = false;
+                    function onFinish(err) {
+                        if (done) return;
+                        done = true;
+                        if (!err) {
+                            recordEvent('ad_load_success', slotId, 'asset_' + realTag + ' src=' + src);
+                            return;
+                        }
+                        if (attempt <= maxAttempts) {
+                            var next = attempt + 1;
+                            var nb = backoff << 1;
+                            recordEvent('ad_load_failed_retry', slotId,
+                                'asset_' + realTag + ' src=' + src + ';attempt=' + attempt + '/' + maxAttempts);
+                            setTimeout(function () { loadAssetWithRetry(el, src, slotId, next, maxAttempts, nb); }, nb);
+                        } else {
+                            recordEvent('ad_load_failed_final', slotId, 'asset_' + realTag + ' src=' + src);
+                        }
+                    }
+                    el.onerror = function () { onFinish(new Error('onerror')); };
+                    el.onload = function () { onFinish(null); };
+                    if (realTag === 'iframe') el.setAttribute('src', src);
+                    else el.setAttribute('src', src);
+                    el.removeAttribute('data-src');
+                } catch (e) {
+                    if (attempt <= maxAttempts) {
+                        var next = attempt + 1;
+                        var nb = backoff << 1;
+                        recordEvent('ad_load_failed_retry', slotId,
+                            'exception asset src=' + src + ';msg=' + (e.message || e));
+                        setTimeout(function () { loadAssetWithRetry(el, src, slotId, next, maxAttempts, nb); }, nb);
+                    } else {
+                        recordEvent('ad_load_failed_final', slotId,
+                            'exception asset src=' + src + ';msg=' + (e.message || e));
+                    }
+                }
+            }
+
+            function renderSlotsFromStatus(statusVersion) {
+                if (!clickStatusCache.can_load_ads) return;
+                if (!clickStatusCache.slots || typeof clickStatusCache.slots !== 'object') return;
+                if (slotsRenderedForVersion === statusVersion) return;
+                slotsRenderedForVersion = statusVersion;
+
+                var allSlots = document.querySelectorAll('.deferred-ad-slot');
+                allSlots.forEach(function (slotEl) {
+                    var pos = slotEl.getAttribute('data-ad-position') || '';
+                    var multiStr = slotEl.getAttribute('data-ad-positions') || '';
+                    var adsForThisSlot = [];
+                    if (multiStr) {
+                        var mult = multiStr.split(',').map(function (s) { return s.trim(); });
+                        mult.forEach(function (p) {
+                            if (clickStatusCache.slots[p] && Array.isArray(clickStatusCache.slots[p])) {
+                                adsForThisSlot = adsForThisSlot.concat(clickStatusCache.slots[p]);
+                            }
+                        });
+                    } else if (pos && clickStatusCache.slots[pos] && Array.isArray(clickStatusCache.slots[pos])) {
+                        adsForThisSlot = clickStatusCache.slots[pos].slice();
+                    }
+                    if (adsForThisSlot.length > 0) {
+                        recordEvent('ad_load_start', pos || 'sitewide', 'ads=' + adsForThisSlot.length);
+                        hydrateSlotContent(slotEl, adsForThisSlot);
+                    }
+                });
+            }
+
+            function refreshClickStatus(callback) {
+                try {
+                    fetch(CLICK_STATUS_ENDPOINT + '?_=' + Date.now(), { method: 'GET', cache: 'no-store' })
+                        .then(function (r) { try { return r.json(); } catch (e) { return { success: false }; } })
+                        .then(function (data) {
+                            if (!data || data.success !== true) return;
+                            var previouslyMet = clickStatusCache.threshold_met;
+                            var prevCouldLoad = clickStatusCache.can_load_ads;
+
+                            clickStatusCache.session_clicks = Number(data.session_clicks) || 0;
+                            clickStatusCache.today_clicks = Number(data.today_clicks) || 0;
+                            clickStatusCache.effective_threshold = Number(data.effective_threshold) || 0;
+                            clickStatusCache.threshold_met = !!data.threshold_met;
+                            clickStatusCache.consent_required = !!data.consent_required;
+                            clickStatusCache.consent_given = !!data.consent_given;
+                            clickStatusCache.consent_denied = !!data.consent_denied;
+                            if (data.consent_message) clickStatusCache.consent_message = String(data.consent_message);
+                            clickStatusCache.can_load_ads = !!data.can_load_ads;
+                            if (Number.isFinite(Number(data.max_retries)) && Number(data.max_retries) >= 0) {
+                                clickStatusCache.max_retries = Number(data.max_retries);
+                                maxRetries = clickStatusCache.max_retries;
+                            }
+                            clickStatusCache.slots = data.slots || null;
+
+                            if (!previouslyMet && clickStatusCache.threshold_met) {
+                                recordEvent('clicks_required_met',
+                                    clickStatusCache.today_clicks + '/' + clickStatusCache.effective_threshold);
+                            }
+                            if (!prevCouldLoad && clickStatusCache.can_load_ads) {
+                                recordEvent('ad_load_start', 'all', 'loading slots first time');
+                                statusCounter += 1;
+                                renderSlotsFromStatus(statusCounter);
+                            } else if (clickStatusCache.can_load_ads) {
+                                statusCounter += 1;
+                                renderSlotsFromStatus(statusCounter);
+                            }
+                            updateConsentBanner();
+                        })
+                        .catch(function () {})
+                        .finally(function () { if (callback) callback(); });
+                } catch (e) {
+                    if (callback) callback();
+                }
+            }
+
+            // =============== Consent banner ===============
+            function updateConsentBanner() {
+                var banner = document.getElementById('adConsentBanner');
+                var textEl = document.getElementById('adConsentBannerText');
+                if (!banner || !textEl) return;
+                if (!clickStatusCache.consent_required) { banner.style.display = 'none'; return; }
+                if (clickStatusCache.consent_given || clickStatusCache.consent_denied) { banner.style.display = 'none'; return; }
+                textEl.textContent = clickStatusCache.consent_message || 'We use third-party ads. Accept to load them.';
+                banner.style.display = 'block';
+            }
+
+            function setConsent(action) {
+                try {
+                    fetch(CONSENT_ENDPOINT, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrfToken()
+                        },
+                        body: 'action=' + encodeURIComponent(action)
+                    }).then(function () {
+                        recordEvent(action === 'give' ? 'consent_given' : 'consent_denied');
+                        setTimeout(function () { refreshClickStatus(); }, 100);
+                    }).catch(function () {});
+                } catch (e) {}
+            }
+
+            try {
+                var acceptBtn = document.getElementById('adConsentAcceptBtn');
+                var denyBtn = document.getElementById('adConsentDenyBtn');
+                if (acceptBtn) acceptBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); setConsent('give'); }, true);
+                if (denyBtn) denyBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); setConsent('deny'); }, true);
+            } catch (e) {}
+
+            // Start up
+            if (DEFERRED_SETTINGS.consent_given && DEFERRED_SETTINGS.can_load_ads) {
+                // Threshold was already met at page render time. Load slots immediately.
+                recordEvent('ad_load_start', 'all', 'eligible at page render (today_clicks=' + (DEFERRED_SETTINGS.today_clicks || 0) + ')');
+                refreshClickStatus();
+            } else if (clickStatusCache.consent_required && !clickStatusCache.consent_given && !clickStatusCache.consent_denied) {
+                updateConsentBanner();
+                refreshClickStatus();
+            } else {
+                refreshClickStatus();
+            }
+
+            refreshEligibleAds();
+
+            // ============================================================
+            // Activity-driven polling (NO idle polling when user inactive)
+            // ============================================================
+            // Remove the passive 8s setInterval that was spamming the server even while
+            // the tab was idle. Instead we refresh status only when the user is actually
+            // interacting with the page, and we always debounce to at most one request
+            // every MIN_REFRESH_MS. When the tab is hidden/unfocused and no input is
+            // coming in, the server receives ZERO requests from this loop.
+            (function () {
+                var MIN_REFRESH_MS = 12000;   // minimum time between refresh calls
+                var lastRefreshAt = 0;
+                var pendingTimer = null;
+                var activeRefreshId = 0;
+                var ongoing = false;
+
+                function scheduleRefresh(forceNow) {
+                    try {
+                        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+                    } catch (e) {}
+                    var now = Date.now();
+                    var elapsed = now - lastRefreshAt;
+                    if (forceNow !== true && elapsed < MIN_REFRESH_MS) {
+                        // Not yet allowed. Schedule one-shot for MIN_REFRESH_MS boundary.
+                        if (pendingTimer != null) return;
+                        var wait = MIN_REFRESH_MS - elapsed;
+                        pendingTimer = setTimeout(function () {
+                            pendingTimer = null;
+                            runRefresh();
+                        }, wait);
+                        return;
+                    }
+                    runRefresh();
+                }
+
+                function runRefresh() {
+                    if (ongoing) return;
+                    try {
+                        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+                    } catch (e) {}
+                    ongoing = true;
+                    activeRefreshId += 1;
+                    var myId = activeRefreshId;
+                    lastRefreshAt = Date.now();
+                    try {
+                        refreshClickStatus(function () {
+                            if (myId === activeRefreshId) ongoing = false;
+                        });
+                    } catch (e) {
+                        ongoing = false;
+                    }
+                }
+
+                function onUserActivity(evt) {
+                    try {
+                        if (evt && evt.type === 'click' && evt.target && isFormControl(evt.target)) return;
+                    } catch (e) {}
+                    scheduleRefresh(false);
+                }
+
+                function onVisibilityOrFocus() {
+                    try {
+                        if (document.visibilityState === 'visible') scheduleRefresh(true);
+                    } catch (e) {}
+                }
+
+                var events = ['mousedown', 'touchstart', 'keydown', 'wheel', 'scroll', 'click'];
+                for (var i = 0; i < events.length; i++) {
+                    try {
+                        window.addEventListener(events[i], onUserActivity, { passive: true, capture: true });
+                    } catch (e) {}
+                }
+                try { document.addEventListener('visibilitychange', onVisibilityOrFocus); } catch (e) {}
+                try { window.addEventListener('focus', onVisibilityOrFocus, true); } catch (e) {}
+                try { window.addEventListener('pageshow', onVisibilityOrFocus, true); } catch (e) {}
+            })();
+        })();
+
+        function applyTheme(theme) {
+            const normalizedTheme = theme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', normalizedTheme);
+            localStorage.setItem('site-theme', normalizedTheme);
+
+            const toggleIcon = document.getElementById('themeToggleIcon');
+            const toggleTitle = document.getElementById('themeToggleTitle');
+            const toggleHint = document.getElementById('themeToggleHint');
+
+            if (toggleIcon && toggleTitle && toggleHint) {
+                if (normalizedTheme === 'light') {
+                    toggleIcon.textContent = '☀️';
+                    toggleTitle.textContent = 'Light Theme';
+                    toggleHint.textContent = 'Switch to dark';
+                } else {
+                    toggleIcon.textContent = '🌙';
+                    toggleTitle.textContent = 'Dark Theme';
+                    toggleHint.textContent = 'Switch to light';
+                }
+            }
+        }
+
+        function initThemeToggle() {
+            const savedTheme = localStorage.getItem('site-theme') || localStorage.getItem('theme_mode') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            localStorage.setItem('site-theme', savedTheme);
+            localStorage.setItem('theme_mode', savedTheme);
+            /* Sync all icon elements */
+            var iconText = savedTheme === 'light' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+            document.querySelectorAll('#themeIcon, #floatingThemeToggle #themeIcon, #themeToggleIcon').forEach(function(el) {
+                el.textContent = iconText;
+            });
+            var floatingBtn = document.getElementById('floatingThemeToggle');
+            if (floatingBtn) floatingBtn.title = savedTheme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+        }
+
+        window.addEventListener('scroll', () => {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        function initScrollButtons() {
+            document.querySelectorAll('.scroll-container').forEach(container => {
+                const parent = container.parentElement;
+                const leftBtn = parent.querySelector('.scroll-btn.left');
+                const rightBtn = parent.querySelector('.scroll-btn.right');
+                if (!leftBtn || !rightBtn) return;
+
+                parent.addEventListener('mouseenter', () => {
+                    if (container.scrollWidth > container.clientWidth) {
+                        leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.5';
+                        rightBtn.style.opacity = '1';
+                    }
+                });
+
+                parent.addEventListener('mouseleave', () => {
+                    leftBtn.style.opacity = '0';
+                    rightBtn.style.opacity = '0';
+                });
+
+                leftBtn.addEventListener('click', () => {
+                    container.scrollBy({ left: -600, behavior: 'smooth' });
+                });
+
+                rightBtn.addEventListener('click', () => {
+                    container.scrollBy({ left: 600, behavior: 'smooth' });
+                });
+
+                container.addEventListener('scroll', () => {
+                    leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.5';
+                    rightBtn.style.opacity = container.scrollLeft < container.scrollWidth - container.clientWidth - 10 ? '1' : '0.5';
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initThemeToggle();
+            initScrollButtons();
+            updateAllDatesToBrowserTime();
+
+            /* Auto-detect active page for mobile bottom nav */
+            var path = window.location.pathname;
+            var bottomNav = document.querySelector('.mobile-bottom-nav');
+            if (bottomNav) {
+                bottomNav.querySelectorAll('.nav-item a').forEach(function(a) {
+                    a.classList.remove('active');
+                    var href = a.getAttribute('href') || '';
+                    if (href === '/' && (path === '/' || path === '')) a.classList.add('active');
+                    else if (href === '/movies/' && path.indexOf('/movies') === 0 && path.indexOf('/movies/id') === -1 && path.indexOf('/movie') === -1) a.classList.add('active');
+                    else if (href === '/series/' && path.indexOf('/series') === 0 && path.indexOf('/series/id') === -1) a.classList.add('active');
+                    else if (href === '/search/' && path.indexOf('/search') === 0) a.classList.add('active');
+                    else if (href === '/watchlist/' && path.indexOf('/watchlist') === 0) a.classList.add('active');
+                });
+            }
+
+            const calendarBtn = document.getElementById('navCalendarBtn');
+            if (calendarBtn) {
+                calendarBtn.addEventListener('click', openCalendarModal);
+            }
+
+            const navbarToggler = document.querySelector('.navbar-toggler');
+            const navbarCollapse = document.querySelector('.navbar-collapse');
+            if (navbarCollapse && navbarToggler) {
+                navbarCollapse.querySelectorAll('.nav-link, .dropdown-item').forEach(link => {
+                    link.addEventListener('click', () => {
+                        if (window.innerWidth <= 991 && navbarCollapse.classList.contains('show')) {
+                            navbarToggler.click();
+                        }
+                    });
+                });
+
+                document.addEventListener('click', (event) => {
+                    if (window.innerWidth <= 991 && navbarCollapse.classList.contains('show')) {
+                        const clickedInsideNavbar = event.target.closest('.navbar');
+                        if (!clickedInsideNavbar) {
+                            navbarToggler.click();
+                        }
+                    }
+                });
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('login_required') === 'true') {
+                openAuthModal('login');
+                const url = new URL(window.location.href);
+                url.searchParams.delete('login_required');
+                url.searchParams.delete('next');
+                window.history.replaceState({}, '', url);
+            }
+
+            updateAllWatchlistButtons();
+            initCardHoverTitles();
+            initLazyImageLoading();
+            initScrollProgressAndBackToTop();
+        });
+
+        let currentCalendarDate = new Date();
+        let monthlyMovies = {};
+        let monthlySeries = {};
+        let selectedDate = null;
+        let isPopupFixed = false;
+        const TMDB_IMAGE_BASE_URL = '{{ settings.TMDB_IMAGE_BASE_URL }}';
+        const detailUrlFormat = '{{ site_settings.url_format|default:"slug" }}';
+
+        function openCalendarModal() {
+            const backdrop = document.getElementById('calendarModalBackdrop');
+            const modal = document.getElementById('calendarModal');
+            backdrop.classList.add('active');
+            setTimeout(() => modal.classList.add('active'), 10);
+            document.body.style.overflow = 'hidden';
+            loadMonthlyData();
+            renderCalendarGrid();
+            document.addEventListener('click', handleDocumentClick);
+        }
+
+        function closeCalendarModal(event) {
+            if (event && event.target !== document.getElementById('calendarModalBackdrop')) return;
+            var backdrop = document.getElementById('calendarModalBackdrop');
+            var modal = document.getElementById('calendarModal');
+            modal.classList.remove('active');
+            setTimeout(function() {
+                backdrop.classList.remove('active');
+                document.body.style.overflow = 'auto';
+                selectedDate = null;
+                isPopupFixed = false;
+                hidePopup();
+                document.removeEventListener('click', handleDocumentClick);
+            }, 300);
+        }
+
+        function handleDocumentClick(event) {
+            if (!isPopupFixed) return;
+            const popup = document.getElementById('calendarDatePopup');
+            const cells = document.querySelectorAll('.calendar-day-cell');
+            const clickedOnCell = Array.from(cells).some(cell => cell.contains(event.target));
+            const clickedOnPopup = popup.contains(event.target);
+            if (!clickedOnCell && !clickedOnPopup) {
+                isPopupFixed = false;
+                hidePopup();
+                selectedDate = null;
+                document.querySelectorAll('.calendar-day-cell').forEach(cell => {
+                    cell.style.background = 'transparent';
+                });
+            }
+        }
+
+        function formatDateForDisplay(date) {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function formatMonthYear(date) {
+            const options = { year: 'numeric', month: 'long' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function formatDateTimeForDisplay(dateString) {
+            const date = new Date(dateString);
+            if (isNaN(date)) return dateString;
+            const options = { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true
+            };
+            return date.toLocaleString(undefined, options);
+        }
+
+        function updateAllDatesToBrowserTime() {
+            document.querySelectorAll('[data-datetime]').forEach(el => {
+                const isoString = el.getAttribute('data-datetime');
+                if (isoString) {
+                    el.textContent = formatDateTimeForDisplay(isoString);
+                }
+            });
+        }
+
+        function navigateMonth(direction) {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+            selectedDate = null;
+            var detailsEl = document.getElementById('selectedDateDetails');
+            if (detailsEl) {
+                detailsEl.style.display = 'none';
+            }
+            loadMonthlyData();
+            renderCalendarGrid();
+        }
+
+        var _loadedCalendarMonths = {};
+
+        async function loadMonthlyData() {
+            const year = currentCalendarDate.getFullYear();
+            const month = String(currentCalendarDate.getMonth() + 1).padStart(2, '0');
+            const monthKey = year + '-' + month;
+            const firstDay = year + '-' + month + '-01';
+            const daysInMonth = new Date(year, currentCalendarDate.getMonth() + 1, 0).getDate();
+            const lastDay = year + '-' + month + '-' + String(daysInMonth).padStart(2, '0');
+
+            document.getElementById('currentMonthYear').textContent = formatMonthYear(currentCalendarDate);
+
+            /* Skip fetch if we already loaded this month */
+            if (_loadedCalendarMonths[monthKey]) {
+                renderCalendarGrid();
+                return;
+            }
+            try {
+                var moviesResponse = await fetch('/ajax/calendar/movies/?start=' + firstDay + '&end=' + lastDay);
+                var moviesData = await moviesResponse.json();
+                moviesData.forEach(function(movie) {
+                    var dateKey = movie.release_date;
+                    if (dateKey) {
+                        if (!monthlyMovies[dateKey]) monthlyMovies[dateKey] = [];
+                        if (!monthlyMovies[dateKey].find(function(m) { return m.id === movie.id; })) monthlyMovies[dateKey].push(movie);
+                    }
+                });
+                var seriesResponse = await fetch('/ajax/calendar/series/?start=' + firstDay + '&end=' + lastDay);
+                var seriesData = await seriesResponse.json();
+                seriesData.forEach(function(show) {
+                    var dateKey = show.first_air_date;
+                    if (dateKey) {
+                        if (!monthlySeries[dateKey]) monthlySeries[dateKey] = [];
+                        if (!monthlySeries[dateKey].find(function(s) { return s.id === show.id; })) monthlySeries[dateKey].push(show);
+                    }
+                });
+                _loadedCalendarMonths[monthKey] = true;
+                renderCalendarGrid();
+            } catch (error) {
+                console.error('Error loading monthly data:', error);
+            }
+        }
+
+        function renderCalendarGrid() {
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.style.width = '14%';
+                emptyCell.style.height = '45px';
+                grid.appendChild(emptyCell);
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const cell = document.createElement('div');
+                cell.style.width = '14%';
+                cell.style.height = '45px';
+                cell.style.border = '1px solid var(--border-color)';
+                cell.style.borderRadius = '8px';
+                cell.style.padding = '8px';
+                cell.style.overflow = 'hidden';
+                cell.style.cursor = 'pointer';
+                cell.className = 'calendar-day-cell';
+                cell.dataset.date = dateKey;
+                cell.style.transition = 'background 0.2s';
+                cell.style.display = 'flex';
+                cell.style.flexDirection = 'column';
+                cell.style.justifyContent = 'center';
+                cell.style.alignItems = 'center';
+                const hasMovies = monthlyMovies[dateKey]?.length > 0;
+                const hasSeries = monthlySeries[dateKey]?.length > 0;
+                const hasData = hasMovies || hasSeries;
+                if (selectedDate === dateKey) {
+                    cell.style.background = 'var(--surface-soft)';
+                }
+                let indicator = '';
+                if (hasMovies && hasSeries) {
+                    indicator = '<div style="display:flex;gap:4px;margin-top:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#e50914;"></div><div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div></div>';
+                } else if (hasMovies) {
+                    indicator = '<div style="width:8px;height:8px;border-radius:50%;background:#e50914;margin-top:4px;"></div>';
+                } else if (hasSeries) {
+                    indicator = '<div style="width:8px;height:8px;border-radius:50%;background:#22c55e;margin-top:4px;"></div>';
+                }
+                cell.innerHTML = `<div style="color: var(--text-color); font-weight: bold;">${day}</div>${indicator}`;
+                cell.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectDate(dateKey, cell, e);
+                });
+                if (hasData) {
+                    cell.addEventListener('mousemove', (e) => { if (!isPopupFixed) showPopup(e, dateKey, false); });
+                    cell.addEventListener('mouseenter', (e) => { if (!isPopupFixed) showPopup(e, dateKey, false); });
+                    cell.addEventListener('mouseleave', () => { if (!isPopupFixed) hidePopup(); });
+                }
+                grid.appendChild(cell);
+            }
+        }
+
+        function buildMovieDetailUrl(movie) {
+            const slug = (movie.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `movie-${movie.id}`;
+            return detailUrlFormat === 'id' ? `/movies/id/${movie.id}/` : `/movies/${slug}/`;
+        }
+
+        function buildSeriesDetailUrl(show) {
+            const title = show.name || show.title || 'Unknown Title';
+            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `series-${show.id}`;
+            return detailUrlFormat === 'id' ? `/series/id/${show.id}/` : `/series/${slug}/`;
+        }
+
+        function buildDetailUrl(data) {
+            if (data.media_type === 'tv' || data.name || data.first_air_date) {
+                return buildSeriesDetailUrl(data);
+            }
+            return buildMovieDetailUrl(data);
+        }
+
+        function showPopup(event, dateKey, fixed = false) {
+            const popup = document.getElementById('calendarDatePopup');
+            const dateTitle = document.getElementById('popupDateTitle');
+            const popupMoviesDiv = document.getElementById('popupMovies');
+            const popupMoviesList = document.getElementById('popupMoviesList');
+            const popupSeriesDiv = document.getElementById('popupSeries');
+            const popupSeriesList = document.getElementById('popupSeriesList');
+            const dateObj = new Date(dateKey);
+            dateTitle.textContent = formatDateForDisplay(dateObj);
+            const movies = monthlyMovies[dateKey] || [];
+            if (movies.length === 0) {
+                popupMoviesDiv.style.display = 'none';
+            } else {
+                popupMoviesDiv.style.display = 'block';
+                popupMoviesList.innerHTML = '';
+                movies.forEach(movie => {
+                    const li = document.createElement('li');
+                    li.style.marginBottom = '4px';
+                    li.innerHTML = `<a href="${buildMovieDetailUrl(movie)}" style="color: var(--text-color); text-decoration: none;">• ${movie.title}</a>`;
+                    popupMoviesList.appendChild(li);
+                });
+            }
+            const series = monthlySeries[dateKey] || [];
+            if (series.length === 0) {
+                popupSeriesDiv.style.display = 'none';
+            } else {
+                popupSeriesDiv.style.display = 'block';
+                popupSeriesList.innerHTML = '';
+                series.forEach(show => {
+                    const title = show.name || show.title || 'Unknown Title';
+                    const li = document.createElement('li');
+                    li.style.marginBottom = '4px';
+                    li.innerHTML = `<a href="${buildSeriesDetailUrl(show)}" style="color: var(--text-color); text-decoration: none;">• ${title}</a>`;
+                    popupSeriesList.appendChild(li);
+                });
+            }
+            popup.style.display = 'block';
+            if (fixed) {
+                const rect = event.target.closest('.calendar-day-cell').getBoundingClientRect();
+                popup.style.left = `${rect.right + 10}px`;
+                popup.style.top = `${rect.top}px`;
+            } else {
+                popup.style.left = `${event.pageX + 10}px`;
+                popup.style.top = `${event.pageY + 10}px`;
+            }
+        }
+
+        function hidePopup() {
+            document.getElementById('calendarDatePopup').style.display = 'none';
+        }
+
+        function selectDate(dateKey, cellElement, event) {
+            document.querySelectorAll('.calendar-day-cell').forEach(cell => {
+                if (cell.dataset.date === selectedDate) {
+                    cell.style.background = 'transparent';
+                }
+            });
+            selectedDate = dateKey;
+            cellElement.style.background = 'var(--surface-soft)';
+            isPopupFixed = true;
+            showPopup(event, dateKey, true);
+        }
+
+        function openModal(data) {
+            document.getElementById('modalBackdrop').classList.add('active');
+            document.getElementById('detailModal').classList.add('active');
+            document.getElementById('modalTitle').textContent = data.title;
+            document.getElementById('modalPlot').textContent = data.overview || 'No description available';
+            const metaParts = [];
+            if (data.release_date) metaParts.push(data.release_date.substring(0, 4));
+            else if (data.first_air_date) metaParts.push(data.first_air_date.substring(0, 4));
+            if (data.vote_average) metaParts.push(`<span class="modal-rating">★ ${data.vote_average.toFixed(1)}</span>`);
+            document.getElementById('modalMeta').innerHTML = metaParts.join(' • ');
+            const genreDiv = document.getElementById('modalGenres');
+            genreDiv.innerHTML = '';
+            if (data.genres) {
+                data.genres.forEach(genre => {
+                    const tag = document.createElement('span');
+                    tag.className = 'genre-tag';
+                    tag.textContent = genre.name;
+                    genreDiv.appendChild(tag);
+                });
+            } else if (data.genre_ids) {
+                data.genre_ids.forEach(id => {
+                    const tag = document.createElement('span');
+                    tag.className = 'genre-tag';
+                    tag.textContent = `Genre ${id}`;
+                    genreDiv.appendChild(tag);
+                });
+            }
+            const hero = document.getElementById('modalHero');
+            const imgPath = data.backdrop_path || data.poster_path;
+            if (imgPath) {
+                hero.style.backgroundImage = `url('{{ settings.TMDB_IMAGE_BASE_URL }}{{ imgPath }}')`;
+            }
+            const playBtn = document.getElementById('modalPlayBtn');
+            const detailUrl = buildDetailUrl(data);
+            playBtn.onclick = () => window.location.href = detailUrl;
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('modalBackdrop').classList.remove('active');
+            document.getElementById('detailModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        document.getElementById('modalBackdrop').addEventListener('click', closeModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeAuthModal();
+            }
+        });
+
+        function openAuthModal(formType) {
+            const backdrop = document.getElementById('authModalBackdrop');
+            const modal = document.getElementById('authModal');
+            backdrop.classList.add('active');
+            setTimeout(() => modal.classList.add('active'), 10);
+            switchAuthForm(formType);
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuthModal(event) {
+            if (event && event.target !== document.getElementById('authModalBackdrop')) return;
+            const backdrop = document.getElementById('authModalBackdrop');
+            const modal = document.getElementById('authModal');
+            modal.classList.remove('active');
+            setTimeout(() => {
+                backdrop.classList.remove('active');
+                document.body.style.overflow = 'auto';
+                ['loginFormElement', 'registerFormElement', 'forgotFormElement'].forEach(id => {
+                    const form = document.getElementById(id);
+                    if (form) form.reset();
+                });
+                ['loginMessage', 'registerMessage', 'forgotMessage'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.style.display = 'none';
+                        el.className = 'auth-form-message';
+                    }
+                });
+            }, 300);
+        }
+
+        function switchAuthForm(formType) {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('forgotForm').style.display = 'none';
+            document.getElementById(formType + 'Form').style.display = 'block';
+        }
+
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = 'auth-form-message ' + type;
+            el.style.display = 'block';
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            try {
+                const response = await fetch('{% url "ajax_login" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('loginMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeAuthModal();
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showMessage('loginMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('loginMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            try {
+                const response = await fetch('{% url "ajax_register" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('registerMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeAuthModal();
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showMessage('registerMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('registerMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleForgotPassword(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            try {
+                const response = await fetch('{% url "ajax_forgot_password" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('forgotMessage', data.message, 'success');
+                } else {
+                    showMessage('forgotMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('forgotMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                const resp = await fetch('{% url "ajax_logout" %}', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken() },
+                    cache: 'no-store'
+                });
+                if (resp.ok) {
+                    // Force a fresh page load, bypassing any cached version
+                    window.location.href = window.location.pathname + '?_=' + Date.now();
+                } else {
+                    // CSRF or other error — still reload to reflect state
+                    window.location.href = window.location.pathname + '?_=' + Date.now();
+                }
+            } catch (error) {
+                window.location.href = window.location.pathname + '?_=' + Date.now();
+            }
+        }
+
+        function showWatchlistNotification(button, message, type = 'info') {
+            if (!button) return;
+
+            const warningDiv = button.closest('.card-image-container')?.querySelector('.watchlist-warning')
+                || button.closest('.hover-content')?.querySelector('.watchlist-warning')
+                || button.closest('.col-md-8')?.querySelector('.watchlist-warning');
+
+            if (!warningDiv) {
+                alert(message);
+                return;
+            }
+
+            warningDiv.textContent = message;
+            warningDiv.classList.remove('text-danger', 'text-success', 'text-warning');
+            warningDiv.classList.add(type === 'success' ? 'text-success' : type === 'warning' ? 'text-warning' : 'text-danger');
+            warningDiv.style.display = 'block';
+
+            setTimeout(() => {
+                warningDiv.style.display = 'none';
+            }, 2500);
+        }
+
+        function findWatchlistButton(tmdbId, mediaType) {
+            const detailBtn = document.getElementById('watchlist-btn');
+            if (detailBtn && detailBtn.dataset.tmdbId == tmdbId && detailBtn.dataset.mediaType == mediaType) {
+                return detailBtn;
+            }
+
+            let matchedButton = null;
+            document.querySelectorAll('.hover-watchlist-btn').forEach(btn => {
+                if (!matchedButton && btn.dataset.tmdbId == tmdbId && btn.dataset.mediaType == mediaType) {
+                    matchedButton = btn;
+                }
+            });
+            return matchedButton;
+        }
+
+        async function toggleWatchlist(tmdbId, mediaType, title, posterPath) {
+            document.querySelectorAll('.watchlist-warning').forEach(w => {
+                w.style.display = 'none';
+            });
+
+            const clickedButton = findWatchlistButton(tmdbId, mediaType);
+
+            try {
+                const formData = new FormData();
+                formData.append('tmdb_id', tmdbId);
+                formData.append('media_type', mediaType);
+                formData.append('title', title);
+                formData.append('poster_path', posterPath);
+                const response = await fetch('{% url "ajax_toggle_watchlist" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    if (data.action === 'added') {
+                        updateAllWatchlistButtons(tmdbId, mediaType, true);
+                        showWatchlistNotification(clickedButton, data.message, 'success');
+                    } else if (data.action === 'exists') {
+                        updateAllWatchlistButtons(tmdbId, mediaType, true);
+                        showWatchlistNotification(clickedButton, data.message, 'warning');
+                    }
+                } else if (data.message.includes('login')) {
+                    showWatchlistNotification(clickedButton, data.message, 'error');
+                } else {
+                    showWatchlistNotification(clickedButton, data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling watchlist:', error);
+            }
+        }
+
+        function updateWatchlistButton(button, inWatchlist) {
+            const icon = button.querySelector('.watchlist-icon');
+            if (icon) {
+                if (inWatchlist) {
+                    icon.textContent = '✓';
+                    button.classList.add('in-watchlist');
+                } else {
+                    icon.textContent = '+';
+                    button.classList.remove('in-watchlist');
+                }
+            } else {
+                const textSpan = button.querySelector('.watchlist-btn-text');
+                if (textSpan) {
+                    textSpan.textContent = inWatchlist ? ' Added' : ' My List';
+                }
+                if (inWatchlist) {
+                    button.classList.remove('btn-outline-light');
+                    button.classList.add('btn-primary');
+                } else {
+                    button.classList.remove('btn-primary');
+                    button.classList.add('btn-outline-light');
+                }
+            }
+        }
+
+        async function checkWatchlist(tmdbId, mediaType) {
+            try {
+                const response = await fetch(`{% url "ajax_check_watchlist" %}?tmdb_id=${tmdbId}&media_type=${mediaType}`);
+                const data = await response.json();
+                return data.in_watchlist;
+            } catch (error) {
+                console.error('Error checking watchlist:', error);
+                return false;
+            }
+        }
+
+        async function updateAllWatchlistButtons(tmdbId = null, mediaType = null, inWatchlist = null) {
+            if (tmdbId && mediaType && inWatchlist !== null) {
+                document.querySelectorAll('.hover-watchlist-btn').forEach(btn => {
+                    if (btn.dataset.tmdbId == tmdbId && btn.dataset.mediaType == mediaType) updateWatchlistButton(btn, inWatchlist);
+                });
+                const detailBtn = document.getElementById('watchlist-btn');
+                if (detailBtn) {
+                    const detailTmdbId = detailBtn.dataset.tmdbId;
+                    const detailMediaType = detailBtn.dataset.mediaType;
+                    if (detailTmdbId == tmdbId && detailMediaType == mediaType) updateWatchlistButton(detailBtn, inWatchlist);
+                }
+            } else {
+                const hoverButtons = document.querySelectorAll('.hover-watchlist-btn');
+                for (const btn of hoverButtons) {
+                    const btnTmdbId = btn.dataset.tmdbId;
+                    const btnMediaType = btn.dataset.mediaType;
+                    if (btnTmdbId && btnMediaType) {
+                        const inWL = await checkWatchlist(parseInt(btnTmdbId), btnMediaType);
+                        updateWatchlistButton(btn, inWL);
+                    }
+                }
+                const detailBtn = document.getElementById('watchlist-btn');
+                if (detailBtn) {
+                    const detailTmdbId = detailBtn.dataset.tmdbId;
+                    const detailMediaType = detailBtn.dataset.mediaType;
+                    if (detailTmdbId && detailMediaType) {
+                        const inWL = await checkWatchlist(parseInt(detailTmdbId), detailMediaType);
+                        updateWatchlistButton(detailBtn, inWL);
+                    }
+                }
+            }
+        }
+
+        function handleNavWatchlistClick(event) {
+            event.preventDefault();
+            {% if user.is_authenticated %}
+                window.location.href = "{% url 'watchlist' %}";
+            {% else %}
+                const warningDiv = document.getElementById('navWatchlistWarning');
+                warningDiv.style.display = 'block';
+                setTimeout(() => {
+                    warningDiv.style.display = 'none';
+                }, 3000);
+                openAuthModal('login');
+            {% endif %}
+        }
+
+        document.addEventListener('click', (e) => {
+            const watchlistBtn = e.target.closest('.hover-watchlist-btn');
+            if (watchlistBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const tmdbId = watchlistBtn.dataset.tmdbId;
+                const mediaType = watchlistBtn.dataset.mediaType;
+                const title = watchlistBtn.dataset.title;
+                const posterPath = watchlistBtn.dataset.posterPath;
+                toggleWatchlist(tmdbId, mediaType, title, posterPath);
+            }
+        });
+
+        // Handle card hover to show title after delay
+        function initCardHoverTitles() {
+            document.querySelectorAll('.card-wrapper').forEach(card => {
+                let hoverTimer = null;
+                const hoverTitle = card.querySelector('.card-hover-title');
+
+                if (!hoverTitle) return;
+
+                card.addEventListener('mouseenter', () => {
+                    hoverTimer = setTimeout(() => {
+                        hoverTitle.classList.add('visible');
+                    }, 1000);
+                });
+
+                card.addEventListener('mouseleave', () => {
+                    if (hoverTimer) {
+                        clearTimeout(hoverTimer);
+                        hoverTimer = null;
+                    }
+                    hoverTitle.classList.remove('visible');
+                });
+            });
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // =====================================================================
+        // NEW UX FEATURES: hover watchlist, info modal, lazy images, scroll UX, back to top
+        // =====================================================================
+
+        function toggleWatchlistInline(btn, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+            var mediaType = btn.getAttribute('data-media-type');
+            var mediaId = btn.getAttribute('data-media-id');
+            var title = btn.getAttribute('data-title') || '';
+            var poster = btn.getAttribute('data-poster') || '';
+            if (!mediaId || !mediaType) return;
+            if (typeof toggleWatchlist === 'function') {
+                toggleWatchlist(mediaId, mediaType, title, poster);
+            }
+            btn.classList.toggle('in-watchlist');
+            var icon = btn.querySelector('i');
+            if (icon) {
+                if (btn.classList.contains('in-watchlist')) {
+                    icon.classList.remove('fa-plus');
+                    icon.classList.add('fa-check');
+                } else {
+                    icon.classList.remove('fa-check');
+                    icon.classList.add('fa-plus');
+                }
+            }
+        }
+
+        function openDetailFromCard(btn) {
+            var card = btn.closest('.card-wrapper');
+            if (!card) return;
+            var link = card.querySelector('a[href*="/movie/"], a[href*="/series/"]');
+            if (link && link.href) window.location.href = link.href;
+        }
+
+        function updateInlineWatchlistBtn() {
+            try {
+                if (typeof window.watchlistItems === 'undefined') return;
+                document.querySelectorAll('.preview-btn.watchlist-btn').forEach(function (btn) {
+                    var mediaType = btn.getAttribute('data-media-type');
+                    var mediaId = String(btn.getAttribute('data-media-id') || '');
+                    var isIn = window.watchlistItems.some(function (it) {
+                        return String(it.tmdb_id || it.media_id) === mediaId && it.media_type === mediaType;
+                    });
+                    btn.classList.toggle('in-watchlist', !!isIn);
+                    var icon = btn.querySelector('i');
+                    if (icon) {
+                        icon.classList.toggle('fa-check', !!isIn);
+                        icon.classList.toggle('fa-plus', !isIn);
+                    }
+                });
+            } catch (e) {}
+        }
+
+        if (typeof updateAllWatchlistButtons === 'function') {
+            var _origUpdateAllWatchlistButtons = updateAllWatchlistButtons;
+            updateAllWatchlistButtons = function () {
+                _origUpdateAllWatchlistButtons.apply(this, arguments);
+                updateInlineWatchlistBtn();
+            };
+        }
+
+        function loadLazyImage(img) {
+            if (!img || img.classList.contains('loaded')) return;
+            var src = img.getAttribute('data-src');
+            if (!src) return;
+            var tester = new Image();
+            tester.onload = function () {
+                img.src = src;
+                img.classList.add('loaded');
+                var wrap = img.closest('.card-image-container, .card-image-wrapper, .position-relative');
+                if (wrap) {
+                    var ph = wrap.querySelector('.lazy-placeholder');
+                    if (ph) ph.classList.add('hidden');
+                }
+            };
+            tester.onerror = function () { img.classList.add('loaded'); };
+            tester.src = src;
+        }
+
+        function initLazyImageLoading() {
+            var lazyImgs = document.querySelectorAll('img.lazy-image[data-src]');
+            if (!lazyImgs.length) return;
+            if (!('IntersectionObserver' in window)) {
+                lazyImgs.forEach(loadLazyImage);
+                return;
+            }
+            if (window._lazyImgObserver) window._lazyImgObserver.disconnect();
+            window._lazyImgObserver = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        loadLazyImage(entry.target);
+                        window._lazyImgObserver.unobserve(entry.target);
+                    }
+                });
+            }, { rootMargin: '200px 0px', threshold: 0.01 });
+            lazyImgs.forEach(function (img) { window._lazyImgObserver.observe(img); });
+        }
+
+        function initScrollProgressAndBackToTop() {
+            var progressBar = document.getElementById('scrollProgress');
+            var backToTop = document.getElementById('backToTop');
+            if (!progressBar && !backToTop) return;
+            var ticking = false;
+            function update() {
+                var doc = document.documentElement;
+                var scrollTop = window.pageYOffset || doc.scrollTop;
+                var scrollHeight = doc.scrollHeight - doc.clientHeight;
+                var pct = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
+                if (progressBar) progressBar.style.width = pct + '%';
+                if (backToTop) {
+                    if (scrollTop > 420) backToTop.classList.add('visible');
+                    else backToTop.classList.remove('visible');
+                }
+                ticking = false;
+            }
+            function onScroll() {
+                if (!ticking) {
+                    window.requestAnimationFrame(update);
+                    ticking = true;
+                }
+            }
+            window.addEventListener('scroll', onScroll, { passive: true });
+            window.addEventListener('resize', onScroll, { passive: true });
+            if (backToTop) {
+                backToTop.addEventListener('click', function () {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+            }
+            update();
+        }
+
+        // ========================================================================
+        // TILE ADS MODULE: In-grid ad tile hydration + first-click gating
+        // ========================================================================
+        (function () {
+            var TILE_ADS = {{ tile_ads_json|safe }} || [];
+            var ENABLE_TILE_CLICK_GATING = {{ enable_tile_click_gating|yesno:"true,false" }};
+            var TILE_GATING_AD_URLS = {{ gating_ad_urls_json|safe }} || [];
+            var TILE_GATING_SOURCE = '{{ tile_gating_source|safe }}';
+            var TILE_AD_SOURCE = '{{ tile_ad_source|safe }}';
+            var AMAZON_PRODUCTS_TILE = {{ tile_ads_json|safe }} || [];
+            var AMAZON_PRODUCTS_RAW = {{ amazon_products_json|safe }} || [];
+            var STORAGE_KEY_PREFIX = 'tile_click_v1:';
+            var tileAdRotationIdx = 0;
+            var gatingAdRotationIdx = 0;
+
+            function shuffleInPlace(arr) {
+                try {
+                    if (!Array.isArray(arr) || arr.length < 2) return;
+                    for (var i = arr.length - 1; i > 0; i--) {
+                        var j = Math.floor(Math.random() * (i + 1));
+                        var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+                    }
+                } catch (e) {}
+            }
+
+            // If source mode is "random" AND the arrays still have some ordering, apply JS shuffle for safety.
+            (function () {
+                try {
+                    if (TILE_AD_SOURCE === 'amazon_random' && Array.isArray(TILE_ADS) && TILE_ADS.length > 1) {
+                        shuffleInPlace(TILE_ADS);
+                    }
+                    if (TILE_GATING_SOURCE === 'amazon_random' && Array.isArray(TILE_GATING_AD_URLS) && TILE_GATING_AD_URLS.length > 1) {
+                        shuffleInPlace(TILE_GATING_AD_URLS);
+                    }
+                } catch (e) {}
+            })();
+
+            function hasAnyTileAds() {
+                return Array.isArray(TILE_ADS) && TILE_ADS.length > 0;
+            }
+            function nextTileAd() {
+                if (!hasAnyTileAds()) return null;
+                var ad = TILE_ADS[tileAdRotationIdx % TILE_ADS.length];
+                tileAdRotationIdx = (tileAdRotationIdx + 1) % TILE_ADS.length;
+                return ad;
+            }
+            function nextGatingAdUrl() {
+                if (!Array.isArray(TILE_GATING_AD_URLS) || TILE_GATING_AD_URLS.length === 0) return null;
+                var url = TILE_GATING_AD_URLS[gatingAdRotationIdx % TILE_GATING_AD_URLS.length];
+                gatingAdRotationIdx = (gatingAdRotationIdx + 1) % TILE_GATING_AD_URLS.length;
+                return url;
+            }
+            function storageKeyFor(mediaType, mediaId) {
+                return STORAGE_KEY_PREFIX + String(mediaType || '') + ':' + String(mediaId || '');
+            }
+            function hasTileBeenClicked(mediaType, mediaId) {
+                try {
+                    var key = storageKeyFor(mediaType, mediaId);
+                    return !!window.sessionStorage && window.sessionStorage.getItem(key) === '1';
+                } catch (e) {
+                    return false;
+                }
+            }
+            function markTileClicked(mediaType, mediaId) {
+                try {
+                    var key = storageKeyFor(mediaType, mediaId);
+                    if (window.sessionStorage) window.sessionStorage.setItem(key, '1');
+                } catch (e) {}
+            }
+            function openAdNewTab(url) {
+                try {
+                    window.open(String(url), '_blank', 'noopener,noreferrer');
+                } catch (e) {}
+            }
+            function buildTileAdHtml(ad) {
+                if (!ad) return '';
+                var provider = String(ad.provider || '');
+                if (provider === 'amazon_affiliate' && ad.affiliate_url) {
+                    var imgHtml = '';
+                    if (ad.affiliate_image_url) {
+                        imgHtml = '<img src="' + ad.affiliate_image_url + '" alt="' + (ad.affiliate_title || ad.name || '').replace(/"/g, '&quot;') + '" style="max-height:180px;object-fit:contain;width:auto;margin:0 auto 0.5rem auto;display:block;">';
+                    }
+                    var priceHtml = ad.affiliate_price ? '<div class="mt-1" style="color:#ff9900;font-weight:600;">' + ad.affiliate_price + '</div>' : '';
+                    return (
+                        '<a href="' + ad.affiliate_url + '" target="_blank" rel="sponsored noopener noreferrer" class="d-block text-decoration-none p-2 rounded h-100" style="border:1px solid rgba(255,153,0,.35);background:rgba(255,153,0,.08);min-height:260px;display:flex;flex-direction:column;justify-content:center;">' +
+                            '<div style="text-align:center;font-size:0.7rem;color:#94a3b8;margin-bottom:0.35rem;">SPONSORED</div>' +
+                            imgHtml +
+                            '<div style="font-size:0.82rem;font-weight:600;color:#e2e8f0;line-height:1.25;">' + (ad.affiliate_title || ad.name || '') + '</div>' +
+                            priceHtml +
+                            '<div class="mt-2"><span class="btn btn-sm" style="background:rgba(255,153,0,.95);color:#0f171e;font-weight:700;font-size:0.75rem;padding:0.25rem 0.6rem;">View on Amazon</span></div>' +
+                        '</a>'
+                    );
+                } else if (provider === 'custom_image') {
+                    var imgTag = '';
+                    if (ad.image_url) {
+                        imgTag = '<img src="' + ad.image_url + '" alt="' + (ad.alt_text || ad.name || '').replace(/"/g, '&quot;') + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
+                    }
+                    var wrapStart = '';
+                    var wrapEnd = '';
+                    if (ad.link_url) {
+                        wrapStart = '<a href="' + ad.link_url + '" target="_blank" rel="noopener noreferrer sponsored" class="d-block h-100">';
+                        wrapEnd = '</a>';
+                    }
+                    return (
+                        '<div style="min-height:260px;position:relative;border-radius:8px;overflow:hidden;background:rgba(15,23,42,0.8);">' +
+                            '<div style="position:absolute;top:4px;left:4px;z-index:2;background:rgba(0,0,0,.55);color:#cbd5e1;font-size:0.6rem;padding:0.1rem 0.35rem;border-radius:4px;">AD</div>' +
+                            wrapStart + imgTag + wrapEnd +
+                        '</div>'
+                    );
+                } else if (provider === 'custom_script' || provider === 'google_adsense') {
+                    return (
+                        '<div style="min-height:260px;background:rgba(15,23,42,0.8);padding:0.5rem;border-radius:8px;overflow:hidden;">' +
+                            '<div style="text-align:center;font-size:0.6rem;color:#64748b;margin-bottom:0.25rem;">AD</div>' +
+                            String(ad.script || '') +
+                        '</div>'
+                    );
+                } else {
+                    return (
+                        '<div style="min-height:260px;background:rgba(15,23,42,0.8);padding:0.75rem;border-radius:8px;">' +
+                            '<div style="text-align:center;font-size:0.65rem;color:#64748b;margin-bottom:0.5rem;">AD</div>' +
+                            String(ad.script || '') +
+                        '</div>'
+                    );
+                }
+            }
+            function activateAdTileScripts(root) {
+                if (!root) return;
+                try {
+                    var scripts = root.querySelectorAll('script');
+                    for (var i = 0; i < scripts.length; i++) {
+                        try {
+                            var s = scripts[i];
+                            var replacement = document.createElement('script');
+                            var attrs = s.attributes;
+                            for (var j = 0; j < attrs.length; j++) {
+                                replacement.setAttribute(attrs[j].name, attrs[j].value);
+                            }
+                            var txt = s.textContent || s.innerText || '';
+                            if (txt) replacement.text = txt;
+                            if (s.parentNode) {
+                                s.parentNode.insertBefore(replacement, s);
+                                s.parentNode.removeChild(s);
+                            }
+                        } catch (innerErr) {}
+                    }
+                } catch (e) {}
+            }
+            function hydrateTilePlaceholder(placeholderEl) {
+                if (!placeholderEl) return;
+                if (placeholderEl.getAttribute('data-hydrated') === '1') return;
+                placeholderEl.setAttribute('data-hydrated', '1');
+                if (!hasAnyTileAds()) {
+                    placeholderEl.style.display = 'none';
+                    return;
+                }
+                var ad = nextTileAd();
+                var cardEl = placeholderEl.querySelector('.tile-ad-card');
+                if (!cardEl) {
+                    placeholderEl.innerHTML = buildTileAdHtml(ad);
+                    activateAdTileScripts(placeholderEl);
+                    return;
+                }
+                var containerEl = cardEl.querySelector('.card-image-container');
+                if (!containerEl) {
+                    cardEl.innerHTML = buildTileAdHtml(ad);
+                } else {
+                    containerEl.innerHTML = buildTileAdHtml(ad);
+                    containerEl.style.padding = '0';
+                    containerEl.style.display = 'block';
+                    containerEl.style.minHeight = '0';
+                }
+                activateAdTileScripts(cardEl);
+            }
+            function scanAndHydrateTilePlaceholders(root) {
+                if (!TILE_ADS || TILE_ADS.length === 0) {
+                    var placeholdersAll = (root || document).querySelectorAll('.tile-ad-placeholder');
+                    for (var i = 0; i < placeholdersAll.length; i++) placeholdersAll[i].style.display = 'none';
+                    return;
+                }
+                var placeholders = (root || document).querySelectorAll('.tile-ad-placeholder[data-hydrated!="1"]');
+                for (var k = 0; k < placeholders.length; k++) {
+                    try { hydrateTilePlaceholder(placeholders[k]); } catch (e) {}
+                }
+            }
+
+            // --- First-click ad gating on content tiles ---
+            function handleTileContentClick(event) {
+                if (!ENABLE_TILE_CLICK_GATING) return;
+                var linkEl = event.target.closest('a[data-tile-link="1"]');
+                if (!linkEl) return;
+                var cardEl = event.target.closest('.movie-card[data-media-id]');
+                if (!cardEl) return;
+                var mediaType = cardEl.getAttribute('data-media-type') || '';
+                var mediaId = cardEl.getAttribute('data-media-id') || '';
+                if (!mediaType || !mediaId) return;
+                if (hasTileBeenClicked(mediaType, mediaId)) {
+                    return;
+                }
+                // First click on this tile -> open ad instead.
+                var adUrl = nextGatingAdUrl();
+                if (!adUrl) return;
+                event.preventDefault();
+                event.stopPropagation();
+                markTileClicked(mediaType, mediaId);
+                openAdNewTab(adUrl);
+                // Visual cue: briefly flash the card
+                try {
+                    cardEl.animate([
+                        { filter: 'brightness(1.15)' },
+                        { filter: 'brightness(1)' }
+                    ], { duration: 250 });
+                } catch (e) {}
+                return false;
+            }
+
+            // Use capture-phase document click so we intercept before navigation.
+            document.addEventListener('click', function (event) {
+                try { handleTileContentClick(event); } catch (e) {}
+            }, true);
+
+            // Observer to auto-hydrate tile placeholders when new ones appear (AJAX/infinite scroll)
+            var _tileObserver = null;
+            function initObserver() {
+                try {
+                    if (!window.MutationObserver) return;
+                    _tileObserver = new MutationObserver(function (mutations) {
+                        for (var i = 0; i < mutations.length; i++) {
+                            var added = mutations[i].addedNodes;
+                            if (!added || !added.length) continue;
+                            for (var j = 0; j < added.length; j++) {
+                                var node = added[j];
+                                if (node && node.nodeType === 1) {
+                                    scanAndHydrateTilePlaceholders(node);
+                                }
+                            }
+                        }
+                    });
+                    _tileObserver.observe(document.body, { childList: true, subtree: true });
+                } catch (e) {}
+            }
+
+            window.TileAdsModule = {
+                init: function () {
+                    scanAndHydrateTilePlaceholders(document);
+                    initObserver();
+                }
+            };
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    /* ===== Global TMDB Rate Limiter ===== */
+    window.TMDBQueue = (function() {
+        var queue = [];
+        var processing = false;
+        var lastRequest = 0;
+        var minDelay = 400;
+        var isPaused = false;
+        var retryCount = 0;
+        var maxRetries = 2;
+        var rateLimitUntil = 0;
+
+        function processNext() {
+            if (processing || isPaused || queue.length === 0) return;
+            var now = Date.now();
+            if (now < rateLimitUntil) {
+                setTimeout(processNext, rateLimitUntil - now);
+                return;
+            }
+            var wait = minDelay - (now - lastRequest);
+            if (wait > 0) {
+                setTimeout(processNext, wait);
+                return;
+            }
+            processing = true;
+            var task = queue.shift();
+            lastRequest = Date.now();
+            task().then(function() {
+                retryCount = 0;
+                processing = false;
+                if (queue.length > 0) setTimeout(processNext, minDelay);
+            }).catch(function(err) {
+                processing = false;
+                if (err && err.status === 429) {
+                    retryCount++;
+                    if (retryCount >= maxRetries) {
+                        isPaused = true;
+                        rateLimitUntil = Date.now() + 60000;
+                        console.warn('TMDB rate limited, pausing 60s');
+                        setTimeout(function() { isPaused = false; retryCount = 0; }, 60000);
+                    } else {
+                        rateLimitUntil = Date.now() + 5000 * retryCount;
+                        setTimeout(processNext, 5000 * retryCount);
+                    }
+                } else if (queue.length > 0) {
+                    setTimeout(processNext, 2000);
+                }
+            });
+        }
+
+        return {
+            add: function(fn) { queue.push(fn); if (!processing && !isPaused) processNext(); },
+            pause: function() { isPaused = true; },
+            resume: function() { isPaused = false; processNext(); },
+            pending: function() { return queue.length; },
+            isPaused: function() { return isPaused; }
+        };
+    })();
+
+    /* ===== Smart fetch wrapper with rate limit handling ===== */
+    window.tmdbFetch = function(url, opts) {
+        return new Promise(function(resolve, reject) {
+            fetch(url, opts).then(function(r) {
+                if (r.status === 429) {
+                    reject({status: 429});
+                } else {
+                    resolve(r);
+                }
+            }).catch(reject);
+        });
+    };
+
+    /* ===== Theme toggle ===== */
+    (function() {
+        var saved = localStorage.getItem('theme_mode');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        var icon = document.getElementById('themeIcon');
+        if (icon) {
+            if (document.documentElement.getAttribute('data-theme') === 'light') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        }
+    })();
+    function toggleTheme() {
+        var html = document.documentElement;
+        var current = html.getAttribute('data-theme') || 'dark';
+        var next = current === 'light' ? 'dark' : 'light';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('theme_mode', next);
+        localStorage.setItem('site-theme', next);
+        /* Update all theme icons */
+        var icons = document.querySelectorAll('#themeIcon, #floatingThemeToggle #themeIcon, #themeToggleIcon');
+        icons.forEach(function(el) { el.textContent = next === 'light' ? '☀️' : '🌙'; });
+        /* Also update the navbar toggle button */
+        var navbarBtn = document.getElementById('themeToggle');
+        if (navbarBtn) navbarBtn.style.background = next === 'light' ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.08)';
+    }
+    </script>
+    <script>
+    /* ===== Intersection Observer — scroll reveal animations ===== */
+    (function() {
+        var targets = document.querySelectorAll('.reveal-on-scroll, .section-reveal, .reveal-stagger');
+        if (!targets.length) return;
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                    /* Stagger children with delay */
+                    if (entry.target.classList.contains('reveal-stagger')) {
+                        var children = entry.target.children;
+                        for (var i = 0; i < children.length; i++) {
+                            (function(child, idx) {
+                                setTimeout(function() { child.classList.add('is-visible'); }, idx * 60);
+                            })(children[i], i);
+                        }
+                    }
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+        targets.forEach(function(el) { observer.observe(el); });
+    })();
+
+    /* ===== Page transition on navigation ===== */
+    (function() {
+        var content = document.querySelector('.content-wrapper') || document.querySelector('main') || document.body;
+        content.classList.add('page-transition');
+        document.addEventListener('click', function(e) {
+            var link = e.target.closest('a[href]');
+            if (!link) return;
+            var href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('javascript:') || link.target === '_blank') return;
+            if (href.indexOf(window.location.origin) === -1 && href.indexOf('/') !== 0) return;
+            e.preventDefault();
+            content.classList.remove('page-transition');
+            content.classList.add('page-exit');
+            setTimeout(function() { window.location.href = href; }, 260);
+        });
+    })();
+
+    /* ===== Footer links: point to the page the user is currently on ===== */
+    (function() {
+        var path = window.location.pathname;
+        var isSeries = /\/series\//.test(path) || /\/series\/id\/.test(path);
+        var listUrl = isSeries ? '/series/' : '/movies/';
+        document.querySelectorAll('.footer-genre-link').forEach(function(a) {
+            var genre = a.getAttribute('data-fgenre');
+            if (genre) a.href = listUrl + '?genre=' + genre;
+        });
+        document.querySelectorAll('.footer-country-link').forEach(function(a) {
+            var country = a.getAttribute('data-fcountry');
+            if (country) a.href = listUrl + '?country=' + country;
+        });
+    })();
+
+    /* Footer Subscribe */
+    function footerSubscribe() {
+        var email = document.getElementById('footerSubscribeEmail');
+        var msg = document.getElementById('footerSubMsg');
+        var btn = document.getElementById('footerSubscribeBtn');
+        if (!email || !email.value) return;
+        btn.textContent = 'Subscribing...';
+        btn.disabled = true;
+        fetch('/ajax/subscribe/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            body: JSON.stringify({email: email.value})
+        }).then(function(r) { return r.json(); })
+        .then(function(d) {
+            msg.style.display = 'block';
+            msg.style.color = d.ok ? '#00c896' : '#e50914';
+            msg.textContent = d.message || (d.ok ? 'Subscribed!' : 'Error');
+            btn.textContent = 'Subscribe';
+            btn.disabled = false;
+            if (d.ok) email.value = '';
+        }).catch(function() {
+            msg.style.display = 'block';
+            msg.style.color = '#e50914';
+            msg.textContent = 'Network error';
+            btn.textContent = 'Subscribe';
+            btn.disabled = false;
+        });
+    }
+    function getCookie(name) {
+        var v = document.cookie.match('(^|;)\\s*' + name + '=([^;]*)');
+        return v ? decodeURIComponent(v[2]) : '';
+    }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

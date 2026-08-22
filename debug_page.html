@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexStream Player</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --accent: #00b4d8;
+            --accent-dark: #0077b6;
+            --bg: #0a0a0a;
+            --surface: rgba(255, 255, 255, 0.06);
+            --surface-hover: rgba(255, 255, 255, 0.12);
+            --text: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.5);
+        }
+
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* ── Layout ── */
+        #app {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* ── Iframe Stage ── */
+        #stage {
+            flex: 1;
+            position: relative;
+            background: #000;
+        }
+
+        #stream-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* ── Brand Watermark ── */
+        #wm-left,
+        #wm-right {
+            position: absolute;
+            top: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 2.5px;
+            color: rgba(255, 255, 255, 0.2);
+            z-index: 10;
+            text-transform: uppercase;
+            text-decoration: none;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s;
+        }
+
+        #wm-left:hover,
+        #wm-right:hover {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        #wm-left {
+            left: 20px;
+        }
+
+        #wm-right {
+            right: 20px;
+        }
+
+        #api-overlay {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0 8px;
+            height: 36px;
+            color: rgba(255, 255, 255, 0.85);
+            cursor: pointer;
+            text-decoration: none;
+            transition: color 0.2s, filter 0.2s;
+            background: transparent;
+            border: none;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-family: 'Inter', sans-serif;
+        }
+
+        #api-overlay:hover {
+            color: #fff;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
+        }
+
+
+
+        /* ── Responsive ── */
+        @media (max-width: 480px) {
+
+            #wm-left,
+            #wm-right {
+                font-size: 8px;
+                letter-spacing: 1.5px;
+                top: 10px;
+            }
+
+            #wm-left {
+                left: 10px;
+            }
+
+            #wm-right {
+                right: 10px;
+            }
+
+            #api-overlay {
+                width: 28px;
+                height: 28px;
+                bottom: 10px;
+            }
+
+            #api-overlay svg {
+                width: 17px;
+                height: 17px;
+            }
+        }
+
+
+
+        /* ── Loading Screen ── */
+        #loading-screen {
+            position: absolute;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            gap: 16px;
+            transition: opacity 0.4s ease;
+        }
+
+        #loading-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader-ring {
+            width: 42px;
+            height: 42px;
+            border: 3px solid rgba(255, 255, 255, 0.08);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #loading-text {
+            font-size: 13px;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+
+        #loading-logo {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--accent);
+        }
+
+        /* ── Error Screen ── */
+        #error-screen {
+            position: absolute;
+            inset: 0;
+            background: var(--bg);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        #error-screen .err-icon {
+            font-size: 36px;
+        }
+
+        #error-screen .err-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        #error-screen .err-msg {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-align: center;
+            max-width: 280px;
+        }
+
+        #error-screen .retry-btn {
+            margin-top: 8px;
+            padding: 8px 24px;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        #error-screen .retry-btn:hover {
+            opacity: 0.85;
+        }
+
+        /* ── Ad Shield Play Button ── */
+        .ad-shield-play {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 30px rgba(0, 180, 216, 0.6);
+            cursor: pointer;
+            z-index: 95;
+            transition: transform 0.2s ease;
+        }
+
+        .ad-shield-play:hover {
+            transform: scale(1.1);
+        }
+
+        .ad-shield-play svg {
+            width: 36px;
+            height: 36px;
+            color: #fff;
+            margin-left: 6px;
+        }
+
+        .ad-shield-play::before,
+        .ad-shield-play::after {
+            content: '';
+            position: absolute;
+            inset: -15px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            opacity: 0;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        .ad-shield-play::after {
+            animation-delay: 1s;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(0.7);
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                transform: scale(1.3);
+                opacity: 0;
+            }
+        }
+
+        /* ── Adblock Screen ── */
+        #adblock-screen {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 0, 0, 0.85);
+            /* Deep reddish dark overlay */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .adblock-card {
+            background: rgba(20, 20, 20, 0.6);
+            border: 1px solid rgba(255, 50, 50, 0.2);
+            padding: 40px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 420px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .adblock-card svg {
+            width: 48px;
+            height: 48px;
+            color: #ff4a4a;
+            margin-bottom: 20px;
+        }
+
+        #adblock-screen .err-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        #adblock-screen .err-msg {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        #adblock-screen .retry-btn {
+            padding: 12px 32px;
+            background: #ff4a4a;
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(255, 74, 74, 0.2);
+        }
+
+        #adblock-screen .retry-btn:hover {
+            background: #ff3333;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(255, 74, 74, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Loading Screen -->
+        <div id="loading-screen">
+            <div id="loading-logo">NEXSTREAM</div>
+            <div class="loader-ring"></div>
+            <div id="loading-text">Resolving sources…</div>
+        </div>
+
+        <!-- Error Screen -->
+        <div id="error-screen">
+            <div class="err-icon">⚠️</div>
+            <div class="err-title">Stream Unavailable</div>
+            <div class="err-msg" id="error-msg">This source is currently unavailable. Try switching servers.</div>
+            <button class="retry-btn" onclick="location.reload()">Reload</button>
+        </div>
+
+        <!-- Adblock Screen -->
+        <div id="adblock-screen">
+            <div class="adblock-card">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                    </path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <div class="err-title">Adblocker Detected</div>
+                <div class="err-msg">We noticed you're using an adblocker. To keep our streaming API free and maintain
+                    high-speed servers, we rely on advertising revenue. Please disable your adblocker for this site to
+                    continue watching.</div>
+                <button class="retry-btn" onclick="location.reload()">I have disabled it</button>
+            </div>
+        </div>
+
+        <!-- Main Video Stage -->
+        <div id="stage">
+            <a href="https://www.codespecters.com" target="_blank" id="wm-left">CODESPECTER</a>
+            <a href="/" target="_blank" id="wm-right">NEXSTREAM API </a>
+            <iframe id="stream-frame" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            // Parse key FIRST — before any ad logic
+            const _urlParams = new URLSearchParams(window.location.search);
+            const _apiKey = _urlParams.get('apikey') || _urlParams.get('api_key') || '';
+            const isDemo = _apiKey.startsWith('DEMO_');
+
+            // ==========================================
+            // ADSTERRA CLICK-SHIELD LOGIC
+            // Only for real (non-demo) keys
+            // ==========================================
+            if (!isDemo) {
+                const adShield = document.createElement('div');
+                adShield.style.cssText = 'position: absolute; inset: 0; z-index: 90; cursor: pointer; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;';
+                adShield.innerHTML = `
+                    <div class="ad-shield-play">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21"></polygon>
+                        </svg>
+                    </div>
+                `;
+
+                const adUrl = 'https://www.profitablecpmratenetwork.com/w1e9p927kb?key=693e3a4dedf39350aaa56de024881e0d';
+                const cooldownHours = 12;
+
+                if (!document.cookie.includes('nex_ad_seen=1')) {
+                    document.getElementById('stage').appendChild(adShield);
+
+                    function dismissAd(e) {
+                        e.preventDefault();
+                        window.open(adUrl, '_blank');
+                        adShield.remove();
+                        const date = new Date();
+                        date.setTime(date.getTime() + (cooldownHours * 60 * 60 * 1000));
+                        document.cookie = `nex_ad_seen=1; expires=${date.toUTCString()}; path=/; SameSite=Lax`;
+                    }
+
+                    adShield.addEventListener('click', dismissAd);
+                    adShield.addEventListener('touchend', dismissAd, { passive: false });
+                }
+            }
+
+            // ==========================================
+            // ADBLOCK DETECTOR — only for non-demo keys
+            // ==========================================
+            function enforceAdblock() {
+                document.getElementById('adblock-screen').style.display = 'flex';
+            }
+
+            async function checkAdblock() {
+                let isBlocked = false;
+                const bait = document.createElement('div');
+                bait.innerHTML = '&nbsp;';
+                bait.className = 'adsbox ad-placement doubleclick ad-banner';
+                bait.style.cssText = 'position:absolute;top:-9999px;height:10px;';
+                document.body.appendChild(bait);
+                await new Promise(r => setTimeout(r, 100));
+                if (bait.offsetHeight === 0 || window.getComputedStyle(bait).display === 'none') isBlocked = true;
+                bait.remove();
+                if (isBlocked) return enforceAdblock();
+                try {
+                    await fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
+                } catch (e) { return enforceAdblock(); }
+            }
+
+            if (!isDemo) checkAdblock();
+
+            const parts = window.location.pathname.split('/').filter(Boolean);
+            // e.g. ['embed','movie','603'] or ['embed','tv','1396','1','1']
+            const type = parts[1]; // 'movie' or 'tv'
+            let apiUrl = '';
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const apiKey = urlParams.get('apikey') || urlParams.get('api_key');
+
+            if (type === 'movie') {
+                apiUrl = `/api/movie/${parts[2]}?apikey=${apiKey}`;
+            } else if (type === 'tv') {
+                apiUrl = `/api/tv/${parts[2]}/${parts[3]}/${parts[4]}?apikey=${apiKey}`;
+            }
+
+            const frame = document.getElementById('stream-frame');
+            const loading = document.getElementById('loading-screen');
+            const loadingText = document.getElementById('loading-text');
+            const errorScreen = document.getElementById('error-screen');
+
+            let sources = [];
+            let activeIndex = 0;
+
+            function hideLoading() {
+                loading.classList.add('fade-out');
+                setTimeout(() => {
+                    loading.style.display = 'none';
+                    loading.remove(); // Aggressively remove from DOM
+                }, 600);
+            }
+
+            function loadSource(index) {
+                activeIndex = index;
+                const src = sources[index];
+                frame.src = src.url;
+            }
+
+            function showError(msg) {
+                errorScreen.style.display = 'flex';
+                document.getElementById('error-msg').textContent = msg;
+                hideLoading();
+            }
+
+            if (!apiUrl) {
+                showError('Invalid embed URL. Expected /embed/movie/{id} or /embed/tv/{id}/{season}/{episode}');
+                return;
+            }
+
+            fetch(apiUrl)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.sources || data.sources.length === 0) {
+                        throw new Error('No sources available for this title.');
+                    }
+
+                    sources = data.sources;
+
+                    // Set title for the document tab
+                    if (data.meta && data.meta.title) {
+                        let label = data.meta.title;
+                        if (type === 'tv') label += ` — S${String(parts[3]).padStart(2, '0')}E${String(parts[4]).padStart(2, '0')}`;
+                        document.title = label + ' | NexStream';
+                    } else {
+                        document.title = type === 'tv'
+                            ? `S${parts[3]}E${parts[4]} | NexStream`
+                            : `TMDB ID: ${parts[2]} | NexStream`;
+                    }
+
+                    // Immediately load the first source
+                    loadingText.textContent = 'Starting player…';
+                    loadSource(0);
+
+                    // Hide loading after iframe loads
+                    frame.onload = () => {
+                        hideLoading();
+                    };
+
+                    // Fallback: hide after 8s regardless
+                    setTimeout(hideLoading, 8000);
+                })
+                .catch(err => {
+                    showError(err.message || 'Failed to fetch stream sources.');
+                });
+        })();
+    </script>
+
+    <!-- Dynamic Ad Loader: Suppressed for demo keys, active for real API keys -->
+    <script type="text/javascript">
+        (function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const apiKey = urlParams.get('apikey') || urlParams.get('api_key') || '';
+            const isDemo = apiKey.startsWith('DEMO_');
+
+            if (!isDemo) {
+                // Adsterra Popunder
+                const s1 = document.createElement('script');
+                s1.type = 'text/javascript';
+                s1.src = 'https://pl29277137.profitablecpmratenetwork.com/b5/cc/6b/b5cc6bc0af64effe0f95728e487e895e.js';
+                document.body.appendChild(s1);
+
+                // Adsterra Social Bar
+                const s2 = document.createElement('script');
+                s2.type = 'text/javascript';
+                s2.src = 'https://pl29277139.profitablecpmratenetwork.com/1d/d1/10/1dd110fc3097cf2d0a0e5665860b66af.js';
+                document.body.appendChild(s2);
+            }
+        })();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Player Configuration Management</h1>
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-secondary">&larr; Back to Admin Dashboard</a>
+        <a href="{% url 'player_create' %}" class="btn btn-primary">+ Create New Player Configuration</a>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table table-dark table-hover">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Name</th>
+                    <th>Media Type</th>
+                    <th>Active</th>
+                    <th>Color</th>
+                    <th>Use for Android</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                <tr>
+                    <td>{{ player.order }}</td>
+                    <td>{{ player.name }}</td>
+                    <td>{{ player.get_media_type_display }}</td>
+                    <td>
+                        {% if player.is_active %}
+                            <span class="badge bg-success">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if player.player_color %}
+                            <span style="background-color: #{{ player.player_color }}; padding: 2px 8px; border-radius: 4px;">#{{ player.player_color }}</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if player.use_for_android %}
+                            <span class="badge bg-info">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="{% url 'toggle_player' player.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm {% if player.is_active %}btn-secondary{% else %}btn-success{% endif %} me-2">
+                                {% if player.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+                        <a href="{% url 'player_edit' player.id %}" class="btn btn-sm btn-warning me-2">Edit</a>
+                        <a href="{% url 'player_delete' player.id %}" class="btn btn-sm btn-danger">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center">No player configurations found. Create one to get started!</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

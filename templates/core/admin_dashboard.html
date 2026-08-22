@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex align-items-center mb-4">
+        <h1 class="mb-0">
+            <i class="fas fa-sliders-h me-3 text-warning"></i>Admin Dashboard
+        </h1>
+    </div>
+
+    <!-- Settings Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'branding_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-palette me-2 text-purple-400"></i> Branding
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Customize brand name, tagline, and color</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'display_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-tv me-2 text-blue-400"></i> Display
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure items per row, card size, theme, and fonts</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'data_source_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-database me-2 text-indigo-400"></i> Data Source
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Select TMDB API or database, configure watch region</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'data_source_config' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #2d1b4e 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-server me-2 text-purple-400"></i> TMDB Database
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure connection to local TMDB database</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'player_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a2e1a 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-play-circle me-2 text-green-400"></i> Player
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Set default movie and TV show players</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'url_blocking_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #2e1a1a 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-shield-alt me-2 text-red-400"></i> URL Blocking
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Configure URL blocking and redirect rules</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'footer_settings' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1c2434 0%, #111827 100%);">
+                <div class="card-header border-0 d-flex justify-content-between align-items-center" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-window-maximize me-2 text-cyan-400"></i> Footer
+                    </h5>
+                    <div class="form-check form-switch m-0" onclick="event.preventDefault(); event.stopPropagation();">
+                        <input class="form-check-input" type="checkbox" id="footer-toggle" {% if site_settings.footer_enabled %}checked{% endif %} onchange="toggleFooter(this); event.stopPropagation();" onclick="event.stopPropagation();">
+                    </div>
+                </div>
+                <div class="card-body text-white d-flex flex-column justify-content-between">
+                    <p class="mb-0" style="color: #a0a0b0;">Edit footer layout, links, subscribe area, branding, and disclaimer text.</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Management Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <h3 class="text-white mb-3"><i class="fas fa-tools me-2 text-warning"></i> Management</h3>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'content_row_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-th-large me-2 text-purple-400"></i> Content Rows
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manage home page content rows</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'player_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-gamepad me-2 text-green-400"></i> Players
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manage video player configurations</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'ad_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #312e81 0%, #1e293b 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-ad me-2 text-indigo-400"></i> Ads
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manage ad providers, scripts, and display rules</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'provider_item_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1f2937 0%, #111827 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-play-circle me-2 text-cyan-400"></i> Providers
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Sync and manage TMDB providers; region management is available from the Providers page</p>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'android_app_list' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #12372a 0%, #0f172a 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fab fa-android me-2 text-green-400"></i> Android App Management
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Manage protected JSON endpoints, credentials, and connection analytics</p>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'web_management_dashboard' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-chart-line me-2 text-blue-400"></i>Web Management
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">View public website visitors, pageviews, trends, and recent activity</p>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-4">
+            <a href="{% url 'system_resource_dashboard' %}" class="card border-0 shadow-lg h-100 text-decoration-none" style="background: linear-gradient(135deg, #831843 0%, #0f172a 100%);">
+                <div class="card-header border-0" style="background: rgba(255,255,255,0.05);">
+                    <h5 class="mb-0 text-white">
+                        <i class="fas fa-server me-2 text-pink-400"></i>System Resources
+                    </h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="mb-0" style="color: #a0a0b0;">Monitor CPU, memory, disk, network, and system information in real-time</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function toggleFooter(toggle) {
+    fetch("{% url 'toggle_footer' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: 'enabled=' + encodeURIComponent(toggle.checked)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            toggle.checked = !toggle.checked;
+            alert(data.message || 'Failed to update footer setting');
+            return;
+        }
+        toggle.checked = !!data.footer_enabled;
+    })
+    .catch(() => {
+        toggle.checked = !toggle.checked;
+        alert('Failed to update footer setting');
+    });
+}
+</script>
+
+<style>
+    .text-purple-400 { color: #a78bfa; }
+    .text-blue-400 { color: #60a5fa; }
+    .text-yellow-400 { color: #fbbf24; }
+    .text-green-400 { color: #4ade80; }
+    .text-indigo-400 { color: #818cf8; }
+    .text-pink-400 { color: #f472b6; }
+    .text-purple-300 { color: #c4b5fd; }
+    .text-blue-300 { color: #93c5fd; }
+    .text-green-300 { color: #86efac; }
+    .text-yellow-300 { color: #fde047; }
+    .text-gray-300 { color: #cbd5e1; }
+    .text-gray-400 { color: #94a3b8; }
+    .text-red-400 { color: #f87171; }
+    .text-cyan-400 { color: #22d3ee; }
+    .text-orange-400 { color: #fb923c; }
+</style>
+{% endblock %}

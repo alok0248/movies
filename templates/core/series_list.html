@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block content %}
+<div class="catalog-shell">
+    <div class="catalog-layout">
+        <main class="catalog-main">
+            <div class="catalog-toolbar">
+                <h1 class="catalog-heading">{% if genre_id %}{% for genre in all_genres %}{% if genre.name|lower == genre_id|lower %}{{ genre.name }} TV Series{% endif %}{% endfor %}{% elif filter_type == 'popular' %}Popular TV Series{% elif filter_type == 'airing_today' %}Airing Today TV Series{% elif filter_type == 'top_rated' %}Top Rated TV Series{% else %}Latest TV Series{% endif %}</h1>
+                <nav class="catalog-filter-tabs" aria-label="TV series filters">
+                    <a href="{% url 'series_list' %}?{% if genre_id %}genre={{ genre_id }}&{% endif %}{% if provider_slug %}provider={{ provider_slug }}&{% endif %}{% if watch_region %}region={{ watch_region }}{% endif %}" class="filter-tab {% if not filter_type %}active{% endif %}">Latest</a>
+                    <a href="{% url 'series_list' %}?filter_type=popular{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'popular' %}active{% endif %}">Popular</a>
+                    <a href="{% url 'series_list' %}?filter_type=airing_today{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'airing_today' %}active{% endif %}">Airing Today</a>
+                    <a href="{% url 'series_list' %}?filter_type=on_the_air{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'on_the_air' %}active{% endif %}">On The Air</a>
+                    <a href="{% url 'series_list' %}?filter_type=top_rated{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'top_rated' %}active{% endif %}">Top Rated</a>
+                </nav>
+            </div>
+            <form method="get" class="catalog-filters">
+                {% if filter_type %}<input type="hidden" name="filter_type" value="{{ filter_type }}">{% endif %}
+                <input type="search" name="search" class="form-control search-input" placeholder="Search series..." value="{{ search_query }}">
+                <select name="provider" class="form-select"><option value="">All Providers</option>{% for provider in catalog_providers %}<option value="{{ provider.slug }}" {% if provider_slug == provider.slug %}selected{% endif %}>{{ provider.name }}</option>{% endfor %}</select>
+                <select name="region" class="form-select"><option value=""{% if not watch_region %} selected{% endif %}>All Countries</option>{% for region in watch_regions %}<option value="{{ region.code }}"{% if watch_region == region.code %} selected{% endif %}>{{ region.name }} ({{ region.code }})</option>{% endfor %}</select>
+                <select name="genre" class="form-select"><option value="">All Genres</option>{% for genre in all_genres %}<option value="{{ genre.name }}" {% if genre.name|lower == genre_id|lower %}selected{% endif %}>{{ genre.name }}</option>{% endfor %}</select>
+                <select name="sort" class="form-select"><option value="">Sort</option><option value="title" {% if sort_by == 'title' %}selected{% endif %}>Title</option><option value="rating" {% if sort_by == 'rating' %}selected{% endif %}>Rating</option></select>
+                <select name="order" class="form-select"><option value="desc" {% if order == 'desc' %}selected{% endif %}>Descending</option><option value="asc" {% if order == 'asc' %}selected{% endif %}>Ascending</option></select>
+                <button type="submit" class="btn btn-primary">Apply</button>
+            </form>
+            <script>
+            /* Auto-submit filter form on any select change */
+            document.querySelector('.catalog-filters').addEventListener('change', function(e) {
+                if (e.target.tagName === 'SELECT') {
+                    this.submit();
+                }
+            });
+            </script>
+            <div class="series-grid catalog-grid" id="seriesGrid">
+                {% for s in series %}
+                <div class="card-wrapper">
+                    <a href="{% url 'series_detail_by_id' s.id %}" class="movie-card" title="{{ s.title }}">
+                        <div class="card-image-container">
+                            {% if s.cover_url %}
+                            <img class="card-image" src="{{ s.cover_url }}" alt="{{ s.title }}" loading="lazy">
+                            {% endif %}
+                            {% if s.first_air_date|is_future_date %}
+                            <div class="card-rating-badge" style="background:rgba(39,174,96,.85);color:#fff">Coming Soon</div>
+                            {% elif s.vote_average and s.vote_average > 0 %}
+                            <div class="card-rating-badge">{{ s.vote_average }}</div>
+                            {% endif %}
+                            <div class="card-overlay">
+                                <div class="card-overlay-title">{{ s.title }}</div>
+                                {% if s.year %}<div class="card-overlay-year">{{ s.year }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="deferred-ad-slot mt-3 mb-3" data-ad-position="tile" data-ad-positions="tile,below_content"></div>
+            <div id="loading" class="text-center py-4 d-none"><div class="spinner-border" role="status" style="color:var(--brand,#e50914);"><span class="visually-hidden">Loading...</span></div></div>
+        </main>
+    </div>
+</div>
+<style>
+.catalog-grid .card-wrapper { min-width: 0; width: auto; transform: none; transition: transform .28s ease, box-shadow .28s ease; }
+.catalog-grid .card-wrapper:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.catalog-grid .movie-card { display: block; border: 0; background: transparent; box-shadow: none; overflow: visible; border-radius: var(--radius, 8px); text-decoration: none; color: var(--text, #f0f0f5); }
+.catalog-grid .card-image-container { position: relative; overflow: hidden; border-radius: var(--radius, 8px); background: var(--bg-3, #1e1e2a); aspect-ratio: 2 / 3; }
+.catalog-grid .card-image { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s ease, opacity .4s; }
+.catalog-grid .card-wrapper:hover .card-image { transform: scale(1.06); }
+.card-rating-badge { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.78); backdrop-filter: blur(4px); color: #ffc107; padding: 3px 8px; border-radius: 12px; font-size: .72rem; font-weight: 800; z-index: 2; border: 1px solid rgba(255,255,255,.12); }
+.card-overlay { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,.9) 100%); opacity: 0; transition: opacity .3s; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px; pointer-events: none; border-radius: var(--radius, 8px); }
+.card-wrapper:hover .card-overlay { opacity: 1; }
+.card-overlay-title { font-size: .82rem; font-weight: 700; color: #fff; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.card-overlay-year { font-size: .7rem; color: rgba(255,255,255,.6); margin-top: 2px; }
+</style>
+<script>
+let page=1,hasNext={{ has_next|yesno:"true,false" }},isLoading=false,preloadDone=false;
+
+function loadMoreSeries(){
+    if(isLoading||!hasNext)return;
+    isLoading=true;
+    document.getElementById('loading').classList.remove('d-none');
+    page+=1;
+    var p=new URLSearchParams(window.location.search);
+    p.set('page',page);
+    fetch('?'+p.toString(),{headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(r){if(r.status===429){isLoading=false;document.getElementById('loading').classList.add('d-none');return;} return r.json();})
+    .then(function(data){
+        if(!data)return;
+        var c=document.getElementById('seriesGrid');
+        var t=document.createElement('div');
+        t.innerHTML=data.html;
+        while(t.firstChild)c.appendChild(t.firstChild);
+        hasNext=data.has_next;
+        isLoading=false;
+        preloadDone=false;
+        document.getElementById('loading').classList.add('d-none');
+    })
+    .catch(function(){isLoading=false;document.getElementById('loading').classList.add('d-none');});
+}
+
+var _seriesScrollTimer=null;
+window.addEventListener('scroll',function(){
+    if(_seriesScrollTimer)clearTimeout(_seriesScrollTimer);
+    _seriesScrollTimer=setTimeout(function(){
+        var scrollBottom=window.innerHeight+window.scrollY;
+        var docHeight=document.body.offsetHeight;
+        if(scrollBottom>=docHeight-1200)loadMoreSeries();
+        else if(scrollBottom>=docHeight-2400&&!preloadDone&&hasNext&&!isLoading){preloadDone=true;}
+    },80);
+});
+</script>
+{% endblock %}

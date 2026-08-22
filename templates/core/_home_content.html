@@ -1,0 +1,66 @@
+{% if movie_rows and movie_rows.0 and movie_rows.0.items and movie_rows.0.items.0 %}
+{% with hero_movie=movie_rows.0.items.0 %}
+<div class="hero-section" {% if hero_movie.backdrop_path or hero_movie.poster_path %}style="background-image: url('{{ settings.TMDB_IMAGE_BASE_URL }}{{ hero_movie.backdrop_path|default:hero_movie.poster_path }}');"{% endif %}>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+        <h1 class="hero-title">{{ hero_movie.title }}</h1>
+        <div class="hero-meta">
+            {% if hero_movie.release_date %}<span>{{ hero_movie.release_date|slice:":4" }}</span>{% endif %}
+            {% if hero_movie.vote_average %}<span style="color: #46d369;">★ {{ hero_movie.vote_average|floatformat:1 }}</span>{% endif %}
+        </div>
+        <p class="hero-description">{{ hero_movie.overview|default:'' }}</p>
+        <div class="d-flex gap-3">
+            {% if hero_movie.id or hero_movie.slug %}
+            <a href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' hero_movie.id %}{% else %}{% url 'movie_detail' hero_movie.slug %}{% endif %}" class="hero-btn hero-btn-primary">
+                ▶ Watch
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endif %}
+
+{% if top_movies %}
+<h2 class="section-title">Top Movies</h2>
+<div class="row-container" data-auto-scroll="true">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="top-movies-scroll">
+        {% include 'core/_movie_cards.html' with movies=top_movies %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endif %}
+
+{% if top_series %}
+<h2 class="section-title">Top Series</h2>
+<div class="row-container" data-auto-scroll="true">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="top-series-scroll">
+        {% include 'core/_series_cards.html' with series=top_series %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endif %}
+
+{% for row_data in movie_rows %}
+<h2 class="section-title">{{ row_data.row.title }}</h2>
+<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}" data-auto-scroll="{{ row_data.row.auto_scroll|yesno:"true,false" }}">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="movie-row-{{ row_data.row.id }}">
+        {% include 'core/_movie_cards.html' with movies=row_data.items %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endfor %}
+
+{% for row_data in series_rows %}
+<h2 class="section-title">{{ row_data.row.title }}</h2>
+<div class="row-container" data-row-id="{{ row_data.row.id }}" data-current-page="{{ row_data.current_page }}" data-total-pages="{{ row_data.total_pages }}" data-auto-scroll="{{ row_data.row.auto_scroll|yesno:"true,false" }}">
+    <button class="scroll-btn left">&lsaquo;</button>
+    <div class="scroll-container" id="series-row-{{ row_data.row.id }}">
+        {% include 'core/_series_cards.html' with series=row_data.items %}
+    </div>
+    <button class="scroll-btn right">&rsaquo;</button>
+</div>
+{% endfor %}

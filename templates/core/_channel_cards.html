@@ -1,0 +1,21 @@
+
+{% for channel in channels %}
+<div class="card-wrapper">
+    {% if channel.watch_link %}
+        <a href="{{ channel.watch_link }}" class="netflix-card-link" target="_blank">
+    {% endif %}
+    <div class="netflix-card">
+        <div class="card-info">
+            <h5 class="card-title">{{ channel.name|default:channel.title }}</h5>
+        </div>
+        <div class="card-hover-preview">
+            <div class="preview-details">
+                <h5 class="preview-title">{{ channel.name|default:channel.title }}</h5>
+            </div>
+        </div>
+    </div>
+    {% if channel.watch_link %}
+        </a>
+    {% endif %}
+</div>
+{% endfor %}

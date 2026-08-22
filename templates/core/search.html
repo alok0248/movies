@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}Search{% if search_query %} - {{ search_query }}{% endif %}{% endblock %}
+
+{% block content %}
+<style>
+.search-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem .6rem;
+}
+.search-card {
+    text-decoration: none;
+    transition: transform .28s ease, box-shadow .28s ease;
+    border-radius: var(--radius, 8px);
+    min-width: 0;
+}
+.search-card:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.search-card-img {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius, 8px);
+    background: var(--bg-3, #1e1e2a);
+    aspect-ratio: 2/3;
+}
+.search-card-img img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform .35s ease, opacity .4s;
+}
+.search-card:hover .search-card-img img { transform: scale(1.06); }
+.search-card-badge {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,.78); backdrop-filter: blur(4px);
+    color: #ffc107; padding: 3px 8px; border-radius: 12px;
+    font-size: .72rem; font-weight: 800; z-index: 2;
+    border: 1px solid rgba(255,255,255,.12);
+}
+.search-card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,.9) 100%);
+    opacity: 0; transition: opacity .3s;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 10px; pointer-events: none; border-radius: var(--radius, 8px);
+}
+.search-card:hover .search-card-overlay { opacity: 1; }
+.search-card-title {
+    font-size: .82rem; font-weight: 700; color: #fff; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.search-card-year { font-size: .7rem; color: rgba(255,255,255,.6); margin-top: 2px; }
+.search-section-title {
+    font-size: 1.1rem; font-weight: 700; color: var(--text, #f0f0f5);
+    margin: 2rem 0 1rem; letter-spacing: -.01em;
+}
+.search-section-title span { color: var(--brand, #00c896); }
+@media(max-width:1200px) { .search-grid { grid-template-columns: repeat(5, 1fr); } }
+@media(max-width:992px) { .search-grid { grid-template-columns: repeat(4, 1fr); } }
+@media(max-width:768px) { .search-grid { grid-template-columns: repeat(3, 1fr); gap: .7rem .5rem; } }
+@media(max-width:480px) { .search-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; } }
+</style>
+
+<div class="catalog-shell">
+    <div class="catalog-heading">
+        Search{% if search_query %}: "<span>{{ search_query }}</span>"{% endif %}
+    </div>
+
+    {% if movies %}
+    <h2 class="search-section-title">Movies</h2>
+    <div class="search-grid">
+        {% for movie in movies %}
+        <a href="{% if site_settings.url_format == 'id' %}/movies/id/{{ movie.id }}/{% else %}/movies/{{ movie.slug }}/{% endif %}" class="search-card" title="{{ movie.title }}">
+            <div class="search-card-img">
+                {% if movie.cover_url %}
+                <img src="{{ movie.cover_url }}" alt="{{ movie.title }}" loading="lazy">
+                {% endif %}
+                {% if movie.vote_average and movie.vote_average > 0 %}
+                <div class="search-card-badge">{{ movie.vote_average }}</div>
+                {% endif %}
+                <div class="search-card-overlay">
+                    <div class="search-card-title">{{ movie.title }}</div>
+                    {% if movie.year %}<div class="search-card-year">{{ movie.year }}</div>{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if series %}
+    <h2 class="search-section-title">TV Series</h2>
+    <div class="search-grid">
+        {% for s in series %}
+        <a href="/series/id/{{ s.id }}/" class="search-card" title="{{ s.title }}">
+            <div class="search-card-img">
+                {% if s.cover_url %}
+                <img src="{{ s.cover_url }}" alt="{{ s.title }}" loading="lazy">
+                {% endif %}
+                {% if s.vote_average and s.vote_average > 0 %}
+                <div class="search-card-badge">{{ s.vote_average }}</div>
+                {% endif %}
+                <div class="search-card-overlay">
+                    <div class="search-card-title">{{ s.title }}</div>
+                    {% if s.year %}<div class="search-card-year">{{ s.year }}</div>{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not movies and not series and search_query %}
+    <div class="text-center mt-5" style="color:var(--text-3);">
+        <div style="font-size:3rem;margin-bottom:1rem;">🔍</div>
+        <p style="font-size:1.1rem;">No results found for "<strong style="color:var(--text);">{{ search_query }}</strong>"</p>
+        <p style="font-size:.85rem;margin-top:.5rem;">Try different keywords or check the spelling.</p>
+    </div>
+    {% endif %}
+
+    {% if not search_query %}
+    <div class="text-center mt-5" style="color:var(--text-3);">
+        <div style="font-size:3rem;margin-bottom:1rem;">🎬</div>
+        <p style="font-size:1.1rem;">Search for movies and TV series</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

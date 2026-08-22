@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>TV Channels</h2>
+<div class="row mt-4">
+    {% for channel in channels %}
+    <div class="col-md-2 mb-4 text-center">
+        <div class="card p-2 h-100">
+            {% if channel.stream_icon %}
+            <img src="{{ channel.stream_icon }}" class="img-fluid mb-2" alt="{{ channel.name }}" style="max-height: 80px; object-fit: contain;">
+            {% else %}
+            <div class="bg-secondary mb-2" style="height: 80px; display: flex; align-items: center; justify-content: center;">
+                <span>TV</span>
+            </div>
+            {% endif %}
+            <p class="small fw-bold">{{ channel.name }}</p>
+        </div>
+    </div>
+    {% empty %}
+    <p>No channels found.</p>
+    {% endfor %}
+</div>
+{% endblock %}

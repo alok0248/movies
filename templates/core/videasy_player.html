@@ -1,0 +1,643 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',Tahoma,sans-serif;color:#fff}
+  
+  /* ===== Main layout ===== */
+  .player-root{width:100%;height:100%;display:flex;flex-direction:column;position:relative}
+  .player-iframe-wrap{flex:1;position:relative;background:#000;min-height:0}
+  .player-iframe-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:#000}
+  .player-title-overlay{position:absolute;bottom:60px;left:20px;z-index:50;pointer-events:none;opacity:0;transform:translateY(10px);transition:opacity .6s ease,transform .6s ease}
+  .player-title-overlay.show{opacity:1;transform:translateY(0)}
+  
+  /* Pause overlay */
+  .pause-overlay{position:absolute;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);transition:opacity .3s ease}
+  .pause-overlay.show{display:flex}
+  .pause-overlay-inner{text-align:center;pointer-events:auto}
+  .pause-play-btn{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.15);border:3px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .25s;margin:0 auto 1rem;backdrop-filter:blur(8px)}
+  .pause-play-btn:hover{background:rgba(255,255,255,.25);border-color:#fff;transform:scale(1.08)}
+  .pause-play-btn svg{width:32px;height:32px;fill:#fff;margin-left:4px}
+  .pause-title{font-size:1.2rem;font-weight:700;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.7);margin-bottom:.3rem}
+  .pause-sub{font-size:.78rem;color:rgba(255,255,255,.55)}
+  .player-title-main{font-size:1.6rem;font-weight:800;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.8);line-height:1.2}
+  .player-title-sub{font-size:.82rem;color:rgba(255,255,255,.6);margin-top:.3rem;font-weight:500}
+  
+  /* ===== Bottom control bar ===== */
+  .ctrl-bar{background:linear-gradient(to top,rgba(0,0,0,.95),rgba(0,0,0,.85));padding:8px 12px;display:flex;flex-direction:column;gap:6px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.06)}
+  .ctrl-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  
+  /* ===== Select dropdowns ===== */
+  .sel{position:relative;display:inline-block}
+  .sel-btn{padding:5px 28px 5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#ccc;font-size:.75rem;font-weight:500;cursor:pointer;white-space:nowrap;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:all .15s}
+  .sel-btn:hover{border-color:rgba(255,255,255,.3);color:#fff}
+  .sel-btn.active-lang{border-color:#e67e22;color:#e67e22}
+  .sel-btn.active-q{border-color:#6c5ce7;color:#a78bfa}
+  .sel-btn.active-dual{border-color:#27ae60;color:#27ae60}
+  .sel-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.3);margin-right:2px;font-weight:600}
+  .sel-menu{position:absolute;bottom:calc(100% + 4px);left:0;min-width:160px;max-height:200px;overflow-y:auto;background:rgba(20,20,20,.97);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:4px;z-index:100;display:none;backdrop-filter:blur(12px)}
+  .sel-menu.open{display:block}
+  .sel-opt{padding:6px 10px;border-radius:4px;font-size:.73rem;color:rgba(255,255,255,.7);cursor:pointer;transition:all .1s;white-space:nowrap}
+  .sel-opt:hover{background:rgba(255,255,255,.08);color:#fff}
+  .sel-opt.chosen{color:#e67e22;font-weight:600}
+  .sel-opt.chosen-q{color:#a78bfa;font-weight:600}
+  
+  /* ===== Volume sliders ===== */
+  .vol-group{display:flex;align-items:center;gap:6px;padding:0 6px}
+  .vol-group label{font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;font-weight:700;min-width:28px}
+  .vol-group label.vid{color:#6c5ce7}
+  .vol-group label.aud{color:#e67e22}
+  .vol-slider{-webkit-appearance:none;appearance:none;width:80px;height:3px;border-radius:2px;outline:none;cursor:pointer;opacity:.8;transition:opacity .15s}
+  .vol-slider:hover{opacity:1}
+  .vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;cursor:pointer}
+  .vol-slider.vid::-webkit-slider-thumb{background:#6c5ce7}
+  .vol-slider.aud::-webkit-slider-thumb{background:#e67e22}
+  .vol-slider::-moz-range-thumb{width:10px;height:10px;border-radius:50%;cursor:pointer;border:none}
+  .vol-slider.vid::-moz-range-thumb{background:#6c5ce7}
+  .vol-slider.aud::-moz-range-thumb{background:#e67e22}
+  .vol-val{font-size:.6rem;color:rgba(255,255,255,.4);font-family:Consolas,monospace;min-width:24px;text-align:right}
+  
+  /* ===== Sync controls ===== */
+  .sync-group{display:flex;align-items:center;gap:4px;padding:0 6px;border-left:1px solid rgba(255,255,255,.08);border-right:1px solid rgba(255,255,255,.08)}
+  .sync-group label{font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.3);font-weight:700}
+  .sync-btn{width:22px;height:20px;border:1px solid rgba(255,255,255,.12);background:transparent;color:rgba(255,255,255,.5);border-radius:3px;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .sync-btn:hover{border-color:#27ae60;color:#fff;background:rgba(39,174,96,.15)}
+  .sync-val{font-size:.65rem;color:#81c784;font-family:Consolas,monospace;min-width:40px;text-align:center}
+  .sync-reset{padding:2px 6px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.4);border-radius:3px;font-size:.6rem;cursor:pointer;transition:all .12s}
+  .sync-reset:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+  
+  /* ===== Status & actions ===== */
+  .status{font-size:.65rem;color:rgba(255,255,255,.35);padding:0 4px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:80px;text-align:right}
+  .status.success{color:#27ae60}
+  .status.error{color:#e74c3c}
+  .action-btn{padding:4px 8px;border-radius:4px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.4);font-size:.6rem;cursor:pointer;transition:all .12s;white-space:nowrap}
+  .action-btn:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+  .action-btn.on{border-color:#27ae60;color:#27ae60;background:rgba(39,174,96,.1)}
+  
+  /* ===== Toast ===== */
+  .toast{position:fixed;top:12px;right:12px;background:#27ae60;color:#fff;padding:6px 14px;border-radius:6px;font-size:.7rem;z-index:999;animation:fadeToast 2s forwards}
+  @keyframes fadeToast{0%,70%{opacity:1}100%{opacity:0}}
+
+  /* ===== Dual mode rows ===== */
+  .dual-row{display:none;align-items:center;gap:8px;flex-wrap:wrap}
+  .dual-row.show{display:flex}
+  .dual-tag{padding:1px 5px;border-radius:3px;font-size:.55rem;font-weight:700;letter-spacing:.03em}
+  .dual-tag.vid{background:rgba(108,92,231,.2);color:#a78bfa}
+  .dual-tag.aud{background:rgba(230,126,34,.2);color:#e67e22}
+
+  /* ===== Season/Episode dropdowns ===== */
+  .ep-row{display:none;align-items:center;gap:8px;flex-wrap:wrap}
+  .ep-row.show{display:flex}
+  .ep-select{padding:4px 24px 4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#ccc;font-size:.73rem;font-weight:500;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;transition:all .15s}
+  .ep-select:hover{border-color:rgba(255,255,255,.3);color:#fff}
+  .ep-select:focus{border-color:#e67e22}
+  .ep-select option{background:#1a1a1a;color:#fff}
+  .ep-loading{font-size:.6rem;color:rgba(255,255,255,.3);font-style:italic}
+</style>
+</head>
+<body>
+<div class="player-root">
+  <!-- Player iframe -->
+  <div class="player-iframe-wrap" id="playerWrap">
+    <div class="player-title-overlay" id="titleOverlay">
+      <div class="player-title-main" id="titleOverlayMain"></div>
+      <div class="player-title-sub" id="titleOverlaySub"></div>
+    </div>
+    <!-- Pause overlay -->
+    <div class="pause-overlay" id="pauseOverlay" onclick="resumePlayback()">
+      <div class="pause-overlay-inner">
+        <div class="pause-play-btn">
+          <svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+        </div>
+        <div class="pause-title" id="pauseTitle"></div>
+        <div class="pause-sub" id="pauseSub"></div>
+      </div>
+    </div>
+    <iframe id="playerFrame" src="{% url 'videasy_player_frame' %}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+  </div>
+
+  <!-- Control bar -->
+  <div class="ctrl-bar">
+    <!-- Row 0: Season/Episode (TV only) -->
+    <div class="ctrl-row ep-row" id="epRow">
+      <span class="sel-label">Season</span>
+      <select class="ep-select" id="seasonSelect" onchange="onSeasonChange()"></select>
+      <span class="sel-label" style="margin-left:4px">Episode</span>
+      <select class="ep-select" id="episodeSelect" onchange="onEpisodeChange()"></select>
+      <span class="ep-loading" id="epLoading"></span>
+    </div>
+
+    <!-- Row 1: Language, Quality, Dual, Status -->
+    <div class="ctrl-row">
+      <!-- Language dropdown -->
+      <div class="sel" id="langSel">
+        <span class="sel-label">Lang</span>
+        <button class="sel-btn" id="langBtn" onclick="toggleMenu('langMenu')">Language</button>
+        <div class="sel-menu" id="langMenu"></div>
+      </div>
+
+      <!-- Quality dropdown -->
+      <div class="sel" id="qSel">
+        <span class="sel-label">Q</span>
+        <button class="sel-btn" id="qBtn" onclick="toggleMenu('qMenu')">Quality</button>
+        <div class="sel-menu" id="qMenu"></div>
+      </div>
+
+      <!-- Dual stream toggle -->
+      <button class="action-btn" id="dualBtn" onclick="toggleDualMode()" style="display:none">Dual Stream</button>
+
+      <div style="flex:1"></div>
+
+      {% if is_admin %}
+      <!-- Admin-only: CSV & Info -->
+      <button class="action-btn" id="csvBtn" style="display:none" onclick="exportCSV()">CSV</button>
+      <button class="action-btn" id="infoBtn" style="display:none" onclick="toggleInfo()">Info</button>
+      {% endif %}
+
+      <!-- Status -->
+      <button class="action-btn" id="popPlayerBtn" style="display:none;background:var(--accent,#46d369);color:#000;border-color:var(--accent,#46d369)" onclick="openPopPlayer()">Pop Player</button>
+      <span class="status" id="status">Ready</span>
+    </div>
+
+    <!-- Row 2: Volume sliders (dual mode) -->
+    <div class="ctrl-row dual-row" id="dualControls">
+      <div class="vol-group">
+        <label class="vid">VID</label>
+        <input type="range" class="vol-slider vid" id="vidVol" min="0" max="100" value="0" oninput="setVolume('video',this.value)">
+        <span class="vol-val" id="vidVolVal">0%</span>
+      </div>
+      <div class="vol-group">
+        <label class="aud">AUD</label>
+        <input type="range" class="vol-slider aud" id="audVol" min="0" max="100" value="100" oninput="setVolume('audio',this.value)">
+        <span class="vol-val" id="audVolVal">100%</span>
+      </div>
+      <div class="sync-group">
+        <label>Sync</label>
+        <button class="sync-btn" onclick="adjustOffset(-10)" title="-10s">&laquo;</button>
+        <button class="sync-btn" onclick="adjustOffset(-1)" title="-1s">&lsaquo;</button>
+        <button class="sync-btn" onclick="adjustOffset(-0.1)" title="-0.1s">-</button>
+        <span class="sync-val" id="syncVal">0.000s</span>
+        <button class="sync-btn" onclick="adjustOffset(0.1)" title="+0.1s">+</button>
+        <button class="sync-btn" onclick="adjustOffset(1)" title="+1s">&rsaquo;</button>
+        <button class="sync-btn" onclick="adjustOffset(10)" title="+10s">&raquo;</button>
+        <button class="sync-reset" onclick="resetOffset()">Rst</button>
+      </div>
+      <!-- Dual VID source -->
+      <div class="sel" id="dualVidSel">
+        <span class="dual-tag vid">VID</span>
+        <button class="sel-btn" id="dualVidBtn" onclick="toggleMenu('dualVidMenu')">Source</button>
+        <div class="sel-menu" id="dualVidMenu"></div>
+      </div>
+      <!-- Dual AUD source -->
+      <div class="sel" id="dualAudSel">
+        <span class="dual-tag aud">AUD</span>
+        <button class="sel-btn" id="dualAudBtn" onclick="toggleMenu('dualAudMenu')">Source</button>
+        <div class="sel-menu" id="dualAudMenu"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if is_admin %}
+<div id="sourceInfo" style="position:fixed;bottom:70px;left:12px;right:12px;max-height:200px;overflow-y:auto;background:rgba(0,0,0,.92);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;font-size:.7rem;display:none;z-index:50;backdrop-filter:blur(12px)"></div>
+{% endif %}
+
+<script>
+const F=[1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580];
+const MAGIC=[109,118,109,49];
+const _b=e=>(e*(e+1)&1)===0;
+function _w(e){return e>>>=0,e^=e>>>16,e=Math.imul(e,2246822507)>>>0,e^=e>>>13,e=Math.imul(e,3266489909)>>>0,(e^=e>>>16)>>>0}
+function _v(e,t){return(e>>>=0,0==(t&=31))?e>>>0:(e<<t|e>>>32-t)>>>0}
+function _fnv1a(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return _w(h)}
+function decrypt(encStr,seedStr,tmdbId){
+  let b64=encStr.replace(/-/g,'+').replace(/_/g,'/');
+  b64+='='.repeat((4-b64.length%4)%4);
+  let raw=atob(b64),enc=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)enc[i]=raw.charCodeAt(i);
+  let a=_w(_fnv1a(seedStr)^_w((tmdbId>>>0)^2654435769))>>>0;
+  let S=new Array(61);
+  for(let e=0;e<8;e++){if(_b(e)){let t=a%61;a=_v((a+2654435769)>>>0,7+(7&e));S[t]=(a^_w(a))>>>0;a=_w((a+t)>>>0)}else S[e]=F[15&e]}
+  let acc=_w((2779096485^a)>>>0),out=new Uint8Array(enc.length),o=0;
+  for(let e=0;e<enc.length;){let curAcc=acc,n=curAcc%61,i=0-Number(n in S),d=S[n]>>>0;
+    let aVal=(d^Math.imul(2654435769,o+1)>>>0)>>>0;
+    let l=(((curAcc)^aVal)>>>0|(curAcc&aVal&i)>>>0)>>>0;
+    let t_val=_w((l=_v(l+curAcc>>>0,31&n)^_v(curAcc,31&Math.imul(n,7))>>>0)+2654435769>>>0);
+    S[n]=t_val>>>0;acc=t_val;o++;
+    out[e++]=255&t_val;e<enc.length&&(out[e++]=t_val>>>8&255);e<enc.length&&(out[e++]=t_val>>>16&255);e<enc.length&&(out[e++]=t_val>>>24&255)}
+  for(let e=0;e<enc.length;e++)enc[e]^=out[e];
+  for(let e=0;e<MAGIC.length;e++)if(enc[e]!==MAGIC[e])throw new Error("Decryption failed");
+  return new TextDecoder("utf-8").decode(enc.slice(4));
+}
+
+const API="https://api.speedracelight.com",DB="https://db.speedracelight.com/3";
+const SERVERS=[["cdn","CDN/Yoru"],["vsrc","Neon"],["hdmovie","HD Movie"],["m4uhd","Breach"],["downloader2","Cypher"],["superflix","Superflix"],["lamovie","LaMovie"],["meine","Meine"]];
+
+function parseURL(url){const p=new URL(url).pathname.replace(/\/$/,"").split("/").filter(Boolean);const type=p[0]||"movie",id=p[1]||null,extra={};if((type==="tv"||type==="anime")&&p.includes("season")){const i=p.indexOf("season");extra.season=p[i+1];if(p.includes("episode"))extra.episode=p[p.indexOf("episode")+1]}return{type,id,extra}}
+async function apiGet(url,params){const u=new URL(url);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));const r=await fetch(u);if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}
+
+let allResults=[],movieDetails={},movieTitle="",currentSrc=null,ddosCookies={};
+let isDualMode=false,audioOffset=0,selectedVideoSrc=null,selectedAudioSrc=null,allFlatSrcs=[],userVideoVol=0,userAudioVol=1;
+const statusEl=document.getElementById("status");
+function log(m,c){statusEl.textContent=m;statusEl.className="status"+(c?" "+c:"")}
+function showToast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+fetch("/api/cookies").then(r=>r.json()).then(d=>{ddosCookies=d.cookies||{}}).catch(()=>{});
+
+/* ===== Menu helpers ===== */
+function toggleMenu(id){
+  var menu=document.getElementById(id);
+  var wasOpen=menu.classList.contains("open");
+  closeAllMenus();
+  if(!wasOpen)menu.classList.add("open");
+}
+function closeAllMenus(){document.querySelectorAll(".sel-menu").forEach(m=>m.classList.remove("open"))}
+document.addEventListener("click",function(e){if(!e.target.closest(".sel"))closeAllMenus()});
+
+function buildMenu(menuId,items,activeClass,onClick){
+  var menu=document.getElementById(menuId);
+  menu.innerHTML="";
+  items.forEach(function(item){
+    var opt=document.createElement("div");
+    opt.className="sel-opt";
+    opt.textContent=item.label;
+    if(item.chosen)opt.className+=" "+activeClass;
+    opt.onclick=function(e){e.stopPropagation();closeAllMenus();onClick(item)};
+    menu.appendChild(opt);
+  });
+}
+
+/* ===== Build language/quality selectors as dropdowns ===== */
+function buildSelectors(){
+  document.getElementById("langBtn").textContent="Language";
+  document.getElementById("qBtn").textContent="Quality";
+  if(!allResults.length)return;
+  var knownLangs={"hindi":1,"english":1,"tamil":1,"telugu":1,"kannada":1,"bengali":1,"malayalam":1,"marathi":1,"german":1,"spanish":1,"portuguese":1,"french":1,"japanese":1,"korean":1,"chinese":1,"hinglish":1};
+  var allSrcs=[];
+  for(var r=0;r<allResults.length;r++){for(var s=0;s<allResults[r].sources.length;s++){
+    var src=allResults[r].sources[s];
+    var lang=src.language||src.audioLanguage||src.audio||src.title||src.quality||"";
+    if(/^\d+p?$/i.test(src.quality||""))lang="Original";
+    else if(knownLangs[(src.quality||"").toLowerCase()])lang=src.quality;
+    else if(!knownLangs[lang.toLowerCase()]&&lang!=="Original"&&lang!=="Vimeos"&&lang!=="Auto"){
+      var found=null;for(var k in knownLangs){var txt=JSON.stringify(src).toLowerCase();if(txt.indexOf(k)>-1){found=k.charAt(0).toUpperCase()+k.slice(1);break}}lang=found||"Original";
+    }
+    allSrcs.push({src:src,server:allResults[r].server,lang:lang,quality:src.quality||"?"});
+  }}
+  var langMap={};for(var i=0;i<allSrcs.length;i++){var ls=allSrcs[i];if(!langMap[ls.lang])langMap[ls.lang]=[];langMap[ls.lang].push(ls)}
+  var langs=Object.keys(langMap).sort(function(a,b){if(a==="Original")return -1;if(b==="Original")return 1;return a.localeCompare(b)});
+  allFlatSrcs=allSrcs;
+
+  var langItems=langs.map(function(l,idx){return{label:l+(langMap[l].length>1?" ("+langMap[l].length+")":""),chosen:idx===0,data:l,sources:langMap[l]}});
+  buildMenu("langMenu",langItems,"chosen",function(item){
+    document.getElementById("langBtn").textContent=item.label;
+    document.getElementById("langBtn").classList.add("active-lang");
+    renderQuality(item.sources,item.data);
+  });
+  document.getElementById("langBtn").textContent=langs[0]||"Language";
+  document.getElementById("langBtn").classList.add("active-lang");
+  renderQuality(langMap[langs[0]]||allSrcs,langs[0]||"");
+
+  document.getElementById("dualBtn").style.display="";
+  var csvB=document.getElementById("csvBtn");if(csvB)csvB.style.display="";
+  var infoB=document.getElementById("infoBtn");if(infoB)infoB.style.display="";
+}
+
+function renderQuality(sources,lang){
+  if(!sources.length)return;
+  var qo={'2160p':0,'2160':0,'1080p':1,'1080':1,'720p':2,'720':2,'480p':3,'480':3,'360p':4,'360':4};
+  sources=sources.slice().sort(function(a,b){return(qo[a.quality]||99)-(qo[b.quality]||99)});
+  var qItems=sources.map(function(s,idx){return{label:s.quality,chosen:idx===0,data:s}});
+  buildMenu("qMenu",qItems,"chosen-q",function(item){
+    document.getElementById("qBtn").textContent=item.label;
+    document.getElementById("qBtn").classList.add("active-q");
+    loadSource(item.data.src,item.data.quality,lang);
+    showSourceInfo(item.data.src);
+  });
+  document.getElementById("qBtn").textContent=sources[0].quality;
+  document.getElementById("qBtn").classList.add("active-q");
+  loadSource(sources[0].src,sources[0].quality,lang);
+  showSourceInfo(sources[0].src);
+}
+
+var _subtitleTracks=[];
+function fetchSubtitles(){
+  var mediaType=_playerType==='tv'?'tv':'movie';
+  var url='/ajax/videasy-sources/?tmdb_id='+encodeURIComponent(_playerTmdbId)+'&media_type='+mediaType;
+  if(_playerType==='tv'){url+='&season_id='+_playerSeason+'&episode_id='+_playerEpisode;}
+  fetch(url).then(function(r){return r.json()}).then(function(d){
+    var allSubs=[];
+    (d.servers||[]).forEach(function(s){(s.subtitles||[]).forEach(function(sub){
+      if(sub.url)allSubs.push({url:sub.url,lang:sub.lang||'en',lang_name:sub.language||sub.lang||'en',label:(sub.language||sub.lang||'en')+' subtitle'});
+    })});
+    var seen={};allSubs=allSubs.filter(function(s){if(seen[s.lang])return false;seen[s.lang]=1;return true;});
+    if(allSubs.length>0){
+      _subtitleTracks=allSubs;
+      var frame=document.getElementById("playerFrame");
+      frame.contentWindow.postMessage({type:"setSubtitles",subtitles:allSubs},"*");
+      log('Loaded '+allSubs.length+' subtitle(s).','success');
+    }
+  }).catch(function(){})
+}
+
+function loadSource(src,quality,lang){
+  if(!src||!src.url)return;currentSrc=src;
+  var frame=document.getElementById("playerFrame");
+  frame.contentWindow.postMessage({type:"play",url:src.url},"*");
+  log("Playing "+(quality||"")+(lang?" \u2014 "+lang:""),"success");
+  fetchSubtitles();
+  document.getElementById('popPlayerBtn').style.display='';
+}
+
+/* ===== Dual stream mode ===== */
+function toggleDualMode(){
+  isDualMode=!isDualMode;
+  var btn=document.getElementById("dualBtn"),dc=document.getElementById("dualControls");
+  var langSel=document.getElementById("langSel"),qSel=document.getElementById("qSel");
+  if(isDualMode){
+    btn.textContent="Single Stream";btn.classList.add("on");
+    langSel.style.display="none";qSel.style.display="none";
+    dc.classList.add("show");
+    document.getElementById("vidVol").value=0;document.getElementById("vidVolVal").textContent="0%";
+    document.getElementById("audVol").value=100;document.getElementById("audVolVal").textContent="100%";
+    userVideoVol=0;userAudioVol=1;
+    buildDualMenus();
+  }else{
+    btn.textContent="Dual Stream";btn.classList.remove("on");
+    langSel.style.display="";qSel.style.display="";
+    dc.classList.remove("show");
+    var activeLang=document.getElementById("langBtn").textContent;
+    var langMap={};for(var i=0;i<allFlatSrcs.length;i++){var s=allFlatSrcs[i];if(!langMap[s.lang])langMap[s.lang]=[];langMap[s.lang].push(s)}
+    var found=false;for(var k in langMap){if(k===activeLang){renderQuality(langMap[k],k);found=true;break}}
+    if(!found){var first=Object.keys(langMap)[0];renderQuality(langMap[first]||allFlatSrcs,first||"")}
+  }
+}
+
+function buildDualMenus(){
+  if(!allFlatSrcs.length)return;
+  var vids=allFlatSrcs.filter(function(s){return s.src&&s.src.url});
+  var auds=allFlatSrcs.filter(function(s){return s.src&&s.src.url});
+  var vidItems=vids.map(function(s,i){return{label:s.quality+" \u2014 "+s.server+" "+s.lang,chosen:i===0,data:s}});
+  var audItems=auds.map(function(s,i){return{label:s.lang+" \u2014 "+s.server+" "+s.quality,chosen:i===Math.min(1,auds.length-1),data:s}});
+  buildMenu("dualVidMenu",vidItems,"chosen-q",function(item){
+    document.getElementById("dualVidBtn").textContent=item.label;
+    selectedVideoSrc=item.data;if(selectedAudioSrc)loadDual();
+  });
+  buildMenu("dualAudMenu",audItems,"chosen",function(item){
+    document.getElementById("dualAudBtn").textContent=item.label;
+    selectedAudioSrc=item.data;if(selectedVideoSrc)loadDual();
+  });
+  selectedVideoSrc=vids[0];selectedAudioSrc=auds.length>1?auds[1]:auds[0];
+  document.getElementById("dualVidBtn").textContent=vidItems[0]?vidItems[0].label:"Source";
+  document.getElementById("dualAudBtn").textContent=audItems[0]?audItems[0].label:"Source";
+  loadDual();
+}
+
+function loadDual(){
+  if(!selectedVideoSrc||!selectedAudioSrc)return;
+  var frame=document.getElementById("playerFrame");
+  frame.contentWindow.postMessage({type:"playDual",videoUrl:selectedVideoSrc.src.url,audioUrl:selectedAudioSrc.src.url,offset:audioOffset},"*");
+  log("Dual: "+selectedVideoSrc.quality+" (vid) + "+selectedAudioSrc.lang+" (aud)","success");
+}
+
+/* ===== Sync & Volume ===== */
+function adjustOffset(d){audioOffset=Math.round((audioOffset+d)*1000)/1000;document.getElementById("syncVal").textContent=audioOffset.toFixed(3)+"s";document.getElementById("playerFrame").contentWindow.postMessage({type:"setOffset",offset:audioOffset},"*")}
+function resetOffset(){audioOffset=0;document.getElementById("syncVal").textContent="0.000s";document.getElementById("playerFrame").contentWindow.postMessage({type:"setOffset",offset:0},"*")}
+function setVolume(t,v){var vol=parseInt(v)/100;if(t==="video"){userVideoVol=vol;document.getElementById("vidVolVal").textContent=v+"%"}else{userAudioVol=vol;document.getElementById("audVolVal").textContent=v+"%"}document.getElementById("playerFrame").contentWindow.postMessage({type:"setVolume",target:t,volume:vol},"*")}
+
+
+
+/* ===== Admin: Source info & CSV export ===== */
+var _lastSrcInfo=null;
+function showSourceInfo(src){_lastSrcInfo=src;}
+function toggleInfo(){
+  var el=document.getElementById("sourceInfo");if(!el)return;
+  if(el.style.display==="block"){el.style.display="none";return}
+  if(!_lastSrcInfo||!_lastSrcInfo.url){el.style.display="none";return}
+  var cookieStr=Object.entries(ddosCookies).map(function(e){return e[0]+"="+e[1]}).join("; ")||"N/A";
+  el.innerHTML='<div style="color:#ce93d8;font-weight:600;margin-bottom:6px">Connection Info</div><div style="margin-bottom:4px"><span style="color:#888">URL:</span> <span style="color:#4fc3f7;word-break:break-all;font-family:Consolas,monospace">'+_lastSrcInfo.url+'</span></div><div><span style="color:#888">Cookies:</span> <span style="color:#81c784;font-family:Consolas,monospace">'+cookieStr+'</span></div><div style="margin-top:6px"><button onclick="navigator.clipboard.writeText(\''+_lastSrcInfo.url.replace(/'/g,"\\'")+'\').then(function(){showToast(\'Copied\')})" style="padding:3px 8px;border:1px solid #444;background:#1a1a2e;color:#ccc;border-radius:4px;cursor:pointer;font-size:.65rem">Copy URL</button></div>';
+  el.style.display="block";
+}
+function escCSV(v){return '"'+String(v||'').replace(/"/g,'""')+'"'+"\n"}
+function exportCSV(){
+  if(!allResults.length)return;
+  var cookieStr=Object.entries(ddosCookies).map(function(e){return e[0]+"="+e[1]}).join("; ")||"N/A";
+  var rows=[["Title","Year","Type","TMDB ID","Server","Quality","Language","URL","Cookies"]];
+  for(var r=0;r<allResults.length;r++)for(var s=0;s<allResults[r].sources.length;s++){var src=allResults[r].sources[s];var lang=src.language||src.audioLanguage||src.audio||(isNaN(parseInt(src.quality))?"?":"Original");rows.push([movieDetails.title||"",movieDetails.year||"",movieDetails.type||"",movieDetails.id||"",allResults[r].server,src.quality||"?",lang,src.url||"",cookieStr])}
+  var csv=rows.map(function(r){return r.map(function(c){return escCSV(c)}).join(",")}).join("\n");
+  var blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(movieTitle||"video").replace(/[^a-zA-Z0-9 ]/g,"").trim()+"_sources.csv";a.click();URL.revokeObjectURL(a.href);showToast("CSV exported");
+}
+
+/* ===== Fetch & play (server-side via Django) ===== */
+async function fetchAndPlay(type, id, extra) {
+  var seasonId=extra.season||'',episodeId=extra.episode||'';
+  log('"'+id+'" — fetching sources...');
+  var url='/ajax/player-sources/?tmdb_id='+encodeURIComponent(id)+'&type='+type;
+  if(seasonId)url+='&season='+encodeURIComponent(seasonId);
+  if(episodeId)url+='&episode='+encodeURIComponent(episodeId);
+  var resp=await fetch(url);
+  var data=await resp.json();
+  if(!data.success||!data.results||!data.results.length)throw new Error(data.error||'No sources found.');
+  movieTitle=data.title||id;
+  movieDetails={title:data.title,year:data.year,type:type,id:data.tmdbId};
+  // Group flat results by server
+  var serverMap={};
+  for(var i=0;i<data.results.length;i++){
+    var r=data.results[i];
+    var sn=r.server_name||r.server||'Unknown';
+    if(!serverMap[sn])serverMap[sn]={server:sn,path:sn,sources:[],subtitles:[]};
+    serverMap[sn].sources.push({url:r.url,quality:r.quality||'?',language:r.language||'',type:r.type||'hls'});
+  }
+  allResults=[];
+  for(var k in serverMap)if(serverMap[k].sources.length>0)allResults.push(serverMap[k]);
+  if(!allResults.length)throw new Error('No sources found.');
+  buildSelectors();
+  log('Loaded! Select language and quality.','success');
+  showTitleOverlay();
+}
+
+/* ===== Title overlay ===== */
+function showTitleOverlay(){
+  var main=document.getElementById('titleOverlayMain');
+  var sub=document.getElementById('titleOverlaySub');
+  var overlay=document.getElementById('titleOverlay');
+  if(!main||!overlay)return;
+  main.textContent=movieTitle||'';
+  var subText='';
+  if(_playerType==='tv'){
+    subText='Season '+_playerSeason+' \u2022 Episode '+_playerEpisode;
+  }else if(movieDetails.year){
+    subText=movieDetails.year;
+  }
+  sub.textContent=subText;
+  overlay.classList.add('show');
+  setTimeout(function(){overlay.classList.remove('show')},3000);
+}
+
+/* ===== Season / Episode selection ===== */
+var _playerType='movie',_playerTmdbId='',_playerSeason=1,_playerEpisode=1,_seasonsData=[];
+
+function showEpRow(show){var el=document.getElementById('epRow');if(el){el.classList.toggle('show',show)}}
+
+async function loadSeasons(tmdbId){
+  showEpRow(true);
+  var loading=document.getElementById('epLoading');
+  loading.textContent='Loading seasons...';
+  try{
+    var resp=await fetch('/ajax/player-episodes/?tmdb_id='+encodeURIComponent(tmdbId));
+    var data=await resp.json();
+    if(!data.success||!data.seasons||!data.seasons.length){loading.textContent='';return}
+    _seasonsData=data.seasons;
+    var sSel=document.getElementById('seasonSelect');
+    sSel.innerHTML='';
+    data.seasons.forEach(function(s){
+      var opt=document.createElement('option');opt.value=s.number;opt.textContent=s.name;
+      if(s.number==_playerSeason)opt.selected=true;
+      sSel.appendChild(opt);
+    });
+    loading.textContent='';
+    await loadEpisodesForSeason(tmdbId,_playerSeason);
+  }catch(e){loading.textContent='Failed to load seasons';}
+}
+
+async function loadEpisodesForSeason(tmdbId,seasonNum){
+  var loading=document.getElementById('epLoading');
+  var eSel=document.getElementById('episodeSelect');
+  loading.textContent='Loading episodes...';
+  eSel.innerHTML='';
+  try{
+    var resp=await fetch('/ajax/player-episodes/?tmdb_id='+encodeURIComponent(tmdbId)+'&season='+encodeURIComponent(seasonNum));
+    var data=await resp.json();
+    if(!data.success||!data.episodes||!data.episodes.length){
+      // Fallback: generate episode numbers
+      for(var i=1;i<=20;i++){var opt=document.createElement('option');opt.value=i;opt.textContent='E'+i;if(i==_playerEpisode)opt.selected=true;eSel.appendChild(opt)}
+      loading.textContent='';return;
+    }
+    data.episodes.forEach(function(ep){
+      var opt=document.createElement('option');opt.value=ep.number;
+      opt.textContent='E'+ep.number+(ep.name?' - '+ep.name:'');
+      if(ep.number==_playerEpisode)opt.selected=true;
+      eSel.appendChild(opt);
+    });
+    loading.textContent='';
+  }catch(e){
+    for(var i=1;i<=20;i++){var opt=document.createElement('option');opt.value=i;opt.textContent='E'+i;if(i==_playerEpisode)opt.selected=true;eSel.appendChild(opt)}
+    loading.textContent='';
+  }
+}
+
+function onSeasonChange(){
+  var v=parseInt(document.getElementById('seasonSelect').value)||1;
+  _playerSeason=v;_playerEpisode=1;
+  loadEpisodesForSeason(_playerTmdbId,v).then(function(){
+    // Auto-play the new episode
+    if(_playerType==='tv'&&_playerTmdbId){
+      fetchAndPlay('tv',_playerTmdbId,{season:String(_playerSeason),episode:String(_playerEpisode)}).catch(function(e){log('Error: '+e.message,'error')});
+    }
+  });
+}
+
+function onEpisodeChange(){
+  var v=parseInt(document.getElementById('episodeSelect').value)||1;
+  _playerEpisode=v;
+  // Auto-play the new episode
+  if(_playerType==='tv'&&_playerTmdbId){
+    fetchAndPlay('tv',_playerTmdbId,{season:String(_playerSeason),episode:String(_playerEpisode)}).catch(function(e){log('Error: '+e.message,'error')});
+  }
+}
+
+/* ===== Auto-play when TMDB ID is in URL ===== */
+(function(){
+  var params=new URLSearchParams(window.location.search);
+  var tmdbId=params.get("tmdb_id");
+  if(tmdbId){
+    var type=params.get("type")||"movie";
+    var season=params.get("season")||"1";
+    var episode=params.get("episode")||"1";
+    _playerType=type;_playerTmdbId=tmdbId;_playerSeason=parseInt(season);_playerEpisode=parseInt(episode);
+    setTimeout(function(){
+      if(type==='tv'){
+        // Load seasons/episodes and then play
+        loadSeasons(tmdbId).then(function(){
+          fetchAndPlay('tv',tmdbId,{season:season,episode:episode}).catch(function(e){log('Error: '+e.message,'error')});
+        });
+      }else{
+        fetchAndPlay('movie',tmdbId,{}).catch(function(e){log('Error: '+e.message,'error')});
+      }
+    },500);
+  }
+})();
+
+/* Pause overlay logic */
+function resumePlayback() {
+  var frame = document.getElementById('playerFrame');
+  if (frame) frame.contentWindow.postMessage({type:'resumePlay'}, '*');
+  hidePauseOverlay();
+}
+function showPauseOverlay() {
+  var el = document.getElementById('pauseOverlay');
+  var title = document.getElementById('pauseTitle');
+  var sub = document.getElementById('pauseSub');
+  if (title) title.textContent = movieTitle || '';
+  if (sub) sub.textContent = currentSrc ? (currentSrc.quality || '') + ' ' + (currentSrc.language || '') : '';
+  if (el) el.classList.add('show');
+}
+function hidePauseOverlay() {
+  var el = document.getElementById('pauseOverlay');
+  if (el) el.classList.remove('show');
+}
+
+/* Forward frameReady, videoPlaying, videoPaused from inner iframe */
+window.addEventListener('message', function(ev) {
+  if (!ev.data) return;
+  if (ev.data.type === 'frameReady' || ev.data.type === 'videoPlaying') {
+    try { parent.postMessage(ev.data, '*'); } catch(e) {}
+  }
+  if (ev.data.type === 'videoPaused') {
+    showPauseOverlay();
+    try { parent.postMessage({type:'videoPaused'}, '*'); } catch(e) {}
+  }
+  if (ev.data.type === 'videoResumed') {
+    hidePauseOverlay();
+  }
+  if (ev.data.type === 'videoError') {
+    var popBtn = document.getElementById('popPlayerBtn');
+    if (popBtn && currentSrc && currentSrc.url) popBtn.style.display = '';
+  }
+});
+
+/* ===== Pop Player - open stream in popup window ===== */
+function openPopPlayer() {
+  if (!currentSrc || !currentSrc.url) return;
+  var url = currentSrc.url;
+  var w = window.open('', '_blank', 'width=1280,height=720');
+  if (!w) { alert('Pop-up blocked. Please allow pop-ups.'); return; }
+  w.document.write('<!DOCTYPE html><html><head><title>Player</title>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>' +
+    '<style>body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh}video{width:100%;height:100%}</style>' +
+    '</head><body><video id="v" controls autoplay></video>' +
+    '<script>var v=document.getElementById("v");' +
+    'if("' + url + '".indexOf(".m3u8")>-1){' +
+    'if(Hls.isSupported()){var h=new Hls();h.loadSource("' + url + '");h.attachMedia(v);h.on(Hls.Events.MANIFEST_PARSED,function(){v.play()})}' +
+    'else if(v.canPlayType("application/vnd.apple.mpegurl")){v.src="' + url + '"}}' +
+    'else{v.src="' + url + '"}<\/script></body></html>');
+  w.document.close();
+}
+
+/* Show pop button on hover when link available */
+function showPopButton() {
+  if (currentSrc && currentSrc.url) {
+    var popBtn = document.getElementById('popPlayerBtn');
+    if (popBtn) popBtn.style.display = '';
+  }
+}
+</script>
+</body>
+</html>

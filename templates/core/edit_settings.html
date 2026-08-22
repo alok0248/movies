@@ -1,0 +1,574 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light btn-sm me-3">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+                <h1 class="mb-0">Site Settings</h1>
+            </div>
+
+            <form method="post" class="needs-validation" novalidate>
+                {% csrf_token %}
+
+                <!-- Branding Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-palette me-2"></i> Branding</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.brand_name.id_for_label }}" class="form-label fw-medium">Brand Name</label>
+                                {{ form.brand_name }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.brand_color.id_for_label }}" class="form-label fw-medium">Brand Color</label>
+                                <div class="input-group">
+                                    {{ form.brand_color }}
+                                    <span class="input-group-text bg-secondary border-0" id="brand-color-preview" style="width: 50px;"></span>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.brand_tagline.id_for_label }}" class="form-label fw-medium">Brand Tagline</label>
+                                {{ form.brand_tagline }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-tv me-2"></i> Display</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.items_per_row.id_for_label }}" class="form-label fw-medium">Items per Row</label>
+                                {{ form.items_per_row }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.card_size.id_for_label }}" class="form-label fw-medium">Card Size</label>
+                                {{ form.card_size }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.title_size.id_for_label }}" class="form-label fw-medium">Title Size</label>
+                                {{ form.title_size }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.text_size.id_for_label }}" class="form-label fw-medium">Text Size</label>
+                                {{ form.text_size }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.theme_style.id_for_label }}" class="form-label fw-medium">Theme Style</label>
+                                {{ form.theme_style }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.font_family.id_for_label }}" class="form-label fw-medium">Font Family</label>
+                                {{ form.font_family }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Source Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-database me-2"></i> Data Source</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="{{ form.data_source.id_for_label }}" class="form-label fw-medium">Data Source</label>
+                                {{ form.data_source }}
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.curated_top_movie_ids.id_for_label }}" class="form-label fw-medium">Curated Top Movie IDs (Optional)</label>
+                                {{ form.curated_top_movie_ids }}
+                                <small class="text-muted">Comma-separated TMDB IDs, e.g., 123,456,789</small>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.curated_top_series_ids.id_for_label }}" class="form-label fw-medium">Curated Top Series IDs (Optional)</label>
+                                {{ form.curated_top_series_ids }}
+                                <small class="text-muted">Comma-separated TMDB IDs, e.g., 123,456,789</small>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.watch_region.id_for_label }}" class="form-label fw-medium">Watch Region</label>
+                                {{ form.watch_region }}
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.hide_live_tv }}
+                                    <label class="form-check-label" for="{{ form.hide_live_tv.id_for_label }}">Hide Live TV from navigation</label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.url_format.id_for_label }}" class="form-label fw-medium">URL Format</label>
+                                {{ form.url_format }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TMDB DB Connection Section -->
+                <div class="card bg-dark border-0 mb-4" id="tmdb-db-section">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-server me-2"></i> TMDB Database (Extracted)</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_host.id_for_label }}" class="form-label fw-medium">Host</label>
+                                {{ form.tmdb_db_host }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_port.id_for_label }}" class="form-label fw-medium">Port</label>
+                                {{ form.tmdb_db_port }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_name.id_for_label }}" class="form-label fw-medium">Database Name</label>
+                                {{ form.tmdb_db_name }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_user.id_for_label }}" class="form-label fw-medium">Username</label>
+                                {{ form.tmdb_db_user }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.tmdb_db_password.id_for_label }}" class="form-label fw-medium">Password</label>
+                                {{ form.tmdb_db_password }}
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-primary w-100" id="test-db-btn">
+                                    <i class="fas fa-plug me-2"></i> Test Connection
+                                </button>
+                            </div>
+                            <div class="col-12" id="db-test-result"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TMDB API Keys Section -->
+                <div class="card bg-dark border-0 mb-4" id="tmdb-api-section">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-key me-2"></i> TMDB API Keys</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-9">
+                                <input type="text" class="form-control" id="new-api-key" placeholder="Enter new TMDB API key">
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <button type="button" class="btn btn-success w-100" id="add-api-key-btn">
+                                    <i class="fas fa-plus me-2"></i> Add Key
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Active</th>
+                                    <th>Created</th>
+                                    <th>Last Used</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="api-keys-list">
+                                {% for key in api_keys %}
+                                <tr data-key-id="{{ key.id }}">
+                                    <td><code>{{ key.key }}</code></td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input api-key-toggle" type="checkbox" {% if key.is_active %}checked{% endif %} data-key-id="{{ key.id }}">
+                                        </div>
+                                    </td>
+                                    <td>{{ key.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td>{{ key.last_used_at|date:"Y-m-d H:i"|default:"Never" }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger delete-api-key-btn" data-key-id="{{ key.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No API keys added</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Player Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-play-circle me-2"></i> Player</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.active_movie_player.id_for_label }}" class="form-label fw-medium">Active Movie Player</label>
+                                {{ form.active_movie_player }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.active_tv_player.id_for_label }}" class="form-label fw-medium">Active TV Player</label>
+                                {{ form.active_tv_player }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.idm_visibility.id_for_label }}" class="form-label fw-medium">IDM Auto-Extract Visibility</label>
+                                {{ form.idm_visibility }}
+                                <small class="text-muted">Controls who can see and use the IDM Auto-Extract buttons and UI on movie / TV show detail pages.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Google AdSense Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-ad me-2"></i> Google AdSense &amp; Ads</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="{{ form.adsense_verification_meta.id_for_label }}" class="form-label fw-medium">AdSense Verification Meta Tag Content</label>
+                                {{ form.adsense_verification_meta }}
+                                <small class="text-muted">Enter the value of the "content" attribute from the Google AdSense verification meta tag (e.g., googlea1b2c3d4e5f6a7b8)</small>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.adsense_client_id.id_for_label }}" class="form-label fw-medium">AdSense Client ID</label>
+                                {{ form.adsense_client_id }}
+                                <small class="text-muted">Enter your Google AdSense client ID (e.g., ca-pub-1234567890123456)</small>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.auto_click_every_clicks.id_for_label }}" class="form-label fw-medium">Auto-Open Ad Every N Clicks</label>
+                                {{ form.auto_click_every_clicks }}
+                                <small class="text-muted">Number of user clicks between ad auto-opens. After this many clicks, the NEXT user click triggers the ad to open in a new tab. Set <strong>1</strong> to trigger on every eligible click, <strong>10</strong> to trigger every 10 clicks, etc.</small>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.default_clicks_required.id_for_label }}" class="form-label fw-medium">Default Clicks Required (Global)</label>
+                                {{ form.default_clicks_required }}
+                                <small class="text-muted">Minimum click threshold that must be reached (across session) before ANY ad content loads on a page. Applied as the effective clicks_required for any ad whose individual clicks_required is 0. Set <strong>0</strong> to rely solely on per-Ad settings.</small>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-medium">Privacy &amp; Consent</label>
+                                <div class="form-check form-switch p-0 mb-2">
+                                    <span class="me-2">{{ form.require_ad_consent }}</span>
+                                    <label class="form-check-label ms-2" for="{{ form.require_ad_consent.id_for_label }}"><strong>Require Ad Consent (GDPR / CCPA)</strong></label>
+                                </div>
+                                <small class="text-muted">If enabled, ad assets and scripts will NOT load until the user clicks Accept on the consent banner.</small>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.max_ad_load_retries.id_for_label }}" class="form-label fw-medium">Max Ad Load Retries</label>
+                                {{ form.max_ad_load_retries }}
+                                <small class="text-muted">Maximum automatic retries with exponential backoff when an ad script/asset fails to load, before the slot is marked failed.</small>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.ad_consent_message.id_for_label }}" class="form-label fw-medium">Consent Banner Copy</label>
+                                {{ form.ad_consent_message }}
+                                <small class="text-muted">Text shown in the GDPR/CCPA consent banner when require_ad_consent is enabled.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <!-- URL Blocking Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-shield-alt me-2"></i> URL Blocking</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.enable_url_blocking }}
+                                    <label class="form-check-label" for="{{ form.enable_url_blocking.id_for_label }}">Enable URL Blocking</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="{{ form.blocked_urls.id_for_label }}" class="form-label fw-medium">Blocked URLs</label>
+                                {{ form.blocked_urls }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.redirect_url.id_for_label }}" class="form-label fw-medium">Redirect URL</label>
+                                {{ form.redirect_url }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email Section -->
+                <div class="card bg-dark border-0 mb-4">
+                    <div class="card-header bg-transparent border-bottom border-secondary">
+                        <h4 class="mb-0"><i class="fas fa-envelope me-2"></i> Email</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_host.id_for_label }}" class="form-label fw-medium">Email Host</label>
+                                {{ form.email_host }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_port.id_for_label }}" class="form-label fw-medium">Email Port</label>
+                                {{ form.email_port }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_host_user.id_for_label }}" class="form-label fw-medium">Email Address</label>
+                                {{ form.email_host_user }}
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.email_host_password.id_for_label }}" class="form-label fw-medium">Email Password</label>
+                                {{ form.email_host_password }}
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.email_use_tls }}
+                                    <label class="form-check-label" for="{{ form.email_use_tls.id_for_label }}">Use TLS</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-3 justify-content-end">
+                    <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light px-4">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="fas fa-save me-2"></i> Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Custom form styling */
+    .form-control, .form-select, .form-control:focus, .form-select:focus {
+        background-color: #1a1a1a;
+        border-color: #444;
+        color: #ffffff;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.25);
+        border-color: #e50914;
+        color: #ffffff;
+    }
+
+    .form-label {
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .card-body {
+        background-color: #141414;
+    }
+    
+    .card-header h4 {
+        color: #ffffff;
+    }
+    
+    .text-muted {
+        color: #999999 !important;
+    }
+    
+    .form-check-label {
+        color: #ffffff;
+    }
+    
+    /* Style the color input to look better */
+    input[type="color"] {
+        height: 38px;
+        padding: 0;
+        cursor: pointer;
+        border: 1px solid #444;
+    }
+    
+    /* Custom tooltip styling */
+    [title] {
+        position: relative;
+    }
+    
+    /* Fix the form elements */
+    {{ form.media }}
+</style>
+
+<script>
+    // Initialize color preview
+    document.addEventListener('DOMContentLoaded', function() {
+        const colorInput = document.getElementById('{{ form.brand_color.id_for_label }}');
+        const colorPreview = document.getElementById('brand-color-preview');
+        
+        if (colorInput && colorPreview) {
+            // Set initial preview
+            colorPreview.style.backgroundColor = colorInput.value;
+            
+            // Update preview on change
+            colorInput.addEventListener('input', function() {
+                colorPreview.style.backgroundColor = colorInput.value;
+            });
+        }
+
+        // Test DB Connection
+        const testDbBtn = document.getElementById('test-db-btn');
+        const dbTestResult = document.getElementById('db-test-result');
+        
+        if (testDbBtn) {
+            testDbBtn.addEventListener('click', async function() {
+                testDbBtn.disabled = true;
+                testDbBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Testing...';
+                dbTestResult.innerHTML = '';
+
+                try {
+                    const response = await fetch('{% url "test_db_connection" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        dbTestResult.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>' + data.message + '</div>';
+                    } else {
+                        dbTestResult.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle me-2"></i>' + data.message + '</div>';
+                    }
+                } catch (error) {
+                    dbTestResult.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle me-2"></i>Error testing connection</div>';
+                } finally {
+                    testDbBtn.disabled = false;
+                    testDbBtn.innerHTML = '<i class="fas fa-plug me-2"></i> Test Connection';
+                }
+            });
+        }
+
+        // Add API Key
+        const addApiKeyBtn = document.getElementById('add-api-key-btn');
+        const newApiKeyInput = document.getElementById('new-api-key');
+        const apiKeysList = document.getElementById('api-keys-list');
+        
+        if (addApiKeyBtn && newApiKeyInput) {
+            addApiKeyBtn.addEventListener('click', async function() {
+                const key = newApiKeyInput.value.trim();
+                if (!key) {
+                    alert('Please enter an API key');
+                    return;
+                }
+
+                addApiKeyBtn.disabled = true;
+                addApiKeyBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Adding...';
+
+                try {
+                    const response = await fetch('{% url "add_api_key" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: 'key=' + encodeURIComponent(key) + '&is_active=on'
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    alert('Error adding key');
+                } finally {
+                    addApiKeyBtn.disabled = false;
+                    addApiKeyBtn.innerHTML = '<i class="fas fa-plus me-2"></i> Add Key';
+                }
+            });
+        }
+
+        // Toggle API Key
+        apiKeysList.addEventListener('click', async function(e) {
+            if (e.target.classList.contains('api-key-toggle')) {
+                const keyId = e.target.dataset.keyId;
+                
+                try {
+                    const response = await fetch('/ajax/toggle-api-key/' + keyId + '/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (!data.success) {
+                        e.target.checked = !e.target.checked;
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    e.target.checked = !e.target.checked;
+                    alert('Error toggling key');
+                }
+            }
+        });
+
+        // Delete API Key
+        apiKeysList.addEventListener('click', async function(e) {
+            if (e.target.closest('.delete-api-key-btn')) {
+                const btn = e.target.closest('.delete-api-key-btn');
+                const keyId = btn.dataset.keyId;
+                
+                if (confirm('Are you sure you want to delete this API key?')) {
+                    try {
+                        const response = await fetch('/ajax/delete-api-key/' + keyId + '/', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken')
+                            }
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            const row = apiKeysList.querySelector('tr[data-key-id="' + keyId + '"]');
+                            if (row) {
+                                row.remove();
+                            }
+                            if (apiKeysList.querySelectorAll('tr').length === 0) {
+                                apiKeysList.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No API keys added</td></tr>';
+                            }
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    } catch (error) {
+                        alert('Error deleting key');
+                    }
+                }
+            }
+        });
+
+        // Helper function to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    });
+</script>
+{% endblock %}

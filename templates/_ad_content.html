@@ -1,0 +1,19 @@
+{% if ad %}
+<div class="ad-wrapper" data-ad-id="{{ ad.id }}" data-ad-provider="{{ ad.provider }}">
+{% if ad.provider == 'custom_image' and ad.image_url %}
+    <a href="{{ ad.link_url|default:'#' }}" target="_blank" rel="noopener noreferrer sponsored">
+        <img src="{{ ad.image_url }}" alt="{{ ad.alt_text|default:ad.name }}" style="max-width:100%;height:auto;border-radius:8px;display:block;">
+    </a>
+{% elif ad.provider == 'amazon_affiliate' and ad.affiliate_image_url %}
+    <a href="{{ ad.affiliate_url|default:'#' }}" target="_blank" rel="noopener noreferrer sponsored" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;">
+        <img src="{{ ad.affiliate_image_url }}" alt="{{ ad.affiliate_title|default:ad.name }}" style="width:120px;height:auto;border-radius:8px;object-fit:cover;">
+        <div>
+            {% if ad.affiliate_title %}<div style="font-weight:600;font-size:0.85rem;line-height:1.3;">{{ ad.affiliate_title }}</div>{% endif %}
+            {% if ad.affiliate_price %}<div style="color:var(--brand,#e50914);font-weight:700;font-size:0.9rem;margin-top:2px;">{{ ad.affiliate_price }}</div>{% endif %}
+        </div>
+    </a>
+{% elif ad.script %}
+    {{ ad.script|safe }}
+{% endif %}
+</div>
+{% endif %}

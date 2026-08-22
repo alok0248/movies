@@ -1,0 +1,46 @@
+{% for item in series %}
+<div class="card-wrapper" data-tmdb-id="{{ item.id }}">
+    {% if item.vote_average and item.vote_average >= 5 %}
+    <div class="rating-badge" title="Rating: {{ item.vote_average }}/10">
+        <i class="fas fa-star" style="font-size: 0.65rem; margin-right: 3px;"></i>{{ item.vote_average|floatformat:1 }}
+    </div>
+    {% endif %}
+    <div class="movie-card d-block text-decoration-none text-reset" data-media-type="tv" data-media-id="{{ item.id }}" data-detail-url="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' item.id %}{% else %}{% url 'series_detail' item.slug %}{% endif %}">
+        <div class="card-image-container">
+            <a class="card-image-link d-block" href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' item.id %}{% else %}{% url 'series_detail' item.slug %}{% endif %}" data-tile-link="1">
+                {% if item.cover_url %}<img data-src="{{ item.cover_url }}" class="card-image lazy-image" alt="{{ item.title }}" loading="lazy">
+                <div class="lazy-placeholder" data-placeholder></div>{% endif %}
+            </a>
+            <div class="card-hover-overlay"></div>
+            <div class="card-hover-preview">
+                <div class="preview-actions">
+                    <a class="preview-btn play-btn" href="{% if site_settings.url_format == 'id' %}{% url 'series_detail_by_id' item.id %}{% else %}{% url 'series_detail' item.slug %}{% endif %}" title="Play">
+                        <i class="fas fa-play"></i>
+                    </a>
+                    <button class="preview-btn watchlist-btn" data-media-type="tv" data-media-id="{{ item.id }}" data-title="{{ item.title }}" data-poster="{{ item.cover_url }}" title="Add to Watchlist" onclick="toggleWatchlistInline(this, event)">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="preview-btn info-btn" data-media-type="tv" data-media-id="{{ item.id }}" title="More Info" onclick="openDetailFromCard(this)">
+                        <i class="fas fa-info-circle"></i>
+                    </button>
+                </div>
+                <div class="preview-title"><strong>{{ item.title }}</strong></div>
+                <div class="preview-meta" style="margin: 4px 0;">
+                    {% if item.year %}<span>{{ item.year }}</span>{% endif %}
+                    {% if item.number_of_seasons %}
+                    <span style="margin-left: 8px;">S{{ item.number_of_seasons }}</span>
+                    {% endif %}
+                    {% if item.vote_average %}
+                    <span style="margin-left: 8px;">
+                        <b>HD</b>
+                    </span>
+                    {% endif %}
+                </div>
+                {% if item.overview %}
+                <div class="preview-plot hover-description" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ item.overview }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}

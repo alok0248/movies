@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+/* ===== Modern Home Page ===== */
+.home-row { margin-bottom: 2rem; position: relative; }
+.home-row-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: .6rem; padding: 0 3.5rem;
+}
+.home-row-title {
+    font-size: 1.15rem; font-weight: 700; color: var(--text, #f0f0f5);
+    margin: 0; letter-spacing: -.01em;
+}
+.home-row-see-all {
+    font-size: .75rem; color: var(--text-3, #606070);
+    text-decoration: none; transition: color .2s;
+}
+.home-row-see-all:hover { color: var(--brand, #e50914); }
+.home-row-scroll {
+    display: flex; gap: .5rem; overflow-x: auto; scroll-behavior: smooth;
+    padding: .4rem 3.5rem; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.home-row-scroll::-webkit-scrollbar { display: none; }
+
+/* Poster cards */
+.home-card {
+    flex: 0 0 165px; text-decoration: none;
+    transition: transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+    border-radius: var(--radius, 12px);
+    min-width: 165px;
+}
+.home-card:hover { transform: translateY(-8px) scale(1.04); z-index: 5; }
+.home-card-img-wrap {
+    width: 165px; height: 248px;
+    border-radius: var(--radius, 12px); overflow: hidden;
+    background: var(--bg-3, #1e1e2a);
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    position: relative;
+}
+.home-card-img-wrap img {
+    width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .4s, transform .4s;
+}
+.home-card:hover .home-card-img-wrap img { transform: scale(1.06); }
+.home-card:hover .home-card-img-wrap { box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.home-card-rating {
+    position: absolute; top: 6px; left: 6px;
+    background: rgba(0,0,0,.78); color: #ffc107;
+    padding: 2px 6px; border-radius: 12px;
+    font-size: .65rem; font-weight: 700; z-index: 3;
+    backdrop-filter: blur(4px);
+}
+.home-card-title {
+    font-size: .73rem; color: var(--text, #f0f0f5);
+    margin-top: .4rem; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 165px;
+}
+.home-card-year { font-size: .65rem; color: var(--text-3, #606070); margin-top: .1rem; }
+
+/* Top rated — same size as regular cards */
+.top-card {
+    flex: 0 0 165px; text-decoration: none;
+    transition: transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+    min-width: 165px;
+}
+.top-card:hover { transform: translateY(-8px) scale(1.04); z-index: 5; }
+.top-card-img {
+    width: 165px; height: 248px; border-radius: var(--radius, 12px);
+    object-fit: cover; display: block;
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    transition: transform .4s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+}
+.top-card:hover .top-card-img { transform: scale(1.06); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.top-card-title {
+    font-size: .73rem; color: var(--text, #f0f0f5);
+    margin-top: .4rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 165px; display: block;
+}
+
+/* Scroll arrows */
+.home-scroll-btn {
+    position: absolute; top: 5px; width: 38px; height: calc(100% - 10px);
+    background: rgba(20,20,20,.5); border: none; color: #fff;
+    font-size: 1.4rem; cursor: pointer; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    opacity: .35; transition: opacity .3s, background .3s;
+    border-radius: var(--radius-sm, 8px); backdrop-filter: blur(6px);
+}
+html[data-theme="light"] .home-scroll-btn { background: rgba(255,255,255,.55); color: #111; }
+.home-scroll-btn.left { left: 0; }
+.home-scroll-btn.right { right: 0; }
+.home-row:hover .home-scroll-btn { opacity: 1; }
+.home-scroll-btn:hover { background: rgba(40,40,40,.8); opacity: 1 !important; }
+html[data-theme="light"] .home-scroll-btn:hover { background: rgba(255,255,255,.85); }
+.home-scroll-btn.hidden { display: none; }
+
+#homeContent { min-height: 50vh; }
+#homeLoading { text-align: center; padding: 4rem 0; color: var(--text-3, #606070); }
+
+/* Responsive — all cards stay uniform at each breakpoint */
+@media (max-width: 1200px) {
+    .home-card, .top-card { flex: 0 0 150px; min-width: 150px; }
+    .home-card-img-wrap, .top-card-img { width: 150px; height: 225px; }
+    .home-card-title, .top-card-title { max-width: 150px; }
+    .home-row-header, .home-row-scroll { padding-left: 2.5rem; padding-right: 2.5rem; }
+}
+@media (max-width: 768px) {
+    .home-card, .top-card { flex: 0 0 125px; min-width: 125px; }
+    .home-card-img-wrap, .top-card-img { width: 125px; height: 188px; }
+    .home-card-title, .top-card-title { max-width: 125px; font-size: .7rem; }
+    .home-row-header, .home-row-scroll { padding-left: 1rem; padding-right: 1rem; }
+    .home-scroll-btn { display: none !important; }
+}
+@media (max-width: 480px) {
+    .home-card, .top-card { flex: 0 0 110px; min-width: 110px; }
+    .home-card-img-wrap, .top-card-img { width: 110px; height: 165px; }
+    .home-card-title, .top-card-title { max-width: 110px; font-size: .65rem; }
+}
+</style>
+
+<!-- Hero Shell (shown while loading) -->
+<div id="home-shell">
+    <div style="position:relative;height:75vh;min-height:450px;overflow:hidden;background:var(--bg,#0d0d12);">
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg,var(--bg,#0d0d12) 0%,var(--bg-2,#16161f) 40%,var(--bg-3,#1e1e2a) 100%);opacity:.85;"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(13,13,18,.98) 0%,rgba(13,13,18,.7) 40%,rgba(13,13,18,.2) 70%,transparent 100%);"></div>
+        <div style="position:absolute;bottom:0;left:0;right:0;height:200px;background:linear-gradient(to top,var(--bg,#0d0d12),transparent);"></div>
+        <div style="position:relative;z-index:2;padding:8rem 3rem 3rem;max-width:600px;">
+            <div style="width:80px;height:4px;background:var(--brand,#e50914);border-radius:2px;margin-bottom:1.5rem;"></div>
+            <h1 style="font-size:2.8rem;font-weight:800;color:var(--text,#f0f0f5);margin:0 0 0.8rem;line-height:1.1;">Loading...</h1>
+            <p style="color:var(--text-2,#a0a0b0);font-size:.95rem;line-height:1.5;">Content is loading in the background.</p>
+        </div>
+    </div>
+</div>
+
+<div id="home-content" aria-live="polite"></div>
+
+<script>
+let autoScrollIntervals = [];
+let _homeCache = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadHomeContent();
+});
+
+function loadHomeContent() {
+    tmdbFetch('{% url "home_initial_data" %}', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        var shell = document.getElementById('home-shell');
+        var content = document.getElementById('home-content');
+        if (shell) shell.style.display = 'none';
+        content.innerHTML = data.html || '';
+        _homeCache = data;
+        /* Load content rows one by one */
+        var rowIds = data.row_ids || [];
+        var loadIndex = 0;
+        function loadNextRow() {
+            if (loadIndex >= rowIds.length) {
+                /* All rows loaded — now load top rated */
+                if (data.has_top) {
+                    loadTopRated('movie');
+                }
+                try { initScrollReveal(); } catch(e) {}
+                return;
+            }
+            var rowId = rowIds[loadIndex];
+            loadIndex++;
+            tmdbFetch('/ajax/home-row/?row_id=' + rowId, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(rowData) {
+                if (rowData.html) {
+                    content.insertAdjacentHTML('beforeend', rowData.html);
+                    try { initializeHomeRows(); } catch(e) {}
+                    try { initScrollReveal(); } catch(e) {}
+                }
+                setTimeout(loadNextRow, 300);
+            })
+            .catch(function() { setTimeout(loadNextRow, 500); });
+        }
+        loadNextRow();
+    })
+    .catch(err => {
+        if (err && err.status === 429) {
+            setTimeout(loadHomeContent, 10000);
+            return;
+        }
+        console.error('Home load error:', err);
+        var content = document.getElementById('home-content');
+        if (content) content.innerHTML = '<div class="container py-5 text-center" style="color:var(--text-3);">Content loading... please refresh.</div>';
+    });
+}
+
+function loadTopRated(mediaType) {
+    tmdbFetch('/ajax/home-top/?media_type=' + mediaType, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(function(r) { return r.json(); })
+    .then(function(topData) {
+        if (topData.html) {
+            var content = document.getElementById('home-content');
+            content.insertAdjacentHTML('beforeend', topData.html);
+            try { initializeHomeRows(); } catch(e) {}
+            try { initScrollReveal(); } catch(e) {}
+        }
+        if (mediaType === 'movie') loadTopRated('tv');
+    })
+    .catch(function() {});
+}
+
+function initializeHomeRows() {
+    autoScrollIntervals.forEach(intervalId => clearInterval(intervalId));
+    autoScrollIntervals = [];
+
+    document.querySelectorAll('.home-row').forEach(function(row) {
+        var scrollEl = row.querySelector('.home-row-scroll');
+        if (!scrollEl) return;
+        row.querySelectorAll('.home-scroll-btn').forEach(function(b){b.remove();});
+        var btnL = document.createElement('button');
+        btnL.className = 'home-scroll-btn left hidden';
+        btnL.innerHTML = '\u2039';
+        btnL.setAttribute('aria-label', 'Scroll left');
+        var btnR = document.createElement('button');
+        btnR.className = 'home-scroll-btn right hidden';
+        btnR.innerHTML = '\u203a';
+        btnR.setAttribute('aria-label', 'Scroll right');
+        row.appendChild(btnL);
+        row.appendChild(btnR);
+        function updateArrows() {
+            var sl = scrollEl.scrollLeft;
+            var sw = scrollEl.scrollWidth;
+            var cw = scrollEl.clientWidth;
+            btnL.classList.toggle('hidden', sl < 10);
+            btnR.classList.toggle('hidden', sl + cw >= sw - 10);
+        }
+        scrollEl.addEventListener('scroll', updateArrows);
+        setTimeout(updateArrows, 300);
+        btnL.addEventListener('click', function() { scrollEl.scrollBy({left: -scrollEl.clientWidth * 0.8, behavior: 'smooth'}); });
+        btnR.addEventListener('click', function() { scrollEl.scrollBy({left: scrollEl.clientWidth * 0.8, behavior: 'smooth'}); });
+    });
+
+    const rowContainers = document.querySelectorAll('.row-container');
+    rowContainers.forEach(container => {
+        const scrollContainer = container.querySelector('.scroll-container');
+        const rowId = container.dataset.rowId;
+        let currentPage = parseInt(container.dataset.currentPage || '1');
+        const totalPages = parseInt(container.dataset.totalPages || '1');
+        let isLoading = false;
+        if (!scrollContainer) return;
+        scrollContainer.addEventListener('scroll', () => {
+            const scrollLeft = scrollContainer.scrollLeft;
+            const scrollWidth = scrollContainer.scrollWidth;
+            const clientWidth = scrollContainer.clientWidth;
+            if (rowId && scrollLeft + clientWidth >= scrollWidth * 0.8 && !isLoading && currentPage < totalPages) {
+                isLoading = true;
+                loadMoreContent(container, rowId, currentPage + 1)
+                    .finally(() => {
+                        currentPage++;
+                        container.dataset.currentPage = currentPage;
+                        isLoading = false;
+                    });
+            }
+        });
+    });
+}
+
+function initScrollReveal() {
+    var targets = document.querySelectorAll('.reveal-on-scroll:not(.is-visible), .reveal-stagger:not(.is-visible), .section-reveal:not(.is-visible)');
+    if (!targets.length) return;
+    var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                if (entry.target.classList.contains('reveal-stagger')) {
+                    var ch = entry.target.children;
+                    for (var i = 0; i < ch.length; i++) {
+                        (function(c, idx) {
+                            setTimeout(function() { c.classList.add('is-visible'); }, idx * 50);
+                        })(ch[i], i);
+                    }
+                }
+                obs.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.05, rootMargin: '0px 0px -30px 0px' });
+    targets.forEach(function(el) { obs.observe(el); });
+}
+
+function loadMoreContent(container, rowId, page) {
+    if (container.dataset.isLoading === 'true') return Promise.resolve();
+    container.dataset.isLoading = 'true';
+    const scrollContainer = container.querySelector('.scroll-container');
+    return fetch('{% url "load_more_row_content" 0 %}'.replace('0', rowId) + '?page=' + page, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = data.html;
+            while (tempDiv.firstChild) scrollContainer.appendChild(tempDiv.firstChild);
+        }
+        if (data.totalPages) container.dataset.totalPages = data.totalPages;
+        if (typeof initScrollButtons === 'function') { try { initScrollButtons(); } catch(e) {} }
+        if (typeof initLazyImageLoading === 'function') initLazyImageLoading();
+        setTimeout(function() {
+            document.querySelectorAll('img.lazy-image[data-src]:not(.loaded)').forEach(function(img) {
+                if (typeof loadLazyImage === 'function') loadLazyImage(img);
+            });
+        }, 500);
+    })
+    .catch(error => { console.error('Error loading more content:', error); })
+    .finally(() => { container.dataset.isLoading = 'false'; });
+}
+</script>
+{% endblock %}

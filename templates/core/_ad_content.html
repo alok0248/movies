@@ -1,0 +1,14 @@
+{% if ad.provider == 'amazon_affiliate' and ad.affiliate_url %}
+    <a href="{{ ad.affiliate_url }}" target="_blank" rel="sponsored noopener noreferrer" class="amazon-affiliate-card d-block text-decoration-none p-3 rounded" style="border:1px solid rgba(255,153,0,.35);background:rgba(255,153,0,.08);">
+        {% if ad.affiliate_image_url %}<img src="{{ ad.affiliate_image_url }}" alt="{{ ad.affiliate_title|default:ad.name }}" class="img-fluid mb-2" style="max-height:180px;object-fit:contain;">{% endif %}
+        <div class="fw-semibold">{{ ad.affiliate_title|default:ad.name }}</div>
+        {% if ad.affiliate_price %}<div class="text-warning mt-1">{{ ad.affiliate_price }}</div>{% endif %}
+        <span class="btn btn-sm btn-warning mt-2">View on Amazon</span>
+    </a>
+{% elif ad.provider == 'custom_image' %}
+    {% if ad.link_url %}<a href="{{ ad.link_url }}" target="_blank" rel="noopener noreferrer">{% endif %}
+    {% if ad.image_url %}<img src="{{ ad.image_url }}" alt="{{ ad.alt_text|default:ad.name }}" class="img-fluid w-100">{% endif %}
+    {% if ad.link_url %}</a>{% endif %}
+{% else %}
+    {{ ad.script|safe }}
+{% endif %}

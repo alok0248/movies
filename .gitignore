@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Django
+db.sqlite3
+db.sqlite3.bak
+*.log
+server.log
+
+# Media uploads
+media/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# IDE
+.trae/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.local
+
+# Node (if any)
+node_modules/
+
+# Test artifacts (keep extractor and player)
+# extractor/    # INCLUDED - video extraction tools
+# player/       # INCLUDED - player test files
+.git.corrupt/

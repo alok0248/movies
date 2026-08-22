@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Watch List{% endblock %}
+
+{% block content %}
+<style>
+.watchlist-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem .6rem;
+}
+.watchlist-card {
+    text-decoration: none;
+    transition: transform .28s ease, box-shadow .28s ease;
+    border-radius: var(--radius, 8px);
+    min-width: 0;
+}
+.watchlist-card:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.watchlist-card-img {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius, 8px);
+    background: var(--bg-3, #1e1e2a);
+    aspect-ratio: 2/3;
+}
+.watchlist-card-img img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform .35s ease;
+}
+.watchlist-card:hover .watchlist-card-img img { transform: scale(1.06); }
+.watchlist-card-badge {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,.78); backdrop-filter: blur(4px);
+    color: #ffc107; padding: 3px 8px; border-radius: 12px;
+    font-size: .72rem; font-weight: 800; z-index: 2;
+    border: 1px solid rgba(255,255,255,.12);
+}
+.watchlist-card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,.9) 100%);
+    opacity: 0; transition: opacity .3s;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 10px; pointer-events: none; border-radius: var(--radius, 8px);
+}
+.watchlist-card:hover .watchlist-card-overlay { opacity: 1; }
+.watchlist-card-title {
+    font-size: .82rem; font-weight: 700; color: #fff; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.watchlist-card-year { font-size: .7rem; color: rgba(255,255,255,.6); margin-top: 2px; }
+.watchlist-card-remove {
+    position: absolute; top: 8px; right: 8px; z-index: 5;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(239,68,68,.85); border: none; color: #fff;
+    font-size: .7rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s, transform .2s;
+    backdrop-filter: blur(4px);
+}
+.watchlist-card:hover .watchlist-card-remove { opacity: 1; }
+.watchlist-card-remove:hover { background: #ef4444; transform: scale(1.1); }
+.section-subtitle {
+    font-size: 1rem; font-weight: 700; color: var(--text, #f0f0f5);
+    margin: 2rem 0 1rem; display: flex; align-items: center; gap: .5rem;
+}
+.section-subtitle i { color: var(--brand, #e50914); }
+@media(max-width:1200px) { .watchlist-grid { grid-template-columns: repeat(5, 1fr); } }
+@media(max-width:992px) { .watchlist-grid { grid-template-columns: repeat(4, 1fr); } }
+@media(max-width:768px) { .watchlist-grid { grid-template-columns: repeat(3, 1fr); gap: .7rem .5rem; } }
+@media(max-width:480px) { .watchlist-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; } }
+</style>
+
+<div class="catalog-shell">
+    <div class="catalog-heading">My Watch List</div>
+
+    {% if movies %}
+    <div class="section-subtitle"><i class="fas fa-film"></i> Movies ({{ movies|length }})</div>
+    <div class="watchlist-grid">
+        {% for movie in movies %}
+        <div class="watchlist-card" data-media-type="movie" data-tmdb-id="{{ movie.id }}">
+            <a href="{% if site_settings.url_format == 'id' %}/movies/id/{{ movie.id }}/{% else %}/movies/{{ movie.slug }}/{% endif %}" class="watchlist-card" title="{{ movie.title }}">
+                <div class="watchlist-card-img">
+                    {% if movie.cover_url %}
+                    <img src="{{ movie.cover_url }}" alt="{{ movie.title }}" loading="lazy">
+                    {% endif %}
+                    <div class="watchlist-card-overlay">
+                        <div class="watchlist-card-title">{{ movie.title }}</div>
+                        {% if movie.year %}<div class="watchlist-card-year">{{ movie.year }}</div>{% endif %}
+                    </div>
+                </div>
+            </a>
+            <button class="watchlist-card-remove" onclick="removeFromWatchlist('{{ movie.id }}', 'movie', this)" title="Remove from list">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if series %}
+    <div class="section-subtitle"><i class="fas fa-tv"></i> TV Series ({{ series|length }})</div>
+    <div class="watchlist-grid">
+        {% for s in series %}
+        <div class="watchlist-card" data-media-type="tv" data-tmdb-id="{{ s.id }}">
+            <a href="/series/id/{{ s.id }}/" class="watchlist-card" title="{{ s.title }}">
+                <div class="watchlist-card-img">
+                    {% if s.cover_url %}
+                    <img src="{{ s.cover_url }}" alt="{{ s.title }}" loading="lazy">
+                    {% endif %}
+                    <div class="watchlist-card-overlay">
+                        <div class="watchlist-card-title">{{ s.title }}</div>
+                        {% if s.year %}<div class="watchlist-card-year">{{ s.year }}</div>{% endif %}
+                    </div>
+                </div>
+            </a>
+            <button class="watchlist-card-remove" onclick="removeFromWatchlist('{{ s.id }}', 'tv', this)" title="Remove from list">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not movies and not series %}
+    <div class="text-center mt-5" style="color:var(--text-3);">
+        <div style="font-size:3rem;margin-bottom:1rem;">📋</div>
+        <p style="font-size:1.1rem;">Your watch list is empty</p>
+        <p style="font-size:.85rem;margin-top:.5rem;">Browse movies and series and add them to your list.</p>
+        <a href="{% url 'index' %}" class="btn btn-primary mt-3" style="display:inline-flex;align-items:center;gap:.4rem;">Browse Content</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function removeFromWatchlist(tmdbId, mediaType, btn) {
+    fetch('{% url "ajax_toggle_watchlist" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+        },
+        body: 'tmdb_id=' + tmdbId + '&media_type=' + mediaType + '&title=&poster_path='
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var card = btn.closest('.watchlist-card');
+            card.style.transition = 'opacity .3s, transform .3s';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(.9)';
+            setTimeout(() => card.remove(), 300);
+        }
+    })
+    .catch(err => console.error('Remove error:', err));
+}
+</script>
+{% endblock %}

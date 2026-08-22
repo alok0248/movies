@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .form-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 3rem 1rem;
+    }
+    .page-header {
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .page-subtitle {
+        color: #94a3b8;
+        margin: 0.35rem 0 0;
+        font-size: 0.98rem;
+    }
+    .panel-card {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 14px;
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.32);
+        overflow: hidden;
+    }
+    .panel-body {
+        padding: 1.5rem;
+    }
+    .section-card {
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+        background: rgba(15, 23, 42, 0.55);
+    }
+    .section-card.section-general {
+        border-color: rgba(56, 189, 248, 0.22);
+        background: linear-gradient(180deg, rgba(8, 47, 73, 0.30), rgba(15, 23, 42, 0.65));
+    }
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 0.35rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+    .section-subtitle {
+        color: #94a3b8;
+        font-size: 0.92rem;
+        margin-bottom: 1rem;
+    }
+    .section-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #fff;
+    }
+    .badge-general { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #e2e8f0;
+    }
+    .form-control,
+    .form-select,
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.96)) !important;
+        background-color: #0f172a !important;
+        border: 1px solid rgba(71, 85, 105, 0.75) !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+        border-radius: 10px !important;
+        padding: 0.8rem 0.95rem;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    textarea.form-control,
+    textarea {
+        min-height: 132px;
+        line-height: 1.55;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.88rem;
+    }
+    .form-control::placeholder,
+    textarea::placeholder,
+    input[type="text"]::placeholder,
+    input[type="number"]::placeholder {
+        color: #7c8aa0 !important;
+        -webkit-text-fill-color: #7c8aa0 !important;
+    }
+    .form-control:hover,
+    .form-select:hover,
+    input[type="text"]:hover,
+    input[type="number"]:hover,
+    textarea:hover,
+    select:hover {
+        border-color: rgba(100, 116, 139, 0.95) !important;
+        background: linear-gradient(180deg, rgba(7, 12, 27, 0.98), rgba(15, 23, 42, 0.98)) !important;
+        background-color: #111827 !important;
+    }
+    .form-control:focus,
+    .form-select:focus,
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus,
+    select:focus {
+        border-color: #6366f1 !important;
+        background: linear-gradient(180deg, rgba(9, 14, 30, 1), rgba(17, 24, 39, 1)) !important;
+        background-color: #111827 !important;
+        box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+    }
+    .form-select option {
+        background: #0f172a;
+        color: #f8fafc;
+    }
+    .form-check-input {
+        background: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        width: 1.1rem;
+        height: 1.1rem;
+    }
+    .form-check-input:checked {
+        background-color: #6366f1;
+        border-color: #6366f1;
+    }
+    .form-check-label {
+        color: #cbd5e1;
+        font-weight: 500;
+    }
+    .helper-box {
+        margin-top: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.72);
+        color: #cbd5e1;
+        font-size: 0.92rem;
+    }
+    .helper-box strong {
+        color: #f8fafc;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        border: none;
+        padding: 0.8rem 2rem;
+        font-weight: 700;
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+    }
+    .btn-secondary {
+        background: rgba(51, 65, 85, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        color: #f8fafc;
+        border-radius: 10px;
+    }
+    .btn-secondary:hover {
+        background: rgba(71, 85, 105, 0.95);
+        color: #fff;
+    }
+</style>
+
+<div class="form-container">
+    <div class="page-header">
+        <div>
+            <h1 class="mb-0" style="font-weight:800; color:#f8fafc;">{{ action }} Ad</h1>
+            <p class="page-subtitle">Configure ad provider, script, and display settings.</p>
+        </div>
+        <a href="{% url 'ad_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Ads
+        </a>
+    </div>
+
+    <div class="panel-card">
+        <div class="panel-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="section-card section-general">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">1</span>
+                        <span>Ad Settings</span>
+                    </div>
+                    <div class="section-subtitle">Basic ad identity, provider, and visibility settings.</div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Ad Name</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.provider.id_for_label }}" class="form-label">Provider</label>
+                            {{ form.provider }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="{{ form.position.id_for_label }}" class="form-label">Ad Position</label>
+                            {{ form.position }}
+                            <small class="text-muted d-block mt-2">Choose where this ad appears, including above or below the video player.</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.clicks_required.id_for_label }}" class="form-label">Clicks Required</label>
+                            {{ form.clicks_required }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.order.id_for_label }}" class="form-label">Display Order</label>
+                            {{ form.order }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0 d-flex align-items-center">
+                            {{ form.is_active }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.is_active.id_for_label }}">Active</label>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center">
+                            {{ form.use_for_android }}
+                            <label class="form-check-label ml-2" style="margin-bottom:0;" for="{{ form.use_for_android.id_for_label }}">Use for Android</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="affiliate-section" class="section-card section-general" style="display: none;">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">2</span>
+                        <span>Amazon Affiliate Product</span>
+                    </div>
+                    <div class="section-subtitle">Use your Amazon Associates tracking URL and optional product details.</div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="{{ form.affiliate_url.id_for_label }}" class="form-label">Amazon Affiliate URL</label>
+                            {{ form.affiliate_url }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.affiliate_title.id_for_label }}" class="form-label">Product Title</label>
+                            {{ form.affiliate_title }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.affiliate_price.id_for_label }}" class="form-label">Price Text</label>
+                            {{ form.affiliate_price }}
+                        </div>
+                        <div class="col-12">
+                            <label for="{{ form.affiliate_image_url.id_for_label }}" class="form-label">Product Image URL</label>
+                            {{ form.affiliate_image_url }}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="script-section" class="section-card section-general">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">2</span>
+                        <span>Ad Script</span>
+                    </div>
+                    <div class="section-subtitle">Paste your ad provider's script code here.</div>
+
+                    <div>
+                        <label for="{{ form.script.id_for_label }}" class="form-label">Ad Script</label>
+                        {{ form.script }}
+                    </div>
+                </div>
+
+                <div id="image-section" class="section-card section-general" style="display: none;">
+                    <div class="section-title">
+                        <span class="section-badge badge-general">2</span>
+                        <span>Custom Banner Ad</span>
+                    </div>
+                    <div class="section-subtitle">Configure your custom image banner ad.</div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12 mb-3">
+                            <label for="{{ form.image_url.id_for_label }}" class="form-label">Banner Image URL</label>
+                            {{ form.image_url }}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label for="{{ form.link_url.id_for_label }}" class="form-label">Destination URL</label>
+                            {{ form.link_url }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.alt_text.id_for_label }}" class="form-label">Image Alt Text</label>
+                            {{ form.alt_text }}
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const providerSelect = document.getElementById('{{ form.provider.id_for_label }}');
+                        const scriptSection = document.getElementById('script-section');
+                        const imageSection = document.getElementById('image-section');
+                        const affiliateSection = document.getElementById('affiliate-section');
+                        
+                        function toggleSections() {
+                            const isImage = providerSelect.value === 'custom_image';
+                            const isAffiliate = providerSelect.value === 'amazon_affiliate';
+                            scriptSection.style.display = isImage || isAffiliate ? 'none' : 'block';
+                            imageSection.style.display = isImage ? 'block' : 'none';
+                            affiliateSection.style.display = isAffiliate ? 'block' : 'none';
+                        }
+                        
+                        providerSelect.addEventListener('change', toggleSections);
+                        toggleSections();  // Initial state
+                    });
+                </script>
+
+                <div class="mt-4 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">Save Ad</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 pt-5 text-center text-white">
+    <h1 class="display-1">404</h1>
+    <h2>Content Not Found</h2>
+    <p class="lead">The movie or TV show you're looking for doesn't exist.</p>
+    <a href="{% url 'index' %}" class="btn btn-primary mt-3">Go Home</a>
+</div>
+{% endblock %}

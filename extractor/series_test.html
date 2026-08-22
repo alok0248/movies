@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Series Extractor</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0a0a0a;color:#e0e0e0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+  h1{font-size:1.3rem;margin-bottom:10px;color:#fff}
+  .input-bar{display:flex;gap:8px;width:100%;max-width:900px;margin-bottom:12px;flex-wrap:wrap}
+  .input-bar input{flex:1;min-width:200px;padding:10px 14px;border:2px solid #333;border-radius:8px;background:#1a1a1a;color:#fff;font-size:.9rem;outline:none}
+  .input-bar input:focus{border-color:#6c5ce7}
+  .input-bar input::placeholder{color:#555}
+  .btn{padding:10px 24px;border:none;border-radius:8px;background:#6c5ce7;color:#fff;font-size:.9rem;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#5a4bd1}
+  .btn:disabled{background:#333;cursor:not-allowed}
+  .player-wrap{width:100%;max-width:900px;background:#000;border-radius:10px;overflow:hidden;margin-bottom:12px}
+  #playerFrame{width:100%;aspect-ratio:16/9;border:none;display:block;background:#000}
+  .sel-row{width:100%;max-width:900px;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .sel-label{color:#666;font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;margin-right:4px;min-width:70px}
+  .chip{padding:5px 14px;border-radius:16px;background:#1a1a1a;border:1px solid #333;color:#aaa;font-size:.75rem;cursor:pointer;transition:all .2s}
+  .chip:hover{border-color:#e67e22;color:#fff}
+  .chip.active{background:#e67e22;border-color:#e67e22;color:#fff}
+  .chip.active-q{background:#6c5ce7;border-color:#6c5ce7;color:#fff}
+  .status{width:100%;max-width:900px;margin-top:8px;padding:10px 14px;border-radius:8px;background:#111;border:1px solid #222;font-size:.8rem;min-height:36px;white-space:pre-wrap;word-break:break-all;line-height:1.4;color:#aaa}
+  .status.error{border-color:#e74c3c;color:#e74c3c}
+  .status.success{border-color:#27ae60;color:#27ae60}
+  .results{width:100%;max-width:900px;margin-top:12px}
+  .server-block{margin-bottom:16px;background:#111;border:1px solid #222;border-radius:8px;padding:12px}
+  .server-name{font-size:.85rem;font-weight:700;color:#ce93d8;margin-bottom:8px}
+  .source-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1a1a1a;font-size:.75rem}
+  .source-item:last-child{border-bottom:none}
+  .quality-badge{background:#6c5ce7;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;min-width:50px;text-align:center}
+  .lang-badge{background:#e67e22;color:#fff;padding:2px 8px;border-radius:4px;font-weight:600}
+  .source-url{flex:1;color:#4fc3f7;font-family:Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .source-url:hover{text-decoration:underline}
+  .copy-btn{background:#1a1a2e;border:1px solid #444;color:#ccc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:.7rem}
+  .copy-btn:hover{border-color:#6c5ce7;color:#fff}
+  .ep-nav{width:100%;max-width:900px;margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ep-nav select{padding:6px 10px;border-radius:6px;background:#1a1a1a;border:1px solid #333;color:#fff;font-size:.8rem}
+  .ep-nav button{padding:6px 14px;border-radius:6px;background:#6c5ce7;color:#fff;border:none;cursor:pointer;font-size:.8rem;font-weight:600}
+  .ep-nav button:hover{background:#5a4bd1}
+</style>
+</head>
+<body>
+<h1>🎬 Series Source Extractor</h1>
+
+<div class="input-bar">
+  <input type="text" id="urlInput" placeholder="Paste series URL e.g. https://player.videasy.net/tv/1399/1/1" />
+  <button class="btn" id="playBtn" onclick="handlePlay()">Extract</button>
+</div>
+
+<div class="ep-nav" id="epNav" style="display:none">
+  <select id="seasonSelect" onchange="onSeasonChange()"></select>
+  <select id="episodeSelect" onchange="onEpisodeChange()"></select>
+  <button onclick="reExtract()">Re-Extract</button>
+</div>
+
+<div class="player-wrap" id="playerWrap">
+  <iframe id="playerFrame" src="player_frame.html" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+</div>
+
+<div class="sel-row" id="langRow" style="display:none"><span class="sel-label">Language</span></div>
+<div class="sel-row" id="qRow" style="display:none"><span class="sel-label">Quality</span></div>
+
+<div class="status" id="status">Ready.</div>
+<div class="results" id="results"></div>
+
+<script>
+const F=[1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580];
+const MAGIC=[109,118,109,49];
+const _b=e=>(e*(e+1)&1)===0;
+function _w(e){return e>>>=0,e^=e>>>16,e=Math.imul(e,2246822507)>>>0,e^=e>>>13,e=Math.imul(e,3266489909)>>>0,(e^=e>>>16)>>>0}
+function _v(e,t){return(e>>>=0,0==(t&=31))?e>>>0:(e<<t|e>>>32-t)>>>0}
+function _fnv1a(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return _w(h)}
+function decrypt(encStr,seedStr,tmdbId){
+  let b64=encStr.replace(/-/g,'+').replace(/_/g,'/');
+  b64+='='.repeat((4-b64.length%4)%4);
+  let raw=atob(b64),enc=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)enc[i]=raw.charCodeAt(i);
+  let a=_w(_fnv1a(seedStr)^_w((tmdbId>>>0)^2654435769))>>>0;
+  let S=new Array(61);
+  for(let e=0;e<8;e++){if(_b(e)){let t=a%61;a=_v((a+2654435769)>>>0,7+(7&e));S[t]=(a^_w(a))>>>0;a=_w((a+t)>>>0)}else S[e]=F[15&e]}
+  let acc=_w((2779096485^a)>>>0),out=new Uint8Array(enc.length),o=0;
+  for(let e=0;e<enc.length;){let curAcc=acc,n=curAcc%61,i=0-Number(n in S),d=S[n]>>>0;
+    let aVal=(d^Math.imul(2654435769,o+1)>>>0)>>>0;
+    let l=(((curAcc)^aVal)>>>0|(curAcc&aVal&i)>>>0)>>>0;
+    let t_val=_w((l=_v(l+curAcc>>>0,31&n)^_v(curAcc,31&Math.imul(n,7))>>>0)+2654435769>>>0);
+    S[n]=t_val>>>0;acc=t_val;o++;
+    out[e++]=255&t_val;e<enc.length&&(out[e++]=t_val>>>8&255);e<enc.length&&(out[e++]=t_val>>>16&255);e<enc.length&&(out[e++]=t_val>>>24&255)}
+  for(let e=0;e<enc.length;e++)enc[e]^=out[e];
+  for(let e=0;e<MAGIC.length;e++)if(enc[e]!==MAGIC[e])throw new Error("Decryption failed");
+  return new TextDecoder("utf-8").decode(enc.slice(4));
+}
+
+const API="https://api.speedracelight.com",DB="https://db.speedracelight.com/3";
+const SERVERS=[["cdn","CDN/Yoru"],["vsrc","Neon"],["hdmovie","HD Movie"],["m4uhd","Breach"],["downloader2","Cypher"],["superflix","Superflix"],["lamovie","LaMovie"],["meine","Meine"]];
+
+let allResults=[],movieTitle="",currentSeason=1,currentEpisode=1,totalSeasons=1,totalEpisodes=1;
+const statusEl=document.getElementById("status");
+function log(m,c){statusEl.textContent=m;statusEl.className="status"+(c?" "+c:"")}
+
+function parseURL(url){
+  const p=new URL(url).pathname.replace(/\/$/,"").split("/").filter(Boolean);
+  const type=p[0]||"tv",id=p[1]||null,extra={};
+  if(p.length>=3)extra.season=p[2];
+  if(p.length>=4)extra.episode=p[3];
+  return{type,id,extra}
+}
+
+async function apiGet(url,params){
+  const u=new URL(url);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+  const r=await fetch(u);if(!r.ok)throw new Error("HTTP "+r.status);return r.json()
+}
+
+function showToast(msg){const t=document.createElement("div");t.style.cssText="position:fixed;top:16px;right:16px;background:#27ae60;color:#fff;padding:8px 18px;border-radius:8px;font-size:.8rem;z-index:999;animation:fadeOut 2s forwards";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+function buildEpisodeNav(tvData){
+  const nav=document.getElementById("epNav");
+  nav.style.display="flex";
+  const sSel=document.getElementById("seasonSelect");
+  const eSel=document.getElementById("episodeSelect");
+  sSel.innerHTML="";eSel.innerHTML="";
+  totalSeasons=tvData.number_of_seasons||1;
+  for(let s=1;s<=totalSeasons;s++){
+    const opt=document.createElement("option");opt.value=s;opt.textContent="Season "+s;
+    if(s===currentSeason)opt.selected=true;sSel.appendChild(opt);
+  }
+  loadEpisodesForSeason(currentSeason);
+}
+
+async function loadEpisodesForSeason(season){
+  const eSel=document.getElementById("episodeSelect");eSel.innerHTML="";
+  try{
+    const d=await apiGet(DB+"/tv/"+document.getElementById("urlInput").value.split("/").filter(Boolean)[1]+"/season/"+season);
+    totalEpisodes=d.episodes?d.episodes.length:1;
+    for(let e=1;e<=totalEpisodes;e++){
+      const opt=document.createElement("option");opt.value=e;
+      const ep=d.episodes?d.episodes.find(x=>x.episode_number===e):null;
+      opt.textContent="E"+e+(ep?" - "+ep.name:"");
+      if(e===currentEpisode)opt.selected=true;eSel.appendChild(opt);
+    }
+  }catch(e){
+    for(let e=1;e<=20;e++){
+      const opt=document.createElement("option");opt.value=e;opt.textContent="Episode "+e;
+      if(e===currentEpisode)opt.selected=true;eSel.appendChild(opt);
+    }
+  }
+}
+
+function onSeasonChange(){
+  currentSeason=parseInt(document.getElementById("seasonSelect").value);
+  currentEpisode=1;loadEpisodesForSeason(currentSeason);
+}
+function onEpisodeChange(){currentEpisode=parseInt(document.getElementById("episodeSelect").value)}
+function reExtract(){handlePlay()}
+
+async function handlePlay(){
+  const url=document.getElementById("urlInput").value.trim();
+  if(!url){log("Please paste a series URL.","error");return}
+  document.getElementById("playBtn").disabled=true;
+  document.getElementById("langRow").style.display="none";
+  document.getElementById("qRow").style.display="none";
+  document.getElementById("results").innerHTML="";
+  log("Extracting...");
+
+  try{
+    const{type,id,extra}=parseURL(url);
+    if(!id)throw new Error("Could not parse TMDB ID from URL.");
+    if(extra.season)currentSeason=parseInt(extra.season);
+    if(extra.episode)currentEpisode=parseInt(extra.episode);
+
+    const d=await apiGet(DB+"/tv/"+id+"?append_to_response=external_ids&language=en");
+    movieTitle=d.name||d.original_name;
+    const year=(d.first_air_date||"").slice(0,4);
+    const imdbId=d.imdb_id||(d.external_ids?d.external_ids.imdb_id:"");
+    log("\""+movieTitle+"\" ("+year+") — Season "+currentSeason+" Episode "+currentEpisode);
+    buildEpisodeNav(d);
+
+    const seedData=await apiGet(API+"/seed",{mediaId:parseInt(id)});
+    const seed=seedData.seed;
+    allResults=[];
+
+    for(const[path,name]of SERVERS){
+      try{
+        const srcUrl=API+"/"+path+"/sources-with-title?title="+encodeURIComponent(movieTitle)+"&mediaType=tv&year="+year+"&tmdbId="+id+"&imdbId="+imdbId+"&enc=2&seed="+encodeURIComponent(seed)+"&seasonId="+currentSeason+"&episodeId="+currentEpisode;
+        const resp=await fetch(srcUrl);if(!resp.ok)continue;
+        const txt=await resp.text();
+        if(txt.startsWith("{")&&(txt.includes("not found")||txt.includes("error")))continue;
+        const result=JSON.parse(decrypt(txt,seed,parseInt(id)));
+        if(result.sources&&result.sources.length>0)allResults.push({server:name,sources:result.sources});
+      }catch(e){}
+    }
+
+    if(!allResults.length)throw new Error("No sources found for S"+currentSeason+"E"+currentEpisode);
+    renderResults();buildSelectors();
+    log("Found sources from "+allResults.length+" servers!","success");
+  }catch(e){log("Error: "+e.message,"error")}
+  finally{document.getElementById("playBtn").disabled=false}
+}
+
+function renderResults(){
+  const el=document.getElementById("results");el.innerHTML="";
+  allResults.forEach(r=>{
+    const block=document.createElement("div");block.className="server-block";
+    let html="<div class='server-name'>"+r.server+" ("+r.sources.length+" sources)</div>";
+    r.sources.forEach(s=>{
+      html+="<div class='source-item'>";
+      html+="<span class='quality-badge'>"+(s.quality||"?")+"</span>";
+      html+="<span class='source-url' title='"+s.url+"' onclick=\"playSource('"+s.url.replace(/'/g,"\\'")+"')\">"+s.url.substring(0,80)+"...</span>";
+      html+="<button class='copy-btn' onclick=\"navigator.clipboard.writeText('"+s.url.replace(/'/g,"\\'")+"').then(()=>showToast('Copied!'))\">Copy</button>";
+      html+="</div>";
+    });
+    block.innerHTML=html;el.appendChild(block);
+  });
+}
+
+function playSource(url){
+  var frame=document.getElementById("playerFrame");
+  frame.contentWindow.postMessage({type:"play",url:url},"*");
+  log("Playing source...","success");
+}
+
+function buildSelectors(){
+  const langRow=document.getElementById("langRow"),qRow=document.getElementById("qRow");
+  langRow.innerHTML='<span class="sel-label">Language</span>';qRow.innerHTML='<span class="sel-label">Quality</span>';
+  if(!allResults.length)return;
+  const allSrcs=[];
+  allResults.forEach(r=>r.sources.forEach(s=>{
+    const lang=s.language||s.audioLanguage||s.audio||"Original";
+    allSrcs.push({src:s,server:r.server,lang:lang,quality:s.quality||"?"});
+  }));
+  const langMap={};allSrcs.forEach(s=>{if(!langMap[s.lang])langMap[s.lang]=[];langMap[s.lang].push(s)});
+  const langs=Object.keys(langMap).sort();
+  langRow.style.display="flex";
+  langs.forEach((lang,i)=>{
+    const chip=document.createElement("div");chip.className="chip"+(i===0?" active":"");
+    chip.textContent=lang;chip.onclick=()=>{
+      langRow.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));chip.classList.add("active");
+      renderQuality(langMap[lang]);
+    };langRow.appendChild(chip);
+  });
+  renderQuality(allSrcs);
+}
+
+function renderQuality(sources){
+  const qRow=document.getElementById("qRow");qRow.innerHTML='<span class="sel-label">Quality</span>';
+  const qo={'2160p':0,'1080p':1,'720p':2,'480p':3,'360p':4};
+  sources.sort((a,b)=>(qo[a.quality]||99)-(qo[b.quality]||99));
+  qRow.style.display="flex";
+  sources.forEach((s,i)=>{
+    const chip=document.createElement("div");chip.className="chip"+(i===0?" active-q":"");
+    chip.textContent=s.quality;chip.onclick=()=>{
+      qRow.querySelectorAll(".chip").forEach(c=>c.classList.remove("active-q"));chip.classList.add("active-q");
+      playSource(s.src.url);
+    };qRow.appendChild(chip);
+  });
+  if(sources[0])playSource(sources[0].src.url);
+}
+
+document.getElementById("urlInput").addEventListener("keydown",e=>{if(e.key==="Enter")handlePlay()});
+</script>
+</body>
+</html>

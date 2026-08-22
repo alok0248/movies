@@ -1,0 +1,481 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1"><i class="fas fa-chart-line me-2 text-info"></i>Android Endpoint Analytics</h1>
+            <p class="text-secondary mb-0">Daily and build-wise connection reporting for saved Android app endpoints.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">&larr; Android Apps</a>
+            <a href="{% url 'android_app_create' %}" class="btn btn-success">+ Create Android App</a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-white fw-semibold">Saved Endpoints</div>
+                <div class="list-group list-group-flush rounded-bottom">
+                    {% for app in apps %}
+                    <a href="{% url 'android_app_dashboard_detail' app.id %}" class="list-group-item list-group-item-action bg-dark text-white border-secondary {% if selected_app and selected_app.id == app.id %}active{% endif %}">
+                        <div class="fw-semibold">{{ app.name }}</div>
+                        <div class="small opacity-75">{{ app.slug }}</div>
+                    </a>
+                    {% empty %}
+                    <div class="list-group-item bg-dark text-secondary border-secondary">No apps saved.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            {% if selected_app %}
+            <div class="row g-4 mb-1">
+                <div class="col-md-3">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Total Connections</div><div class="display-6 text-white">{{ selected_app.total_connections }}</div></div></div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Total Unique Visitors</div><div class="display-6 text-white">{{ total_unique_visitors }}</div></div></div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Builds Seen</div><div class="display-6 text-white">{{ build_summary|length }}</div></div></div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Endpoint Status</div><div class="mt-2">{% if selected_app.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Disabled</span>{% endif %}</div></div></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1"><i class="fas fa-database me-2 text-warning"></i>Data Retention</h5>
+                            <div class="text-secondary small">Automatically delete analytics data older than the configured number of days.</div>
+                        </div>
+                    </div>
+                    <form id="retentionForm" class="d-flex align-items-center gap-3 flex-wrap">
+                        {% csrf_token %}
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-white small fw-semibold">Keep last</label>
+                            <input type="number" id="retentionDays" class="form-control form-control-sm bg-dark text-white border-secondary" style="width:90px" min="1" max="3650" value="{{ selected_app.data_retention_days }}">
+                            <label class="text-white small fw-semibold">days</label>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="updateRetention()">Save & Clean</button>
+                        <div id="retentionStatus" class="small"></div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">{{ selected_app.name }}</h5>
+                            <div class="text-secondary small">Daily endpoint connections</div>
+                        </div>
+                        <a href="{% url 'android_app_edit' selected_app.id %}" class="btn btn-sm btn-outline-warning">Edit App</a>
+                    </div>
+                    <div style="height: 300px;"><canvas id="dailyConnectionsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="text-white mb-1">Daily Unique Visitors</h5>
+                    <div class="text-secondary small mb-3">Number of unique Android devices visiting each day.</div>
+                    <div style="height: 280px;"><canvas id="dailyUniqueVisitorsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <h5 class="text-white mb-1">Connections by Build</h5>
+                    <div class="text-secondary small mb-3">Build identity is supplied through the <code>X-Android-Build</code> request header.</div>
+                    <div style="height: 280px;"><canvas id="buildConnectionsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <h5 class="text-white mb-0">Endpoint Configuration</h5>
+                        <a href="{% url 'android_app_integration_guide' selected_app.id %}" class="btn btn-sm btn-outline-info">View Connection Guide</a>
+                    </div>
+                    <div class="row g-3 small">
+                        <div class="col-md-6"><div class="text-secondary">API URL</div><code class="text-info text-break">{{ app_endpoint }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Allowed app/build identity</div><code class="text-white text-break">{{ selected_app.allowed_endpoint|default:'Not configured' }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Allowed build ID</div><code class="text-white text-break">{{ selected_app.allowed_build_id|default:'Not configured' }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Username</div><code class="text-white">{{ selected_app.access_username }}</code></div>
+                        <div class="col-md-6"><div class="text-secondary">Last accessed</div><span class="text-white">{{ selected_app.last_accessed_at|default:'Never' }}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">Failed Connection Attempts</h5>
+                            <div class="text-secondary small">Recent failed attempts to connect to this endpoint (last 5).</div>
+                        </div>
+                        <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="btn btn-sm btn-outline-danger">View All</a>
+                    </div>
+                    {% if failed_attempts %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle small">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Reason</th>
+                                    <th>IP Address</th>
+                                    <th>Request Identity</th>
+                                    <th>Build ID</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for attempt in failed_attempts %}
+                                <tr>
+                                    <td>{{ attempt.attempted_at }}</td>
+                                    <td>
+                                        <span class="badge bg-danger">{{ attempt.get_failure_reason_display }}</span>
+                                    </td>
+                                    <td>{{ attempt.ip_address|default:'-' }}</td>
+                                    <td>{{ attempt.request_identity|default:'-' }}</td>
+                                    <td>{{ attempt.build_identifier|default:'-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-secondary">No failed attempts recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">Recent Devices</h5>
+                            <div class="text-secondary small">Last 10 unique devices</div>
+                        </div>
+                    </div>
+                    {% if recent_devices %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle small">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Device Model</th>
+                                    <th>OS Version</th>
+                                    <th>Total Visits</th>
+                                    <th>Last Seen</th>
+                                    <th>First Seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for device in recent_devices %}
+                                <tr>
+                                    <td><code class="text-info">{{ device.user_id }}</code></td>
+                                    <td>{{ device.device_model|default:"-" }}</td>
+                                    <td>{{ device.os_version|default:"-" }}</td>
+                                    <td>{{ device.total_visits }}</td>
+                                    <td>{{ device.last_seen_at }}</td>
+                                    <td>{{ device.first_seen_at }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-secondary">No devices recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h5 class="text-white mb-1">Recent Visits</h5>
+                            <div class="text-secondary small">Last 20 device visits</div>
+                        </div>
+                    </div>
+                    {% if recent_visits %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle small">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User ID</th>
+                                    <th>Device Model</th>
+                                    <th>OS Version</th>
+                                    <th>Build ID</th>
+                                    <th>IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for visit in recent_visits %}
+                                <tr>
+                                    <td>{{ visit.visited_at }}</td>
+                                    <td><code class="text-info">{{ visit.device.user_id }}</code></td>
+                                    <td>{{ visit.device_model|default:"-" }}</td>
+                                    <td>{{ visit.os_version|default:"-" }}</td>
+                                    <td>{{ visit.build_identifier }}</td>
+                                    <td>{{ visit.ip_address|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-secondary">No visits recorded yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="card bg-dark border-secondary shadow-sm"><div class="card-body text-center py-5 text-secondary">Create an Android app to start tracking its endpoint usage.</div></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-sm mt-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3">All Endpoint Totals</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead><tr><th>App</th><th>Status</th><th>Total Connections</th><th>Last Accessed</th><th></th></tr></thead>
+                    <tbody>
+                        {% for row in summary_rows %}
+                        <tr>
+                            <td><div class="fw-semibold">{{ row.app.name }}</div><div class="text-secondary small">{{ row.app.slug }}</div></td>
+                            <td>{% if row.app.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Disabled</span>{% endif %}</td>
+                            <td>{{ row.total_connections }}</td>
+                            <td>{{ row.last_accessed_at|default:'Never' }}</td>
+                            <td><a class="btn btn-sm btn-outline-info" href="{% url 'android_app_dashboard_detail' row.app.id %}">View</a></td>
+                        </tr>
+                        {% empty %}<tr><td colspan="5" class="text-secondary text-center py-4">No endpoint activity yet.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+function updateRetention() {
+    var days = parseInt(document.getElementById('retentionDays').value);
+    if (!days || days < 1) { days = 30; }
+    var statusEl = document.getElementById('retentionStatus');
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    statusEl.innerHTML = '<span class="text-warning">Saving...</span>';
+    fetch('/admin-dashboard/android-apps/{{ selected_app.id }}/analytics/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'retention_days=' + days
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var msg = 'Retention set to ' + data.retention_days + ' days.';
+            if (data.deleted && Object.values(data.deleted).some(function(v){return v>0;})) {
+                var total = Object.values(data.deleted).reduce(function(a,b){return a+b;}, 0);
+                msg += ' Deleted ' + total + ' old records.';
+            }
+            statusEl.innerHTML = '<span class="text-success">' + msg + '</span>';
+        } else {
+            statusEl.innerHTML = '<span class="text-danger">Error: ' + (data.error || 'Unknown') + '</span>';
+        }
+    })
+    .catch(function(e) {
+        statusEl.innerHTML = '<span class="text-danger">Request failed</span>';
+    });
+}
+
+let dailyChart, uniqueChart, buildChart;
+const chartText = '#cbd5e1';
+const gridColor = 'rgba(148, 163, 184, 0.16)';
+
+function initializeCharts() {
+    const dailyLabels = {{ chart_labels_json|safe }};
+    const dailyValues = {{ chart_values_json|safe }};
+    const uniqueLabels = {{ unique_chart_labels_json|safe }};
+    const uniqueValues = {{ unique_chart_values_json|safe }};
+    const buildLabels = {{ build_chart_labels_json|safe }};
+    const buildValues = {{ build_chart_values_json|safe }};
+
+    if (document.getElementById('dailyConnectionsChart')) {
+        dailyChart = new Chart(document.getElementById('dailyConnectionsChart'), {
+            type: 'line',
+            data: { labels: dailyLabels, datasets: [{ label: 'Connections', data: dailyValues, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+        });
+    }
+    if (document.getElementById('dailyUniqueVisitorsChart')) {
+        uniqueChart = new Chart(document.getElementById('dailyUniqueVisitorsChart'), {
+            type: 'line',
+            data: { labels: uniqueLabels, datasets: [{ label: 'Unique Visitors', data: uniqueValues, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+        });
+    }
+    if (document.getElementById('buildConnectionsChart')) {
+        buildChart = new Chart(document.getElementById('buildConnectionsChart'), {
+            type: 'bar',
+            data: { labels: buildLabels, datasets: [{ label: 'Connections', data: buildValues, backgroundColor: '#22c55e', borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
+        });
+    }
+}
+
+function updateDashboard(data) {
+    // Update the big numbers
+    const totalConnectionsEl = document.querySelector('.card.bg-dark.border-secondary.h-100 .display-6.text-white');
+    if (totalConnectionsEl) {
+        totalConnectionsEl.textContent = data.total_connections;
+    }
+    const uniqueVisitorsEl = Array.from(document.querySelectorAll('.card.bg-dark.border-secondary.h-100 .display-6.text-white')).find(el => 
+        el.parentElement.textContent.includes('Total Unique Visitors')
+    );
+    if (uniqueVisitorsEl) {
+        uniqueVisitorsEl.textContent = data.total_unique_visitors;
+    }
+
+    // Update charts
+    if (dailyChart) {
+        dailyChart.data.labels = data.chart_labels;
+        dailyChart.data.datasets[0].data = data.chart_values;
+        dailyChart.update();
+    }
+    if (uniqueChart) {
+        uniqueChart.data.labels = data.unique_chart_labels;
+        uniqueChart.data.datasets[0].data = data.unique_chart_values;
+        uniqueChart.update();
+    }
+    if (buildChart) {
+        buildChart.data.labels = data.build_chart_labels;
+        buildChart.data.datasets[0].data = data.build_chart_values;
+        buildChart.update();
+    }
+
+    // Update failed attempts table
+    const failedTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[0];
+    if (failedTbody && data.failed_attempts.length) {
+        failedTbody.innerHTML = data.failed_attempts.map(attempt => `
+            <tr>
+                <td data-datetime="${attempt.attempted_at}">${new Date(attempt.attempted_at).toLocaleString()}</td>
+                <td><span class="badge bg-danger">${attempt.failure_reason_display}</span></td>
+                <td>${attempt.ip_address || '-'}</td>
+                <td>${attempt.request_identity || '-'}</td>
+                <td>${attempt.build_identifier || '-'}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Update recent devices table
+    const devicesTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[1];
+    if (devicesTbody && data.recent_devices.length) {
+        devicesTbody.innerHTML = data.recent_devices.map(device => `
+            <tr>
+                <td><code class="text-info">${device.user_id}</code></td>
+                <td>${device.device_model || '-'}</td>
+                <td>${device.os_version || '-'}</td>
+                <td>${device.total_visits}</td>
+                <td data-datetime="${device.last_seen_at}">${new Date(device.last_seen_at).toLocaleString()}</td>
+                <td data-datetime="${device.first_seen_at}">${new Date(device.first_seen_at).toLocaleString()}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Update recent visits table
+    const visitsTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[2];
+    if (visitsTbody && data.recent_visits.length) {
+        visitsTbody.innerHTML = data.recent_visits.map(visit => `
+            <tr>
+                <td data-datetime="${visit.visited_at}">${new Date(visit.visited_at).toLocaleString()}</td>
+                <td><code class="text-info">${visit.device__user_id}</code></td>
+                <td>${visit.device_model || '-'}</td>
+                <td>${visit.os_version || '-'}</td>
+                <td>${visit.build_identifier || '-'}</td>
+                <td>${visit.ip_address || '-'}</td>
+            </tr>
+        `).join('');
+    }
+}
+
+// Initialize charts when DOM loads
+document.addEventListener('DOMContentLoaded', () => {
+    initializeCharts();
+
+    // Start polling if selected app exists
+    {% if selected_app %}
+    const pollUrl = "{% url 'ajax_android_app_dashboard' selected_app.id %}";
+    const POLL_INTERVAL_MS = 5000;   // minimum time between polls (was setInterval 5s)
+    (function () {
+        var lastPollAt = 0;
+        var pendingTimer = null;
+        var ongoing = false;
+        var runId = 0;
+
+        async function doPoll() {
+            if (ongoing) return;
+            try { if (document.visibilityState === 'hidden') return; } catch (e) {}
+            ongoing = true;
+            runId += 1;
+            var myId = runId;
+            lastPollAt = Date.now();
+            try {
+                const response = await fetch(pollUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (myId === runId) updateDashboard(data);
+                }
+            } catch (err) {
+                console.error('Error updating dashboard:', err);
+            } finally {
+                if (myId === runId) ongoing = false;
+            }
+        }
+
+        function schedule(forceNow) {
+            try { if (document.visibilityState === 'hidden') return; } catch (e) {}
+            var now = Date.now();
+            var elapsed = now - lastPollAt;
+            if (!forceNow && elapsed < POLL_INTERVAL_MS) {
+                if (pendingTimer != null) return;
+                var wait = POLL_INTERVAL_MS - elapsed;
+                pendingTimer = setTimeout(function () {
+                    pendingTimer = null;
+                    doPoll();
+                }, wait);
+                return;
+            }
+            doPoll();
+        }
+
+        function onActivity() { schedule(false); }
+        function onVisible() {
+            try { if (document.visibilityState === 'visible') schedule(true); } catch (e) {}
+        }
+
+        var events = ['mousedown', 'touchstart', 'keydown', 'wheel', 'scroll', 'click'];
+        for (var i = 0; i < events.length; i++) {
+            try { window.addEventListener(events[i], onActivity, { passive: true, capture: true }); } catch (e) {}
+        }
+        try { document.addEventListener('visibilitychange', onVisible); } catch (e) {}
+        try { window.addEventListener('focus', onVisible, true); } catch (e) {}
+        try { window.addEventListener('pageshow', onVisible, true); } catch (e) {}
+
+        // One immediate poll on load
+        schedule(true);
+    })();
+    {% endif %}
+});
+</script>
+{% endblock %}

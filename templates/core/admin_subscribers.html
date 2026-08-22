@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Subscribers - Admin{% endblock %}
+{% block content %}
+<style>
+    .sub-wrap { max-width: 1300px; margin: 0 auto; padding: 1.5rem; }
+    .sub-grid { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; }
+    @media (max-width: 900px) { .sub-grid { grid-template-columns: 1fr; } }
+    .sub-card { background: var(--bg-2); border-radius: 12px; border: 1px solid var(--border); padding: 1.2rem; }
+    .sub-card h3 { color: var(--text); font-size: 1rem; margin-bottom: .8rem; font-weight: 700; }
+    .sub-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+    .sub-header h2 { color: var(--text); font-size: 1.4rem; }
+    .sub-stats { display: flex; gap: .8rem; }
+    .sub-stat { padding: .5rem .8rem; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--border); text-align: center; }
+    .sub-stat-num { font-size: 1.3rem; font-weight: 800; color: var(--brand, #00c896); }
+    .sub-stat-label { font-size: .65rem; color: var(--text-3); text-transform: uppercase; }
+    .sub-table { width: 100%; border-collapse: collapse; }
+    .sub-table th, .sub-table td { padding: .55rem .7rem; text-align: left; font-size: .78rem; color: var(--text-3); border-bottom: 1px solid var(--border); }
+    .sub-table th { background: var(--bg-1); color: var(--text); font-weight: 600; text-transform: uppercase; font-size: .65rem; letter-spacing: .5px; }
+    .sub-table tr:hover { background: rgba(255,255,255,.02); }
+    .badge-active { background: rgba(0,200,150,.15); color: #00c896; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
+    .badge-inactive { background: rgba(229,9,20,.15); color: #e50914; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
+    .badge-sent { background: rgba(0,200,150,.15); color: #00c896; padding: 2px 6px; border-radius: 4px; font-size: .65rem; font-weight: 600; }
+    .badge-failed { background: rgba(229,9,20,.15); color: #e50914; padding: 2px 6px; border-radius: 4px; font-size: .65rem; font-weight: 600; }
+    .sub-mail-form label { display: block; color: var(--text-3); font-size: .75rem; margin-bottom: .2rem; font-weight: 500; }
+    .sub-mail-form input[type=text], .sub-mail-form textarea {
+        width: 100%; padding: .55rem .7rem; border-radius: 8px; background: var(--bg-1); border: 1px solid var(--border);
+        color: var(--text); font-size: .82rem; margin-bottom: .8rem; box-sizing: border-box; font-family: inherit;
+    }
+    .sub-mail-form textarea { min-height: 100px; resize: vertical; }
+    .sub-send-btn { padding: .6rem 1.2rem; border: none; border-radius: 8px; background: var(--brand, #00c896); color: #fff; font-weight: 700; font-size: .82rem; cursor: pointer; }
+    .sub-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .sub-msg { padding: .5rem .8rem; border-radius: 8px; margin-bottom: .8rem; font-size: .78rem; display: none; }
+    .sub-msg.ok { display: block; background: rgba(0,200,150,.1); color: #00c896; border: 1px solid rgba(0,200,150,.3); }
+    .sub-msg.err { display: block; background: rgba(229,9,20,.1); color: #e50914; border: 1px solid rgba(229,9,20,.3); }
+    .sub-right-list { max-height: 600px; overflow-y: auto; }
+    .sub-right-item { display: flex; justify-content: space-between; align-items: center; padding: .5rem 0; border-bottom: 1px solid var(--border); font-size: .78rem; }
+    .sub-right-email { color: var(--text); font-weight: 500; }
+    .sub-right-meta { color: var(--text-3); font-size: .68rem; }
+    .delivery-row { display: flex; justify-content: space-between; align-items: flex-start; padding: .6rem 0; border-bottom: 1px solid var(--border); font-size: .75rem; }
+    .delivery-row:last-child { border-bottom: none; }
+    .delivery-email { color: var(--text); font-weight: 500; font-size: .72rem; }
+    .delivery-subject { color: var(--text-3); font-size: .68rem; margin-top: .1rem; }
+    .delivery-time { color: var(--text-3); font-size: .65rem; white-space: nowrap; }
+</style>
+
+<div class="sub-wrap">
+    <div class="sub-header">
+        <h2>📧 Subscribers</h2>
+        <div class="sub-stats">
+            <div class="sub-stat"><div class="sub-stat-num">{{ total_active }}</div><div class="sub-stat-label">Active</div></div>
+            <div class="sub-stat"><div class="sub-stat-num">{{ total_inactive }}</div><div class="sub-stat-label">Unsubscribed</div></div>
+        </div>
+    </div>
+
+    <div class="sub-grid">
+        <!-- LEFT: Send Email Form + Sent Messages + Delivery Log -->
+        <div>
+            <!-- Send Email Form -->
+            <div class="sub-card sub-mail-form" style="margin-bottom:1.5rem">
+                <h3>✉️ Send Email to Subscribers</h3>
+                <div id="emailMsg" class="sub-msg"></div>
+                <label>Subject</label>
+                <input type="text" id="emailSubject" placeholder="Email subject...">
+                <label>Message Body</label>
+                <textarea id="emailBody" placeholder="Write your message here..."></textarea>
+                <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.8rem;color:var(--text)">
+                        <input type="checkbox" id="selectAll" style="width:16px;height:16px;accent-color:var(--brand,#00c896)">
+                        Select all active ({{ total_active }})
+                    </label>
+                </div>
+                <button class="sub-send-btn" id="sendEmailBtn" onclick="sendEmailToSubs()">Send Email</button>
+            </div>
+
+            <!-- Sent Messages Log -->
+            {% if sent_messages %}
+            <div class="sub-card" style="margin-bottom:1.5rem">
+                <h3>📋 Sent Messages</h3>
+                <div style="max-height:300px;overflow-y:auto">
+                    <table class="sub-table">
+                        <thead><tr><th>Subject</th><th>Sent By</th><th>To</th><th>Date</th></tr></thead>
+                        <tbody>
+                            {% for msg in sent_messages %}
+                            <tr>
+                                <td style="color:var(--text);font-weight:500">{{ msg.subject }}</td>
+                                <td>{{ msg.sent_by|default:"System" }}</td>
+                                <td>{{ msg.recipient_count }}</td>
+                                <td>{{ msg.sent_at|date:"M d, Y H:i" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Delivery Log (per-subscriber) -->
+            {% if deliveries %}
+            <div class="sub-card">
+                <h3>📬 Delivery Log</h3>
+                <div style="max-height:350px;overflow-y:auto">
+                    {% for d in deliveries %}
+                    <div class="delivery-row">
+                        <div style="flex:1">
+                            <div class="delivery-email">{{ d.subscriber.email }}</div>
+                            <div class="delivery-subject">{{ d.message.subject }}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0">
+                            {% if d.status == 'sent' %}<span class="badge-sent">Sent</span>{% else %}<span class="badge-failed">Failed</span>{% endif %}
+                            <div class="delivery-time">{{ d.sent_at|date:"M d, Y H:i" }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- RIGHT: Subscriber List -->
+        <div>
+            <div class="sub-card">
+                <h3>👥 All Subscribers</h3>
+                <div class="sub-right-list" id="subRightList">
+                    {% for sub in subscribers %}
+                    <div class="sub-right-item">
+                        <div style="flex:1;min-width:0">
+                            <div class="sub-right-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sub.email }}</div>
+                            <div class="sub-right-meta">
+                                Joined {{ sub.created_at|date:"M d, Y" }}
+                                · {{ sub.messages_received }} msg{{ sub.messages_received|pluralize }}
+                            </div>
+                        </div>
+                        <div style="flex-shrink:0;margin-left:.5rem">
+                            {% if sub.is_active %}<span class="badge-active">Active</span>{% else %}<span class="badge-inactive">Unsub</span>{% endif %}
+                            <div style="margin-top:2px">
+                                <input type="checkbox" class="sub-checkbox" value="{{ sub.id }}" {% if not sub.is_active %}disabled{% endif %} style="width:14px;height:14px;accent-color:var(--brand,#00c896)">
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div style="text-align:center;color:var(--text-3);padding:2rem;font-size:.82rem">No subscribers yet</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function sendEmailToSubs() {
+    var subject = document.getElementById('emailSubject').value.trim();
+    var body = document.getElementById('emailBody').value.trim();
+    var msgEl = document.getElementById('emailMsg');
+    var btn = document.getElementById('sendEmailBtn');
+    var selectAll = document.getElementById('selectAll').checked;
+
+    if (!subject || !body) { msgEl.className = 'sub-msg err'; msgEl.textContent = 'Subject and body are required'; return; }
+
+    var selectedIds = [];
+    if (!selectAll) {
+        document.querySelectorAll('.sub-checkbox:checked').forEach(function(cb) { selectedIds.push(parseInt(cb.value)); });
+        if (!selectedIds.length) { msgEl.className = 'sub-msg err'; msgEl.textContent = 'No subscribers selected'; return; }
+    }
+
+    btn.disabled = true; btn.textContent = 'Sending...';
+    fetch('/ajax/send-email/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({ subject: subject, body: body, subscriber_ids: selectedIds, send_to_all: selectAll })
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        msgEl.className = d.ok ? 'sub-msg ok' : 'sub-msg err';
+        msgEl.textContent = d.message;
+        btn.disabled = false; btn.textContent = 'Send Email';
+        if (d.ok) { document.getElementById('emailSubject').value = ''; document.getElementById('emailBody').value = ''; document.getElementById('selectAll').checked = false; document.querySelectorAll('.sub-checkbox').forEach(function(cb) { cb.checked = false; }); }
+    }).catch(function() { msgEl.className = 'sub-msg err'; msgEl.textContent = 'Network error'; btn.disabled = false; btn.textContent = 'Send Email'; });
+}
+function getCookie(name) { var v = document.cookie.match('(^|;)\\s*' + name + '=([^;]*)'); return v ? decodeURIComponent(v[2]) : ''; }
+</script>
+{% endblock %}
