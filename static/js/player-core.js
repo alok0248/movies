@@ -210,7 +210,28 @@ function switchDualAudio(){var s=document.getElementById('dualAudSel');if(!s)ret
       fLoader:function(c){var l=new window.Hls.DefaultConfig.loader(c);var o=l.load.bind(l);l.load=function(cfg,cb,ctx){if(cfg.url&&cfg.url.indexOf('/proxy/')===-1){cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://','');}o(cfg,cb,ctx);};return l;}
     });var p2=_proxyUrl(d.url);h.loadSource(p2);h.attachMedia(_audioEl);h.on(window.Hls.Events.MANIFEST_PARSED,function(){_audioEl.play().catch(function(){});});_audioHls=h;}else{_audioEl.src=_proxyUrl(d.url);_audioEl.play().catch(function(){});}}
 function setDualVol(t,v){v=parseInt(v)/100;if(t==='video'){var e=document.getElementById('mainVideo');if(e)e.volume=v;var el=document.getElementById('dualVidVol');if(el)el.textContent=Math.round(v*100);}else{if(_audioEl)_audioEl.volume=v;var el=document.getElementById('dualAudVol');if(el)el.textContent=Math.round(v*100);}}
-function toggleDualMode(){_dualMode=!_dualMode;var b=document.getElementById('dualToggle');if(b)b.classList.toggle('active',_dualMode);var p=document.getElementById('dualPanel');if(p)p.classList.toggle('open',_dualMode);if(_dualMode){_buildDualPanel(_allSources);}else{if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(_audioEl){_audioEl.pause();_audioEl.src='';}}}
+function toggleDualMode(){
+  _dualMode=!_dualMode;
+  var b=document.getElementById('dualToggle');
+  if(b)b.classList.toggle('active',_dualMode);
+  var p=document.getElementById('dualPanel');
+  var box=document.getElementById('sourceSelector');
+  var srcInfo=document.getElementById('srcInfo');
+  if(p) p.classList.toggle('open',_dualMode);
+  /* Hide resolution/language when dual mode is on */
+  if(box){
+    var dds=box.querySelectorAll('.src-dd');
+    dds.forEach(function(d){d.style.display=_dualMode?'none':'';});
+    var labels=box.querySelectorAll('.src-dd-label');
+    labels.forEach(function(l){l.style.display=_dualMode?'none':'';});
+    if(srcInfo) srcInfo.style.display=_dualMode?'none':'';
+  }
+  if(_dualMode){_buildDualPanel(_allSources);}
+  else{
+    if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
+    if(_audioEl){_audioEl.pause();_audioEl.src='';}
+  }
+}
 
 function _buildVideasyPlayer(container, apiUrl) {
   _allSources=[]; _playerPlaying=false;
@@ -243,6 +264,8 @@ function _buildVideasyPlayer(container, apiUrl) {
   vw.addEventListener('mousemove', _showControls);
   vw.addEventListener('mouseenter', _showControls);
   vw.addEventListener('click', _showControls);
+  vid.addEventListener('mousemove', _showControls);
+  vid.addEventListener('click', _showControls);
   /* Start hidden, show on first interaction */
   _srcSel.classList.add('player-controls-autohide');
 
