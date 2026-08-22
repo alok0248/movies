@@ -40,7 +40,6 @@ def player_sources_stream_view(request):
 
     def generate():
         # Yield immediately to flush headers and start connection
-        yield 'data: ' + _json.dumps({'type': 'connecting'}) + NL
         sent = set()
         # Use cached seed if available (saves ~0.7s)
         seed_cache_key = f'stream_seed_{tmdb_id}'
@@ -57,14 +56,24 @@ def player_sources_stream_view(request):
             yield 'data: ' + _json.dumps({'type': 'error', 'message': 'Could not fetch seed'}) + NL
             return
 
-        for server_name, endpoint in V._VIDKING_SERVERS.items():
+        # Fetch ALL servers in parallel for maximum speed
+        import concurrent.futures
+        def fetch_one(server_name, endpoint):
             try:
-                result = V._vk_fetch_sources_for_server(
+                return server_name, V._vk_fetch_sources_for_server(
                     server_name, endpoint, tmdb_id, media_type,
                     title='', year='', season_id=season,
                     episode_id=episode, imdb_id='',
                     seed=seed, timestamp=timestamp,
                 )
+            except Exception as e:
+                logger.debug('stream: %s failed: %s', server_name, e)
+                return server_name, {'sources': []}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+            futures = {pool.submit(fetch_one, name, ep): name for name, ep in V._VIDKING_SERVERS.items()}
+            for future in concurrent.futures.as_completed(futures):
+                server_name, result = future.result()
                 sources = result.get('sources', [])
                 if isinstance(sources, list) and sources:
                     for src in sources:
@@ -79,9 +88,6 @@ def player_sources_stream_view(request):
                                 'language': lang,
                                 'server': server_name,
                             }) + NL
-            except Exception as e:
-                logger.debug('stream: %s failed: %s', server_name, e)
-                continue
 
         yield 'data: ' + _json.dumps({'type': 'done', 'tmdbId': tmdb_id}) + NL
 
