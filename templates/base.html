@@ -1068,10 +1068,13 @@
                 <div class="col-12 col-md-6 col-lg-2">
                     {% if site_settings.footer_links_title %}<div class="site-footer-title">{{ site_settings.footer_links_title }}</div>{% endif %}
                     <ul class="site-footer-list">
+                        <li><a href="{% url 'index' %}">Home</a></li>
                         <li><a href="{% url 'movie_list' %}">Movies</a></li>
                         <li><a href="{% url 'series_list' %}">TV-Series</a></li>
-                        <li><a href="#">FAQ's</a></li>
-                        <li><a href="#">DMCA</a></li>
+                        <li><a href="{% url 'upcoming' %}">Upcoming</a></li>
+                        <li><a href="{% url 'search' %}">Search</a></li>
+                        <li><a href="{% url 'live_tv' %}">Live TV</a></li>
+                        <li><a href="{% url 'watchlist' %}">My List</a></li>
                         <li><a href="{% url 'unsubscribe_page' %}">Unsubscribe</a></li>
                     </ul>
                 </div>
