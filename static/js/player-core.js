@@ -2,16 +2,50 @@
 var _allSources = []; var _mainHls = null; var _audioHls = null;
 var _audioEl = null; var _dualMode = false; var _playerPlaying = false;
 
+function _proxyUrl(url) {
+  if (!url) return url;
+  if (url.indexOf('/proxy/') === -1) {
+    return '/proxy/' + url.replace('https://', '').replace('http://', '');
+  }
+  return url;
+}
+
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
+  var proxied = _proxyUrl(url);
   if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    var h = new window.Hls({maxBufferLength:60, maxMaxBufferLength:120});
-    h.loadSource(url); h.attachMedia(mediaEl);
+    var h = new window.Hls({
+      maxBufferLength: 60,
+      maxMaxBufferLength: 120,
+      xhrSetup: function(xhr, reqUrl) {
+        /* Proxy ALL requests through our server */
+        if (reqUrl && reqUrl.indexOf('/proxy/') === -1) {
+          var newUrl = '/proxy/' + reqUrl.replace('https://', '').replace('http://', '');
+          xhr.open('GET', newUrl, true);
+        }
+      },
+      pLoader: function(config) {
+        var loader = new window.Hls.DefaultConfig.loader(config);
+        var originalLoad = loader.load.bind(loader);
+        loader.load = function(config, callbacks, context) {
+          /* Rewrite playlist URLs to proxy */
+          if (config.url && config.url.indexOf('/proxy/') === -1) {
+            config.url = '/proxy/' + config.url.replace('https://', '').replace('http://', '');
+          }
+          if (config.url && config.urlTransform) {
+            config.url = config.urlTransform(config.url);
+          }
+          originalLoad(config, callbacks, context);
+        };
+        return loader;
+      }
+    });
+    h.loadSource(proxied); h.attachMedia(mediaEl);
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); });
     _mainHls = h;
   } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = url;
+    mediaEl.src = proxied;
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
   } else { mediaEl.src = url; mediaEl.play().catch(function(){}); }
 }
