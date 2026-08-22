@@ -214,23 +214,13 @@ function toggleDualMode(){
   _dualMode=!_dualMode;
   var b=document.getElementById('dualToggle');
   if(b)b.classList.toggle('active',_dualMode);
-  var p=document.getElementById('dualPanel');
-  var box=document.getElementById('sourceSelector');
-  var srcInfo=document.getElementById('srcInfo');
-  if(p) p.classList.toggle('open',_dualMode);
-  /* Hide resolution/language when dual mode is on */
-  if(box){
-    var dds=box.querySelectorAll('.src-dd');
-    dds.forEach(function(d){d.style.display=_dualMode?'none':'';});
-    var labels=box.querySelectorAll('.src-dd-label');
-    labels.forEach(function(l){l.style.display=_dualMode?'none':'';});
-    if(srcInfo) srcInfo.style.display=_dualMode?'none':'';
-  }
-  if(_dualMode){_buildDualPanel(_allSources);}
-  else{
-    if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
-    if(_audioEl){_audioEl.pause();_audioEl.src='';}
-  }
+  /* Just hide/show resolution and language dropdowns */
+  var dds=document.querySelectorAll('#sourceSelector .src-dd');
+  dds.forEach(function(d){d.style.display=_dualMode?'none':'';});
+  var labels=document.querySelectorAll('#sourceSelector .src-dd-label');
+  labels.forEach(function(l){l.style.display=_dualMode?'none':'';});
+  var info=document.getElementById('srcInfo');
+  if(info) info.style.display=_dualMode?'none':'';
 }
 
 function _buildVideasyPlayer(container, apiUrl) {
