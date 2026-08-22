@@ -52,7 +52,7 @@ function _buildDualPanel(sources) {
   if(!vids.length) vids=sources; var auds=sources;
   var vo=vids.map(function(s,i){return '<option value="'+i+'"'+(i===0?' selected':'')+'>'+s.quality+' - '+s.server+'</option>';}).join('');
   var ao=auds.map(function(s,i){return '<option value="'+i+'"'+(i===Math.min(1,auds.length-1)?' selected':'')+'>'+(s.language||s.quality)+' - '+s.server+'</option>';}).join('');
-  p.innerHTML='<div class="dual-row"><label>Video</label><select id="dualVidSel" onchange="switchDualVideo()">'+vo+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol('video',this.value)"><span class="dual-vol" id="dualVidVol">100</span></div>'+'<div class="dual-row"><label>Audio</label><select id="dualAudSel" onchange="switchDualAudio()">'+ao+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol('audio',this.value)"><span class="dual-vol" id="dualAudVol">100</span></div>';
+  p.innerHTML='<div class="dual-row"><label>Video</label><select id="dualVidSel" onchange="switchDualVideo()">'+vo+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol(\'video\',this.value)"><span class="dual-vol" id="dualVidVol">100</span></div>'+'<div class="dual-row"><label>Audio</label><select id="dualAudSel" onchange="switchDualAudio()">'+ao+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol(\'audio\',this.value)"><span class="dual-vol" id="dualAudVol">100</span></div>';
   p.classList.add('open'); switchDualVideo(); switchDualAudio();
 }
 
@@ -71,20 +71,29 @@ function _buildVideasyPlayer(container, apiUrl) {
   cr.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>';
   container.appendChild(cr);
   var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; container.appendChild(dp);
+
+  /* Use streaming endpoint - play first source ASAP, add rest in background */
   var streamUrl=apiUrl.replace('/ajax/player-sources/','/ajax/player-sources-stream/');
   var es=new EventSource(streamUrl);
   es.onmessage=function(ev){try{var m=JSON.parse(ev.data);
-    if(m.type==='source'){_addSource(m);
+    if(m.type==='source'){
+      _addSource(m);
       if(!_playerPlaying){_playerPlaying=true;_playHls(m.url,vid);hidePlayerLoading();}
       if(_dualMode)_buildDualPanel(_allSources);
     }else if(m.type==='done'){es.close();}}catch(e){}};
   es.onerror=function(){es.close();if(!_playerPlaying){
+    /* Fallback to JSON endpoint */
     fetch(apiUrl).then(function(r){return r.json()}).then(function(d){
-      if(d.success&&d.results&&d.results.length){d.results.forEach(function(s){_addSource(s);});
-        _playerPlaying=true;_playHls(d.results[0].url,vid);hidePlayerLoading();}
-      else{container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';hidePlayerLoading();}
-    }).catch(function(){hidePlayerLoading();});}};
+      if(d.success&&d.results&&d.results.length){
+        d.results.forEach(function(s){_addSource(s);});
+        _playerPlaying=true;_playHls(d.results[0].url,vid);hidePlayerLoading();
+      }else{
+        container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
+        hidePlayerLoading();
+      }
+    }).catch(function(){hidePlayerLoading();});
+  }};
   vid.addEventListener('playing',function(){hidePlayerLoading();},{once:true});
   vid.addEventListener('error',function(){hidePlayerLoading();},{once:true});
-  setTimeout(function(){hidePlayerLoading();},8000);
+  setTimeout(function(){hidePlayerLoading();},10000);
 }
