@@ -3234,7 +3234,7 @@
     /* ===== Footer links: point to the page the user is currently on ===== */
     (function() {
         var path = window.location.pathname;
-        var isSeries = /\/series\//.test(path) || /\/series\/id\/.test(path);
+        var isSeries = path.indexOf('/series/') !== -1 || path.indexOf('/series/id/') !== -1;
         var listUrl = isSeries ? '/series/' : '/movies/';
         document.querySelectorAll('.footer-genre-link').forEach(function(a) {
             var genre = a.getAttribute('data-fgenre');

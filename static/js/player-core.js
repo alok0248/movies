@@ -39,7 +39,7 @@ function _playHls(url, mediaEl) {
           originalLoad(config, callbacks, context);
         };
         return loader;
-      }
+      },
       fLoader: function(config) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
@@ -128,28 +128,66 @@ function _buildVideasyPlayer(container, apiUrl) {
   container.appendChild(cr);
   var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; container.appendChild(dp);
 
-  /* Use streaming endpoint - play first source ASAP, add rest in background */
-  var streamUrl=apiUrl.replace('/ajax/player-sources/','/ajax/player-sources-stream/');
-  var es=new EventSource(streamUrl);
-  es.onmessage=function(ev){try{var m=JSON.parse(ev.data);
-    if(m.type==='source'){
-      _addSource(m);
-      if(!_playerPlaying){_playerPlaying=true;_playHls(m.url,vid);hidePlayerLoading();}
-      if(_dualMode)_buildDualPanel(_allSources);
-    }else if(m.type==='done'){es.close();}}catch(e){}};
-  es.onerror=function(){es.close();if(!_playerPlaying){
-    /* Fallback to JSON endpoint */
-    fetch(apiUrl).then(function(r){return r.json()}).then(function(d){
-      if(d.success&&d.results&&d.results.length){
-        d.results.forEach(function(s){_addSource(s);});
-        _playerPlaying=true;_playHls(d.results[0].url,vid);hidePlayerLoading();
-      }else{
-        container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
-        hidePlayerLoading();
+  /* Parse tmdb_id, type, season, episode from apiUrl or global vars */
+  var params = {};
+  (apiUrl.split('?')[1] || '').split('&').forEach(function(p){var kv=p.split('=');params[kv[0]]=decodeURIComponent(kv[1]||'');});
+  var tmdbId = params.tmdb_id || (typeof movieId !== 'undefined' ? movieId : '');
+  var mediaType = params.type || 'movie';
+  var season = params.season || '1';
+  var episode = params.episode || '1';
+
+  if (!tmdbId) {
+    container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">Missing TMDB ID</div>';
+    hidePlayerLoading();
+    return;
+  }
+
+  /* Client-side extraction - runs entirely in browser, no server needed */
+  if (typeof ClientExtract !== 'undefined') {
+    ClientExtract.extractSources(tmdbId, mediaType, season, episode,
+      function onSource(s) {
+        _addSource(s);
+        if (!_playerPlaying) {
+          _playerPlaying = true;
+          _playHls(s.url, vid);
+          hidePlayerLoading();
+        }
+      },
+      function onDone() {
+        if (!_playerPlaying) {
+          container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
+          hidePlayerLoading();
+        }
       }
-    }).catch(function(){hidePlayerLoading();});
-  }};
+    ).catch(function(err) {
+      console.error('Client extraction failed:', err);
+      /* Fallback to server API */
+      _fetchFromServer(container, apiUrl, vid);
+    });
+  } else {
+    /* Fallback to server API */
+    _fetchFromServer(container, apiUrl, vid);
+  }
+
   vid.addEventListener('playing',function(){hidePlayerLoading();},{once:true});
   vid.addEventListener('error',function(){hidePlayerLoading();},{once:true});
-  setTimeout(function(){hidePlayerLoading();},10000);
+  setTimeout(function(){hidePlayerLoading();},20000);
+}
+
+function _fetchFromServer(container, apiUrl, vid) {
+  fetch(apiUrl).then(function(r){return r.json()}).then(function(d){
+    if(d.success&&d.results&&d.results.length){
+      d.results.forEach(function(s){_addSource(s);});
+      _playerPlaying=true;
+      _playHls(d.results[0].url,vid);
+      hidePlayerLoading();
+    }else{
+      container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
+      hidePlayerLoading();
+    }
+  }).catch(function(err){
+    console.error('Server fetch failed:',err);
+    container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">Failed to load streams</div>';
+    hidePlayerLoading();
+  });
 }

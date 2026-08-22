@@ -421,6 +421,7 @@ html[data-theme="light"] .det-sidebar-chip{background:rgba(0,0,0,.05);color:rgba
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="/static/js/client-extract.js"></script>
 <script src="/static/js/player-core.js"></script>
 <script>
 // ===== Player configurations =====
@@ -632,7 +633,7 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeTrailer();
 });
 
-document.getElementById('wikipedia-btn').addEventListener('click', async function() {
+var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListener('click', async function() {
     var ws = document.getElementById('wikipedia-inline');
     var btn = this;
     if (ws.style.display === 'none' || !ws.innerHTML) {
