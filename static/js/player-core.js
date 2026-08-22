@@ -194,6 +194,26 @@ function selectSource(idx) {
   var v=document.getElementById('mainVideo'); if(v) _playHls(s.url,v);
 }
 
+function _buildDualInline(){
+  var box=document.getElementById('sourceSelector');
+  var existing=document.getElementById('dualInline');
+  if(existing) existing.remove();
+  if(!_allSources.length) return;
+  var vids=_allSources.filter(function(s){return s.quality&&s.quality!=='Auto';});
+  if(!vids.length) vids=_allSources; var auds=_allSources;
+  var vo=vids.map(function(s,i){return '<option value="'+i+'"'+(i===0?' selected':'')+'>'+s.quality+' - '+s.server+'</option>';}).join('');
+  var ao=auds.map(function(s,i){return '<option value="'+i+'"'+(i===Math.min(1,auds.length-1)?' selected':'')+'>'+(s.language||s.quality)+' - '+s.server+'</option>';}).join('');
+  var div=document.createElement('div');
+  div.id='dualInline';
+  div.className='src-dd';
+  div.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:nowrap;overflow-x:auto;flex:1;';
+  div.innerHTML='<div class="dual-row" style="margin:0;display:flex;align-items:center;gap:.4rem;flex:1"><label style="font-size:.6rem;color:rgba(255,255,255,.5);width:auto;flex-shrink:0">Video</label><select id="dualVidSel" onchange="switchDualVideo()" style="flex:1;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;font-size:.7rem;font-family:inherit;appearance:none;cursor:pointer;min-width:0">'+vo+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol(&apos;video&apos;,this.value)" style="width:60px;accent-color:#46d369;height:3px"><span class="dual-vol" id="dualVidVol" style="font-size:.6rem;color:rgba(255,255,255,.5);width:24px;text-align:center">100</span></div>'
+    +'<div class="dual-row" style="margin:0;display:flex;align-items:center;gap:.4rem;flex:1"><label style="font-size:.6rem;color:rgba(255,255,255,.5);width:auto;flex-shrink:0">Audio</label><select id="dualAudSel" onchange="switchDualAudio()" style="flex:1;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;font-size:.7rem;font-family:inherit;appearance:none;cursor:pointer;min-width:0">'+ao+'</select><input type="range" min="0" max="100" value="100" oninput="setDualVol(&apos;audio&apos;,this.value)" style="width:60px;accent-color:#46d369;height:3px"><span class="dual-vol" id="dualAudVol" style="font-size:.6rem;color:rgba(255,255,255,.5);width:24px;text-align:center">100</span></div>'
+    +'<div style="display:flex;align-items:center;gap:.3rem;flex-shrink:0"><button class="dual-sync-btn" onclick="adjustSync(-0.5)" style="padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#fff;font-size:.68rem;cursor:pointer">−.5s</button><span style="font-size:.6rem;color:rgba(255,255,255,.5);width:32px;text-align:center" id="syncOffset">0.0s</span><button class="dual-sync-btn" onclick="adjustSync(0.5)" style="padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#fff;font-size:.68rem;cursor:pointer">+.5s</button></div>';
+  box.appendChild(div);
+  switchDualVideo(); switchDualAudio();
+}
+
 function _buildDualPanel(sources) {
   var p=document.getElementById('dualPanel'); if(!p||!sources.length) return;
   var vids=sources.filter(function(s){return s.quality&&s.quality!=='Auto';});
@@ -258,17 +278,26 @@ function toggleDualMode(){
   var b=document.getElementById('dualToggle');
   if(b)b.classList.toggle('active',_dualMode);
   var box=document.getElementById('sourceSelector');
-  var pnl=document.getElementById('dualPanel');
-  /* Hide resolution/language when dual on */
-  var dds=document.querySelectorAll('#sourceSelector .src-dd');
-  dds.forEach(function(d){d.style.display=_dualMode?'none':'';});
-  var labels=document.querySelectorAll('#sourceSelector .src-dd-label');
-  labels.forEach(function(l){l.style.display=_dualMode?'none':'';});
+  /* Hide resolution/language, show video/audio selectors */
+  var dds=box.querySelectorAll('.src-dd');
+  var labels=box.querySelectorAll('.src-dd-label');
   var info=document.getElementById('srcInfo');
-  if(info) info.style.display=_dualMode?'none':'';
-  /* Show/hide dual panel */
-  if(_dualMode){_buildDualPanel(_allSources);if(pnl)pnl.classList.add('open');_startSync();}
-  else{if(pnl)pnl.classList.remove('open');if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}if(_audioEl){_audioEl.pause();_audioEl.src='';}_stopSync();}
+  var dualInline=document.getElementById('dualInline');
+  if(_dualMode){
+    dds.forEach(function(d){d.style.display='none';});
+    labels.forEach(function(l){l.style.display='none';});
+    if(info) info.style.display='none';
+    _buildDualInline();
+    _startSync();
+  } else {
+    dds.forEach(function(d){d.style.display='';});
+    labels.forEach(function(l){l.style.display='';});
+    if(info) info.style.display='';
+    if(dualInline) dualInline.remove();
+    if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
+    if(_audioEl){_audioEl.pause();_audioEl.src='';}
+    _stopSync();
+  }
 }
 
 function _buildVideasyPlayer(container, apiUrl) {
@@ -293,7 +322,7 @@ function _buildVideasyPlayer(container, apiUrl) {
   _syncAudioToVideo();
 
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
-  var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; vw.appendChild(dp);
+  /* dual panel removed - using inline dual stream instead */
   container.appendChild(vw);
 
   /* === Collapse icon === */
@@ -305,22 +334,19 @@ function _buildVideasyPlayer(container, apiUrl) {
 
   var _foldTimer=null, _iconHideTimer=null;
   var _state='hidden'; /* hidden | icon | open */
+  var _foldAnimTimer=null;
 
   function _setBarVisible(visible){
+    clearTimeout(_foldAnimTimer);
     if(visible){
       sd.classList.remove('folded','folding');
       sd.classList.add('open');
       sd.style.display='flex'; sd.style.opacity='1'; sd.style.transform='';
-      if(dp && dp.classList.contains('open')){
-        dp.classList.remove('folded','folding');
-        dp.style.display='block'; dp.style.opacity='1'; dp.style.transform='';
-      }
     } else {
       sd.classList.add('folding');
-      if(dp && dp.classList.contains('open')) dp.classList.add('folding');
-      setTimeout(function(){
+      sd.classList.remove('open');
+      _foldAnimTimer=setTimeout(function(){
         sd.classList.remove('folding'); sd.classList.add('folded');
-        if(dp && dp.classList.contains('open')){dp.classList.remove('folding');dp.classList.add('folded');}
       },350);
     }
   }
@@ -333,8 +359,6 @@ function _buildVideasyPlayer(container, apiUrl) {
   function _showIcon(){
     _state='icon';
     _setIconVisible(true);
-    clearTimeout(_iconHideTimer);
-    _iconHideTimer=setTimeout(function(){_hideIcon();},3000);
   }
 
   function _hideIcon(){
@@ -344,11 +368,15 @@ function _buildVideasyPlayer(container, apiUrl) {
 
   function _foldBar(){
     _setBarVisible(false);
-    setTimeout(function(){_showIcon();},350);
+    clearTimeout(_showIconTimer);
+    _showIconTimer=setTimeout(function(){_showIcon();},350);
   }
 
+  var _showIconTimer=null;
+
   function _openBar(){
-    clearTimeout(_foldTimer); clearTimeout(_iconHideTimer);
+    clearTimeout(_foldTimer);
+    clearTimeout(_showIconTimer);
     _state='open';
     _setIconVisible(false);
     _setBarVisible(true);
