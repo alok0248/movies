@@ -10,11 +10,28 @@
   video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
   .audio-vis{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#81c784;font-size:.6rem;padding:2px 6px;border-radius:3px;display:none;z-index:3;pointer-events:none}
   .audio-vis.on{display:block}
+
+  /* On-screen controls overlay */
+  .osd-feedback{position:absolute;z-index:10;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;transition:opacity .3s}
+  .osd-feedback.show{opacity:1}
+  .osd-feedback .osd-icon{font-size:2.4rem;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.7)}
+  .osd-feedback .osd-label{font-size:.7rem;color:rgba(255,255,255,.8);margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+  .osd-center{inset:0}
+  .osd-left{left:10%;right:auto;top:50%;transform:translateY(-50%)}
+  .osd-right{right:10%;left:auto;top:50%;transform:translateY(-50%)}
+  .osd-top{top:12%;left:50%;transform:translateX(-50%)}
+
+  /* Seek/Volume bar overlay */
+  .osd-bar{position:absolute;bottom:50px;left:50%;transform:translateX(-50%);width:180px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden;z-index:10;pointer-events:none;opacity:0;transition:opacity .3s}
+  .osd-bar.show{opacity:1}
+  .osd-bar-fill{height:100%;background:var(--brand,#e50914);border-radius:2px;transition:width .15s}
 </style>
 </head>
 <body>
 <video id="vid" controls playsinline></video>
 <div class="audio-vis" id="audioVis">AUDIO SYNC</div>
+<div class="osd-feedback osd-center" id="osdCenter"><div class="osd-icon" id="osdIcon"></div><div class="osd-label" id="osdLabel"></div></div>
+<div class="osd-bar" id="osdBar"><div class="osd-bar-fill" id="osdBarFill"></div></div>
 <video id="audioVid" style="position:absolute;width:0;height:0;visibility:hidden" playsinline></video>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script>
@@ -30,14 +47,14 @@
   function startMuteEnforce(){
     if(muteEnforceInterval)return;
     muteEnforceInterval=setInterval(function(){
-      if(dualMode){video.muted=true;video.volume=0}
+      if(dualMode&&userVideoVol===0){video.muted=true;video.volume=0}
     },50);
   }
   function stopMuteEnforce(){
     if(muteEnforceInterval){clearInterval(muteEnforceInterval);muteEnforceInterval=null}
   }
   var muteObserver=new MutationObserver(function(){
-    if(dualMode&&(!video.muted||video.volume>0)){video.muted=true;video.volume=0}
+    if(dualMode&&userVideoVol===0&&(!video.muted||video.volume>0)){video.muted=true;video.volume=0}
   });
   muteObserver.observe(video,{attributes:true,attributeFilter:["muted","volume"]});
 
@@ -66,7 +83,7 @@
       startSync();
     }
   });
-  video.addEventListener("pause",function(){if(dualMode)audioVid.pause()});
+  video.addEventListener("pause",function(){if(dualMode)audioVid.pause();try{parent.postMessage({type:"videoPaused"},"*")}catch(e){}});
   video.addEventListener("seeking",function(){
     if(dualMode&&audioVid.src)audioVid.currentTime=video.currentTime-audioOffset;
   });
@@ -92,8 +109,38 @@
       if(dualMode&&audioVid.src)audioVid.currentTime=video.currentTime-audioOffset;
     }
     if(d.type==="setVolume"){
-      if(d.target==="video"){userVideoVol=d.volume;if(!dualMode){video.volume=d.volume;video.muted=(d.volume===0)}}
+      if(d.target==="video"){
+        userVideoVol=d.volume;
+        if(dualMode){video.volume=d.volume;video.muted=(d.volume===0)}
+        else{video.volume=d.volume;video.muted=(d.volume===0)}
+      }
       else if(d.target==="audio"){userAudioVol=d.volume;audioVid.volume=d.volume;audioVid.muted=(d.volume===0)}
+    }
+    if(d.type==="seekTo"){
+      video.currentTime=d.time;
+      if(dualMode&&audioVid.src)audioVid.currentTime=d.time-audioOffset;
+    }
+    if(d.type==="setVideoVolume"){
+      video.volume=d.volume;video.muted=(d.volume===0);userVideoVol=d.volume;
+    }
+    if(d.type==="resumePlay"){
+      video.play().catch(function(){});
+      if(dualMode&&audioVid.src)audioVid.play().catch(function(){});
+    }
+    if(d.type==="setAudioVolume"){
+      audioVid.volume=d.volume;audioVid.muted=(d.volume===0);userAudioVol=d.volume;
+    }
+    if(d.type==="setSubtitles"&&d.subtitles){
+      var tracks=video.querySelectorAll("track");tracks.forEach(function(t){t.remove()});
+      d.subtitles.forEach(function(s,i){
+        var url=s.url||('https://api.opensubtitles.com/api/v1/download');
+        if(!s.url&&s.id){url='/ajax/player-subtitles/?download_id='+s.id;}
+        var track=document.createElement("track");
+        track.kind="subtitles";track.label=s.label||s.lang_name||s.lang||"Sub "+(i+1);
+        track.srclang=(s.lang||"en").substring(0,2);track.src=url;
+        if(i===0)track.default=true;
+        video.appendChild(track);
+      });
     }
     if(d.type==="stop"){
       if(hls){hls.destroy();hls=null}if(hlsAudio){hlsAudio.destroy();hlsAudio=null}
@@ -108,7 +155,7 @@
     if(hls){hls.destroy();hls=null}
     video.removeAttribute("src");video.load();
     if(url.indexOf(".m3u8")>-1){
-      loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30})},url,function(h){hls=h},null);
+      loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,backBufferLength:120,highBufferWatchdogPeriod:1,nudgeOffset:0.1,maxSeekHole:30,fragLoadingTimeOut:30000,manifestLoadingTimeOut:20000})},url,function(h){hls=h},null);
     }else{video.src=makeProxy(url);video.play().catch(function(){})}
   }
 
@@ -136,8 +183,9 @@
       });
     }
 
-    loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30})},videoUrl,function(h){hls=h},function(){videoReady=true;checkBoth()},true);
-    loadHLS(audioVid,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30})},audioUrl,function(h){hlsAudio=h},function(){audioReady=true;checkBoth()},false);
+    var hlsConfig={enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,backBufferLength:120,highBufferWatchdogPeriod:1,nudgeOffset:0.1,maxSeekHole:30,fragLoadingTimeOut:30000,manifestLoadingTimeOut:20000};
+    loadHLS(video,function(){return new Hls(hlsConfig)},videoUrl,function(h){hls=h},function(){videoReady=true;checkBoth()},true);
+    loadHLS(audioVid,function(){return new Hls(hlsConfig)},audioUrl,function(h){hlsAudio=h},function(){audioReady=true;checkBoth()},false);
   }
 
   // Generic HLS loader
@@ -154,8 +202,12 @@
       h.on(Hls.Events.MANIFEST_PARSED,function(e,d){if(onReady)onReady()});
       h.on(Hls.Events.ERROR,function(e,d){
         if(d.fatal){
-          if(d.type===Hls.ErrorTypes.NETWORK_ERROR)setTimeout(function(){if(h)h.startLoad()},2000);
-          else if(d.type===Hls.ErrorTypes.MEDIA_ERROR)h.recoverMediaError();
+          if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
+            setTimeout(function(){if(h)h.startLoad()},1500);
+          }else if(d.type===Hls.ErrorTypes.MEDIA_ERROR){
+            h.recoverMediaError();
+            setTimeout(function(){if(h&&h.media)h.media.play().catch(function(){})},500);
+          }
         }
       });
       if(enforceMute)h.on(Hls.Events.LEVEL_SWITCHING,function(){el.muted=true;el.volume=0});
@@ -183,6 +235,59 @@
   }
 
   try{parent.postMessage({type:"frameReady"},"*")}catch(e){}
+
+  video.addEventListener("play",function(){try{parent.postMessage({type:"videoResumed"},"*")}catch(e){}});
+  /* Notify parent when video starts playing */
+  video.addEventListener("playing",function(){
+    try{parent.postMessage({type:"videoPlaying"},"*")}catch(e){}
+  },false);
+  video.addEventListener("waiting",function(){
+    try{parent.postMessage({type:"videoBuffering"},"*")}catch(e){}
+  },false);
+  video.addEventListener("error",function(){
+    try{parent.postMessage({type:"videoError",error:video.error?video.error.message:'unknown'},"*")}catch(e){}
+  },false);
+
+  /* ===== Keyboard arrow controls ===== */
+  var _osdTimer=null;
+  var _barTimer=null;
+  var osdIcon=document.getElementById("osdIcon");
+  var osdLabel=document.getElementById("osdLabel");
+  var osdCenter=document.getElementById("osdCenter");
+  var osdBar=document.getElementById("osdBar");
+  var osdBarFill=document.getElementById("osdBarFill");
+
+  function showOSD(icon,label,dur){
+    osdIcon.textContent=icon;osdLabel.textContent=label;osdCenter.classList.add("show");
+    if(_osdTimer)clearTimeout(_osdTimer);_osdTimer=setTimeout(function(){osdCenter.classList.remove("show")},dur||800);
+  }
+  function showBar(pct,label,dur){
+    osdBarFill.style.width=pct+"%";showOSD("",label,0);osdBar.classList.add("show");
+    if(_barTimer)clearTimeout(_barTimer);_barTimer=setTimeout(function(){osdBar.classList.remove("show");osdCenter.classList.remove("show")},dur||1200);
+  }
+  function fmtTime(s){
+    s=Math.floor(s||0);var m=Math.floor(s/60);s=s%60;return String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+  }
+  document.addEventListener("keydown",function(ev){
+    if(!video.src&&!hls)return;
+    var dur=video.duration||0;
+    switch(ev.key){
+      case"ArrowRight":
+        ev.preventDefault();video.currentTime=Math.min(video.currentTime+10,dur);
+        if(dualMode&&audioVid.src)audioVid.currentTime=video.currentTime-audioOffset;
+        showOSD("⏩","+10s "+fmtTime(video.currentTime)+(dur?" / "+fmtTime(dur):""));break;
+      case"ArrowLeft":
+        ev.preventDefault();video.currentTime=Math.max(video.currentTime-10,0);
+        if(dualMode&&audioVid.src)audioVid.currentTime=video.currentTime-audioOffset;
+        showOSD("⏪","-10s "+fmtTime(video.currentTime));break;
+      case"ArrowUp":
+        ev.preventDefault();var nv=Math.min(video.volume+0.05,1);video.volume=nv;video.muted=false;userVideoVol=nv;
+        showBar(Math.round(nv*100),"🔊 Volume "+Math.round(nv*100)+"%");break;
+      case"ArrowDown":
+        ev.preventDefault();var dv=Math.max(video.volume-0.05,0);video.volume=dv;video.muted=(dv===0);userVideoVol=dv;
+        showBar(Math.round(dv*100),dv===0?"🔇 Muted":"🔉 Volume "+Math.round(dv*100)+"%");break;
+    }
+  });
 })();
 </script>
 </body>
