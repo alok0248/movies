@@ -416,6 +416,7 @@ html[data-theme="light"] .ep-list-card .ep-desc{color:rgba(26,26,46,.45)}
 </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script>
 // ===== Player configurations =====
 const playerConfigs = {
@@ -522,20 +523,61 @@ function updatePlayerUrl() {
     var container = document.getElementById('player-container');
     var cfg = playerConfigs[currentPlayerId];
     if (!cfg || !container) return;
-    var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
-    while (container.firstChild) container.removeChild(container.firstChild); showPlayerLoading(container);
-    if (content.type === 'html') {
-        container.innerHTML = content.content;
-        /* For HTML type (local player), hide after a fallback timeout */
-        setTimeout(function() { hidePlayerLoading(); }, 5000);
+    while (container.firstChild) container.removeChild(container.firstChild);
+    showPlayerLoading(container);
+
+    /* Server 0 (Videasy): fetch stream URL and play with HLS.js */
+    if (cfg.name === 'Videasy') {
+        var apiUrl = '/ajax/player-sources/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv&season=' + currentSeason + '&episode=' + currentEpisode;
+        fetch(apiUrl).then(function(r){return r.json()}).then(function(data) {
+            if (!data.success || !data.results || !data.results.length) {
+                container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem;">No streams found</div>';
+                return;
+            }
+            var best = data.results[0];
+            var src = best.url;
+            var vid = document.createElement('video');
+            vid.id = 'mainVideo';
+            vid.controls = true;
+            vid.autoplay = true;
+            vid.playsInline = true;
+            vid.style.cssText = 'width:100%;height:100%;background:#000;display:block;';
+            container.appendChild(vid);
+            if (src.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
+                var hls = new window.Hls({maxBufferLength: 60, maxMaxBufferLength: 120});
+                hls.loadSource(src);
+                hls.attachMedia(vid);
+                hls.on(window.Hls.Events.MANIFEST_PARSED, function() { vid.play().catch(function(){}); });
+            } else if (src.indexOf('.m3u8') > -1 && vid.canPlayType('application/vnd.apple.mpegurl')) {
+                vid.src = src;
+                vid.addEventListener('loadedmetadata', function() { vid.play().catch(function(){}); });
+            } else {
+                vid.src = src;
+                vid.play().catch(function(){});
+            }
+            hidePlayerLoading();
+        }).catch(function(e) {
+            while (container.firstChild) container.removeChild(container.firstChild);
+            var iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+            iframe.src = '/api/player/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv&season=' + currentSeason + '&episode=' + currentEpisode;
+            container.appendChild(iframe);
+            setTimeout(function() { hidePlayerLoading(); }, 5000);
+        });
     } else {
-        var iframe = document.createElement('iframe');
-        iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
-        iframe.allow = 'autoplay; fullscreen; picture-in-picture';
-        iframe.src = content.content;
-        container.appendChild(iframe);
-        /* Safety fallback: hide after 5s max */
-        setTimeout(function() { hidePlayerLoading(); }, 5000);
+        var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
+        if (content.type === 'html') {
+            container.innerHTML = content.content;
+            setTimeout(function() { hidePlayerLoading(); }, 5000);
+        } else {
+            var iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+            iframe.allow = 'autoplay; fullscreen; picture-in-player';
+            iframe.src = content.content;
+            container.appendChild(iframe);
+            setTimeout(function() { hidePlayerLoading(); }, 5000);
+        }
     }
     playerLoaded = true;
     updateServerButtons();
