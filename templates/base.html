@@ -1079,6 +1079,15 @@
                     </ul>
                 </div>
                 <div class="col-12 col-md-6 col-lg-2">
+                    <div class="site-footer-title">Legal</div>
+                    <ul class="site-footer-list">
+                        <li><a href="{% url 'about' %}">About Us</a></li>
+                        <li><a href="{% url 'contact' %}">Contact Us</a></li>
+                        <li><a href="{% url 'privacy' %}">Privacy Policy</a></li>
+                        <li><a href="{% url 'terms' %}">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div class="col-12 col-md-6 col-lg-2">
                     <div class="site-footer-title">{{ site_settings.footer_genres_title }}</div>
                     <ul class="site-footer-list">
                         {% for item in site_settings.footer_genres.splitlines %}

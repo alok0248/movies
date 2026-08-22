@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import TemplateView
 from . import views
 from . import local_player
 
@@ -129,4 +130,8 @@ urlpatterns = [
     path('unsubscribe/', views.unsubscribe_page, name='unsubscribe_page'),
     path('admin-dashboard/subscribers/', views.admin_subscribers, name='admin_subscribers'),
     path('ajax/send-email/', views.ajax_send_email, name='ajax_send_email'),
+    path('about/', TemplateView.as_view(template_name='core/about.html'), name='about'),
+    path('contact/', TemplateView.as_view(template_name='core/contact.html'), name='contact'),
+    path('privacy/', TemplateView.as_view(template_name='core/privacy.html'), name='privacy'),
+    path('terms/', TemplateView.as_view(template_name='core/terms.html'), name='terms'),
 ]

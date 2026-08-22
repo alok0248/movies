@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}About Us - newmovies{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:2rem auto;padding:0 2rem;">
+  <h1 style="font-size:2rem;font-weight:800;color:var(--text);margin-bottom:1.5rem;">About Us</h1>
+  <div style="color:var(--text-2);line-height:1.8;font-size:.95rem;">
+    <p>Welcome to <strong>newmovies</strong> — your go-to destination for discovering and streaming movies and TV series.</p>
+    <h2 style="font-size:1.3rem;font-weight:700;color:var(--text);margin:1.5rem 0 .8rem;">Our Mission</h2>
+    <p>We aim to provide a seamless, ad-free browsing experience for movie and TV series enthusiasts. Our platform aggregates content from various sources to help you find what to watch next.</p>
+    <h2 style="font-size:1.3rem;font-weight:700;color:var(--text);margin:1.5rem 0 .8rem;">What We Offer</h2>
+    <ul style="padding-left:1.5rem;margin:.5rem 0;">
+      <li>Curated lists of popular, top-rated, and upcoming movies and TV series</li>
+      <li>Detailed information powered by TMDB (The Movie Database)</li>
+      <li>Multiple streaming servers for flexible playback options</li>
+      <li>Personal watchlist to keep track of what you want to watch</li>
+      <li>Genre and country-based filtering for easy discovery</li>
+    </ul>
+    <h2 style="font-size:1.3rem;font-weight:700;color:var(--text);margin:1.5rem 0 .8rem;">Content Sources</h2>
+    <p>All movie and TV show data, including descriptions, ratings, cast information, and images, is provided by <a href="https://www.themoviedb.org/" target="_blank" rel="noopener" style="color:var(--brand);text-decoration:none;font-weight:600;">TMDB</a>. We do not host or store any video content on our servers.</p>
+    <h2 style="font-size:1.3rem;font-weight:700;color:var(--text);margin:1.5rem 0 .8rem;">Contact</h2>
+    <p>Have questions or feedback? Visit our <a href="/contact/" style="color:var(--brand);text-decoration:none;font-weight:600;">Contact Us</a> page to get in touch.</p>
+  </div>
+</div>
+{% endblock %}
