@@ -215,7 +215,7 @@ function toggleDualMode(){_dualMode=!_dualMode;var b=document.getElementById('du
 function _buildVideasyPlayer(container, apiUrl) {
   _allSources=[]; _playerPlaying=false;
   var vid=document.createElement('video'); vid.id='mainVideo'; vid.controls=true; vid.autoplay=true; vid.playsInline=true;
-  vid.style.cssText='width:100%;height:100%;background:#000;display:block;border-radius:16px 16px 0 0;';
+  vid.style.cssText='width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;';
   container.appendChild(vid);
   _initBufEvents(vid);
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; container.appendChild(sd);
