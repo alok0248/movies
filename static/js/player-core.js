@@ -1,6 +1,6 @@
 /* ===== Shared Player Core - Streaming ===== */
 var _allSources = []; var _mainHls = null; var _audioHls = null;
-var _audioEl = null; var _dualMode = false; var _playerPlaying = false;
+var _audioEl = null; var _dualMode = false; var _playerPlaying = false; var _audioOffset = 0;
 
 function _proxyUrl(url) {
   if (!url) return url;
@@ -231,6 +231,13 @@ function switchDualAudio(){
 }
 function setDualVol(t,v){v=parseInt(v)/100;if(t==='video'){var e=document.getElementById('mainVideo');if(e)e.volume=v;var el=document.getElementById('dualVidVol');if(el)el.textContent=Math.round(v*100);}else{if(_audioEl)_audioEl.volume=v;var el=document.getElementById('dualAudVol');if(el)el.textContent=Math.round(v*100);}}
 
+function adjustSync(delta){
+  _audioOffset+=delta;
+  var el=document.getElementById('syncOffset');
+  if(el) el.textContent=(_audioOffset>0?'+':'')+_audioOffset.toFixed(1)+'s';
+  var v=document.getElementById('mainVideo');
+  if(v&&_audioEl){_audioEl.currentTime=v.currentTime+_audioOffset;}
+}
 /* Periodic sync: keep audio aligned with video */
 var _syncInterval=null;
 function _startSync(){
@@ -240,7 +247,7 @@ function _startSync(){
     var v=document.getElementById('mainVideo');
     if(!v) return;
     var diff=v.currentTime-_audioEl.currentTime;
-    if(Math.abs(diff)>0.5){_audioEl.currentTime=v.currentTime;}
+    if(Math.abs(diff)>0.5){_audioEl.currentTime=v.currentTime+_audioOffset;}
     if(v.paused && !_audioEl.paused){_audioEl.pause();}
     else if(!v.paused && _audioEl.paused){_audioEl.play().catch(function(){});}
   },1000);
@@ -272,6 +279,19 @@ function _buildVideasyPlayer(container, apiUrl) {
   vid.style.cssText='width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;object-fit:contain;';
   vw.appendChild(vid);
   _initBufEvents(vid);
+
+  /* Sync audio to video events */
+  function _syncAudioToVideo(){
+    if(!_dualMode||!_audioEl) return;
+    var v=vid;
+    v.addEventListener('pause',function(){if(_audioEl&&!_audioEl.paused)_audioEl.pause();});
+    v.addEventListener('play',function(){if(_audioEl&&_audioEl.paused){_audioEl.currentTime=v.currentTime+_audioOffset;_audioEl.play().catch(function(){});}});
+    v.addEventListener('seeking',function(){if(_audioEl){_audioEl.currentTime=v.currentTime+_audioOffset;}});
+    v.addEventListener('seeked',function(){if(_audioEl){_audioEl.currentTime=v.currentTime+_audioOffset;}});
+    v.addEventListener('ratechange',function(){if(_audioEl){_audioEl.playbackRate=v.playbackRate;}});
+  }
+  _syncAudioToVideo();
+
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
   var dp=document.createElement('div'); dp.id='dualPanel'; dp.className='dual-panel'; vw.appendChild(dp);
   container.appendChild(vw);
