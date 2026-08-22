@@ -268,6 +268,29 @@ html[data-theme="light"] .det-sidebar-meta .highlight{color:#1a1a2e}
 html[data-theme="light"] .det-sidebar-overview{color:rgba(26,26,46,.6)}
 html[data-theme="light"] .det-sidebar-label{color:rgba(26,26,46,.35)}
 html[data-theme="light"] .det-sidebar-chip{background:rgba(0,0,0,.05);color:rgba(26,26,46,.6)}
+/* Source selector */
+.src-selector{margin-top:.5rem;display:none}
+.src-selector.open{display:block}
+.src-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.3);font-weight:700;margin-bottom:.4rem}
+.src-list{display:flex;flex-wrap:wrap;gap:.4rem;max-height:120px;overflow-y:auto;scrollbar-width:thin}
+.src-item{padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:.4rem}
+.src-item:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.9)}
+.src-item.active{background:var(--brand,#e50914);color:#fff;border-color:var(--brand,#e50914)}
+.src-item .src-quality{color:#46d369;font-weight:700}
+.src-item .src-lang{color:rgba(255,255,255,.4);font-size:.65rem}
+.src-item .src-server{color:rgba(255,255,255,.3);font-size:.6rem}
+.dual-panel{margin-top:.5rem;display:none}
+.dual-panel.open{display:block}
+.dual-row{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;padding:.4rem .6rem;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.04)}
+.dual-row label{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);font-weight:700;width:50px;flex-shrink:0}
+.dual-row select{flex:1;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.8);font-size:.72rem;font-family:inherit;appearance:none;cursor:pointer}
+.dual-row select:focus{outline:none;border-color:var(--brand,#e50914)}
+.dual-row input[type=range]{width:80px;accent-color:var(--brand,#e50914);height:4px}
+.dual-row .dual-vol{font-size:.6rem;color:rgba(255,255,255,.3);width:28px;text-align:center}
+.player-controls-row{display:flex;align-items:center;gap:.5rem;margin-top:.4rem;padding:.3rem 0}
+.ctrl-toggle{padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .2s}
+.ctrl-toggle:hover{background:rgba(255,255,255,.1);color:#fff}
+.ctrl-toggle.active{background:rgba(70,211,105,.15);color:#46d369;border-color:rgba(70,211,105,.25)}
 </style>
 
 <div class="det-page">
@@ -398,6 +421,7 @@ html[data-theme="light"] .det-sidebar-chip{background:rgba(0,0,0,.05);color:rgba
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="/static/js/player-core.js"></script>
 <script>
 // ===== Player configurations =====
 const playerConfigs = {
@@ -504,50 +528,10 @@ function loadMoviePlayer() {
     while (container.firstChild) container.removeChild(container.firstChild);
     showPlayerLoading(container);
 
-    /* Server 0 (Videasy): fetch stream URL and play with HLS.js */
+    /* Server 0 (Videasy): fetch sources and play with source selection */
     if (cfg.name === 'Videasy') {
         var apiUrl = '/ajax/player-sources/?tmdb_id=' + movieId + '&type=movie';
-        fetch(apiUrl).then(function(r){return r.json()}).then(function(data) {
-            if (!data.success || !data.results || !data.results.length) {
-                container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem;">No streams found</div>';
-                return;
-            }
-            /* Pick best source (highest quality) */
-            var best = data.results[0];
-            var src = best.url;
-            /* Build video element */
-            var vid = document.createElement('video');
-            vid.id = 'mainVideo';
-            vid.controls = true;
-            vid.autoplay = true;
-            vid.playsInline = true;
-            vid.style.cssText = 'width:100%;height:100%;background:#000;display:block;';
-            vid.poster = '';
-            container.appendChild(vid);
-            /* Load with HLS.js */
-            if (src.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-                var hls = new window.Hls({maxBufferLength: 60, maxMaxBufferLength: 120});
-                hls.loadSource(src);
-                hls.attachMedia(vid);
-                hls.on(window.Hls.Events.MANIFEST_PARSED, function() { vid.play().catch(function(){}); });
-            } else if (src.indexOf('.m3u8') > -1 && vid.canPlayType('application/vnd.apple.mpegurl')) {
-                vid.src = src;
-                vid.addEventListener('loadedmetadata', function() { vid.play().catch(function(){}); });
-            } else {
-                vid.src = src;
-                vid.play().catch(function(){});
-            }
-            hidePlayerLoading();
-        }).catch(function(e) {
-            /* Fallback: load extraction player iframe */
-            while (container.firstChild) container.removeChild(container.firstChild);
-            var iframe = document.createElement('iframe');
-            iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
-            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
-            iframe.src = '/api/player/?tmdb_id=' + movieId + '&type=movie';
-            container.appendChild(iframe);
-            setTimeout(function() { hidePlayerLoading(); }, 5000);
-        });
+        _buildVideasyPlayer(container, apiUrl);
     } else {
         /* Other servers: load iframe */
         var content = getPlayerContent(cfg, 'movie', movieId, null, null, movieImdbId);
