@@ -370,11 +370,12 @@ html[data-theme="light"] .det-sidebar-chip{background:rgba(0,0,0,.05);color:rgba
         {% if all_players %}
         <div class="det-servers" style="margin-top:.5rem">
             <span class="det-servers-label">Servers</span>
+            <button type="button" class="det-server-pill" data-player-id="0" style="font-weight:800">0</button>
             {% for player in all_players %}
             <button type="button" class="det-server-pill"
                 data-player-id="{{ player.id }}"
                 {% if request.user.is_staff or request.user.is_superuser %}data-player-edit-url="{% url 'player_edit' player.id %}"{% endif %}>
-                {{ forloop.counter0 }}
+                {{ forloop.counter }}
             </button>
             {% endfor %}
         </div>
@@ -459,6 +460,7 @@ html[data-theme="light"] .det-sidebar-chip{background:rgba(0,0,0,.05);color:rgba
 <script>
 // ===== Player configurations =====
 const playerConfigs = {
+    0: { name: 'Extractor', isExtractor: true },
     {% for player in all_players %}
     {{ player.id }}: {
         name: "{{ player.name|escapejs }}",
@@ -486,12 +488,12 @@ const movieYear = "{{ movie.year|escapejs }}";
 const isAdminUser = {% if request.user.is_staff or request.user.is_superuser %}true{% else %}false{% endif %};
 let playerLoaded = false;
 let wikipediaLoaded = false;
-let currentPlayerId = {% if all_players %}{{ all_players.0.id }}{% else %}null{% endif %};
+let currentPlayerId = 0;
 
 function getPlayerUrl(cfg, mediaType, mediaId, season, episode, imdbId) {
     imdbId = imdbId || '';
-    /* Server 0 (Videasy) always uses extraction — ignore any custom URLs in DB */
-    if (cfg.name === 'Videasy') {
+    /* Server 0 (Extractor) always uses extraction — ignore any custom URLs in DB */
+    if (cfg.isExtractor) {
         return '/api/player/?tmdb_id=' + (mediaId || '') + '&type=' + mediaType;
     }
     var customUrl = mediaType === 'movie'
@@ -511,8 +513,8 @@ function getPlayerUrl(cfg, mediaType, mediaId, season, episode, imdbId) {
 }
 
 function getPlayerContent(cfg, mediaType, mediaId, season, episode, imdbId) {
-    /* Server 0 (Videasy) always uses extraction — never use custom HTML or URLs */
-    if (cfg.name === 'Videasy') {
+    /* Server 0 (Extractor) always uses extraction — never use custom HTML or URLs */
+    if (cfg.isExtractor) {
         return { type: 'url', content: '/api/player/?tmdb_id=' + (mediaId || '') + '&type=' + mediaType };
     }
     if (cfg.customIframeMode === 'full') {
@@ -562,8 +564,8 @@ function loadMoviePlayer() {
     while (container.firstChild) container.removeChild(container.firstChild);
     showPlayerLoading(container);
 
-    /* Server 0 (Videasy): fetch sources and play with source selection */
-    if (cfg.name === 'Videasy') {
+    /* Server 0 (Extractor): fetch sources and play with source selection */
+    if (cfg.isExtractor) {
         var apiUrl = '/ajax/player-sources/?tmdb_id=' + movieId + '&type=movie';
         _buildVideasyPlayer(container, apiUrl);
     } else {
@@ -612,7 +614,7 @@ if (playBtn) {
 updateServerButtons();
 
 /* Pre-fetch seed for instant play */
-if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].name === 'Videasy') {
+if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor) {
     fetch('/ajax/prefetch-sources/?tmdb_id=' + movieId + '&type=movie', {mode: 'no-cors'}).catch(function(){});
 }
 
