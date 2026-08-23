@@ -427,6 +427,12 @@ function _buildVideasyPlayer(container, apiUrl) {
     }
   });
 
+  /* Touch support for mobile: single tap shows icon, tap again opens bar */
+  vw.addEventListener('touchstart',function(e){
+    if(_insideBar(e.target))return;
+    if(_state==='hidden')_showIcon();
+  },{passive:true});
+
   /* Start hidden */
   _state='hidden';
   _setBarVisible(false);
