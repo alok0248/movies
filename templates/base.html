@@ -3280,5 +3280,35 @@
     }
     </script>
     {% block extra_js %}{% endblock %}
+
+{% if site_settings.dev_mode_protection %}
+<script>
+(function(){
+  var _devDetected=false;
+  function _checkDevTools(){
+    var w=window.innerWidth,d=window.outerWidth;
+    if(w<d-100||w>d+100){
+      if(!_devDetected){_devDetected=true;_trigger404();}
+    }
+    try{
+      var el=document.createElement('div');
+      Object.defineProperty(el,'id',{get:function(){throw new Error();}});
+      console.log(el);
+    }catch(e){if(!_devDetected){_devDetected=true;_trigger404();}}
+  }
+  function _trigger404(){
+    if(sessionStorage.getItem('_dev404'))return;
+    sessionStorage.setItem('_dev404','1');
+    document.documentElement.innerHTML='';
+    document.open();
+    document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>404 - Not Found</title><style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#0a0a0a;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}h1{font-size:6rem;margin:0;color:#e50914}h2{font-size:1.5rem;font-weight:400;opacity:.7;margin:1rem 0}p{opacity:.5;max-width:400px}.ad-box{margin:2rem;padding:1.5rem 2rem;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.03);max-width:500px;width:100%}.ad-box h3{font-size:1rem;color:#e50914;margin-bottom:.5rem}.ad-box p{font-size:.8rem;opacity:.6}</style></head><body><h1>404</h1><h2>Page Not Found</h2><p>The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.</p><div class="ad-box"><h3>Premium Content</h3><p>Stream thousands of movies and TV shows in HD. Try our premium plan today!</p></div><div class="ad-box"><h3>Discover More</h3><p>Explore our curated collection of award-winning films and trending series.</p></div><p style="margin-top:2rem;font-size:.7rem;opacity:.3">&copy; 2026</p></body></html>');
+    document.close();
+  }
+  setInterval(_checkDevTools,500);
+  window.addEventListener('resize',function(){setTimeout(_checkDevTools,100);});
+})();
+</script>
+{% endif %}
+
 </body>
 </html>

@@ -209,6 +209,10 @@ class SiteSettings(models.Model):
         default='autoclick_urls',
         help_text="Where the first-click-gating ad URL comes from — the global autoclick ad pool, or the Amazon Affiliate Product list."
     )
+    dev_mode_protection = models.BooleanField(
+        default=False,
+        help_text="If enabled, users with browser DevTools/Inspector open will see a 404 page with ads."
+    )
 
     class Meta:
         verbose_name_plural = "Site Settings"
