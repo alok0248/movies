@@ -322,8 +322,10 @@ function _buildVideasyPlayer(container, apiUrl) {
   _syncAudioToVideo();
 
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
-  /* Stop clicks on controls bar from bubbling to player (which would close the bar) */
-  sd.addEventListener('click',function(e){e.stopPropagation();});
+  /* Stop clicks on controls bar from bubbling to player (which would close the bar)
+     AND reset the auto-fold timer so the bar stays open while user interacts */
+  sd.addEventListener('click',function(e){e.stopPropagation();if(_state==='open')_resetAutoFold();});
+  sd.addEventListener('mouseenter',function(){if(_state==='open')_resetAutoFold();});
   /* dual panel removed - using inline dual stream instead */
   container.appendChild(vw);
 
