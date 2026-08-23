@@ -275,10 +275,10 @@ html[data-theme="light"] .ep-list-card .ep-num{color:#e50914}
 html[data-theme="light"] .ep-list-card .ep-text>div{color:#1a1a2e}
 html[data-theme="light"] .ep-list-card .ep-desc{color:rgba(26,26,46,.45)}
 /* Source selector */
-.src-selector{position:absolute;bottom:60px;left:10px;right:10px;z-index:20;display:none;gap:10px;align-items:center;flex-wrap:wrap;pointer-events:auto;background:rgba(255,255,255,.08);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border-radius:14px;padding:10px 16px;border:1px solid rgba(255,255,255,.15);box-shadow:0 8px 32px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08);transition:opacity .5s ease,transform .5s ease}
+.src-selector{position:absolute;bottom:50px;left:50%;transform:translateX(-50%);z-index:20;display:none;gap:8px;align-items:center;flex-wrap:nowrap;pointer-events:auto;background:rgba(20,20,35,.92);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border-radius:10px;padding:6px 12px;border:1px solid rgba(255,255,255,.12);box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06);transition:opacity .5s ease,transform .5s ease}
 .src-selector.open{display:flex}
 /* Collapse icon */
-.player-collapse-icon{position:absolute;bottom:60px;right:14px;z-index:21;width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.08);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(255,255,255,.15);display:none;align-items:center;justify-content:center;cursor:pointer;transition:all .4s ease;box-shadow:0 4px 16px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08)}
+.player-collapse-icon{position:absolute;bottom:50px;right:14px;z-index:22;width:32px;height:32px;border-radius:8px;background:rgba(20,20,35,.92);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border:1px solid rgba(255,255,255,.12);display:none;align-items:center;justify-content:center;cursor:pointer;transition:all .4s ease;box-shadow:0 4px 16px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)}
 .player-collapse-icon:hover{background:rgba(255,255,255,.15);transform:scale(1.08)}
 .player-collapse-icon.show{display:flex}
 .player-collapse-icon svg{width:18px;height:18px;fill:none;stroke:rgba(255,255,255,.7);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -288,7 +288,7 @@ html[data-theme="light"] .ep-list-card .ep-desc{color:rgba(26,26,46,.45)}
 .dual-panel.folding{opacity:0!important;transform:translateY(8px) scale(.95);pointer-events:none;transition:all .35s ease}
 .dual-panel.folded{display:none!important}
 .src-dd{position:relative;display:inline-block}
-.src-dd-btn{display:inline-flex;align-items:center;gap:.5rem;padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.12);color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:120px}
+.src-dd-btn{display:inline-flex;align-items:center;gap:.4rem;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.1);color:#fff;font-size:.7rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:90px}
 .src-dd-btn:hover{background:rgba(255,255,255,.1);color:#fff}
 .src-dd-btn.active{border-color:var(--brand,#e50914);color:var(--brand,#e50914)}
 .src-dd-btn .dd-icon{font-size:.5rem;opacity:.5;transition:transform .2s}
