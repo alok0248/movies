@@ -411,19 +411,11 @@ function _buildVideasyPlayer(container, apiUrl) {
   /* Icon click: always unfold */
   icon.addEventListener('click',function(e){e.stopPropagation();_openBar();});
 
-  /* Player click anywhere: fold to icon — but NOT if clicking controls bar, icon, or dropdowns */
-  vw.addEventListener('click',function(e){
-    if(e.target===icon||icon.contains(e.target)) return;
-    if(e.target.closest('.src-selector')||e.target.closest('.player-collapse-icon')) return;
-    if(_state==='open'){_foldBar();}
-    else if(_state==='hidden'){_showIcon();}
-  });
-
-  vid.addEventListener('click',function(e){
-    if(e.target.closest('.src-selector')) return;
-    if(_state==='open'){_foldBar();}
-    else if(_state==='hidden'){_showIcon();}
-  });
+  function _insideBar(el){return el.closest('.src-selector')||el.closest('.player-collapse-icon')||el.closest('.dual-panel-inline');}
+  vw.addEventListener('click',function(e){if(_insideBar(e.target))return;if(_state==='open')_foldBar();else if(_state==='hidden')_showIcon();});
+  vw.addEventListener('mousedown',function(e){if(_insideBar(e.target))e.stopPropagation();});
+  vid.addEventListener('click',function(e){if(_insideBar(e.target))return;if(_state==='open')_foldBar();else if(_state==='hidden')_showIcon();});
+  vid.addEventListener('mousedown',function(e){if(_insideBar(e.target))e.stopPropagation();});
 
   /* Mouse enter: show icon if hidden */
   vw.addEventListener('mouseenter',function(){
