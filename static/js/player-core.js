@@ -2,14 +2,6 @@
 var _allSources = []; var _mainHls = null; var _audioHls = null;
 var _audioEl = null; var _dualMode = false; var _playerPlaying = false; var _audioOffset = 0;
 
-function _proxyUrl(url) {
-  if (!url) return url;
-  if (url.indexOf('/proxy/') === -1) {
-    return '/proxy/' + url.replace('https://', '').replace('http://', '');
-  }
-  return url;
-}
-
 /* ===== Buffering Overlay ===== */
 function _showBuf(vid) {
   var p = vid.parentNode; if (!p) return;
@@ -51,19 +43,19 @@ function _playHls(url, mediaEl) {
   if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
     var _origHost="";try{_origHost=new URL(url).origin;}catch(e){}
     function _resolveUrl(u){if(!u)return u;if(u.indexOf("http")===0)return u;if(_origHost)return _origHost+u;return u;}
-    function _corsProxy(u){if(!u)return u;return "https://corsproxy.io/?"+encodeURIComponent(u);}
+
     var h = new window.Hls({
       maxBufferLength: 300,
       maxMaxBufferLength: 600,
       xhrSetup: function(xhr, reqUrl) {
         var resolved = _resolveUrl(reqUrl);
-        xhr.open('GET', _corsProxy(resolved), true);
+        xhr.open('GET', (resolved), true);
       },
       pLoader: function(config) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
         loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) cfg.url = _corsProxy(_resolveUrl(cfg.url));
+          if (cfg.url) cfg.url = (_resolveUrl(cfg.url));
           originalLoad(cfg, callbacks, context);
         };
         return loader;
@@ -72,25 +64,25 @@ function _playHls(url, mediaEl) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
         loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) cfg.url = _corsProxy(_resolveUrl(cfg.url));
+          if (cfg.url) cfg.url = (_resolveUrl(cfg.url));
           originalLoad(cfg, callbacks, context);
         };
         return loader;
       }
     });
-    h.loadSource(proxied); h.attachMedia(mediaEl);
+    h.loadSource(url); h.attachMedia(mediaEl);
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); });
     h.on(window.Hls.Events.ERROR, function(evt, data) {
       if (data.fatal) {
         console.error('HLS fatal error:', data.type, data.details);
         h.destroy(); _mainHls = null;
-        mediaEl.src = proxied;
+        mediaEl.src = url;
         mediaEl.play().catch(function(){});
       }
     });
     _mainHls = h;
   } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = _corsProxy(url);
+    mediaEl.src = (url);
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
   } else { mediaEl.src = url; mediaEl.play().catch(function(){}); }
 }
@@ -233,13 +225,13 @@ function switchDualAudio(){
   if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:300,maxMaxBufferLength:600,
       xhrSetup:function(xhr,u){if(u&&u.indexOf('/proxy/')===-1){xhr.open('GET','/proxy/'+u.replace('https://','').replace('http://',''),true);}},
       fLoader:function(c){var l=new window.Hls.DefaultConfig.loader(c);var o=l.load.bind(l);l.load=function(cfg,cb,ctx){if(cfg.url&&cfg.url.indexOf('/proxy/')===-1){cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://','');}o(cfg,cb,ctx);};return l;}
-    });h.loadSource(_corsProxy(d.url));h.attachMedia(_audioEl);
+    });h.loadSource((d.url));h.attachMedia(_audioEl);
     h.on(window.Hls.Events.MANIFEST_PARSED,function(){
       var v=document.getElementById('mainVideo');
       if(v){_audioEl.currentTime=v.currentTime+_audioOffset;}
       _audioEl.play().catch(function(){});
     });_audioHls=h;
-  }else{_audioEl.src=_corsProxy(d.url);_audioEl.play().catch(function(){});}
+  }else{_audioEl.src=(d.url);_audioEl.play().catch(function(){});}
 }
 function setDualVol(t,v){v=parseInt(v)/100;if(t==='video'){var e=document.getElementById('mainVideo');if(e)e.volume=v;var el=document.getElementById('dualVidVol');if(el)el.textContent=Math.round(v*100);}else{if(_audioEl)_audioEl.volume=v;var el=document.getElementById('dualAudVol');if(el)el.textContent=Math.round(v*100);}}
 
