@@ -411,11 +411,8 @@ function _buildVideasyPlayer(container, apiUrl) {
   /* Icon click: always unfold */
   icon.addEventListener('click',function(e){e.stopPropagation();_openBar();});
 
-  function _insideBar(el){return el.closest('.src-selector')||el.closest('.player-collapse-icon')||el.closest('.dual-panel-inline');}
-  vw.addEventListener('click',function(e){if(_insideBar(e.target))return;if(_state==='open')_foldBar();else if(_state==='hidden')_showIcon();});
-  vw.addEventListener('mousedown',function(e){if(_insideBar(e.target))e.stopPropagation();});
-  vid.addEventListener('click',function(e){if(_insideBar(e.target))return;if(_state==='open')_foldBar();else if(_state==='hidden')_showIcon();});
-  vid.addEventListener('mousedown',function(e){if(_insideBar(e.target))e.stopPropagation();});
+  /* Only icon click or 5s idle closes the bar — never close on video/player clicks */
+  vw.addEventListener('click',function(e){if(e.target===icon||icon.contains(e.target))return;if(_state==='hidden')_showIcon();});
 
   /* Mouse enter: show icon if hidden */
   vw.addEventListener('mouseenter',function(){
