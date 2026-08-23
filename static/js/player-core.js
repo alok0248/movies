@@ -51,18 +51,19 @@ function _playHls(url, mediaEl) {
   if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
     var _origHost="";try{_origHost=new URL(url).origin;}catch(e){}
     function _resolveUrl(u){if(!u)return u;if(u.indexOf("http")===0)return u;if(_origHost)return _origHost+u;return u;}
+    function _proxyUrl2(u){if(!u||u.indexOf("/proxy/")!==-1)return u;return "/proxy/"+u.replace("https://","").replace("http://","");}
     var h = new window.Hls({
       maxBufferLength: 300,
       maxMaxBufferLength: 600,
       xhrSetup: function(xhr, reqUrl) {
         var resolved = _resolveUrl(reqUrl);
-        if (resolved !== reqUrl) xhr.open('GET', resolved, true);
+        xhr.open('GET', _proxyUrl2(resolved), true);
       },
       pLoader: function(config) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
         loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) cfg.url = _resolveUrl(cfg.url);
+          if (cfg.url) cfg.url = _proxyUrl2(_resolveUrl(cfg.url));
           originalLoad(cfg, callbacks, context);
         };
         return loader;
@@ -71,7 +72,7 @@ function _playHls(url, mediaEl) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
         loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) cfg.url = _resolveUrl(cfg.url);
+          if (cfg.url) cfg.url = _proxyUrl2(_resolveUrl(cfg.url));
           originalLoad(cfg, callbacks, context);
         };
         return loader;
@@ -89,7 +90,7 @@ function _playHls(url, mediaEl) {
     });
     _mainHls = h;
   } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = url;
+    mediaEl.src = _proxyUrl2(url);
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
   } else { mediaEl.src = url; mediaEl.play().catch(function(){}); }
 }
@@ -232,13 +233,13 @@ function switchDualAudio(){
   if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:300,maxMaxBufferLength:600,
       xhrSetup:function(xhr,u){if(u&&u.indexOf('/proxy/')===-1){xhr.open('GET','/proxy/'+u.replace('https://','').replace('http://',''),true);}},
       fLoader:function(c){var l=new window.Hls.DefaultConfig.loader(c);var o=l.load.bind(l);l.load=function(cfg,cb,ctx){if(cfg.url&&cfg.url.indexOf('/proxy/')===-1){cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://','');}o(cfg,cb,ctx);};return l;}
-    });h.loadSource(d.url);h.attachMedia(_audioEl);
+    });h.loadSource(_proxyUrl2(d.url));h.attachMedia(_audioEl);
     h.on(window.Hls.Events.MANIFEST_PARSED,function(){
       var v=document.getElementById('mainVideo');
       if(v){_audioEl.currentTime=v.currentTime+_audioOffset;}
       _audioEl.play().catch(function(){});
     });_audioHls=h;
-  }else{_audioEl.src=d.url;_audioEl.play().catch(function(){});}
+  }else{_audioEl.src=_proxyUrl2(d.url);_audioEl.play().catch(function(){});}
 }
 function setDualVol(t,v){v=parseInt(v)/100;if(t==='video'){var e=document.getElementById('mainVideo');if(e)e.volume=v;var el=document.getElementById('dualVidVol');if(el)el.textContent=Math.round(v*100);}else{if(_audioEl)_audioEl.volume=v;var el=document.getElementById('dualAudVol');if(el)el.textContent=Math.round(v*100);}}
 
