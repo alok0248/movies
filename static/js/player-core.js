@@ -38,25 +38,36 @@ function _initBufEvents(vid) {
 }
 
 function _proxyUrl(u){if(!u)return u;return "/proxy/"+u.replace("https://","").replace("http://","");}
+function _proxyUrl(u){if(!u)return u;return "/proxy/"+u.replace("https://","").replace("http://","");}
+var _triedUrls={};
+
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
+  _triedUrls={}; _triedUrls[url]=1;
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
-  if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
+  _tryHlsUrl(url, mediaEl, false);
+}
+
+function _tryHlsUrl(url, mediaEl, useProxy) {
+  if (!mediaEl || !url) return;
+  if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
+  var loadUrl = useProxy ? _proxyUrl(url) : url;
+
+  if (loadUrl.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
     var _origHost="";try{_origHost=new URL(url).origin;}catch(e){}
     function _resolveUrl(u){if(!u)return u;if(u.indexOf("http")===0)return u;if(_origHost)return _origHost+u;return u;}
 
     var h = new window.Hls({
-      maxBufferLength: 300,
-      maxMaxBufferLength: 600,
+      maxBufferLength: 300, maxMaxBufferLength: 600,
       xhrSetup: function(xhr, reqUrl) {
-        var resolved = _resolveUrl(reqUrl);
-        xhr.open('GET', (resolved), true);
+        var resolved = useProxy ? '/proxy/'+_resolveUrl(reqUrl).replace('https://','').replace('http://','') : _resolveUrl(reqUrl);
+        xhr.open('GET', resolved, true);
       },
       pLoader: function(config) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
         loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) cfg.url = (_resolveUrl(cfg.url));
+          if (cfg.url) { cfg.url = _resolveUrl(cfg.url); if (useProxy && cfg.url.indexOf('/proxy/')===-1) cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://',''); }
           originalLoad(cfg, callbacks, context);
         };
         return loader;
@@ -65,39 +76,46 @@ function _playHls(url, mediaEl) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
         loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) cfg.url = (_resolveUrl(cfg.url));
+          if (cfg.url) { cfg.url = _resolveUrl(cfg.url); if (useProxy && cfg.url.indexOf('/proxy/')===-1) cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://',''); }
           originalLoad(cfg, callbacks, context);
         };
         return loader;
       }
     });
-    h.loadSource(url); h.attachMedia(mediaEl);
-    h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); });
+    h.loadSource(loadUrl); h.attachMedia(mediaEl);
+    h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
     h.on(window.Hls.Events.ERROR, function(evt, data) {
       if (data.fatal) {
-        console.error('HLS fatal error (direct):', data.type, data.details, '- retrying via proxy');
         h.destroy(); _mainHls = null;
-        /* Retry with server proxy */
-        var proxied = _proxyUrl(url);
-        if (window.Hls && window.Hls.isSupported()) {
-          var h2 = new window.Hls({maxBufferLength:300, maxMaxBufferLength:600});
-          h2.loadSource(proxied); h2.attachMedia(mediaEl);
-          h2.on(window.Hls.Events.MANIFEST_PARSED, function(){mediaEl.play().catch(function(){});});
-          h2.on(window.Hls.Events.ERROR, function(e,d){if(d.fatal){h2.destroy();mediaEl.src=proxied;mediaEl.play().catch(function(){});}});
-          _mainHls = h2;
-        } else {
-          mediaEl.src = proxied;
-          mediaEl.play().catch(function(){});
-        }
+        if (!useProxy) { console.error('Direct failed, proxy:', url.substring(0,60)); _tryHlsUrl(url, mediaEl, true); }
+        else { console.error('Proxy failed, next source'); _tryNextSource(mediaEl); }
       }
     });
     _mainHls = h;
-  } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = (url);
+  } else if (loadUrl.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
+    mediaEl.src = loadUrl;
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
-  } else { mediaEl.src = url; mediaEl.play().catch(function(){}); }
+    mediaEl.addEventListener('error', function() { _tryNextSource(mediaEl); }, {once:true});
+  } else {
+    mediaEl.src = loadUrl;
+    mediaEl.play().catch(function() {});
+    mediaEl.addEventListener('error', function() { _tryNextSource(mediaEl); }, {once:true});
+  }
 }
 
+function _tryNextSource(mediaEl) {
+  var seen={};
+  for (var i=0; i<_allSources.length; i++) {
+    var s=_allSources[i]; var k=s.url;
+    if (!_triedUrls[k] && !seen[k]) {
+      _triedUrls[k]=1; seen[k]=1;
+      console.log('Next source:', s.server, s.quality, s.url.substring(0,60));
+      _tryHlsUrl(s.url, mediaEl, false);
+      return;
+    }
+  }
+  console.error('All sources exhausted');
+}
 function _addSource(s) { _allSources.push(s); _renderSourceList(); }
 
 var _selQuality = null; var _selLanguage = null; var _selServer = null;
