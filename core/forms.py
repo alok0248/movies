@@ -51,6 +51,7 @@ class SiteSettingsForm(forms.ModelForm):
             'enable_tile_click_gating',
             'tile_ad_source',
             'tile_gating_source',
+            'dev_mode_protection',
         ]
         widgets = {
             'blocked_urls': forms.Textarea(attrs={'rows': 6, 'cols': 80, 'class': 'form-control', 'title': 'List of URLs to block (one per line), or "all" to block everything except admin pages'}),
@@ -69,6 +70,7 @@ class SiteSettingsForm(forms.ModelForm):
             'text_size': forms.Select(attrs={'class': 'form-select', 'title': 'Select the size of general text on the site'}),
             'theme_style': forms.Select(attrs={'class': 'form-select', 'title': 'Select a pre-defined theme style for your site'}),
             'font_family': forms.Select(attrs={'class': 'form-select', 'title': 'Select the font family to use across the site'}),
+            'dev_mode_protection': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Block users with DevTools/Inspector open by showing a 404 page with ads'}),
             'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to enable URL blocking for non-admin pages'}),
             'redirect_url': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter the URL to redirect blocked requests to'}),
             'email_host': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP server (e.g., smtp.gmail.com)'}),
@@ -214,6 +216,7 @@ class URLBlockingSettingsForm(forms.ModelForm):
         model = SiteSettings
         fields = ['enable_url_blocking', 'blocked_urls', 'redirect_url']
         widgets = {
+            'dev_mode_protection': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Block users with DevTools/Inspector open by showing a 404 page with ads'}),
             'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'blocked_urls': forms.Textarea(attrs={'rows': 6, 'class': 'form-control'}),
             'redirect_url': forms.TextInput(attrs={'class': 'form-control'}),
