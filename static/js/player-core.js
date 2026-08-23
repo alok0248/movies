@@ -324,7 +324,14 @@ function _buildVideasyPlayer(container, apiUrl) {
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
   /* Stop clicks on controls bar from bubbling to player (which would close the bar)
      AND reset the auto-fold timer so the bar stays open while user interacts */
-  sd.addEventListener('click',function(e){e.stopPropagation();if(_state==='open')_resetAutoFold();});
+  sd.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(_state==='open')_resetAutoFold();
+    var btn=e.target.closest('[data-toggle]');
+    if(btn){var id=btn.getAttribute('data-toggle');var dd=document.getElementById(id);if(!dd)return;var wasOpen=dd.classList.contains('open');document.querySelectorAll('.src-dd').forEach(function(d){if(d!==dd)d.classList.remove('open');});if(!wasOpen)dd.classList.add('open');else dd.classList.remove('open');return;}
+    var opt=e.target.closest('[data-action]');
+    if(opt){var action=opt.getAttribute('data-action');var val=opt.getAttribute('data-value');document.querySelectorAll('.src-dd').forEach(function(d){d.classList.remove('open');});if(action==='pickQ'){_selQuality=val;_playSelected();_renderSourceList();}else if(action==='pickL'){_selLanguage=val;_playSelected();_renderSourceList();}return;}
+  });
   sd.addEventListener('mouseenter',function(){if(_state==='open')_resetAutoFold();});
   /* dual panel removed - using inline dual stream instead */
   container.appendChild(vw);
