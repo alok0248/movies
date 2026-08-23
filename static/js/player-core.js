@@ -49,6 +49,8 @@ function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
   var proxied = _proxyUrl(url);
+  var _origHost="";try{_origHost=new URL(url).origin;}catch(e){}
+  function _proxyResolve(u){if(!u||u.indexOf("/proxy/")!==-1)return u;if(u.indexOf("http")!==0&&_origHost)u=_origHost+u;return "/proxy/"+u.replace("https://","").replace("http://","");}
   if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
     var h = new window.Hls({
       maxBufferLength: 300,
@@ -56,33 +58,24 @@ function _playHls(url, mediaEl) {
       xhrSetup: function(xhr, reqUrl) {
         /* Proxy ALL requests through our server */
         if (reqUrl && reqUrl.indexOf('/proxy/') === -1) {
-          var newUrl = '/proxy/' + reqUrl.replace('https://', '').replace('http://', '');
-          xhr.open('GET', newUrl, true);
+          xhr.open('GET', _proxyResolve(reqUrl), true);
         }
       },
       pLoader: function(config) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
-        loader.load = function(config, callbacks, context) {
-          /* Rewrite playlist URLs to proxy */
-          if (config.url && config.url.indexOf('/proxy/') === -1) {
-            config.url = '/proxy/' + config.url.replace('https://', '').replace('http://', '');
-          }
-          if (config.url && config.urlTransform) {
-            config.url = config.urlTransform(config.url);
-          }
-          originalLoad(config, callbacks, context);
+        loader.load = function(cfg, callbacks, context) {
+          if (cfg.url) cfg.url = _proxyResolve(cfg.url);
+          originalLoad(cfg, callbacks, context);
         };
         return loader;
       },
       fLoader: function(config) {
         var loader = new window.Hls.DefaultConfig.loader(config);
         var originalLoad = loader.load.bind(loader);
-        loader.load = function(config, callbacks, context) {
-          if (config.url && config.url.indexOf('/proxy/') === -1) {
-            config.url = '/proxy/' + config.url.replace('https://', '').replace('http://', '');
-          }
-          originalLoad(config, callbacks, context);
+        loader.load = function(cfg, callbacks, context) {
+          if (cfg.url) cfg.url = _proxyResolve(cfg.url);
+          originalLoad(cfg, callbacks, context);
         };
         return loader;
       }
