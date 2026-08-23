@@ -322,6 +322,8 @@ function _buildVideasyPlayer(container, apiUrl) {
   _syncAudioToVideo();
 
   var sd=document.createElement('div'); sd.id='sourceSelector'; sd.className='src-selector'; vw.appendChild(sd);
+  /* Stop clicks on controls bar from bubbling to player (which would close the bar) */
+  sd.addEventListener('click',function(e){e.stopPropagation();});
   /* dual panel removed - using inline dual stream instead */
   container.appendChild(vw);
 
