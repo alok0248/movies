@@ -58,7 +58,7 @@ function _tryHlsUrl(url, mediaEl, useProxy) {
     function _resolveUrl(u){if(!u)return u;if(u.indexOf("http")===0)return u;if(_origHost)return _origHost+u;return u;}
 
     var h = new window.Hls({
-      maxBufferLength: 300, maxMaxBufferLength: 600,
+      maxBufferLength: 30, maxMaxBufferLength: 60,
       xhrSetup: function(xhr, reqUrl) {
         var resolved = useProxy ? '/proxy/'+_resolveUrl(reqUrl).replace('https://','').replace('http://','') : _resolveUrl(reqUrl);
         xhr.open('GET', resolved, true);
@@ -251,7 +251,7 @@ function switchDualAudio(){
   if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
   if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.muted=false;document.body.appendChild(_audioEl);}
   _audioEl.muted=false; _audioEl.volume=1;
-  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:300,maxMaxBufferLength:600,
+  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:30,maxMaxBufferLength:60,
       xhrSetup:function(xhr,u){if(u&&u.indexOf('/proxy/')===-1){xhr.open('GET','/proxy/'+u.replace('https://','').replace('http://',''),true);}},
       fLoader:function(c){var l=new window.Hls.DefaultConfig.loader(c);var o=l.load.bind(l);l.load=function(cfg,cb,ctx){if(cfg.url&&cfg.url.indexOf('/proxy/')===-1){cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://','');}o(cfg,cb,ctx);};return l;}
     });h.loadSource((d.url));h.attachMedia(_audioEl);
