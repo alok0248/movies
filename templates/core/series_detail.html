@@ -106,7 +106,13 @@ html[data-theme="light"] .src-selector{background:rgba(245,245,250,.8)}
 html[data-theme="light"] .dual-panel{background:rgba(245,245,250,.85)}
 html[data-theme="light"] .src-selector{background:rgba(245,245,250,.9);border:1px solid rgba(0,0,0,.08)}
 html[data-theme="light"] .player-controls-row{background:linear-gradient(transparent,rgba(245,245,250,.8))}
-html[data-theme="light"] .src-dd-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);color:rgba(26,26,46,.7)}
+html[data-theme="light"] .src-dd-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);color:rgba(26,26,46,.8)}
+html[data-theme="light"] .src-dd-menu{background:rgba(255,255,255,.97);border-color:rgba(0,0,0,.12)}
+html[data-theme="light"] .src-dd-opt{color:rgba(26,26,46,.85)}
+html[data-theme="light"] .src-dd-opt:hover{background:rgba(0,0,0,.06);color:#000}
+html[data-theme="light"] .src-dd-opt.chosen{color:var(--brand,#e50914)}
+html[data-theme="light"] .src-dd-opt .opt-count{color:rgba(26,26,46,.5);background:rgba(0,0,0,.06)}
+html[data-theme="light"] .src-dd-label{color:rgba(26,26,46,.5)}
 html[data-theme="light"] .ctrl-toggle{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);color:rgba(26,26,46,.6)}
 html[data-theme="light"] .buf-ring{border-color:rgba(0,0,0,.1);border-top-color:var(--brand,#e50914)}{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1.2)}}
 
@@ -289,10 +295,10 @@ html[data-theme="light"] .ep-list-card .ep-desc{color:rgba(26,26,46,.45)}
 .src-dd.open .src-dd-btn .dd-icon{transform:rotate(180deg)}
 .src-dd-menu{position:absolute;bottom:calc(100% + 6px);left:0;z-index:50;min-width:180px;max-height:240px;overflow-y:auto;background:rgba(18,18,28,.97);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.7);backdrop-filter:blur(12px);display:none}
 .src-dd.open .src-dd-menu{display:block}
-.src-dd-opt{padding:6px 10px;border-radius:6px;color:rgba(255,255,255,.6);font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:space-between}
-.src-dd-opt:hover{background:rgba(255,255,255,.08);color:#fff}
+.src-dd-opt{padding:6px 10px;border-radius:6px;color:rgba(255,255,255,.9);font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:space-between}
+.src-dd-opt:hover{background:rgba(255,255,255,.12);color:#fff}
 .src-dd-opt.chosen{color:var(--brand,#e50914);font-weight:700}
-.src-dd-opt .opt-count{font-size:.6rem;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
+.src-dd-opt .opt-count{font-size:.6rem;color:rgba(255,255,255,.5);background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px}
 .src-dd-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);font-weight:700;margin-right:.4rem;flex-shrink:0}
 .src-active-info{font-size:.65rem;color:rgba(255,255,255,.5);margin-left:.25rem}
 .dual-panel{position:absolute;bottom:110px;left:10px;right:10px;z-index:25;display:none;background:rgba(255,255,255,.06);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,.12);transition:opacity .5s ease,transform .5s ease;box-shadow:0 8px 32px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)}
