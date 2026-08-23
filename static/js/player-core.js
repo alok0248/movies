@@ -37,6 +37,7 @@ function _initBufEvents(vid) {
   vid.addEventListener('seeked', function() { _hideBuf(); });
 }
 
+function _proxyUrl(u){if(!u)return u;return "/proxy/"+u.replace("https://","").replace("http://","");}
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
@@ -74,10 +75,20 @@ function _playHls(url, mediaEl) {
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); });
     h.on(window.Hls.Events.ERROR, function(evt, data) {
       if (data.fatal) {
-        console.error('HLS fatal error:', data.type, data.details);
+        console.error('HLS fatal error (direct):', data.type, data.details, '- retrying via proxy');
         h.destroy(); _mainHls = null;
-        mediaEl.src = url;
-        mediaEl.play().catch(function(){});
+        /* Retry with server proxy */
+        var proxied = _proxyUrl(url);
+        if (window.Hls && window.Hls.isSupported()) {
+          var h2 = new window.Hls({maxBufferLength:300, maxMaxBufferLength:600});
+          h2.loadSource(proxied); h2.attachMedia(mediaEl);
+          h2.on(window.Hls.Events.MANIFEST_PARSED, function(){mediaEl.play().catch(function(){});});
+          h2.on(window.Hls.Events.ERROR, function(e,d){if(d.fatal){h2.destroy();mediaEl.src=proxied;mediaEl.play().catch(function(){});}});
+          _mainHls = h2;
+        } else {
+          mediaEl.src = proxied;
+          mediaEl.play().catch(function(){});
+        }
       }
     });
     _mainHls = h;
