@@ -136,10 +136,10 @@ function _renderSourceList(){
 
 document.addEventListener('click',function(e){
   var btn=e.target.closest('[data-toggle]');
-  if(btn){var id=btn.getAttribute('data-toggle');var dd=document.getElementById(id);if(!dd)return;var wasOpen=dd.classList.contains('open');document.querySelectorAll('.src-dd').forEach(function(d){d.classList.remove('open');});if(!wasOpen)dd.classList.add('open');return;}
+  if(btn){var id=btn.getAttribute('data-toggle');var dd=document.getElementById(id);if(!dd)return;var wasOpen=dd.classList.contains('open');document.querySelectorAll('.src-dd').forEach(function(d){if(d!==dd)d.classList.remove('open');});if(!wasOpen)dd.classList.add('open');else dd.classList.remove('open');_resetAutoFold();return;}
   var opt=e.target.closest('[data-action]');
-  if(opt){var action=opt.getAttribute('data-action');var val=opt.getAttribute('data-value');document.querySelectorAll('.src-dd').forEach(function(d){d.classList.remove('open');});if(action==='pickQ'){_selQuality=val;_playSelected();_renderSourceList();}else if(action==='pickL'){_selLanguage=val;_playSelected();_renderSourceList();}return;}
-  if(!e.target.closest('.src-dd'))document.querySelectorAll('.src-dd').forEach(function(d){d.classList.remove('open');});
+  if(opt){var action=opt.getAttribute('data-action');var val=opt.getAttribute('data-value');document.querySelectorAll('.src-dd').forEach(function(d){d.classList.remove('open');});if(action==='pickQ'){_selQuality=val;_playSelected();_renderSourceList();}else if(action==='pickL'){_selLanguage=val;_playSelected();_renderSourceList();}_resetAutoFold();return;}
+  /* Don't close dropdowns on outside click — only auto-fold timer closes them */
 });
 
 function _playSelected() {
@@ -383,6 +383,10 @@ function _buildVideasyPlayer(container, apiUrl) {
     _startAutoFold();
   }
 
+  function _resetAutoFold(){
+    _startAutoFold();
+  }
+
   function _startAutoFold(){
     clearTimeout(_foldTimer);
     _foldTimer=setTimeout(function(){
@@ -396,9 +400,10 @@ function _buildVideasyPlayer(container, apiUrl) {
   /* Icon click: always unfold */
   icon.addEventListener('click',function(e){e.stopPropagation();_openBar();});
 
-  /* Player click anywhere: fold everything to icon */
+  /* Player click anywhere: fold everything to icon — but NOT if clicking dropdown controls */
   vw.addEventListener('click',function(e){
     if(e.target===icon||icon.contains(e.target)) return;
+    if(e.target.closest('.src-dd')||e.target.closest('.dual-panel-inline')||e.target.closest('.player-collapse-icon')) return;
     if(_state==='open'){_foldBar();}
     else if(_state==='hidden'){_showIcon();}
   });
