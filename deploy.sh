@@ -31,6 +31,10 @@ log "Code updated to $(git rev-parse --short HEAD)"
 log "Running migrations..."
 python manage.py migrate --noinput 2>&1 | tee -a "$LOG_FILE" || log "Migration warning (non-fatal)"
 
+# Ensure nginx (www-data) can traverse directories to serve static files
+chmod o+x /home 2>/dev/null || true
+chmod o+x /home/ubuntu 2>/dev/null || true
+
 # Collect static files
 log "Collecting static files..."
 python manage.py collectstatic --noinput 2>&1 | tee -a "$LOG_FILE" || true
