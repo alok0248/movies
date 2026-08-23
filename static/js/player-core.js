@@ -408,8 +408,8 @@ function _buildVideasyPlayer(container, apiUrl) {
   }
 
   /* === Events === */
-  /* Icon click: always unfold */
-  icon.addEventListener('click',function(e){e.stopPropagation();_openBar();});
+  /* Icon click: open bar (never close — only timer closes) */
+  icon.addEventListener('click',function(e){e.stopPropagation();if(_state!=='open')_openBar();});
 
   /* Only icon click or 5s idle closes the bar — never close on video/player clicks */
   vw.addEventListener('click',function(e){if(e.target===icon||icon.contains(e.target))return;if(_state==='hidden')_showIcon();});
