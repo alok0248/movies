@@ -494,18 +494,25 @@ function _buildVideasyPlayer(container, apiUrl) {
 }
 
 function _fetchFromServer(container, apiUrl, vid) {
-  fetch(apiUrl).then(function(r){return r.json()}).then(function(d){
+  console.log('[Player] Fetching sources from:', apiUrl);
+  fetch(apiUrl).then(function(r){
+    console.log('[Player] API response status:', r.status);
+    return r.json();
+  }).then(function(d){
+    console.log('[Player] Results:', d.results ? d.results.length : 0, 'success:', d.success);
     if(d.success&&d.results&&d.results.length){
       d.results.forEach(function(s){_addSource(s);});
       _playerPlaying=true;
+      console.log('[Player] Playing first source:', d.results[0].url.substring(0,80));
       _playHls(d.results[0].url,vid);
       hidePlayerLoading();
     }else{
+      console.error('[Player] No results:', d);
       container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
       hidePlayerLoading();
     }
   }).catch(function(err){
-    console.error('Server fetch failed:',err);
+    console.error('[Player] Fetch failed:',err);
     container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">Failed to load streams</div>';
     hidePlayerLoading();
   });
