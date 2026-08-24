@@ -37,84 +37,57 @@ function _initBufEvents(vid) {
   vid.addEventListener('seeked', function() { _hideBuf(); });
 }
 
-function _proxyUrl(u){if(!u)return u;return "/proxy/"+u.replace("https://","").replace("http://","");}
-function _proxyUrl(u){if(!u)return u;return "/proxy/"+u.replace("https://","").replace("http://","");}
-var _triedUrls={};
+var _sourceQueue = []; var _srcIdx = 0; var _triedUrls = {};
 
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
-  _triedUrls={}; _triedUrls[url]=1;
-  if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
-  _tryHlsUrl(url, mediaEl, false);
+  _srcIdx = 0;
+  _sourceQueue = [];
+  var seen = {};
+  _allSources.forEach(function(s) { if (!seen[s.url]) { seen[s.url] = 1; _sourceQueue.push(s); } });
+  if (_sourceQueue.length && _sourceQueue[0].url !== url) {
+    for (var i = 0; i < _sourceQueue.length; i++) {
+      if (_sourceQueue[i].url === url) { _sourceQueue.splice(i, 1); break; }
+    }
+    _sourceQueue.unshift({url: url, quality: '?', language: 'Original', server: 'first'});
+  }
+  _triedUrls = {};
+  _tryCurrentSource(mediaEl);
 }
 
-function _tryHlsUrl(url, mediaEl, useProxy) {
-  if (!mediaEl || !url) return;
+function _tryCurrentSource(mediaEl) {
+  if (_srcIdx >= _sourceQueue.length) { console.error('All sources exhausted'); hidePlayerLoading(); return; }
+  var s = _sourceQueue[_srcIdx];
+  if (_triedUrls[s.url]) { _srcIdx++; _tryCurrentSource(mediaEl); return; }
+  _triedUrls[s.url] = 1;
+  console.log('PLAY: '+s.server+' '+s.quality+' '+s.url.substring(0,80));
+  var url = s.url;
+
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
-  var loadUrl = useProxy ? _proxyUrl(url) : url;
 
-  if (loadUrl.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    var _origHost="";try{_origHost=new URL(url).origin;}catch(e){}
-    function _resolveUrl(u){if(!u)return u;if(u.indexOf("http")===0)return u;if(_origHost)return _origHost+u;return u;}
-
-    var h = new window.Hls({
-      maxBufferLength: 10, maxMaxBufferLength: 300,
-      xhrSetup: function(xhr, reqUrl) {
-        var resolved = useProxy ? '/proxy/'+_resolveUrl(reqUrl).replace('https://','').replace('http://','') : _resolveUrl(reqUrl);
-        xhr.open('GET', resolved, true);
-      },
-      pLoader: function(config) {
-        var loader = new window.Hls.DefaultConfig.loader(config);
-        var originalLoad = loader.load.bind(loader);
-        loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) { cfg.url = _resolveUrl(cfg.url); if (useProxy && cfg.url.indexOf('/proxy/')===-1) cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://',''); }
-          originalLoad(cfg, callbacks, context);
-        };
-        return loader;
-      },
-      fLoader: function(config) {
-        var loader = new window.Hls.DefaultConfig.loader(config);
-        var originalLoad = loader.load.bind(loader);
-        loader.load = function(cfg, callbacks, context) {
-          if (cfg.url) { cfg.url = _resolveUrl(cfg.url); if (useProxy && cfg.url.indexOf('/proxy/')===-1) cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://',''); }
-          originalLoad(cfg, callbacks, context);
-        };
-        return loader;
-      }
-    });
-    h.loadSource(loadUrl); h.attachMedia(mediaEl);
+  if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
+    var h = new window.Hls({ maxBufferLength: 10, maxMaxBufferLength: 300, enableWorker: true });
+    h.loadSource(url); h.attachMedia(mediaEl);
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
     h.on(window.Hls.Events.ERROR, function(evt, data) {
-      if (data.fatal) {
-        h.destroy(); _mainHls = null;
-        if (!useProxy) { console.error('Direct failed, proxy:', url.substring(0,60)); _tryHlsUrl(url, mediaEl, true); }
-        else { console.error('Proxy failed, next source'); _tryNextSource(mediaEl); }
-      }
+      if (data.fatal) { h.destroy(); _mainHls = null; console.error('HLS failed:', s.url.substring(0,60)); _advanceSource(mediaEl); }
     });
     _mainHls = h;
-  } else if (loadUrl.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = loadUrl;
+  } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
+    mediaEl.src = url;
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
-    mediaEl.addEventListener('error', function() { _tryNextSource(mediaEl); }, {once:true});
+    mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
   } else {
-    mediaEl.src = loadUrl;
-    mediaEl.play().catch(function() {});
-    mediaEl.addEventListener('error', function() { _tryNextSource(mediaEl); }, {once:true});
+    mediaEl.src = url; mediaEl.play().catch(function() {});
+    mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
   }
 }
 
-function _tryNextSource(mediaEl) {
-  var seen={};
-  for (var i=0; i<_allSources.length; i++) {
-    var s=_allSources[i]; var k=s.url;
-    if (!_triedUrls[k] && !seen[k]) {
-      _triedUrls[k]=1; seen[k]=1;
-      console.log('Next source:', s.server, s.quality, s.url.substring(0,60));
-      _tryHlsUrl(s.url, mediaEl, false);
-      return;
-    }
-  }
-  console.error('All sources exhausted');
+function _advanceSource(mediaEl) { _srcIdx++; _tryCurrentSource(mediaEl); }
+
+function _openPopup() {
+  var match = _findBestMatch();
+  if (match) window.open(match.s.url, '_blank', 'width=1200,height=700,menubar=no,toolbar=no');
 }
 function _addSource(s) { _allSources.push(s); _renderSourceList(); }
 
@@ -141,7 +114,8 @@ function _renderSourceList(){
   lh+='<div class="src-dd-menu">';
   languages.forEach(function(l){var cls=l===_selLanguage?' chosen':'';lh+='<div class="src-dd-opt'+cls+'" data-action="pickL" data-value="'+l+'">'+l+'<span class="opt-count">'+lMap[l].length+'</span></div>';});
   lh+='</div></div>';
-  box.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>'+qh+lh+'<span class="src-active-info" id="srcInfo"></span>';
+  var popBtn='<div class="ctrl-pop-btn" id="popBtn" onclick="_openPopup()" title="Open in popup player">&#9654; Pop</div>';
+  box.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>'+qh+lh+popBtn+'<span class="src-active-info" id="srcInfo"></span>';
   box.classList.add('open');
   _updateSrcInfo();
 }
@@ -252,8 +226,6 @@ function switchDualAudio(){
   if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.muted=false;document.body.appendChild(_audioEl);}
   _audioEl.muted=false; _audioEl.volume=1;
   if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({maxBufferLength:10,maxMaxBufferLength:300,
-      xhrSetup:function(xhr,u){if(u&&u.indexOf('/proxy/')===-1){xhr.open('GET','/proxy/'+u.replace('https://','').replace('http://',''),true);}},
-      fLoader:function(c){var l=new window.Hls.DefaultConfig.loader(c);var o=l.load.bind(l);l.load=function(cfg,cb,ctx){if(cfg.url&&cfg.url.indexOf('/proxy/')===-1){cfg.url='/proxy/'+cfg.url.replace('https://','').replace('http://','');}o(cfg,cb,ctx);};return l;}
     });h.loadSource((d.url));h.attachMedia(_audioEl);
     h.on(window.Hls.Events.MANIFEST_PARSED,function(){
       var v=document.getElementById('mainVideo');
@@ -479,32 +451,8 @@ function _buildVideasyPlayer(container, apiUrl) {
     return;
   }
 
-  /* Client-side extraction - runs entirely in browser, no server needed */
-  if (typeof ClientExtract !== 'undefined') {
-    ClientExtract.extractSources(tmdbId, mediaType, season, episode,
-      function onSource(s) {
-        _addSource(s);
-        if (!_playerPlaying) {
-          _playerPlaying = true;
-          _playHls(s.url, vid);
-          hidePlayerLoading();
-        }
-      },
-      function onDone() {
-        if (!_playerPlaying) {
-          container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
-          hidePlayerLoading();
-        }
-      }
-    ).catch(function(err) {
-      console.error('Client extraction failed:', err);
-      /* Fallback to server API */
-      _fetchFromServer(container, apiUrl, vid);
-    });
-  } else {
-    /* Fallback to server API */
-    _fetchFromServer(container, apiUrl, vid);
-  }
+  /* Server extracts URLs, browser plays via iframe/HLS.js */
+  _fetchFromServer(container, apiUrl, vid);
 
   vid.addEventListener('playing',function(){hidePlayerLoading();},{once:true});
   vid.addEventListener('error',function(){hidePlayerLoading();},{once:true});

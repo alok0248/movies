@@ -1,7 +1,7 @@
 /* ===== Client-Side Source Extraction ===== */
 /* Runs entirely in the browser - no server needed for extraction */
 var ClientExtract = (function() {
-  var API = 'https://api.speedracelight.com';
+  var API = '/proxy/api.speedracelight.com';
   var SERVERS = [
     ['cdn', 'Yoru'], ['vsrc', 'Neon'], ['m4uhd', 'Breach'],
     ['downloader2', 'Cypher'], ['lamovie', 'Omen'], ['meine', 'Killjoy'],
