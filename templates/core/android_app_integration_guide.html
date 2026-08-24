@@ -104,11 +104,132 @@
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-sm mt-4">
+    <div class="card bg-dark border-secondary shadow-sm mt-4 mb-4">
         <div class="card-body">
             <h5 class="text-white">4. Android handling</h5>
             <div class="text-secondary small">On HTTP <code>200</code>, parse the JSON payload and continue normally. On HTTP <code>426</code>, parse the update payload, display its message, and open the returned <code>apk_url</code> when available. HTTP <code>403</code> means the credentials or identity were rejected. HTTP <code>404</code> means the endpoint is disabled or does not exist.</div>
         </div>
     </div>
+
+    <!-- ===== User Sync API Section ===== -->
+    <div class="card bg-dark border-success shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="text-success mb-0"><i class="fas fa-sync-alt me-2"></i>5. User Sync API</h5>
+                <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">View All Synced Users &rarr;</a>
+            </div>
+            <p class="text-secondary small mb-3">The Android app sends user login/sync data to this endpoint. Users are stored and their subscription status is returned.</p>
+
+            <div class="row g-3 small mb-3">
+                <div class="col-md-6">
+                    <div class="text-secondary">Endpoint</div>
+                    <code class="text-success text-break">{{ user_sync_endpoint }}</code>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-secondary">Method</div>
+                    <code class="text-white">POST</code>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-secondary">Content-Type</div>
+                    <code class="text-white">application/json</code>
+                </div>
+            </div>
+
+            <div class="row g-3 small mb-3">
+                <div class="col-md-4">
+                    <div class="text-secondary">Authorization</div>
+                    <code class="text-white">Basic {{ basic_auth_value }}</code>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-secondary">X-Android-App</div>
+                    <code class="text-white">{{ android_app.allowed_endpoint|default:'#198' }}</code>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-secondary">X-Android-Build</div>
+                    <code class="text-white">{{ android_app.allowed_build_id|default:'350' }}</code>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-2">
+                <div class="col-md-4">
+                    <div class="card bg-black border-secondary">
+                        <div class="card-body text-center py-3">
+                            <div class="h3 text-success mb-0">{{ synced_total }}</div>
+                            <div class="text-secondary small">Total Users</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-black border-secondary">
+                        <div class="card-body text-center py-3">
+                            <div class="h3 text-info mb-0">{{ synced_subscribed }}</div>
+                            <div class="text-secondary small">Subscribed</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-black border-secondary">
+                        <div class="card-body text-center py-3">
+                            <div class="h3 text-warning mb-0">{{ synced_total|add:"-"|add:synced_subscribed }}</div>
+                            <div class="text-secondary small">Free Users</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent synced users -->
+    {% if synced_users %}
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3">Recent Synced Users</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0 small">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Device</th>
+                            <th>Subscription</th>
+                            <th>Last Synced</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in synced_users %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if u.photo_url %}
+                                        <img src="{{ u.photo_url }}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
+                                    {% else %}
+                                        <div style="width:28px;height:28px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.7rem;">{{ u.display_name|first|upper }}</div>
+                                    {% endif %}
+                                    <span class="text-white">{{ u.display_name|default:u.email }}</span>
+                                </div>
+                            </td>
+                            <td><code>{{ u.email }}</code></td>
+                            <td>{{ u.device_model|default:'-' }}</td>
+                            <td>
+                                {% if u.is_subscribed %}
+                                    <span class="badge bg-success">{{ u.plan|default:'Subscribed' }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Free</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ u.last_synced_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if synced_total > 10 %}
+            <div class="text-center mt-3">
+                <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">View All {{ synced_total }} Users</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

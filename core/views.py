@@ -2555,12 +2555,23 @@ def android_app_integration_guide(request, app_id):
         f"{android_app.access_username}:{android_app.access_password}".encode('utf-8')
     ).decode('utf-8')
 
+    # Synced users data from /api/user/sync
+    from .models import SyncedUser
+    synced_users = SyncedUser.objects.all().order_by('-last_synced_at')[:10]
+    synced_total = SyncedUser.objects.count()
+    synced_subscribed = SyncedUser.objects.filter(is_subscribed=True).count()
+    user_sync_endpoint = request.build_absolute_uri('/api/user/sync/')
+
     return render(request, 'core/android_app_integration_guide.html', {
         'android_app': android_app,
         'app_endpoint': app_endpoint,
         'sample_success_payload': sample_success_payload,
         'sample_update_payload_json': json.dumps(sample_update_payload, indent=2),
         'basic_auth_value': basic_auth_value,
+        'synced_users': synced_users,
+        'synced_total': synced_total,
+        'synced_subscribed': synced_subscribed,
+        'user_sync_endpoint': user_sync_endpoint,
     })
 
 
