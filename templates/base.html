@@ -25,28 +25,29 @@
                 return false;
             }
         });
-        /* DevTools detection — blank the page if DevTools is open */
+        /* DevTools detection — show error page if DevTools is open */
         (function() {
             var devtoolsOpen = false;
             var threshold = 160;
+            function _blockPage(type) {
+                document.open();
+                document.write('<!DOCTYPE html><html><head><title>Access Denied - 403</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0f;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}.err-box{text-align:center;max-width:500px;padding:2rem}.err-code{font-size:6rem;font-weight:800;color:#e50914;line-height:1;text-shadow:0 0 40px rgba(229,9,20,.3)}.err-title{font-size:1.5rem;margin:1rem 0 .5rem;color:#fff}.err-msg{color:#888;font-size:.9rem;line-height:1.6;margin-bottom:2rem}.err-icon{font-size:3rem;margin-bottom:1rem;filter:grayscale(.2)}.err-line{width:80px;height:3px;background:#e50914;margin:1.5rem auto;border-radius:2px}.blocked-list{text-align:left;margin:1rem auto;max-width:300px;color:#666;font-size:.8rem;line-height:2}.blocked-list span{color:#e50914;margin-right:.5rem}</style></head><body><div class="err-box"><div class="err-icon">🚫</div><div class="err-code">403</div><div class="err-title">Access Denied</div><div class="err-line"></div><div class="err-msg">Your access to this page has been blocked because developer tools were detected on this browser.<br><br>This action violates our terms of service.</div><div class="blocked-list"><span>✖</span> Right-click disabled<br><span>✖</span> DevTools disabled<br><span>✖</span> View-source disabled<br><span>✖</span> Debugger blocked</div><div class="err-msg" style="color:#555;font-size:.75rem;margin-top:2rem">If you believe this is an error, please contact support.</div></div></body></html>');
+                document.close();
+            }
             setInterval(function() {
                 var w = window.outerWidth - window.innerWidth > threshold;
                 var h = window.outerHeight - window.innerHeight > threshold;
                 if (w || h) {
-                    if (!devtoolsOpen) {
-                        devtoolsOpen = true;
-                        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:sans-serif;font-size:1.2rem;text-align:center;padding:2rem;"><div>🚫 Developer tools detected.<br><small style="color:#888;margin-top:.5rem;display:block;">Please close DevTools to continue.</small></div></div>';
-                    }
+                    if (!devtoolsOpen) { devtoolsOpen = true; _blockPage('devtools'); }
                 } else {
                     if (devtoolsOpen) { devtoolsOpen = false; location.reload(); }
                 }
             }, 1000);
-            /* Also detect debugger statement trick */
             setInterval(function() {
                 var start = performance.now();
                 debugger;
                 if (performance.now() - start > 100) {
-                    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:sans-serif;font-size:1.2rem;text-align:center;padding:2rem;"><div>🚫 Debugger detected.<br><small style="color:#888;margin-top:.5rem;display:block;">Please close DevTools to continue.</small></div></div>';
+                    if (!devtoolsOpen) { devtoolsOpen = true; _blockPage('debugger'); }
                 }
             }, 2000);
         })();
