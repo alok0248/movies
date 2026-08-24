@@ -78,9 +78,9 @@ function _tryCurrentSource(mediaEl) {
       fragLoadingTimeOut: 30000,
       manifestLoadingTimeOut: 15000,
       levelLoadingTimeOut: 15000,
-      fragLoadingMaxRetry: 8,
-      levelLoadingMaxRetry: 6,
-      manifestLoadingMaxRetry: 6,
+      fragLoadingMaxRetry: 3,
+      levelLoadingMaxRetry: 2,
+      manifestLoadingMaxRetry: 3,
       startLevel: -1,
       capLevelToPlayerSize: true,
       stretchShortVideoTrack: true,
@@ -93,17 +93,9 @@ function _tryCurrentSource(mediaEl) {
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
     h.on(window.Hls.Events.ERROR, function(evt, data) {
       if (data.fatal) {
-        if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
-          console.warn('HLS network error, retrying...');
-          h.startLoad();
-        } else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
-          console.warn('HLS media error, recovering...');
-          h.recoverMediaError();
-        } else {
-          h.destroy(); _mainHls = null;
-          console.error('HLS fatal:', s.url.substring(0,60));
-          _advanceSource(mediaEl);
-        }
+        console.warn('[Player] HLS error:', data.type, data.details, 'on', s.server, s.quality);
+        h.destroy(); _mainHls = null;
+        _advanceSource(mediaEl);
       }
     });
     _mainHls = h;
