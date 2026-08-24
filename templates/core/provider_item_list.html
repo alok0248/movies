@@ -1,24 +1,60 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="container mt-5 mb-5">
+<div class="container mt-4 mb-5">
     <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-4">
-        <h1 class="text-white mb-0"><i class="fas fa-play-circle me-2 text-info"></i> Providers</h1>
+        <h1 class="text-white mb-0"><i class="fas fa-play-circle me-2 text-info"></i> Providers <span class="badge bg-secondary fs-6">{{ total }}</span></h1>
         <div class="d-flex gap-2">
             <a href="{% url 'watch_region_list' %}" class="btn btn-outline-light">Regions</a>
             <a href="{% url 'provider_item_create' %}" class="btn btn-primary">Add Provider</a>
-            <form method="post" action="{% url 'provider_item_sync' %}">{% csrf_token %}<button class="btn btn-outline-info" type="submit">Sync from TMDB</button></form>
+            <form method="post" action="{% url 'provider_item_sync' %}" class="d-inline"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button class="btn btn-outline-info" type="submit"><i class="fas fa-sync me-1"></i>Sync from TMDB</button></form>
         </div>
     </div>
-    {% if messages %}{% for message in messages %}<div class="alert alert-info">{{ message }}</div>{% endfor %}{% endif %}
-    <div class="card bg-dark border-secondary"><div class="card-body"><div class="table-responsive">
-        <table class="table table-dark table-hover align-middle">
+    {% if messages %}{% for message in messages %}<div class="alert alert-info alert-dismissible fade show">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+    <!-- Stats -->
+    <div class="row g-2 mb-3">
+        <div class="col-auto"><span class="badge bg-success">Enabled: {{ enabled_count }}</span></div>
+        <div class="col-auto"><span class="badge bg-danger">Disabled: {{ disabled_count }}</span></div>
+        <div class="col-auto"><span class="badge bg-info">Movies: {{ movies_count }}</span></div>
+        <div class="col-auto"><span class="badge bg-warning text-dark">TV: {{ tv_count }}</span></div>
+    </div>
+
+    <!-- Search -->
+    <form class="mb-3">
+        <div class="input-group input-group-sm">
+            <input type="text" name="q" class="form-control bg-dark text-white border-secondary" placeholder="Search providers..." value="{{ search }}">
+            <button class="btn btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
+            {% if search %}<a href="{% url 'provider_item_list' %}" class="btn btn-outline-danger"><i class="fas fa-times"></i></a>{% endif %}
+        </div>
+    </form>
+
+    <div class="card bg-dark border-secondary"><div class="card-body p-0"><div class="table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
             <thead><tr><th>Name</th><th>TMDB ID</th><th>Movies</th><th>TV</th><th>Enabled</th><th>Actions</th></tr></thead>
             <tbody>{% for provider in providers %}<tr>
-                <td>{{ provider.name }}<br><code>{{ provider.slug }}</code></td><td>{{ provider.tmdb_provider_id|default:'Manual' }}</td>
-                <td>{{ provider.supports_movies|yesno:'Yes,No' }}</td><td>{{ provider.supports_tv|yesno:'Yes,No' }}</td><td>{{ provider.is_enabled|yesno:'Yes,No' }}</td>
-                <td class="d-flex flex-wrap gap-1"><a href="{% url 'provider_item_edit' provider.id %}" class="btn btn-sm btn-outline-light">Edit</a><form method="post" action="{% url 'provider_item_toggle' provider.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-warning" type="submit">{% if provider.is_enabled %}Disable{% else %}Enable{% endif %}</button></form><a href="{% url 'provider_item_delete' provider.id %}" class="btn btn-sm btn-outline-danger">Delete</a></td>
-            </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">No providers found. Use Sync from TMDB.</td></tr>{% endfor %}</tbody>
+                <td>
+                    {% if provider.logo_path %}<img src="https://image.tmdb.org/t/p/w92{{ provider.logo_path }}" alt="" style="height:24px;margin-right:6px;vertical-align:middle;border-radius:4px;">{% endif %}
+                    {{ provider.name }}<br><small class="text-secondary">{{ provider.slug }}</small>
+                </td>
+                <td>{{ provider.tmdb_provider_id|default:'Manual' }}</td>
+                <td>{{ provider.supports_movies|yesno:'Yes,No' }}</td><td>{{ provider.supports_tv|yesno:'Yes,No' }}</td>
+                <td>{% if provider.is_enabled %}<span class="badge bg-success">Enabled</span>{% else %}<span class="badge bg-danger">Disabled</span>{% endif %}</td>
+                <td class="d-flex flex-wrap gap-1"><a href="{% url 'provider_item_edit' provider.id %}" class="btn btn-sm btn-outline-light">Edit</a><form method="post" action="{% url 'provider_item_toggle' provider.id %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-warning" type="submit">{% if provider.is_enabled %}Disable{% else %}Enable{% endif %}</button></form><a href="{% url 'provider_item_delete' provider.id %}" class="btn btn-sm btn-outline-danger">Delete</a></td>
+            </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No providers found. Click "Sync from TMDB" to fetch all providers.</td></tr>{% endfor %}</tbody>
         </table>
     </div></div></div>
+
+    <!-- Pagination -->
+    {% if providers.has_other_pages %}
+    <nav class="mt-3"><ul class="pagination pagination-sm justify-content-center">
+        {% if providers.has_previous %}<li class="page-item"><a class="page-link bg-dark text-white border-secondary" href="?page=1{% if search %}&q={{ search }}{% endif %}">&laquo;</a></li><li class="page-item"><a class="page-link bg-dark text-white border-secondary" href="?page={{ providers.previous_page_number }}{% if search %}&q={{ search }}{% endif %}">&lsaquo;</a></li>{% endif %}
+        {% for num in providers.paginator.page_range %}
+            {% if providers.number == num %}<li class="page-item active"><span class="page-link" style="background:var(--brand,#e50914);border-color:var(--brand,#e50914)">{{ num }}</span></li>
+            {% elif num > providers.number|add:'-4' and num < providers.number|add:'4' %}<li class="page-item"><a class="page-link bg-dark text-white border-secondary" href="?page={{ num }}{% if search %}&q={{ search }}{% endif %}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+        {% if providers.has_next %}<li class="page-item"><a class="page-link bg-dark text-white border-secondary" href="?page={{ providers.next_page_number }}{% if search %}&q={{ search }}{% endif %}">&rsaquo;</a></li><li class="page-item"><a class="page-link bg-dark text-white border-secondary" href="?page={{ providers.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}">&raquo;</a></li>{% endif %}
+    </ul></nav>
+    {% endif %}
 </div>
 {% endblock %}

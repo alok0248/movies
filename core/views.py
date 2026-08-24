@@ -2272,8 +2272,32 @@ def content_row_delete(request, row_id):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def provider_item_list(request):
+    from django.core.paginator import Paginator
     providers = ProviderItem.objects.all().order_by('display_priority', 'name')
-    return render(request, 'core/provider_item_list.html', {'providers': providers})
+    search = request.GET.get('q', '').strip()
+    if search:
+        providers = providers.filter(
+            models.Q(name__icontains=search) |
+            models.Q(slug__icontains=search) |
+            models.Q(tmdb_provider_id=search) if search.isdigit() else models.Q(name__icontains=search)
+        )
+    total = ProviderItem.objects.count()
+    enabled_count = ProviderItem.objects.filter(is_enabled=True).count()
+    disabled_count = total - enabled_count
+    movies_count = ProviderItem.objects.filter(supports_movies=True).count()
+    tv_count = ProviderItem.objects.filter(supports_tv=True).count()
+    paginator = Paginator(providers, 50)
+    page = request.GET.get('page')
+    providers = paginator.get_page(page)
+    return render(request, 'core/provider_item_list.html', {
+        'providers': providers,
+        'total': total,
+        'enabled_count': enabled_count,
+        'disabled_count': disabled_count,
+        'movies_count': movies_count,
+        'tv_count': tv_count,
+        'search': search,
+    })
 
 
 @login_required
