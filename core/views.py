@@ -5229,10 +5229,22 @@ def proxy_view(request, target):
             http_resp['Access-Control-Allow-Origin'] = '*'
             return http_resp
 
-        # Non-m3u8: stream as-is
+        # Non-m3u8: stream as-is, but fix content type for CDN-obfuscated video segments
+        # CDN returns text/html for .html segments that are actually MPEG-TS video data
+        real_content_type = content_type
+        first_chunk = resp.iter_content(chunk_size=16384)
+        try:
+            first_data = next(first_chunk)
+        except StopIteration:
+            first_data = b''
+        # Detect MPEG-TS by magic bytes (0x47) or FFmpeg signature
+        if first_data and (first_data[:1] == b'\x47' or b'FFmpeg' in first_data[:32] or b'ftyp' in first_data[:12]):
+            real_content_type = 'video/mp2t'
         def stream_chunks():
             try:
-                for chunk in resp.iter_content(chunk_size=65536):
+                if first_data:
+                    yield first_data
+                for chunk in first_chunk:
                     if chunk:
                         yield chunk
             finally:
@@ -5240,7 +5252,7 @@ def proxy_view(request, target):
                     resp.close()
                 except Exception:
                     pass
-        http_resp = StreamingHttpResponse(stream_chunks(), content_type=content_type)
+        http_resp = StreamingHttpResponse(stream_chunks(), content_type=real_content_type)
         http_resp['Access-Control-Allow-Origin'] = '*'
         http_resp['Accept-Ranges'] = 'bytes'
         if content_length:
