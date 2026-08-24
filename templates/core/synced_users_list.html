@@ -3,18 +3,65 @@
 <div class="container mt-5 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
-            <h1 class="text-white mb-1"><i class="fas fa-mobile-alt me-2 text-success"></i>Synced Users</h1>
-            <p class="text-secondary mb-0">Android app users who have synced via the user sync API.</p>
+            <h1 class="text-white mb-1"><i class="fas fa-users me-2 text-success"></i>Synced Users</h1>
+            <p class="text-secondary mb-0">All Android app users who have synced via the user sync API.</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">&larr; Back</a>
+            <a href="{% url 'android_app_dashboard' %}" class="btn btn-outline-light">&larr; Back to Analytics</a>
         </div>
     </div>
 
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="display-5 text-white fw-bold">{{ total }}</div>
+                    <div class="text-secondary small mt-1"><i class="fas fa-users me-1"></i>Total Users</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-success shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="display-5 text-success fw-bold">{{ subscribed }}</div>
+                    <div class="text-secondary small mt-1"><i class="fas fa-crown me-1"></i>Subscribed</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="display-5 text-warning fw-bold">{{ free }}</div>
+                    <div class="text-secondary small mt-1"><i class="fas fa-user me-1"></i>Free Users</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-info shadow-sm h-100">
+                <div class="card-body text-center">
+                    {% if total > 0 %}
+                        <div class="display-5 text-info fw-bold">{{ subscribed|floatformat:0 }}%</div>
+                    {% else %}
+                        <div class="display-5 text-info fw-bold">0%</div>
+                    {% endif %}
+                    <div class="text-secondary small mt-1"><i class="fas fa-chart-pie me-1"></i>Conversion</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
     <div class="card bg-dark border-secondary shadow-lg">
-        <div class="card-body">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <span class="text-white fw-semibold">All Users ({{ total }})</span>
+            <div class="input-group input-group-sm" style="max-width:250px;">
+                <input type="text" id="userSearch" class="form-control bg-dark text-white border-secondary" placeholder="Search users..." oninput="filterUsers()">
+            </div>
+        </div>
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle mb-0 small">
+                <table class="table table-dark table-hover align-middle mb-0 small" id="usersTable">
                     <thead>
                         <tr>
                             <th>User</th>
@@ -25,54 +72,47 @@
                             <th>Plan</th>
                             <th>Valid Until</th>
                             <th>Last Synced</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for u in users %}
-                        <tr>
+                        <tr class="user-row" style="cursor:pointer;" onclick="window.location='{% url 'synced_user_detail' u.id %}'">
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     {% if u.photo_url %}
-                                        <img src="{{ u.photo_url }}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+                                        <img src="{{ u.photo_url }}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid {% if u.is_subscribed %}#22c55e{% else %}#64748b{% endif %};">
                                     {% else %}
-                                        <div style="width:32px;height:32px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.8rem;">{{ u.display_name|first|upper }}</div>
+                                        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,{% if u.is_subscribed %}#22c55e,#16a34a{% else %}#64748b,#475569{% endif %});display:flex;align-items:center;justify-content:center;color:#fff;font-size:.85rem;font-weight:600;">{{ u.display_name|first|upper }}</div>
                                     {% endif %}
                                     <div>
                                         <div class="fw-semibold text-white">{{ u.display_name|default:u.email }}</div>
-                                        <div class="text-secondary small">{{ u.google_id }}</div>
+                                        <div class="text-secondary small">ID: {{ u.google_id|truncatechars:12 }}</div>
                                     </div>
                                 </div>
                             </td>
                             <td><code class="text-break">{{ u.email }}</code></td>
                             <td>
-                                <div>{{ u.device_model|default:'-' }}</div>
-                                <div class="text-secondary small">{{ u.os_version }}</div>
+                                <div class="text-white">{{ u.device_model|default:'-' }}</div>
+                                <div class="text-secondary small">Android {{ u.os_version }}</div>
                             </td>
                             <td><code>{{ u.app_version|default:'-' }}</code></td>
                             <td>
                                 {% if u.is_subscribed %}
-                                    <span class="badge bg-success">Subscribed</span>
+                                    <span class="badge bg-success"><i class="fas fa-check me-1"></i>Subscribed</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Free</span>
                                 {% endif %}
                             </td>
-                            <td>{{ u.plan|default:'-' }}</td>
-                            <td>{% if u.valid_until %}{{ u.valid_until }}{% else %}<span class="text-secondary">-</span>{% endif %}</td>
-                            <td>{{ u.last_synced_at }}</td>
-                            <td>
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <a href="{% url 'synced_user_edit' u.id %}" class="btn btn-sm btn-warning">Edit</a>
-                                    <form method="post" action="{% url 'synced_user_delete' u.id %}" onsubmit="return confirm('Delete this user?')">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
+                            <td><span class="text-white">{{ u.plan|default:'-' }}</span></td>
+                            <td>{% if u.valid_until %}<span class="text-white">{{ u.valid_until }}</span>{% else %}<span class="text-secondary">-</span>{% endif %}</td>
+                            <td><span class="text-secondary">{{ u.last_synced_at }}</span></td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-secondary py-5">No synced users yet.</td>
+                            <td colspan="8" class="text-center text-secondary py-5">
+                                <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                No synced users yet. Users will appear here when they connect via the sync API.
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -81,4 +121,15 @@
         </div>
     </div>
 </div>
+
+<script>
+function filterUsers() {
+    var query = document.getElementById('userSearch').value.toLowerCase();
+    var rows = document.querySelectorAll('#usersTable tbody .user-row');
+    rows.forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = text.includes(query) ? '' : 'none';
+    });
+}
+</script>
 {% endblock %}
