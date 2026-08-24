@@ -5153,25 +5153,105 @@ def proxy_view(request, target):
     Proxy requests to CDN / stream servers.
     Reconstructs the full URL from the path, tries with videasy.to Origin,
     then falls back without Origin on 403.
+    Rewrites .m3u8 manifests so segment URLs also go through the proxy.
     """
+    import requests as _req
+    import urllib.parse as _urlparse
+
     # Reconstruct full URL — auto-detect http vs https
     if target.startswith("http/"):
         target_url = "http://" + target[5:]
     else:
         target_url = "https://" + target
 
-    # Try with videasy.to Origin first (needed for CDN servers)
-    response = _proxy_fetch_url(target_url, origin=_VIDEASY_ORIGIN,
-                                referer=f"{_VIDEASY_ORIGIN}/")
-    if response is not None:
-        return response
+    headers = {
+        'User-Agent': _VIDEASY_USER_AGENT,
+        'Origin': _VIDEASY_ORIGIN,
+        'Referer': f"{_VIDEASY_ORIGIN}/",
+    }
 
-    # Retry without Origin (for servers that reject fake Origin)
-    response = _proxy_fetch_url(target_url, origin=None, referer=None)
-    if response is not None:
-        return response
+    try:
+        resp = _req.get(target_url, headers=headers, timeout=(8, 30), stream=True, verify=True, allow_redirects=True)
+        if resp.status_code == 403:
+            headers.pop('Origin', None)
+            headers.pop('Referer', None)
+            resp.close()
+            resp = _req.get(target_url, headers=headers, timeout=(8, 30), stream=True, verify=True, allow_redirects=True)
+        if resp.status_code >= 400:
+            resp.close()
+            return HttpResponse(f"Proxy error: {resp.status_code}", status=resp.status_code)
 
-    return HttpResponse("Proxy error: all attempts failed", status=502)
+        content_type = resp.headers.get('Content-Type', 'application/octet-stream')
+        content_length = resp.headers.get('Content-Length')
+
+        # If it's an m3u8 manifest, rewrite segment URLs to go through proxy
+        if 'mpegurl' in content_type.lower() or target_url.endswith('.m3u8'):
+            body = resp.text
+            resp.close()
+            base_url = target_url.rsplit('/', 1)[0] + '/'
+            origin = request.build_absolute_uri('/proxy/').rstrip('/')
+            lines = body.split('\n')
+            rewritten = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    # Resolve relative URLs
+                    if not stripped.startswith('http'):
+                        stripped = _urlparse.urljoin(base_url, stripped)
+                    try:
+                        u = _urlparse.urlparse(stripped)
+                        proxy_path = u.hostname + u.path
+                        if u.query:
+                            proxy_path += '?' + u.query
+                        rewritten.append(f"{origin}/{proxy_path}")
+                    except Exception:
+                        rewritten.append(stripped)
+                elif 'URI="' in stripped:
+                    # Rewrite URIs in tags
+                    import re
+                    def rewrite_uri(m):
+                        uri = m.group(1)
+                        if not uri.startswith('http'):
+                            uri = _urlparse.urljoin(base_url, uri)
+                        try:
+                            u = _urlparse.urlparse(uri)
+                            proxy_path = u.hostname + u.path
+                            if u.query:
+                                proxy_path += '?' + u.query
+                            return f'URI="{origin}/{proxy_path}"'
+                        except Exception:
+                            return m.group(0)
+                    rewritten.append(re.sub(r'URI="([^"]+)"', rewrite_uri, stripped))
+                else:
+                    rewritten.append(stripped)
+            body = '\n'.join(rewritten)
+            http_resp = HttpResponse(body, content_type='application/vnd.apple.mpegurl')
+            http_resp['Access-Control-Allow-Origin'] = '*'
+            return http_resp
+
+        # Non-m3u8: stream as-is
+        def stream_chunks():
+            try:
+                for chunk in resp.iter_content(chunk_size=65536):
+                    if chunk:
+                        yield chunk
+            finally:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+        http_resp = StreamingHttpResponse(stream_chunks(), content_type=content_type)
+        http_resp['Access-Control-Allow-Origin'] = '*'
+        http_resp['Accept-Ranges'] = 'bytes'
+        if content_length:
+            http_resp['Content-Length'] = content_length
+        for hdr in ('Cache-Control', 'ETag', 'Last-Modified', 'Accept-Ranges'):
+            val = resp.headers.get(hdr)
+            if val:
+                http_resp[hdr] = val
+        return http_resp
+    except Exception as e:
+        return HttpResponse(f"Proxy error: {e}", status=502)
 
 
 def _custom_dns_resolve(host):

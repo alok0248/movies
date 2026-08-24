@@ -1980,6 +1980,10 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Register Service Worker for transparent CDN proxy
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/js/proxy-sw.js').catch(function(){});
+            }
             initThemeToggle();
             initScrollButtons();
             updateAllDatesToBrowserTime();
