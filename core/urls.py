@@ -154,4 +154,9 @@ urlpatterns = [
     path('admin-dashboard/ad-files/', views.admin_ad_files, name='admin_ad_files'),
     path('ajax/ad-files/save/', views.ajax_save_ad_file, name='ajax_save_ad_file'),
     path('ajax/ad-files/delete/', views.ajax_delete_ad_file, name='ajax_delete_ad_file'),
+    path('admin-dashboard/users/', views.admin_user_list, name='admin_user_list'),
+    path('admin-dashboard/users/add/', views.admin_user_add, name='admin_user_add'),
+    path('admin-dashboard/users/<int:user_id>/edit/', views.admin_user_edit, name='admin_user_edit'),
+    path('admin-dashboard/users/<int:user_id>/block/', views.admin_user_block, name='admin_user_block'),
+    path('admin-dashboard/users/<int:user_id>/delete/', views.admin_user_delete, name='admin_user_delete'),
 ]
