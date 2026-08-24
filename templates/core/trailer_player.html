@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;z-index:9999;">
+    <div style="position:absolute;top:1rem;left:1rem;z-index:10000;">
+        <a href="javascript:history.back()" style="color:#fff;text-decoration:none;font-size:1.2rem;background:rgba(0,0,0,0.6);padding:0.5rem 1rem;border-radius:8px;">
+            &larr; Back
+        </a>
+    </div>
+    <iframe
+        src="{{ embed_url }}"
+        style="width:100%;height:100%;border:none;"
+        allow="autoplay; encrypted-media"
+        allowfullscreen
+        title="Trailer Player">
+    </iframe>
+</div>
+{% endblock %}
