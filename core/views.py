@@ -2507,6 +2507,13 @@ def android_app_dashboard(request, app_id=None):
             'last_accessed_at': app.last_accessed_at,
         })
 
+    # Synced users
+    from .models import SyncedUser
+    synced_users = SyncedUser.objects.all().order_by('-last_synced_at')[:5]
+    synced_total = SyncedUser.objects.count()
+    synced_subscribed = SyncedUser.objects.filter(is_subscribed=True).count()
+    synced_free = synced_total - synced_subscribed
+
     return render(request, 'core/android_app_dashboard.html', {
         'apps': apps,
         'selected_app': selected_app,
@@ -2523,6 +2530,10 @@ def android_app_dashboard(request, app_id=None):
         'total_unique_visitors': total_unique_visitors,
         'recent_devices': recent_devices,
         'recent_visits': recent_visits,
+        'synced_users': synced_users,
+        'synced_total': synced_total,
+        'synced_subscribed': synced_subscribed,
+        'synced_free': synced_free,
     })
 
 
@@ -5994,3 +6005,50 @@ def synced_user_delete(request, user_id):
     if request.method == 'POST':
         user_obj.delete()
     return redirect('synced_users_list')
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def user_dashboard(request):
+    """Beautiful dashboard showing all synced users with stats."""
+    users = SyncedUser.objects.all().order_by('-last_synced_at')
+    total = users.count()
+    subscribed = users.filter(is_subscribed=True).count()
+    free = total - subscribed
+
+    # Device breakdown
+    device_stats = (
+        users.values('device_model')
+        .annotate(count=models.Count('id'))
+        .order_by('-count')[:10]
+    )
+    # OS version breakdown
+    os_stats = (
+        users.values('os_version')
+        .annotate(count=models.Count('id'))
+        .order_by('-count')[:10]
+    )
+    # App version breakdown
+    version_stats = (
+        users.values('app_version')
+        .annotate(count=models.Count('id'))
+        .order_by('-count')[:10]
+    )
+    # Plan breakdown
+    plan_stats = (
+        users.filter(is_subscribed=True)
+        .values('plan')
+        .annotate(count=models.Count('id'))
+        .order_by('-count')[:10]
+    )
+
+    return render(request, 'core/user_dashboard.html', {
+        'users': users,
+        'total': total,
+        'subscribed': subscribed,
+        'free': free,
+        'device_stats': device_stats,
+        'os_stats': os_stats,
+        'version_stats': version_stats,
+        'plan_stats': plan_stats,
+    })
