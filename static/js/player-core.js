@@ -66,11 +66,43 @@ function _tryCurrentSource(mediaEl) {
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
 
   if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    var h = new window.Hls({ enableWorker: true, lowLatencyMode: false, maxBufferLength: 300, maxMaxBufferLength: 600, backBufferLength: 120, highBufferWatchdogPeriod: 1, nudgeOffset: 0.1, maxSeekHole: 30, fragLoadingTimeOut: 30000, manifestLoadingTimeOut: 20000 });
+    var h = new window.Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+      maxBufferLength: 300,
+      maxMaxBufferLength: 600,
+      backBufferLength: 120,
+      highBufferWatchdogPeriod: 0.5,
+      nudgeOffset: 0.1,
+      maxSeekHole: 60,
+      fragLoadingTimeOut: 60000,
+      manifestLoadingTimeOut: 30000,
+      levelLoadingTimeOut: 30000,
+      fragLoadingMaxRetry: 6,
+      levelLoadingMaxRetry: 4,
+      manifestLoadingMaxRetry: 4,
+      startLevel: -1,
+      capLevelToPlayerSize: true,
+      stretchShortVideoTrack: true,
+      maxAudioFramesDrift: 4,
+      debug: false
+    });
     h.loadSource(url); h.attachMedia(mediaEl);
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
     h.on(window.Hls.Events.ERROR, function(evt, data) {
-      if (data.fatal) { h.destroy(); _mainHls = null; console.error('HLS failed:', s.url.substring(0,60)); _advanceSource(mediaEl); }
+      if (data.fatal) {
+        if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+          console.warn('HLS network error, retrying...');
+          h.startLoad();
+        } else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+          console.warn('HLS media error, recovering...');
+          h.recoverMediaError();
+        } else {
+          h.destroy(); _mainHls = null;
+          console.error('HLS fatal:', s.url.substring(0,60));
+          _advanceSource(mediaEl);
+        }
+      }
     });
     _mainHls = h;
   } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
@@ -225,7 +257,7 @@ function switchDualAudio(){
   if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
   if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.muted=false;document.body.appendChild(_audioEl);}
   _audioEl.muted=false; _audioEl.volume=1;
-  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,backBufferLength:120,highBufferWatchdogPeriod:1,nudgeOffset:0.1,maxSeekHole:30,fragLoadingTimeOut:30000,manifestLoadingTimeOut:20000,
+  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,backBufferLength:120,highBufferWatchdogPeriod:0.5,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:30000,fragLoadingMaxRetry:6,levelLoadingMaxRetry:4,manifestLoadingMaxRetry:4,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,
     });h.loadSource((d.url));h.attachMedia(_audioEl);
     h.on(window.Hls.Events.MANIFEST_PARSED,function(){
       var v=document.getElementById('mainVideo');
