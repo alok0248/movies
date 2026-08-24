@@ -754,7 +754,8 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         try {
             fetch("{% url 'ajax_record_play_progress' %}", {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+                var _csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value; if (!_csrf) { var m = document.cookie.match(/csrftoken=([^;]+)/); _csrf = m ? m[1] : ''; }
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf},
                 body: JSON.stringify(payload)
             });
         } catch(e) {}
@@ -770,7 +771,14 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         })
         .catch(function() {});
 
-    // Listen for video events
+    // Start tracking when video plays — works with both iframe and inline player
+    var _progressInterval = null;
+    function _startTracking() {
+        if (_progressInterval) return;
+        recordProgress();
+        _progressInterval = setInterval(recordProgress, 15000);
+    }
+    // Method 1: postMessage from iframe player
     window.addEventListener('message', function(ev) {
         if (ev.data && ev.data.type === 'videoPlaying') {
             var v = getVideoEl();
@@ -779,11 +787,33 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
                 v.currentTime = window._resumePosition;
                 delete window._resumePosition;
             }
-            setInterval(recordProgress, 15000);
+            _startTracking();
         } else if (ev.data && ev.data.type === 'videoPaused') {
             recordProgress();
         }
     });
+    // Method 2: poll for inline video element (HLS.js player)
+    var _pollCount = 0;
+    var _pollTimer = setInterval(function() {
+        var v = getVideoEl();
+        if (!v) { _pollCount++; if (_pollCount > 200) clearInterval(_pollTimer); return; }
+        if (v._playTrackingAttached) return;
+        v._playTrackingAttached = true;
+        clearInterval(_pollTimer);
+        v.addEventListener('playing', function() {
+            if (window._resumePosition && !resumed) {
+                resumed = true;
+                v.currentTime = window._resumePosition;
+                delete window._resumePosition;
+            }
+            _startTracking();
+        });
+        v.addEventListener('pause', function() { recordProgress(); });
+        v.addEventListener('ended', function() { recordProgress(); });
+        v.addEventListener('seeked', function() { recordProgress(); });
+        // If already playing when we find it
+        if (!v.paused && v.currentTime > 5) _startTracking();
+    }, 500);
 
     window.addEventListener('beforeunload', function() {
         recordProgress();
