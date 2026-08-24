@@ -1040,6 +1040,7 @@ class EmailDelivery(models.Model):
 
 class SyncedUser(models.Model):
     """Android app user synced via POST /api/user/sync."""
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='synced_profiles')
     email = models.EmailField(unique=True)
     display_name = models.CharField(max_length=255, blank=True, default='')
     photo_url = models.URLField(blank=True, default='')
@@ -1081,6 +1082,26 @@ class SyncedUser(models.Model):
             'daysRemaining': self.days_remaining,
             'features': self.features or [],
         }
+
+
+class EmailVerification(models.Model):
+    """Email verification token for registration."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_verifications')
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {'verified' if self.verified else 'pending'}"
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        return timezone.now() > self.created_at + timedelta(minutes=5)
 
 
 class PlayHistory(models.Model):

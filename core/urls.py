@@ -92,6 +92,7 @@ urlpatterns = [
     path('ajax/home-top/', views.home_top_ajax, name='home_top_ajax'),
     path('ajax/login/', views.ajax_login, name='ajax_login'),
     path('ajax/register/', views.ajax_register, name='ajax_register'),
+    path('ajax/verify-email/', views.verify_email, name='verify_email'),
     path('ajax/logout/', views.ajax_logout, name='ajax_logout'),
     path('ajax/forgot-password/', views.ajax_forgot_password, name='ajax_forgot_password'),
     path('reset-password/<uidb64>/<token>/', views.reset_password, name='reset_password'),
