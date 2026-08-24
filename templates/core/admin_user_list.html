@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}User Management - Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color: #60a5fa;">
+                <i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard
+            </a>
+            <h2 class="text-white mt-2 mb-0"><i class="fas fa-users-cog me-2"></i>User Management</h2>
+        </div>
+        <a href="{% url 'admin_user_add' %}" class="btn btn-success">
+            <i class="fas fa-plus me-1"></i> Add User
+        </a>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary text-center p-3">
+                <div class="text-secondary small">Total Users</div>
+                <div class="text-white fs-3 fw-bold">{{ total }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary text-center p-3">
+                <div class="text-secondary small">Active</div>
+                <div class="text-success fs-3 fw-bold">{{ active }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary text-center p-3">
+                <div class="text-secondary small">Blocked</div>
+                <div class="text-danger fs-3 fw-bold">{{ blocked }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <form class="mb-4">
+        <div class="input-group">
+            <input type="text" name="q" class="form-control bg-dark text-white border-secondary" placeholder="Search by username, email, or name..." value="{{ search }}">
+            <button class="btn btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
+            {% if search %}
+                <a href="{% url 'admin_user_list' %}" class="btn btn-outline-danger"><i class="fas fa-times"></i></a>
+            {% endif %}
+        </div>
+    </form>
+
+    <!-- User Table -->
+    <div class="card bg-dark border-secondary">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr id="user-row-{{ u.id }}">
+                            <td>{{ u.id }}</td>
+                            <td class="text-white fw-bold">{{ u.username }}</td>
+                            <td style="color: #60a5fa;">{{ u.email|default:"—" }}</td>
+                            <td>{{ u.first_name }} {{ u.last_name }}</td>
+                            <td>
+                                {% if u.is_superuser %}
+                                    <span class="badge bg-warning text-dark">Super Admin</span>
+                                {% elif u.is_staff %}
+                                    <span class="badge bg-info">Staff</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">User</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                    <span class="badge bg-success" id="status-{{ u.id }}">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger" id="status-{{ u.id }}">Blocked</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-secondary small">{{ u.date_joined|date:"M d, Y" }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'admin_user_edit' u.id %}" class="btn btn-outline-info" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-outline-{% if u.is_active %}warning{% else %}success{% endif %}" title="{% if u.is_active %}Block{% else %}Unblock{% endif %}" onclick="toggleBlock({{ u.id }}, this)">
+                                        <i class="fas fa-{% if u.is_active %}ban{% else %}check{% endif %}"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" title="Delete" onclick="deleteUser({{ u.id }}, '{{ u.username }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-secondary py-4">No users found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function toggleBlock(userId, btn) {
+    try {
+        const resp = await fetch(`/admin-dashboard/users/${userId}/block/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            location.reload();
+        }
+    } catch (e) {
+        alert('Failed to toggle user status');
+    }
+}
+
+async function deleteUser(userId, username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This cannot be undone.`)) return;
+    try {
+        const resp = await fetch(`/admin-dashboard/users/${userId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        if (resp.redirected || resp.ok) {
+            location.reload();
+        }
+    } catch (e) {
+        alert('Failed to delete user');
+    }
+}
+
+function getCsrfToken() {
+    const name = 'csrftoken';
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+        c = c.trim();
+        if (c.startsWith(name + '=')) return c.substring(name.length + 1);
+    }
+    return '';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Add User - Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 600px;">
+    <a href="{% url 'admin_user_list' %}" class="text-decoration-none" style="color: #60a5fa;">
+        <i class="fas fa-arrow-left me-1"></i> Back to User Management
+    </a>
+    <h2 class="text-white mt-3 mb-4"><i class="fas fa-user-plus me-2"></i>Add New User</h2>
+
+    {% if messages %}
+    {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-body">
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Username *</label>
+                    <input type="text" name="username" class="form-control bg-dark text-white border-secondary" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Email</label>
+                    <input type="email" name="email" class="form-control bg-dark text-white border-secondary" placeholder="gmail.com or yahoo.com only">
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label text-white">First Name</label>
+                        <input type="text" name="first_name" class="form-control bg-dark text-white border-secondary">
+                    </div>
+                    <div class="col">
+                        <label class="form-label text-white">Last Name</label>
+                        <input type="text" name="last_name" class="form-control bg-dark text-white border-secondary">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Password</label>
+                    <input type="password" name="password" class="form-control bg-dark text-white border-secondary" placeholder="Leave blank for no password">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Role</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_staff" id="is_staff">
+                        <label class="form-check-label text-white" for="is_staff">Staff (can access admin)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_superuser" id="is_superuser">
+                        <label class="form-check-label text-white" for="is_superuser">Superuser (full access)</label>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-white">Status</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="is_active" checked>
+                        <label class="form-check-label text-white" for="is_active">Active</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success w-100">
+                    <i class="fas fa-plus me-1"></i> Create User
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

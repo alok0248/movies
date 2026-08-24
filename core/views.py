@@ -6369,3 +6369,122 @@ def ajax_resume_position(request):
             'title': last.title,
         })
     return JsonResponse({'success': True, 'position': 0})
+
+
+# ---------------------------------------------------------------------------
+# Admin User Management (block, add, edit all fields except email)
+# ---------------------------------------------------------------------------
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_list(request):
+    """Admin page listing all Django users with block/edit/add actions."""
+    users = User.objects.all().order_by('-date_joined')
+    search = request.GET.get('q', '').strip()
+    if search:
+        users = users.filter(
+            models.Q(username__icontains=search) |
+            models.Q(email__icontains=search) |
+            models.Q(first_name__icontains=search)
+        )
+    total = users.count()
+    active = users.filter(is_active=True).count()
+    blocked = total - active
+    return render(request, 'core/admin_user_list.html', {
+        'users': users,
+        'total': total,
+        'active': active,
+        'blocked': blocked,
+        'search': search,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_block(request, user_id):
+    """Toggle block/unblock a user."""
+    user_obj = get_object_or_404(User, id=user_id)
+    if request.method == 'POST':
+        user_obj.is_active = not user_obj.is_active
+        user_obj.save(update_fields=['is_active'])
+        status = 'unblocked' if user_obj.is_active else 'blocked'
+        return JsonResponse({'success': True, 'is_active': user_obj.is_active, 'message': f'User {status}'})
+    return JsonResponse({'success': False, 'message': 'POST required'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_add(request):
+    """Admin: add a new user."""
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        password = request.POST.get('password', '')
+        is_staff = request.POST.get('is_staff') == 'on'
+        is_superuser = request.POST.get('is_superuser') == 'on'
+        is_active = request.POST.get('is_active', 'on') == 'on'
+        
+        if not username:
+            messages.error(request, 'Username is required')
+            return render(request, 'core/admin_user_add.html')
+        if User.objects.filter(username=username).exists():
+            messages.error(request, 'Username already exists')
+            return render(request, 'core/admin_user_add.html')
+        if email and User.objects.filter(email=email).exists():
+            messages.error(request, 'Email already registered')
+            return render(request, 'core/admin_user_add.html')
+        
+        user_obj = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password if password else None,
+            first_name=first_name,
+            last_name=last_name,
+        )
+        user_obj.is_staff = is_staff
+        user_obj.is_superuser = is_superuser
+        user_obj.is_active = is_active
+        user_obj.save()
+        messages.success(request, f'User {username} created successfully')
+        return redirect('admin_user_list')
+    return render(request, 'core/admin_user_add.html')
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_edit(request, user_id):
+    """Admin: edit any user field except email."""
+    user_obj = get_object_or_404(User, id=user_id)
+    if request.method == 'POST':
+        user_obj.username = request.POST.get('username', user_obj.username).strip()
+        user_obj.first_name = request.POST.get('first_name', '').strip()
+        user_obj.last_name = request.POST.get('last_name', '').strip()
+        user_obj.is_staff = request.POST.get('is_staff') == 'on'
+        user_obj.is_superuser = request.POST.get('is_superuser') == 'on'
+        user_obj.is_active = request.POST.get('is_active') == 'on'
+        # Email is read-only — do not update
+        new_password = request.POST.get('password', '').strip()
+        if new_password:
+            user_obj.set_password(new_password)
+        user_obj.save()
+        messages.success(request, f'User {user_obj.username} updated successfully')
+        return redirect('admin_user_list')
+    synced_profile = SyncedUser.objects.filter(user=user_obj).first()
+    return render(request, 'core/admin_user_edit.html', {
+        'edit_user': user_obj,
+        'synced_profile': synced_profile,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_delete(request, user_id):
+    """Admin: delete a user."""
+    user_obj = get_object_or_404(User, id=user_id)
+    if request.method == 'POST':
+        username = user_obj.username
+        user_obj.delete()
+        messages.success(request, f'User {username} deleted')
+    return redirect('admin_user_list')

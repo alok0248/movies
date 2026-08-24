@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit {{ edit_user.username }} - Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 700px;">
+    <a href="{% url 'admin_user_list' %}" class="text-decoration-none" style="color: #60a5fa;">
+        <i class="fas fa-arrow-left me-1"></i> Back to User Management
+    </a>
+    <h2 class="text-white mt-3 mb-4"><i class="fas fa-user-edit me-2"></i>Edit User: {{ edit_user.username }}</h2>
+
+    {% if messages %}
+    {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-body">
+            <form method="POST">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Username</label>
+                    <input type="text" name="username" class="form-control bg-dark text-white border-secondary" value="{{ edit_user.username }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Email <span class="text-secondary">(read-only)</span></label>
+                    <input type="email" class="form-control bg-dark text-secondary border-secondary" value="{{ edit_user.email }}" disabled>
+                    <div class="form-text text-muted">Email cannot be changed from here.</div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label text-white">First Name</label>
+                        <input type="text" name="first_name" class="form-control bg-dark text-white border-secondary" value="{{ edit_user.first_name }}">
+                    </div>
+                    <div class="col">
+                        <label class="form-label text-white">Last Name</label>
+                        <input type="text" name="last_name" class="form-control bg-dark text-white border-secondary" value="{{ edit_user.last_name }}">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">New Password <span class="text-secondary">(leave blank to keep current)</span></label>
+                    <input type="password" name="password" class="form-control bg-dark text-white border-secondary" placeholder="Enter new password or leave blank">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Status</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if edit_user.is_active %}checked{% endif %}>
+                        <label class="form-check-label text-white" for="is_active">Active</label>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-white">Role</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_staff" id="is_staff" {% if edit_user.is_staff %}checked{% endif %}>
+                        <label class="form-check-label text-white" for="is_staff">Staff (can access admin)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_superuser" id="is_superuser" {% if edit_user.is_superuser %}checked{% endif %}>
+                        <label class="form-check-label text-white" for="is_superuser">Superuser (full access)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-save me-1"></i> Save Changes
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {% if synced_profile %}
+    <!-- Android Sync Profile -->
+    <div class="card bg-dark border-secondary mt-4">
+        <div class="card-header border-secondary">
+            <h5 class="text-white mb-0"><i class="fas fa-mobile-alt me-2 text-green-400"></i>Android Sync Profile</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 small">
+                <div class="col-md-6">
+                    <div class="text-secondary">Device</div>
+                    <div class="text-white">{{ synced_profile.device_model|default:"—" }} ({{ synced_profile.os_version|default:"—" }})</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">App Version</div>
+                    <div class="text-white">{{ synced_profile.app_version|default:"—" }} (Build {{ synced_profile.build_number|default:"—" }})</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Google ID</div>
+                    <div class="text-white">{{ synced_profile.google_id|default:"—" }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Last Synced</div>
+                    <div class="text-white">{{ synced_profile.last_synced_at|date:"M d, Y H:i" }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Subscription</div>
+                    <div class="text-white">
+                        {% if synced_profile.is_subscribed %}
+                            <span class="badge bg-success">{{ synced_profile.plan }}</span> until {{ synced_profile.valid_until }}
+                        {% else %}
+                            <span class="badge bg-secondary">Free</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Device ID</div>
+                    <div class="text-white text-break">{{ synced_profile.device_id|default:"—" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
