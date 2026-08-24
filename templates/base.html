@@ -2611,8 +2611,9 @@
         }
 
         async function updateAllWatchlistButtons(tmdbId = null, mediaType = null, inWatchlist = null) {
+            var allBtns = document.querySelectorAll('.hover-watchlist-btn, .preview-btn.watchlist-btn');
             if (tmdbId && mediaType && inWatchlist !== null) {
-                document.querySelectorAll('.hover-watchlist-btn').forEach(btn => {
+                allBtns.forEach(btn => {
                     if (btn.dataset.tmdbId == tmdbId && btn.dataset.mediaType == mediaType) updateWatchlistButton(btn, inWatchlist);
                 });
                 const detailBtn = document.getElementById('watchlist-btn');
@@ -2622,10 +2623,9 @@
                     if (detailTmdbId == tmdbId && detailMediaType == mediaType) updateWatchlistButton(detailBtn, inWatchlist);
                 }
             } else {
-                const hoverButtons = document.querySelectorAll('.hover-watchlist-btn');
-                for (const btn of hoverButtons) {
-                    const btnTmdbId = btn.dataset.tmdbId;
-                    const btnMediaType = btn.dataset.mediaType;
+                for (const btn of allBtns) {
+                    var btnTmdbId = btn.dataset.tmdbId || btn.getAttribute('data-media-id');
+                    var btnMediaType = btn.dataset.mediaType;
                     if (btnTmdbId && btnMediaType) {
                         const inWL = await checkWatchlist(parseInt(btnTmdbId), btnMediaType);
                         updateWatchlistButton(btn, inWL);
