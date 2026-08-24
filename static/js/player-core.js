@@ -106,63 +106,90 @@ function _playHls(url, mediaEl) {
   _tryCurrentSource(mediaEl);
 }
 
+function _tryHlsDirect(url, mediaEl) {
+  /* Play CDN URL directly via HLS.js — zero server load */
+  var h = new window.Hls({
+    enableWorker: true,
+    lowLatencyMode: false,
+    maxBufferLength: 900,
+    maxMaxBufferLength: 1800,
+    backBufferLength: 60,
+    highBufferWatchdogPeriod: 0.2,
+    nudgeOffset: 0.1,
+    maxSeekHole: 60,
+    fragLoadingTimeOut: 30000,
+    manifestLoadingTimeOut: 15000,
+    levelLoadingTimeOut: 15000,
+    fragLoadingMaxRetry: 8,
+    levelLoadingMaxRetry: 6,
+    manifestLoadingMaxRetry: 6,
+    startLevel: -1,
+    capLevelToPlayerSize: true,
+    stretchShortVideoTrack: true,
+    maxAudioFramesDrift: 4,
+    startFragPrefetch: true,
+    maxBufferSize: 209715200,
+    debug: false
+  });
+  h.loadSource(url); h.attachMedia(mediaEl);
+  return h;
+}
+
 function _tryCurrentSource(mediaEl) {
   if (_srcIdx >= _sourceQueue.length) { console.error('All sources exhausted'); hidePlayerLoading(); return; }
   var s = _sourceQueue[_srcIdx];
   if (_triedUrls[s.url]) { _srcIdx++; _tryCurrentSource(mediaEl); return; }
   _triedUrls[s.url] = 1;  console.log('PLAY: '+s.server+' '+s.quality+' '+s.url.substring(0,80));
-  var proxyUrl = _makeProxyUrl(s.url);
 
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
 
   if (s.url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    // Fetch manifest via proxy — server already rewrites segment URLs to go through /proxy/
-    fetch(proxyUrl).then(function(r) { return r.text(); }).then(function(manifest) {
-      console.log('[Player] Manifest fetched via proxy, playing directly');
-      var h = new window.Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        maxBufferLength: 900,
-        maxMaxBufferLength: 1800,
-        backBufferLength: 60,
-        highBufferWatchdogPeriod: 0.2,
-        nudgeOffset: 0.1,
-        maxSeekHole: 60,
-        fragLoadingTimeOut: 30000,
-        manifestLoadingTimeOut: 15000,
-        levelLoadingTimeOut: 15000,
-        fragLoadingMaxRetry: 8,
-        levelLoadingMaxRetry: 6,
-        manifestLoadingMaxRetry: 6,
-        startLevel: -1,
-        capLevelToPlayerSize: true,
-        stretchShortVideoTrack: true,
-        maxAudioFramesDrift: 4,
-        startFragPrefetch: true,
-        maxBufferSize: 209715200,
-        debug: false,
-        xhrSetup: function(xhr) { xhr.timeout = 30000; }
+    /* Step 1: Try playing CDN URL directly in browser (zero server load) */
+    var h = _tryHlsDirect(s.url, mediaEl);
+    var proxyFallback = false;
+    h.on(window.Hls.Events.MANIFEST_PARSED, function() {
+      console.log('[Player] Direct play OK:', s.server, s.quality);
+      mediaEl.play().catch(function(){});
+      hidePlayerLoading();
+    });
+    h.on(window.Hls.Events.ERROR, function(evt, data) {
+      if (!data.fatal) return;
+      if (proxyFallback) {
+        /* Proxy also failed — move to next source */
+        console.warn('[Player] Proxy also failed:', data.type, data.details);
+        h.destroy(); _mainHls = null;
+        _advanceSource(mediaEl);
+        return;
+      }
+      /* Step 2: Direct play failed (CORS/blocked) — fallback to proxy */
+      console.warn('[Player] Direct play failed, trying proxy:', data.type, data.details);
+      h.destroy(); _mainHls = null;
+      proxyFallback = true;
+      var proxyUrl = _makeProxyUrl(s.url);
+      var h2 = _tryHlsDirect(proxyUrl, mediaEl);
+      h2.on(window.Hls.Events.MANIFEST_PARSED, function() {
+        console.log('[Player] Proxy fallback OK:', s.server, s.quality);
+        mediaEl.play().catch(function(){});
+        hidePlayerLoading();
       });
-      h.loadSource(proxyUrl); h.attachMedia(mediaEl);
-      h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
-      h.on(window.Hls.Events.ERROR, function(evt, data) {
-        if (data.fatal) {
-          console.warn('[Player] HLS error:', data.type, data.details, 'on', s.server, s.quality);
-          h.destroy(); _mainHls = null;
+      h2.on(window.Hls.Events.ERROR, function(evt2, data2) {
+        if (data2.fatal) {
+          console.warn('[Player] Proxy also failed:', data2.type, data2.details);
+          h2.destroy(); _mainHls = null;
           _advanceSource(mediaEl);
         }
       });
-      _mainHls = h;
-    }).catch(function(err) {
-      console.error('[Player] Manifest fetch failed:', err);
-      _advanceSource(mediaEl);
+      _mainHls = h2;
     });
+    _mainHls = h;
   } else if (s.url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = proxyUrl;
+    /* Safari native HLS */
+    mediaEl.src = s.url;
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
     mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
   } else {
-    mediaEl.src = proxyUrl; mediaEl.play().catch(function () {});
+    /* Direct MP4 / other */
+    mediaEl.src = s.url; mediaEl.play().catch(function () {});
     mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
   }
 }
