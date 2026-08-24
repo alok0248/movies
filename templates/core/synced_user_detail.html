@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5" style="max-width: 960px;">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <a href="{% url 'synced_users_list' %}" class="btn btn-outline-light btn-sm">&larr;</a>
+            {% if user_obj.photo_url %}
+                <img src="{{ user_obj.photo_url }}" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid {% if user_obj.is_subscribed %}#22c55e{% else %}#64748b{% endif %};">
+            {% else %}
+                <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,{% if user_obj.is_subscribed %}#22c55e,#16a34a{% else %}#64748b,#475569{% endif %});display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;font-weight:700;">{{ user_obj.display_name|first|upper }}</div>
+            {% endif %}
+            <div>
+                <h1 class="text-white mb-0">{{ user_obj.display_name|default:user_obj.email }}</h1>
+                <div class="text-secondary">{{ user_obj.email }}</div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'synced_user_edit' user_obj.id %}" class="btn btn-warning"><i class="fas fa-edit me-1"></i>Edit</a>
+            <form method="post" action="{% url 'synced_user_delete' user_obj.id %}" onsubmit="return confirm('Delete this user permanently?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger"><i class="fas fa-trash me-1"></i>Delete</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Subscription Status Banner -->
+    {% if user_obj.is_subscribed %}
+    <div class="card border-success shadow-sm mb-4" style="background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(22,163,74,0.06));">
+        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width:48px;height:48px;border-radius:12px;background:rgba(34,197,94,0.2);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-crown text-success fa-lg"></i>
+                </div>
+                <div>
+                    <div class="text-success fw-bold fs-5">{{ user_obj.plan|default:'VIP Premium' }}</div>
+                    <div class="text-secondary small">
+                        {% if user_obj.valid_until %}Valid until {{ user_obj.valid_until }} &middot; {{ user_obj.days_remaining }} days remaining{% else %}Active subscription{% endif %}
+                    </div>
+                </div>
+            </div>
+            <span class="badge bg-success fs-6 px-3 py-2">Subscribed</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="card border-secondary shadow-sm mb-4">
+        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width:48px;height:48px;border-radius:12px;background:rgba(100,116,139,0.2);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-user text-secondary fa-lg"></i>
+                </div>
+                <div>
+                    <div class="text-white fw-bold fs-5">Free User</div>
+                    <div class="text-secondary small">No active subscription</div>
+                </div>
+            </div>
+            <span class="badge bg-secondary fs-6 px-3 py-2">Free</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Features -->
+    {% if user_obj.features %}
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="text-white mb-3"><i class="fas fa-star me-2 text-warning"></i>Plan Features</h5>
+            <div class="d-flex flex-wrap gap-2">
+                {% for feature in user_obj.features %}
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2"><i class="fas fa-check me-1"></i>{{ feature }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Device & App Info -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-mobile-alt me-2 text-info"></i>Device Information</div>
+                <div class="card-body">
+                    <table class="table table-dark table-borderless mb-0 small">
+                        <tr><td class="text-secondary" style="width:45%">Device ID</td><td><code class="text-white">{{ user_obj.device_id|default:'-' }}</code></td></tr>
+                        <tr><td class="text-secondary">Device Model</td><td class="text-white">{{ user_obj.device_model|default:'-' }}</td></tr>
+                        <tr><td class="text-secondary">OS Version</td><td class="text-white">Android {{ user_obj.os_version|default:'-' }}</td></tr>
+                        <tr><td class="text-secondary">App Version</td><td class="text-white">{{ user_obj.app_version|default:'-' }}</td></tr>
+                        <tr><td class="text-secondary">Build Number</td><td class="text-white">{{ user_obj.build_number|default:'-' }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-user-circle me-2 text-primary"></i>Account Information</div>
+                <div class="card-body">
+                    <table class="table table-dark table-borderless mb-0 small">
+                        <tr><td class="text-secondary" style="width:45%">Display Name</td><td class="text-white">{{ user_obj.display_name|default:'-' }}</td></tr>
+                        <tr><td class="text-secondary">Email</td><td><code class="text-info">{{ user_obj.email }}</code></td></tr>
+                        <tr><td class="text-secondary">Google ID</td><td><code class="text-white">{{ user_obj.google_id|default:'-' }}</code></td></tr>
+                        <tr><td class="text-secondary">Profile Photo</td><td>
+                            {% if user_obj.photo_url %}
+                                <a href="{{ user_obj.photo_url }}" target="_blank" class="text-info text-break" style="font-size:.8rem;">{{ user_obj.photo_url|truncatechars:40 }}</a>
+                            {% else %}
+                                <span class="text-secondary">-</span>
+                            {% endif %}
+                        </td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscription Details -->
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-credit-card me-2 text-success"></i>Subscription Details</div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-md-3 text-center">
+                    <div class="p-3 rounded" style="background:rgba({% if user_obj.is_subscribed %}34,197,94{% else %}100,116,139{% endif %},0.1);">
+                        <div class="h3 text-{% if user_obj.is_subscribed %}success{% else %}secondary{% endif %} mb-1">{% if user_obj.is_subscribed %}Yes{% else %}No{% endif %}</div>
+                        <div class="text-secondary small">Active</div>
+                    </div>
+                </div>
+                <div class="col-md-3 text-center">
+                    <div class="p-3 rounded" style="background:rgba(56,189,248,0.1);">
+                        <div class="h3 text-info mb-1">{{ user_obj.plan|default:'None' }}</div>
+                        <div class="text-secondary small">Plan</div>
+                    </div>
+                </div>
+                <div class="col-md-3 text-center">
+                    <div class="p-3 rounded" style="background:rgba(168,85,247,0.1);">
+                        <div class="h3 text-purple mb-1" style="color:#a855f7;">{{ user_obj.valid_until|default:'-' }}</div>
+                        <div class="text-secondary small">Valid Until</div>
+                    </div>
+                </div>
+                <div class="col-md-3 text-center">
+                    <div class="p-3 rounded" style="background:rgba(251,191,36,0.1);">
+                        <div class="h3 text-warning mb-1">{{ user_obj.days_remaining }}</div>
+                        <div class="text-secondary small">Days Left</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timestamps -->
+    <div class="card bg-dark border-secondary shadow-sm">
+        <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-clock me-2 text-secondary"></i>Activity Timestamps</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="text-secondary small mb-1">First Created</div>
+                    <div class="text-white">{{ user_obj.created_at }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary small mb-1">Last Synced</div>
+                    <div class="text-white">{{ user_obj.last_synced_at }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

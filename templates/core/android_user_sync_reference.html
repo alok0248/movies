@@ -51,7 +51,7 @@
                             <td>{% if app.last_accessed_at %}{{ app.last_accessed_at }}{% else %}<span class="text-secondary">Never</span>{% endif %}</td>
                             <td>
                                 <div class="d-flex gap-2 flex-wrap">
-                                    <a href="{% url 'android_app_integration_guide' app.id %}" class="btn btn-sm btn-outline-info">Integration Guide</a>
+                                    <a href="{% url 'android_app_dashboard_detail' app.id %}" class="btn btn-sm btn-outline-info">Analytics</a>
                                     <a href="{% url 'android_app_edit' app.id %}" class="btn btn-sm btn-warning">Edit</a>
                                 </div>
                             </td>

@@ -2550,44 +2550,6 @@ def android_app_failed_attempts(request, app_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
-def android_app_integration_guide(request, app_id):
-    android_app = get_object_or_404(AndroidApp, id=app_id)
-    app_endpoint = request.build_absolute_uri(f"/api/android-apps/{android_app.slug}/")
-    sample_success_payload = json.dumps(android_app.json_payload, indent=2)
-    sample_update_payload = {
-        'status': 'update_required',
-        'message': 'Update the app with the latest APK URL.',
-        'expected_build_id': android_app.allowed_build_id or 'your-build-id',
-    }
-    if android_app.apk_file:
-        sample_update_payload['apk_url'] = request.build_absolute_uri(android_app.apk_file.url)
-
-    basic_auth_value = base64.b64encode(
-        f"{android_app.access_username}:{android_app.access_password}".encode('utf-8')
-    ).decode('utf-8')
-
-    # Synced users data from /api/user/sync
-    from .models import SyncedUser
-    synced_users = SyncedUser.objects.all().order_by('-last_synced_at')[:10]
-    synced_total = SyncedUser.objects.count()
-    synced_subscribed = SyncedUser.objects.filter(is_subscribed=True).count()
-    user_sync_endpoint = request.build_absolute_uri('/api/user/sync/')
-
-    return render(request, 'core/android_app_integration_guide.html', {
-        'android_app': android_app,
-        'app_endpoint': app_endpoint,
-        'sample_success_payload': sample_success_payload,
-        'sample_update_payload_json': json.dumps(sample_update_payload, indent=2),
-        'basic_auth_value': basic_auth_value,
-        'synced_users': synced_users,
-        'synced_total': synced_total,
-        'synced_subscribed': synced_subscribed,
-        'user_sync_endpoint': user_sync_endpoint,
-    })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
 def android_user_sync_reference(request):
     """Display registered Android apps for the user sync endpoint."""
     apps = AndroidApp.objects.all().order_by('name')
@@ -5973,7 +5935,23 @@ def user_sync_api(request):
 def synced_users_list(request):
     """Admin page listing all synced Android users."""
     users = SyncedUser.objects.all().order_by('-last_synced_at')
-    return render(request, 'core/synced_users_list.html', {'users': users})
+    total = users.count()
+    subscribed = users.filter(is_subscribed=True).count()
+    free = total - subscribed
+    return render(request, 'core/synced_users_list.html', {
+        'users': users,
+        'total': total,
+        'subscribed': subscribed,
+        'free': free,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def synced_user_detail(request, user_id):
+    """Show full details for a single synced user."""
+    user_obj = get_object_or_404(SyncedUser, id=user_id)
+    return render(request, 'core/synced_user_detail.html', {'user_obj': user_obj})
 
 
 @login_required
