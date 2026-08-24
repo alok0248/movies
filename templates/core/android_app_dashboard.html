@@ -20,7 +20,10 @@
                 <div class="list-group list-group-flush rounded-bottom">
                     {% for app in apps %}
                     <a href="{% url 'android_app_dashboard_detail' app.id %}" class="list-group-item list-group-item-action bg-dark text-white border-secondary {% if selected_app and selected_app.id == app.id %}active{% endif %}">
-                        <div class="fw-semibold">{{ app.name }}</div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="fw-semibold">{{ app.name }}</div>
+                            {% if app.is_active %}<span class="badge bg-success" style="font-size:.65rem;">Active</span>{% else %}<span class="badge bg-secondary" style="font-size:.65rem;">Disabled</span>{% endif %}
+                        </div>
                         <div class="small opacity-75">{{ app.slug }}</div>
                     </a>
                     {% empty %}
@@ -43,7 +46,12 @@
                     <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Builds Seen</div><div class="display-6 text-white">{{ build_summary|length }}</div></div></div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-dark border-secondary shadow-sm h-100"><div class="card-body"><div class="text-secondary small">Endpoint Status</div><div class="mt-2">{% if selected_app.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Disabled</span>{% endif %}</div></div></div>
+                    <a href="{% url 'synced_users_list' %}" class="card bg-dark border-success shadow-sm h-100 text-decoration-none">
+                        <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                            <div class="text-secondary small">User List</div>
+                            <div class="display-6 text-success mt-1"><i class="fas fa-users"></i></div>
+                        </div>
+                    </a>
                 </div>
             </div>
 
