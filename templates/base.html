@@ -2574,27 +2574,21 @@
         }
 
         function updateWatchlistButton(button, inWatchlist) {
-            const icon = button.querySelector('.watchlist-icon');
-            if (icon) {
-                if (inWatchlist) {
-                    icon.textContent = '✓';
-                    button.classList.add('in-watchlist');
-                } else {
-                    icon.textContent = '+';
-                    button.classList.remove('in-watchlist');
-                }
+            if (!button) return;
+            var icon = button.querySelector('i');
+            var text = button.querySelector('#watchlist-text') || button.querySelector('.watchlist-btn-text');
+            if (inWatchlist) {
+                if (icon) { icon.className = 'fas fa-check'; }
+                if (text) { text.textContent = 'In Watchlist'; }
+                button.style.background = '#22c55e';
+                button.style.borderColor = '#22c55e';
+                button.style.color = '#fff';
             } else {
-                const textSpan = button.querySelector('.watchlist-btn-text');
-                if (textSpan) {
-                    textSpan.textContent = inWatchlist ? ' Added' : ' My List';
-                }
-                if (inWatchlist) {
-                    button.classList.remove('btn-outline-light');
-                    button.classList.add('btn-primary');
-                } else {
-                    button.classList.remove('btn-primary');
-                    button.classList.add('btn-outline-light');
-                }
+                if (icon) { icon.className = 'fas fa-plus'; }
+                if (text) { text.textContent = 'Add to Watchlist'; }
+                button.style.background = '';
+                button.style.borderColor = '';
+                button.style.color = '';
             }
         }
 
