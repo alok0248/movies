@@ -2433,6 +2433,10 @@
                         closeAuthModal();
                         window.location.reload();
                     }, 1000);
+                } else if (data.message === 'first_login') {
+                    // Android-synced user needs to set a password
+                    showMessage('loginMessage', '📱 ' + (data.detail || 'Please set a password for your account.'), 'info');
+                    setTimeout(() => { switchAuthForm('register'); }, 1500);
                 } else {
                     showMessage('loginMessage', data.message, 'error');
                 }
@@ -2451,11 +2455,17 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showMessage('registerMessage', data.message, 'success');
-                    setTimeout(() => {
-                        closeAuthModal();
-                        window.location.reload();
-                    }, 1000);
+                    if (data.requires_verification) {
+                        showMessage('registerMessage', '✅ ' + data.message, 'success');
+                        // Show the email sent hint and switch to login tab
+                        setTimeout(() => { switchAuthForm('login'); }, 3000);
+                    } else {
+                        showMessage('registerMessage', data.message, 'success');
+                        setTimeout(() => {
+                            closeAuthModal();
+                            window.location.reload();
+                        }, 1000);
+                    }
                 } else {
                     showMessage('registerMessage', data.message, 'error');
                 }

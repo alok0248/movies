@@ -28,6 +28,7 @@ import datetime
 import requests
 import calendar
 import base64
+import secrets
 from bs4 import BeautifulSoup
 import psutil
 import platform
@@ -2890,36 +2891,134 @@ def android_app_endpoint(request, app_slug):
 
 def ajax_login(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
+        username = request.POST.get('username', '')
+        password = request.POST.get('password', '')
+        # Try standard auth first
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
             return JsonResponse({'success': True, 'message': 'Login successful'})
+        # If no password provided, try email-based login for synced users
+        if not password and '@' in username:
+            try:
+                user = User.objects.get(email=username)
+                if not user.has_usable_password():
+                    # First web login: set a password
+                    new_pass = request.POST.get('new_password', '')
+                    if new_pass and len(new_pass) >= 6:
+                        user.set_password(new_pass)
+                        user.save()
+                        login(request, user)
+                        return JsonResponse({'success': True, 'message': 'Password set and login successful'})
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'first_login',
+                        'detail': 'This account was created from Android. Please set a password.',
+                        'email': user.email,
+                    })
+                else:
+                    return JsonResponse({'success': False, 'message': 'Invalid password'})
+            except User.DoesNotExist:
+                pass
         return JsonResponse({'success': False, 'message': 'Invalid username or password'})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
 def ajax_register(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
+        username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+        
+        if not username or not email or not password:
+            return JsonResponse({'success': False, 'message': 'All fields are required'})
         
         if password != confirm_password:
             return JsonResponse({'success': False, 'message': 'Passwords do not match'})
         
+        if len(password) < 6:
+            return JsonResponse({'success': False, 'message': 'Password must be at least 6 characters'})
+        
+        # Check if email already exists (web or Android-synced user)
+        existing_user = User.objects.filter(email=email).first()
+        if existing_user:
+            # If this user came from Android sync, tell them to use email login
+            if existing_user.has_usable_password():
+                return JsonResponse({'success': False, 'message': 'Email already registered. Please login instead.'})
+            else:
+                # Android-synced user registering — set their password and send verification
+                existing_user.set_password(password)
+                existing_user.first_name = username
+                existing_user.is_active = False
+                existing_user.save()
+                # Create email verification token
+                from .models import EmailVerification
+                token = secrets.token_hex(32)
+                EmailVerification.objects.create(user=existing_user, token=token)
+                # Send verification email
+                verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
+                try:
+                    send_mail(
+                        subject='Verify your email - NewMovies',
+                        message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
+                        from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@newmovies.linkpc.net',
+                        recipient_list=[email],
+                        fail_silently=True,
+                    )
+                except Exception as e:
+                    logger.warning(f'Failed to send verification email: {e}')
+                return JsonResponse({'success': True, 'message': 'Verification email sent. Please check your inbox.', 'requires_verification': True})
+        
         if User.objects.filter(username=username).exists():
             return JsonResponse({'success': False, 'message': 'Username already taken'})
         
-        if User.objects.filter(email=email).exists():
-            return JsonResponse({'success': False, 'message': 'Email already registered'})
-        
+        # Create new user (inactive until email verified)
         user = User.objects.create_user(username=username, email=email, password=password)
-        login(request, user)
-        return JsonResponse({'success': True, 'message': 'Registration successful'})
+        user.is_active = False
+        user.save()
+        
+        # Create email verification token
+        from .models import EmailVerification
+        token = secrets.token_hex(32)
+        EmailVerification.objects.create(user=user, token=token)
+        
+        # Send verification email
+        verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
+        try:
+            send_mail(
+                subject='Verify your email - NewMovies',
+                message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
+                from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@newmovies.linkpc.net',
+                recipient_list=[email],
+                fail_silently=True,
+            )
+        except Exception as e:
+            logger.warning(f'Failed to send verification email: {e}')
+        
+        return JsonResponse({'success': True, 'message': 'Verification email sent. Please check your inbox.', 'requires_verification': True})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+
+def verify_email(request):
+    """GET /ajax/verify-email/?token=... — verify email within 5 minutes."""
+    token = request.GET.get('token', '')
+    if not token:
+        return render(request, 'core/email_verified.html', {'success': False, 'message': 'Invalid verification link.'})
+    from .models import EmailVerification
+    try:
+        ev = EmailVerification.objects.select_related('user').get(token=token)
+    except EmailVerification.DoesNotExist:
+        return render(request, 'core/email_verified.html', {'success': False, 'message': 'Invalid verification link.'})
+    if ev.verified:
+        return render(request, 'core/email_verified.html', {'success': True, 'message': 'Email already verified. You can now login.'})
+    if ev.is_expired:
+        return render(request, 'core/email_verified.html', {'success': False, 'message': 'Verification link has expired. Please register again.'})
+    ev.verified = True
+    ev.save(update_fields=['verified'])
+    ev.user.is_active = True
+    ev.user.save(update_fields=['is_active'])
+    return render(request, 'core/email_verified.html', {'success': True, 'message': 'Email verified successfully! You can now login.'})
 
 
 def ajax_logout(request):
@@ -6018,6 +6117,30 @@ def user_sync_api(request):
             'os_version': body.get('osVersion', ''),
         },
     )
+
+    # Auto-create or link Django User for web login
+    if not user_obj.user:
+        display_name = body.get('displayName', '') or email.split('@')[0]
+        username = email.split('@')[0]
+        # Ensure unique username
+        base_username = username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        # Create user with unusable password (login via email on web)
+        django_user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=None,
+        )
+        django_user.first_name = display_name
+        django_user.save()
+        user_obj.user = django_user
+        user_obj.save(update_fields=['user'])
+    elif not user_obj.user.has_usable_password():
+        # User exists but has no password — set one from googleId as fallback
+        pass
 
     return JsonResponse({
         'status': 'success',

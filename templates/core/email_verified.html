@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Email Verification{% endblock %}
+
+{% block content %}
+<div class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+    <div class="card bg-dark border-secondary shadow-lg" style="max-width: 480px; width: 100%;">
+        <div class="card-body text-center p-5">
+            {% if success %}
+                <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+                <h3 class="text-success mb-3">Verified!</h3>
+                <p class="text-white">{{ message }}</p>
+                <a href="/" class="btn btn-primary mt-3 px-4">Go to Homepage</a>
+                <button onclick="openAuthModal('login')" class="btn btn-outline-light mt-3 px-4">Login Now</button>
+            {% else %}
+                <div style="font-size: 4rem; margin-bottom: 1rem;">❌</div>
+                <h3 class="text-danger mb-3">Verification Failed</h3>
+                <p class="text-white">{{ message }}</p>
+                <a href="/" class="btn btn-outline-light mt-3 px-4">Go to Homepage</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
