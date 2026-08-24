@@ -69,8 +69,8 @@ function _tryCurrentSource(mediaEl) {
     var h = new window.Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      maxBufferLength: 900,
-      maxMaxBufferLength: 1800,
+      maxBufferLength: 300,
+      maxMaxBufferLength: 600,
       backBufferLength: 60,
       highBufferWatchdogPeriod: 0.3,
       nudgeOffset: 0.1,
