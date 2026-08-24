@@ -402,7 +402,7 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
             <button id="play-button" class="det-btn det-btn-play">
                 <i class="fas fa-play"></i> Play
             </button>
-            <button class="det-btn det-btn-ghost" onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
+            <button id="watchlist-btn" class="det-btn det-btn-ghost" data-tmdb-id="{{ movie.id }}" data-media-type="movie" onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
                 <i class="fas fa-plus"></i> My List
             </button>
         </div>

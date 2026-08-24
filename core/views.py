@@ -2994,23 +2994,27 @@ def ajax_toggle_watchlist(request):
     if request.method == 'POST':
         tmdb_id = int(request.POST.get('tmdb_id'))
         media_type = request.POST.get('media_type')
-        title = request.POST.get('title')
-        poster_path = request.POST.get('poster_path')
+        title = request.POST.get('title', '')
+        poster_path = request.POST.get('poster_path', '')
 
-        watchlist_item, created = WatchList.objects.get_or_create(
+        existing = WatchList.objects.filter(
+            user=request.user,
+            tmdb_id=tmdb_id,
+            media_type=media_type
+        )
+
+        if existing.exists():
+            existing.delete()
+            return JsonResponse({'success': True, 'action': 'removed', 'message': 'Removed from watchlist'})
+
+        WatchList.objects.create(
             user=request.user,
             tmdb_id=tmdb_id,
             media_type=media_type,
-            defaults={
-                'title': title,
-                'poster_path': poster_path
-            }
+            title=title,
+            poster_path=poster_path
         )
-
-        if created:
-            return JsonResponse({'success': True, 'action': 'added', 'message': 'Added to watchlist'})
-
-        return JsonResponse({'success': True, 'action': 'exists', 'message': 'Already in watchlist'})
+        return JsonResponse({'success': True, 'action': 'added', 'message': 'Added to watchlist'})
 
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
@@ -3027,7 +3031,7 @@ def ajax_check_watchlist(request):
         media_type=media_type
     ).exists()
     return JsonResponse({'in_watchlist': in_watchlist})
-4
+
 
 @login_required
 def watchlist(request):
