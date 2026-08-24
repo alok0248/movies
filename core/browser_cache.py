@@ -4,9 +4,6 @@
 class BrowserCacheMiddleware:
     """Set Cache-Control headers so browsers keep pages cached."""
 
-    # Pages that can be cached in the browser
-    CACHEABLE_PATHS = ('/movies/', '/series/', '/collection/', '/upcoming/', '/search/')
-
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -19,12 +16,11 @@ class BrowserCacheMiddleware:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return response
 
-        path = request.path
-        # Detail pages: cache for 1 hour
-        if any(path.startswith(p) for p in self.CACHEABLE_PATHS):
-            response['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400'
-        # Home page: cache for 10 minutes
-        elif path == '/':
-            response['Cache-Control'] = 'public, max-age=600, stale-while-revalidate=3600'
+        # All HTML pages: always revalidate so changes appear on reload
+        content_type = response.get('Content-Type', '')
+        if 'text/html' in content_type:
+            response['Cache-Control'] = 'no-cache, must-revalidate'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
 
         return response
