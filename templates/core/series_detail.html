@@ -664,6 +664,7 @@ function updateEpisodeDetails(episodeData) {
     if (episodeData.overview) html += '<p class="det-ep-overview">' + episodeData.overview + '</p>';
     html += '</div></div>';
     el.innerHTML = html;
+    if (typeof currentEpisodeTitle !== 'undefined') currentEpisodeTitle = episodeData.name || '';
 }
 
 function renderEpisodeList(episodeList) {
@@ -836,6 +837,7 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
         poster_path: '{{ series.poster_path|default:'' }}'
     };
     var resumed = false;
+    var currentEpisodeTitle = '';
 
     function getVideoEl() {
         return document.getElementById('mainVideo');
@@ -848,6 +850,7 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
         var payload = Object.assign({}, playData, {
             season_number: currentSeason,
             episode_number: currentEpisode,
+            episode_title: currentEpisodeTitle,
             duration_seconds: Math.floor(v.currentTime),
             total_duration_seconds: Math.floor(v.duration || 0),
             completed: completed
@@ -855,8 +858,7 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
         try {
             fetch("{% url 'ajax_record_play_progress' %}", {
                 method: 'POST',
-                var _csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value; if (!_csrf) { var m = document.cookie.match(/csrftoken=([^;]+)/); _csrf = m ? m[1] : ''; }
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('meta[name="csrf-token"]') || {}).content || ''},
                 body: JSON.stringify(payload)
             });
         } catch(e) {}

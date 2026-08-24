@@ -754,8 +754,7 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         try {
             fetch("{% url 'ajax_record_play_progress' %}", {
                 method: 'POST',
-                var _csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value; if (!_csrf) { var m = document.cookie.match(/csrftoken=([^;]+)/); _csrf = m ? m[1] : ''; }
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('meta[name="csrf-token"]') || {}).content || ''},
                 body: JSON.stringify(payload)
             });
         } catch(e) {}
