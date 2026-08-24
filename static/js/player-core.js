@@ -116,12 +116,9 @@ function _tryCurrentSource(mediaEl) {
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
 
   if (s.url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    // Fetch manifest via proxy, rewrite segment URLs client-side, play via Blob
+    // Fetch manifest via proxy — server already rewrites segment URLs to go through /proxy/
     fetch(proxyUrl).then(function(r) { return r.text(); }).then(function(manifest) {
-      var rewritten = _rewriteManifest(manifest, s.url);
-      var blob = new Blob([rewritten], {type: 'application/vnd.apple.mpegurl'});
-      var blobUrl = URL.createObjectURL(blob);
-      console.log('[Player] Manifest rewritten, playing via Blob. Segments will proxy through:', location.origin + '/proxy/');
+      console.log('[Player] Manifest fetched via proxy, playing directly');
       var h = new window.Hls({
         enableWorker: true,
         lowLatencyMode: false,
@@ -146,13 +143,12 @@ function _tryCurrentSource(mediaEl) {
         debug: false,
         xhrSetup: function(xhr) { xhr.timeout = 30000; }
       });
-      h.loadSource(blobUrl); h.attachMedia(mediaEl);
+      h.loadSource(proxyUrl); h.attachMedia(mediaEl);
       h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
       h.on(window.Hls.Events.ERROR, function(evt, data) {
         if (data.fatal) {
           console.warn('[Player] HLS error:', data.type, data.details, 'on', s.server, s.quality);
           h.destroy(); _mainHls = null;
-          URL.revokeObjectURL(blobUrl);
           _advanceSource(mediaEl);
         }
       });
