@@ -385,7 +385,7 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
                 <i class="fas fa-play"></i> Play
             </button>
             <button id="watchlist-btn" class="det-btn det-btn-ghost" data-tmdb-id="{{ series.id }}" data-media-type="tv" onclick="toggleWatchlist({{ series.id }}, 'tv', '{{ series.title|escapejs }}', '{{ series.poster_path|default:'' }}')">
-                <i class="fas fa-plus"></i> My List
+                <i class="fas fa-plus" id="watchlist-icon"></i> <span id="watchlist-text">Add to Watchlist</span>
             </button>
         </div>
         {% if all_players %}
