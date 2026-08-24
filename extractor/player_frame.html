@@ -235,6 +235,29 @@
   }
 
   try{parent.postMessage({type:"frameReady"},"*")}catch(e){}
+  // Background session refresh: ping the proxy URL every 4 min to keep upstream alive
+  var _currentPlayUrl = '';
+  var _sessionRefreshTimer = null;
+  function _startSessionRefresh(url) {
+    _currentPlayUrl = url;
+    if (_sessionRefreshTimer) clearInterval(_sessionRefreshTimer);
+    _sessionRefreshTimer = setInterval(function() {
+      if (!_currentPlayUrl) return;
+      var px = makeProxy(_currentPlayUrl);
+      fetch(px, { method: 'HEAD', mode: 'no-cors' }).catch(function(){});
+    }, 240000); // every 4 minutes
+  }
+  // Hook into playUrl and playDual to track current URL
+  var _origPlayUrl = playUrl;
+  playUrl = function(url) { _startSessionRefresh(url); _origPlayUrl(url); };
+  var _origPlayDual = playDual;
+  playDual = function(videoUrl, audioUrl) { _startSessionRefresh(videoUrl); _origPlayDual(videoUrl, audioUrl); };
+  // Also start on first play message
+  window.addEventListener('message', function(ev) {
+    if (ev.data && ev.data.type === 'play' && ev.data.url) _startSessionRefresh(ev.data.url);
+    if (ev.data && ev.data.type === 'playDual' && ev.data.videoUrl) _startSessionRefresh(ev.data.videoUrl);
+  });
+
 
   video.addEventListener("play",function(){try{parent.postMessage({type:"videoResumed"},"*")}catch(e){}});
   /* Notify parent when video starts playing */
