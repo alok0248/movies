@@ -10,17 +10,22 @@ function _showBuf(vid) {
     el = document.createElement('div');
     el.id = 'bufOverlay';
     el.className = 'buf-overlay';
-    el.innerHTML = '<div class="buf-ring"></div><div class="buf-text">Buffering<span class="player-loading-dots"><span>.</span><span>.</span><span>.</span></span></div><div class="buf-bar-wrap"><div class="buf-bar" id="bufBar"></div></div>';
+    el.innerHTML = '<div class="buf-ring"></div><div class="buf-text">Buffering<span class="player-loading-dots"><span>.</span><span>.</span><span>.</span></span></div><div class="buf-info" id="bufInfo"></div><div class="buf-bar-wrap"><div class="buf-bar" id="bufBar"></div></div>';
     p.appendChild(el);
   }
   el.classList.add('show');
-  // Update progress bar
   _bufInterval = setInterval(function() {
     var bar = document.getElementById('bufBar');
+    var info = document.getElementById('bufInfo');
     if (!bar || vid.buffered.length === 0) return;
     var end = vid.buffered.end(vid.buffered.length - 1);
     var pct = vid.duration ? (end / vid.duration * 100) : 0;
     bar.style.width = Math.min(pct, 100) + '%';
+    if (info) {
+      var ahead = Math.max(0, vid.currentTime - vid.buffered.start(0));
+      var bufAhead = Math.max(0, end - vid.currentTime);
+      info.textContent = 'Buffered: ' + Math.round(pct) + '% | Ahead: ' + Math.round(bufAhead) + 's';
+    }
   }, 300);
 }
 var _bufInterval = null;
@@ -35,6 +40,23 @@ function _initBufEvents(vid) {
   vid.addEventListener('canplay', function() { _hideBuf(); });
   vid.addEventListener('seeking', function() { _showBuf(vid); });
   vid.addEventListener('seeked', function() { _hideBuf(); });
+  /* Persistent buffer progress bar at bottom of video */
+  var barWrap = document.createElement('div');
+  barWrap.id = 'persistentBufBar';
+  barWrap.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.15);z-index:7;pointer-events:none;border-radius:0 0 16px 16px;overflow:hidden;';
+  var barFill = document.createElement('div');
+  barFill.id = 'persistentBufFill';
+  barFill.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg,#e50914,#ff4d4d);transition:width .5s ease;border-radius:2px;';
+  barWrap.appendChild(barFill);
+  vid.parentNode.appendChild(barWrap);
+  /* Update persistent bar every 500ms */
+  setInterval(function() {
+    var fill = document.getElementById('persistentBufFill');
+    if (!fill || vid.buffered.length === 0 || !vid.duration) return;
+    var end = vid.buffered.end(vid.buffered.length - 1);
+    var pct = (end / vid.duration) * 100;
+    fill.style.width = Math.min(pct, 100) + '%';
+  }, 500);
 }
 
 var _sourceQueue = []; var _srcIdx = 0; var _triedUrls = {};
@@ -103,25 +125,26 @@ function _tryCurrentSource(mediaEl) {
       var h = new window.Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        maxBufferLength: 300,
-        maxMaxBufferLength: 600,
+        maxBufferLength: 900,
+        maxMaxBufferLength: 1800,
         backBufferLength: 60,
-        highBufferWatchdogPeriod: 0.3,
+        highBufferWatchdogPeriod: 0.2,
         nudgeOffset: 0.1,
         maxSeekHole: 60,
         fragLoadingTimeOut: 30000,
         manifestLoadingTimeOut: 15000,
         levelLoadingTimeOut: 15000,
-        fragLoadingMaxRetry: 3,
-        levelLoadingMaxRetry: 2,
-        manifestLoadingMaxRetry: 3,
+        fragLoadingMaxRetry: 8,
+        levelLoadingMaxRetry: 6,
+        manifestLoadingMaxRetry: 6,
         startLevel: -1,
         capLevelToPlayerSize: true,
         stretchShortVideoTrack: true,
         maxAudioFramesDrift: 4,
         startFragPrefetch: true,
         maxBufferSize: 209715200,
-        debug: false
+        debug: false,
+        xhrSetup: function(xhr) { xhr.timeout = 30000; }
       });
       h.loadSource(blobUrl); h.attachMedia(mediaEl);
       h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
