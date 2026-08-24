@@ -65,6 +65,7 @@ urlpatterns = [
     path('admin-dashboard/android-apps/<int:app_id>/analytics/', views.android_app_dashboard, name='android_app_dashboard_detail'),
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
     path('admin-dashboard/android-apps/<int:app_id>/integration-guide/', views.android_app_integration_guide, name='android_app_integration_guide'),
+    path('admin-dashboard/android-apps/user-sync-reference/', views.android_user_sync_reference, name='android_user_sync_reference'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/json/', views.ajax_android_app_dashboard, name='ajax_android_app_dashboard'),
     path('admin-dashboard/web-management/', views.web_management_dashboard, name='web_management_dashboard'),
     path('admin-dashboard/web-management/data/', views.ajax_web_management_dashboard, name='ajax_web_management_dashboard'),

@@ -2566,6 +2566,51 @@ def android_app_integration_guide(request, app_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def android_user_sync_reference(request):
+    """Display backend integration reference for the Android user sync endpoint."""
+    sample_request_body = json.dumps({
+        'email': 'user@example.com',
+        'displayName': 'John Doe',
+        'photoUrl': 'https://example.com/photo.jpg',
+        'googleId': '1098234729183749',
+        'idToken': 'eyJhbGciOi...',
+        'appVersion': '3.4.8.350',
+        'buildNumber': 350,
+        'deviceId': 'android_1837482',
+        'deviceModel': 'Pixel 8',
+        'osVersion': '14',
+        'action': 'login_or_sync',
+        'timestamp': 1724480000000,
+    }, indent=4)
+
+    sample_response = json.dumps({
+        'status': 'success',
+        'message': 'User synced successfully',
+        'subscription': {
+            'isSubscribed': True,
+            'plan': 'VIP Premium',
+            'validUntil': '2026-12-31',
+            'daysRemaining': 130,
+            'features': [
+                'Ad-Free Streaming',
+                '4K Ultra HD',
+                'VIP Live TV Channels',
+                'Unlimited Downloads',
+            ],
+        },
+    }, indent=4)
+
+    basic_auth_value = base64.b64encode(b'testing:testing').decode('utf-8')
+
+    return render(request, 'core/android_user_sync_reference.html', {
+        'sample_request_body': sample_request_body,
+        'sample_response': sample_response,
+        'basic_auth_value': basic_auth_value,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def ajax_android_app_dashboard(request, app_id):
     selected_app = get_object_or_404(AndroidApp, id=app_id)
     # Auto-clean old analytics data based on retention setting
