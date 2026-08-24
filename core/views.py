@@ -2940,6 +2940,12 @@ def ajax_register(request):
         if len(password) < 6:
             return JsonResponse({'success': False, 'message': 'Password must be at least 6 characters'})
         
+        # Only allow Gmail and Yahoo emails
+        allowed_domains = ['gmail.com', 'yahoo.com', 'yahoo.co.in']
+        email_domain = email.split('@')[-1] if '@' in email else ''
+        if email_domain not in allowed_domains:
+            return JsonResponse({'success': False, 'message': 'We don\'t support this email. Please use Gmail or Yahoo.'})
+        
         # Check if email already exists (web or Android-synced user)
         existing_user = User.objects.filter(email=email).first()
         if existing_user:
