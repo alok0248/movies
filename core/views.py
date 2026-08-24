@@ -5876,3 +5876,110 @@ def ajax_delete_ad_file(request):
         return JsonResponse({'ok': True, 'message': f'{filename} deleted'})
     except Exception as e:
         return JsonResponse({'ok': False, 'message': str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Android User Sync API + Admin
+# ---------------------------------------------------------------------------
+from .models import SyncedUser
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def user_sync_api(request):
+    """POST /api/user/sync — receive login/sync from Android app."""
+    # Validate Basic Auth
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Basic '):
+        return JsonResponse({'status': 'error', 'message': 'Missing Authorization header'}, status=401)
+    try:
+        import base64
+        decoded = base64.b64decode(auth_header.split(' ', 1)[1]).decode('utf-8')
+        username, password = decoded.split(':', 1)
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Invalid Authorization header'}, status=401)
+
+    # Validate credentials against stored endpoint credentials (first AndroidApp)
+    from .models import AndroidApp
+    app_identity = request.META.get('HTTP_X_ANDROID_APP', '')
+    build_id = request.META.get('HTTP_X_ANDROID_BUILD', '')
+    user_email_header = request.META.get('HTTP_X_ANDROID_USER_EMAIL', '')
+
+    # Check against registered Android apps
+    app_match = AndroidApp.objects.filter(
+        access_username=username,
+        access_password=password,
+        is_active=True,
+    ).first()
+    if not app_match:
+        return JsonResponse({'status': 'error', 'message': 'Invalid credentials'}, status=403)
+
+    # Parse request body
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = body.get('email', '')
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    # Upsert synced user
+    user_obj, created = SyncedUser.objects.update_or_create(
+        email=email,
+        defaults={
+            'display_name': body.get('displayName', ''),
+            'photo_url': body.get('photoUrl', ''),
+            'google_id': body.get('googleId', ''),
+            'app_version': body.get('appVersion', ''),
+            'build_number': body.get('buildNumber', 0),
+            'device_id': body.get('deviceId', ''),
+            'device_model': body.get('deviceModel', ''),
+            'os_version': body.get('osVersion', ''),
+        },
+    )
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'User synced successfully',
+        'subscription': user_obj.subscription_payload(),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def synced_users_list(request):
+    """Admin page listing all synced Android users."""
+    users = SyncedUser.objects.all().order_by('-last_synced_at')
+    return render(request, 'core/synced_users_list.html', {'users': users})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def synced_user_edit(request, user_id):
+    """Admin: edit a synced user's subscription."""
+    user_obj = get_object_or_404(SyncedUser, id=user_id)
+    if request.method == 'POST':
+        user_obj.is_subscribed = request.POST.get('is_subscribed') == 'on'
+        user_obj.plan = request.POST.get('plan', '')
+        valid_until = request.POST.get('valid_until', '')
+        if valid_until:
+            import datetime
+            user_obj.valid_until = datetime.date.fromisoformat(valid_until)
+        else:
+            user_obj.valid_until = None
+        features_raw = request.POST.get('features', '')
+        user_obj.features = [f.strip() for f in features_raw.split('\n') if f.strip()]
+        user_obj.save()
+        return redirect('synced_users_list')
+    return render(request, 'core/synced_user_edit.html', {'synced_user': user_obj})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def synced_user_delete(request, user_id):
+    """Admin: delete a synced user."""
+    user_obj = get_object_or_404(SyncedUser, id=user_id)
+    if request.method == 'POST':
+        user_obj.delete()
+    return redirect('synced_users_list')

@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5 mb-5" style="max-width: 700px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="text-white mb-1"><i class="fas fa-user-edit me-2 text-warning"></i>Edit User Subscription</h1>
+            <p class="text-secondary mb-0">{{ synced_user.display_name|default:synced_user.email }}</p>
+        </div>
+        <a href="{% url 'synced_users_list' %}" class="btn btn-outline-light">&larr; Back to Users</a>
+    </div>
+
+    <!-- User Info Card -->
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h6 class="text-secondary mb-3">User Info</h6>
+            <div class="row g-3 small">
+                <div class="col-md-6">
+                    <div class="text-secondary">Email</div>
+                    <div class="text-white">{{ synced_user.email }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Display Name</div>
+                    <div class="text-white">{{ synced_user.display_name|default:'-' }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Device</div>
+                    <div class="text-white">{{ synced_user.device_model|default:'-' }} (Android {{ synced_user.os_version }})</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">App Version</div>
+                    <div class="text-white">{{ synced_user.app_version|default:'-' }} (build {{ synced_user.build_number }})</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Device ID</div>
+                    <div class="text-white"><code>{{ synced_user.device_id|default:'-' }}</code></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-secondary">Google ID</div>
+                    <div class="text-white"><code>{{ synced_user.google_id|default:'-' }}</code></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscription Edit Form -->
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-body">
+            <h6 class="text-white mb-3">Subscription Settings</h6>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="is_subscribed" name="is_subscribed" {% if synced_user.is_subscribed %}checked{% endif %}>
+                        <label class="form-check-label text-white" for="is_subscribed">Active Subscription</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white small">Plan Name</label>
+                    <input type="text" class="form-control bg-dark border-secondary text-white" name="plan" value="{{ synced_user.plan }}" placeholder="e.g. VIP Premium">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white small">Valid Until</label>
+                    <input type="date" class="form-control bg-dark border-secondary text-white" name="valid_until" value="{{ synced_user.valid_until|date:'Y-m-d'|default:'' }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white small">Features (one per line)</label>
+                    <textarea class="form-control bg-dark border-secondary text-white" name="features" rows="5" placeholder="Ad-Free Streaming&#10;4K Ultra HD&#10;VIP Live TV Channels&#10;Unlimited Downloads">{{ synced_user.features|join:"\n" }}</textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">Save Changes</button>
+                    <a href="{% url 'synced_users_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
