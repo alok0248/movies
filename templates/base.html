@@ -984,6 +984,7 @@
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" aria-labelledby="userDropdown">
                                 <li><a class="dropdown-item" href="{% url 'watchlist' %}">📋 My Watch List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'user_play_history' %}">🕐 Play History</a></li>
                                 {% if user.is_staff or user.is_superuser %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">📊 Admin Dashboard</a></li>

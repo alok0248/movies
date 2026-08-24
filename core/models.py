@@ -1081,3 +1081,49 @@ class SyncedUser(models.Model):
             'daysRemaining': self.days_remaining,
             'features': self.features or [],
         }
+
+
+class PlayHistory(models.Model):
+    """Track play sessions for logged-in users."""
+    MEDIA_TYPE_CHOICES = [
+        ('movie', 'Movie'),
+        ('tv', 'TV Show'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='play_history')
+    tmdb_id = models.IntegerField()
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES)
+    title = models.CharField(max_length=255)
+    poster_path = models.CharField(max_length=255, blank=True, null=True)
+    season_number = models.IntegerField(null=True, blank=True)
+    episode_number = models.IntegerField(null=True, blank=True)
+    episode_title = models.CharField(max_length=255, blank=True, default='')
+    duration_seconds = models.IntegerField(default=0)
+    total_duration_seconds = models.IntegerField(default=0)
+    completed = models.BooleanField(default=False)
+    last_played_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'tmdb_id', 'media_type', 'season_number', 'episode_number')
+        ordering = ['-last_played_at']
+        indexes = [
+            models.Index(fields=['user', 'last_played_at']),
+        ]
+
+    def __str__(self):
+        label = self.title
+        if self.season_number and self.episode_number:
+            label += f" S{self.season_number}E{self.episode_number}"
+        return f"{self.user.username} - {label}"
+
+    @property
+    def progress_percent(self):
+        if not self.total_duration_seconds:
+            return 0
+        return min(100, round((self.duration_seconds / self.total_duration_seconds) * 100))
+
+    @property
+    def formatted_duration(self):
+        m, s = divmod(self.duration_seconds, 60)
+        h, m = divmod(m, 60)
+        return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"

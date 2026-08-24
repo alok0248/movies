@@ -6030,3 +6030,56 @@ def user_dashboard(request):
         'version_stats': version_stats,
         'plan_stats': plan_stats,
     })
+
+
+from .models import PlayHistory
+
+
+@require_http_methods(["POST"])
+def ajax_record_play_progress(request):
+    """Record play progress for a logged-in user."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Not authenticated'})
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'})
+
+    tmdb_id = data.get('tmdb_id')
+    media_type = data.get('media_type', 'movie')
+    title = data.get('title', '')
+    poster_path = data.get('poster_path', '')
+    season_number = data.get('season_number')
+    episode_number = data.get('episode_number')
+    episode_title = data.get('episode_title', '')
+    duration_seconds = int(data.get('duration_seconds', 0))
+    total_duration_seconds = int(data.get('total_duration_seconds', 0))
+    completed = data.get('completed', False)
+
+    if not tmdb_id:
+        return JsonResponse({'success': False, 'message': 'tmdb_id required'})
+
+    history, created = PlayHistory.objects.update_or_create(
+        user=request.user,
+        tmdb_id=tmdb_id,
+        media_type=media_type,
+        season_number=season_number,
+        episode_number=episode_number,
+        defaults={
+            'title': title,
+            'poster_path': poster_path,
+            'episode_title': episode_title,
+            'duration_seconds': duration_seconds,
+            'total_duration_seconds': total_duration_seconds,
+            'completed': completed,
+        }
+    )
+    return JsonResponse({'success': True, 'created': created})
+
+
+@login_required
+def user_play_history(request):
+    """Show the user's play history."""
+    history = PlayHistory.objects.filter(user=request.user).order_by('-last_played_at')
+    return render(request, 'core/user_play_history.html', {'history': history})

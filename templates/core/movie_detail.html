@@ -725,6 +725,49 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         btn.innerHTML = '<i class="fas fa-times-circle"></i> Close'; btn.disabled = false;
     } else { ws.style.display = 'none'; btn.innerHTML = '<i class="fas fa-info-circle"></i> Info'; }
 });
+
+/* ===== Play Progress Tracking ===== */
+(function() {
+    var playStartTime = 0;
+    var playTimer = null;
+    var playData = {
+        tmdb_id: {{ movie.id }},
+        media_type: 'movie',
+        title: '{{ movie.title|escapejs }}',
+        poster_path: '{{ movie.poster_path|default:'' }}'
+    };
+
+    function recordProgress() {
+        if (!playStartTime) return;
+        var duration = Math.floor((Date.now() - playStartTime) / 1000);
+        if (duration < 5) return;
+        var payload = Object.assign({}, playData, {
+            duration_seconds: duration,
+            total_duration_seconds: {{ movie.runtime|default:0|default:0 }} * 60,
+            completed: false
+        });
+        try {
+            fetch("{% url 'ajax_record_play_progress' %}", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+                body: JSON.stringify(payload)
+            });
+        } catch(e) {}
+    }
+
+    window.addEventListener('message', function(ev) {
+        if (ev.data && ev.data.type === 'videoPlaying') {
+            if (!playStartTime) playStartTime = Date.now();
+            if (!playTimer) playTimer = setInterval(recordProgress, 15000);
+        } else if (ev.data && ev.data.type === 'videoPaused') {
+            recordProgress();
+        }
+    });
+
+    window.addEventListener('beforeunload', function() {
+        recordProgress();
+    });
+})();
 </script>
 <script src="/static/js/lazy-extras.js"></script>
 {% endblock %}
