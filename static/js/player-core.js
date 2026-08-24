@@ -69,22 +69,24 @@ function _tryCurrentSource(mediaEl) {
     var h = new window.Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      maxBufferLength: 300,
-      maxMaxBufferLength: 600,
-      backBufferLength: 120,
-      highBufferWatchdogPeriod: 0.5,
+      maxBufferLength: 900,
+      maxMaxBufferLength: 1800,
+      backBufferLength: 60,
+      highBufferWatchdogPeriod: 0.3,
       nudgeOffset: 0.1,
       maxSeekHole: 60,
-      fragLoadingTimeOut: 60000,
-      manifestLoadingTimeOut: 30000,
-      levelLoadingTimeOut: 30000,
-      fragLoadingMaxRetry: 6,
-      levelLoadingMaxRetry: 4,
-      manifestLoadingMaxRetry: 4,
+      fragLoadingTimeOut: 30000,
+      manifestLoadingTimeOut: 15000,
+      levelLoadingTimeOut: 15000,
+      fragLoadingMaxRetry: 8,
+      levelLoadingMaxRetry: 6,
+      manifestLoadingMaxRetry: 6,
       startLevel: -1,
       capLevelToPlayerSize: true,
       stretchShortVideoTrack: true,
       maxAudioFramesDrift: 4,
+      startFragPrefetch: true,
+      maxBufferSize: 209715200,
       debug: false
     });
     h.loadSource(url); h.attachMedia(mediaEl);
@@ -257,7 +259,7 @@ function switchDualAudio(){
   if(_audioHls){try{_audioHls.destroy();}catch(e){}_audioHls=null;}
   if(!_audioEl){_audioEl=document.createElement('audio');_audioEl.id='dualAudio';_audioEl.muted=false;document.body.appendChild(_audioEl);}
   _audioEl.muted=false; _audioEl.volume=1;
-  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,backBufferLength:120,highBufferWatchdogPeriod:0.5,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:30000,fragLoadingMaxRetry:6,levelLoadingMaxRetry:4,manifestLoadingMaxRetry:4,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,
+  if(d.url.indexOf('.m3u8')>-1&&window.Hls&&window.Hls.isSupported()){var h=new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,highBufferWatchdogPeriod:0.3,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,fragLoadingMaxRetry:8,levelLoadingMaxRetry:6,manifestLoadingMaxRetry:6,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:209715200,
     });h.loadSource((d.url));h.attachMedia(_audioEl);
     h.on(window.Hls.Events.MANIFEST_PARSED,function(){
       var v=document.getElementById('mainVideo');
