@@ -6179,3 +6179,64 @@ def user_play_history(request):
     """Show the user's play history."""
     history = PlayHistory.objects.filter(user=request.user).order_by('-last_played_at')
     return render(request, 'core/user_play_history.html', {'history': history})
+
+
+@require_http_methods(["GET"])
+def ajax_play_progress(request):
+    """Return play progress for a list of tmdb_ids (for poster progress bars)."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': True, 'items': {}})
+    ids_raw = request.GET.get('ids', '')
+    if not ids_raw:
+        return JsonResponse({'success': True, 'items': {}})
+    try:
+        tmdb_ids = [int(x.strip()) for x in ids_raw.split(',') if x.strip()]
+    except ValueError:
+        return JsonResponse({'success': True, 'items': {}})
+    history = PlayHistory.objects.filter(
+        user=request.user, tmdb_id__in=tmdb_ids
+    ).order_by('tmdb_id', '-last_played_at')
+    items = {}
+    for h in history:
+        key = str(h.tmdb_id)
+        if key not in items:
+            items[key] = {
+                'tmdb_id': h.tmdb_id,
+                'progress': h.progress_percent,
+                'completed': h.completed,
+                'duration': h.duration_seconds,
+                'total': h.total_duration_seconds,
+                'season': h.season_number,
+                'episode': h.episode_number,
+                'title': h.title,
+            }
+    return JsonResponse({'success': True, 'items': items})
+
+
+@require_http_methods(["GET"])
+def ajax_resume_position(request):
+    """Return the last playback position for resume."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': True, 'position': 0})
+    tmdb_id = request.GET.get('tmdb_id', '')
+    media_type = request.GET.get('media_type', 'movie')
+    season = request.GET.get('season')
+    episode = request.GET.get('episode')
+    try:
+        tmdb_id = int(tmdb_id)
+    except (ValueError, TypeError):
+        return JsonResponse({'success': True, 'position': 0})
+    kwargs = {'user': request.user, 'tmdb_id': tmdb_id, 'media_type': media_type}
+    if season:
+        kwargs['season_number'] = int(season)
+    if episode:
+        kwargs['episode_number'] = int(episode)
+    last = PlayHistory.objects.filter(**kwargs).order_by('-last_played_at').first()
+    if last and not last.completed and last.duration_seconds > 10:
+        return JsonResponse({
+            'success': True,
+            'position': last.duration_seconds,
+            'progress': last.progress_percent,
+            'title': last.title,
+        })
+    return JsonResponse({'success': True, 'position': 0})

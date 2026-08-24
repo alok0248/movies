@@ -2041,6 +2041,7 @@
             updateAllWatchlistButtons();
             initCardHoverTitles();
             initLazyImageLoading();
+            loadProgressBars();
             initScrollProgressAndBackToTop();
         });
 
@@ -2796,6 +2797,40 @@
             tester.src = src;
         }
 
+        /* ===== Play Progress Bars on Posters ===== */
+        function loadProgressBars() {
+            var cards = document.querySelectorAll('.card-wrapper[data-tmdb-id], .card-wrapper[data-media-id]');
+            var ids = [];
+            cards.forEach(function(c) {
+                var id = c.dataset.tmdbId || c.dataset.mediaId;
+                if (id && ids.indexOf(id) === -1) ids.push(id);
+            });
+            if (!ids.length || !document.cookie.includes('sessionid')) return;
+            fetch('/ajax/play-progress/?ids=' + ids.join(','))
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d.success || !d.items) return;
+                    cards.forEach(function(c) {
+                        var id = c.dataset.tmdbId || c.dataset.mediaId;
+                        var item = d.items[String(id)];
+                        if (!item || item.completed) return;
+                        var imgContainer = c.querySelector('.card-image-container');
+                        if (!imgContainer) return;
+                        var existing = imgContainer.querySelector('.progress-bar-overlay');
+                        if (existing) existing.remove();
+                        var pct = item.progress || 0;
+                        if (pct < 1) return;
+                        var bar = document.createElement('div');
+                        bar.className = 'progress-bar-overlay';
+                        bar.style.cssText = 'position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(0,0,0,.6);z-index:5;border-radius:0 0 8px 8px;';
+                        var fill = document.createElement('div');
+                        fill.style.cssText = 'height:100%;width:' + pct + '%;background:var(--brand,#e50914);border-radius:0 0 8px 8px;transition:width .3s;';
+                        bar.appendChild(fill);
+                        imgContainer.appendChild(bar);
+                    });
+                })
+                .catch(function() {});
+        }
         function initLazyImageLoading() {
             var lazyImgs = document.querySelectorAll('img.lazy-image[data-src]');
             if (!lazyImgs.length) return;
