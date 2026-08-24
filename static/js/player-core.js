@@ -47,6 +47,27 @@ function _makeProxyUrl(url) {
   } catch(e) { return url; }
 }
 
+function _rewriteManifest(text, baseUrl) {
+  var lines = text.split('\n');
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) { out.push(''); continue; }
+    if (line.charAt(0) === '#') {
+      // Rewrite URI= in tags
+      out.push(line.replace(/URI="([^"]+)"/g, function(m, u) {
+        if (u.indexOf('http') === 0) return 'URI="' + _makeProxyUrl(u) + '"';
+        return 'URI="' + _makeProxyUrl(new URL(u, baseUrl).href) + '"';
+      }));
+    } else {
+      // Segment URL — make absolute then proxy
+      var full = line.indexOf('http') === 0 ? line : new URL(line, baseUrl).href;
+      out.push(_makeProxyUrl(full));
+    }
+  }
+  return out.join('\n');
+}
+
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
   _srcIdx = 0;
@@ -67,52 +88,62 @@ function _tryCurrentSource(mediaEl) {
   if (_srcIdx >= _sourceQueue.length) { console.error('All sources exhausted'); hidePlayerLoading(); return; }
   var s = _sourceQueue[_srcIdx];
   if (_triedUrls[s.url]) { _srcIdx++; _tryCurrentSource(mediaEl); return; }
-  _triedUrls[s.url] = 1;
-  console.log('PLAY: '+s.server+' '+s.quality+' '+s.url.substring(0,80));
-  var url = _makeProxyUrl(s.url);
+  _triedUrls[s.url] = 1;  console.log('PLAY: '+s.server+' '+s.quality+' '+s.url.substring(0,80));
+  var proxyUrl = _makeProxyUrl(s.url);
 
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
 
-  if (url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    var h = new window.Hls({
-      enableWorker: true,
-      lowLatencyMode: false,
-      maxBufferLength: 300,
-      maxMaxBufferLength: 600,
-      backBufferLength: 60,
-      highBufferWatchdogPeriod: 0.3,
-      nudgeOffset: 0.1,
-      maxSeekHole: 60,
-      fragLoadingTimeOut: 30000,
-      manifestLoadingTimeOut: 15000,
-      levelLoadingTimeOut: 15000,
-      fragLoadingMaxRetry: 3,
-      levelLoadingMaxRetry: 2,
-      manifestLoadingMaxRetry: 3,
-      startLevel: -1,
-      capLevelToPlayerSize: true,
-      stretchShortVideoTrack: true,
-      maxAudioFramesDrift: 4,
-      startFragPrefetch: true,
-      maxBufferSize: 209715200,
-      debug: false
+  if (s.url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
+    // Fetch manifest via proxy, rewrite segment URLs client-side, play via Blob
+    fetch(proxyUrl).then(function(r) { return r.text(); }).then(function(manifest) {
+      var rewritten = _rewriteManifest(manifest, s.url);
+      var blob = new Blob([rewritten], {type: 'application/vnd.apple.mpegurl'});
+      var blobUrl = URL.createObjectURL(blob);
+      console.log('[Player] Manifest rewritten, playing via Blob. Segments will proxy through:', location.origin + '/proxy/');
+      var h = new window.Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        maxBufferLength: 300,
+        maxMaxBufferLength: 600,
+        backBufferLength: 60,
+        highBufferWatchdogPeriod: 0.3,
+        nudgeOffset: 0.1,
+        maxSeekHole: 60,
+        fragLoadingTimeOut: 30000,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 15000,
+        fragLoadingMaxRetry: 3,
+        levelLoadingMaxRetry: 2,
+        manifestLoadingMaxRetry: 3,
+        startLevel: -1,
+        capLevelToPlayerSize: true,
+        stretchShortVideoTrack: true,
+        maxAudioFramesDrift: 4,
+        startFragPrefetch: true,
+        maxBufferSize: 209715200,
+        debug: false
+      });
+      h.loadSource(blobUrl); h.attachMedia(mediaEl);
+      h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
+      h.on(window.Hls.Events.ERROR, function(evt, data) {
+        if (data.fatal) {
+          console.warn('[Player] HLS error:', data.type, data.details, 'on', s.server, s.quality);
+          h.destroy(); _mainHls = null;
+          URL.revokeObjectURL(blobUrl);
+          _advanceSource(mediaEl);
+        }
+      });
+      _mainHls = h;
+    }).catch(function(err) {
+      console.error('[Player] Manifest fetch failed:', err);
+      _advanceSource(mediaEl);
     });
-    h.loadSource(url); h.attachMedia(mediaEl);
-    h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
-    h.on(window.Hls.Events.ERROR, function(evt, data) {
-      if (data.fatal) {
-        console.warn('[Player] HLS error:', data.type, data.details, 'on', s.server, s.quality);
-        h.destroy(); _mainHls = null;
-        _advanceSource(mediaEl);
-      }
-    });
-    _mainHls = h;
-  } else if (url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    mediaEl.src = url;
+  } else if (s.url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
+    mediaEl.src = proxyUrl;
     mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
     mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
   } else {
-    mediaEl.src = url; mediaEl.play().catch(function() {});
+    mediaEl.src = proxyUrl; mediaEl.play().catch(function () {});
     mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
   }
 }
