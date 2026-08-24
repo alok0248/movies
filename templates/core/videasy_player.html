@@ -625,7 +625,7 @@ function openPopPlayer() {
     '</head><body><video id="v" controls autoplay></video>' +
     '<script>var v=document.getElementById("v");' +
     'if("' + url + '".indexOf(".m3u8")>-1){' +
-    'if(Hls.isSupported()){var h=new Hls({enableWorker:true,maxBufferLength:300,maxMaxBufferLength:600,backBufferLength:120,fragLoadingTimeOut:60000,fragLoadingMaxRetry:6,startLevel:-1});h.loadSource("' + url + '");h.attachMedia(v);h.on(Hls.Events.MANIFEST_PARSED,function(){v.play()})}' +
+    'if(Hls.isSupported()){var h=new Hls({enableWorker:true,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,fragLoadingTimeOut:30000,fragLoadingMaxRetry:8,startFragPrefetch:true,maxBufferSize:209715200,startLevel:-1});h.loadSource("' + url + '");h.attachMedia(v);h.on(Hls.Events.MANIFEST_PARSED,function(){v.play()})}' +
     'else if(v.canPlayType("application/vnd.apple.mpegurl")){v.src="' + url + '"}}' +
     'else{v.src="' + url + '"}<\/script></body></html>');
   w.document.close();
