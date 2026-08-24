@@ -2542,13 +2542,20 @@
             const clickedButton = findWatchlistButton(tmdbId, mediaType);
 
             try {
+                var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                    || document.querySelector('meta[name="csrf-token"]')?.content
+                    || '';
                 const formData = new FormData();
                 formData.append('tmdb_id', tmdbId);
                 formData.append('media_type', mediaType);
                 formData.append('title', title);
                 formData.append('poster_path', posterPath);
+                formData.append('csrfmiddlewaretoken', csrfToken);
                 const response = await fetch('{% url "ajax_toggle_watchlist" %}', {
                     method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
                     body: formData
                 });
                 const data = await response.json();
