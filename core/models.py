@@ -1036,3 +1036,48 @@ class EmailDelivery(models.Model):
 
     def __str__(self):
         return f"{self.subscriber.email} <- {self.message.subject} [{self.status}]"
+
+
+class SyncedUser(models.Model):
+    """Android app user synced via POST /api/user/sync."""
+    email = models.EmailField(unique=True)
+    display_name = models.CharField(max_length=255, blank=True, default='')
+    photo_url = models.URLField(blank=True, default='')
+    google_id = models.CharField(max_length=100, blank=True, default='')
+    app_version = models.CharField(max_length=50, blank=True, default='')
+    build_number = models.IntegerField(default=0)
+    device_id = models.CharField(max_length=100, blank=True, default='')
+    device_model = models.CharField(max_length=100, blank=True, default='')
+    os_version = models.CharField(max_length=50, blank=True, default='')
+
+    # Subscription
+    is_subscribed = models.BooleanField(default=False)
+    plan = models.CharField(max_length=100, blank=True, default='')
+    valid_until = models.DateField(blank=True, null=True)
+    features = models.JSONField(default=list, blank=True)
+
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-last_synced_at']
+
+    def __str__(self):
+        return f"{self.display_name or self.email}"
+
+    @property
+    def days_remaining(self):
+        if not self.valid_until:
+            return 0
+        from datetime import date
+        delta = self.valid_until - date.today()
+        return max(0, delta.days)
+
+    def subscription_payload(self):
+        return {
+            'isSubscribed': self.is_subscribed,
+            'plan': self.plan,
+            'validUntil': self.valid_until.isoformat() if self.valid_until else None,
+            'daysRemaining': self.days_remaining,
+            'features': self.features or [],
+        }
