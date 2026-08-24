@@ -114,9 +114,13 @@ html[data-theme="light"] .src-dd-btn{background:rgba(0,0,0,.04);border-color:rgb
 html[data-theme="light"] .src-dd-menu{background:rgba(255,255,255,.97);border-color:rgba(0,0,0,.12)}
 html[data-theme="light"] .src-dd-opt{color:rgba(26,26,46,.85)}
 html[data-theme="light"] .src-dd-opt:hover{background:rgba(0,0,0,.06);color:#000}
+html[data-theme="light"] .ctrl-pop-btn{background:rgba(34,139,34,.08);border-color:rgba(34,139,34,.15);color:rgba(34,139,34,.9)}
+html[data-theme="light"] .ctrl-pop-btn:hover{background:rgba(34,139,34,.15)}
 html[data-theme="light"] .src-dd-opt.chosen{color:var(--brand,#e50914)}
 html[data-theme="light"] .src-dd-opt .opt-count{color:rgba(26,26,46,.5);background:rgba(0,0,0,.06)}
-html[data-theme="light"] .src-dd-label{color:rgba(26,26,46,.5)}
+html[data-theme="light"] .ctrl-pop-btn{display:inline-flex;align-items:center;gap:.3rem;padding:5px 10px;border-radius:6px;border:1px solid rgba(80,200,120,.3);background:rgba(80,200,120,.12);color:rgba(80,200,120,.9);font-size:.7rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.ctrl-pop-btn:hover{background:rgba(80,200,120,.25);border-color:rgba(80,200,120,.5)}
+.src-dd-label{color:rgba(26,26,46,.5)}
 html[data-theme="light"] .ctrl-toggle{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);color:rgba(26,26,46,.6)}
 html[data-theme="light"] .buf-ring{border-color:rgba(0,0,0,.1);border-top-color:var(--brand,#e50914)}{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1.2)}}
 
@@ -240,6 +244,7 @@ html[data-theme="light"] .buf-ring{border-color:rgba(0,0,0,.1);border-top-color:
   .src-dd-menu{min-width:150px;max-height:200px}
   .player-collapse-icon{width:28px;height:28px;bottom:44px;right:10px}
   .player-collapse-icon svg{width:14px;height:14px}
+  .ctrl-pop-btn{padding:4px 8px;font-size:.65rem}
 }
 @media(max-width:768px) and (min-width:481px){
   .src-selector{left:12px;right:12px;transform:none;bottom:48px;padding:5px 10px;gap:7px}
@@ -339,6 +344,8 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 .src-dd-opt:hover{background:rgba(255,255,255,.12);color:#fff}
 .src-dd-opt.chosen{color:var(--brand,#e50914);font-weight:700}
 .src-dd-opt .opt-count{font-size:.6rem;color:rgba(255,255,255,.5);background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px}
+.ctrl-pop-btn{display:inline-flex;align-items:center;gap:.3rem;padding:5px 10px;border-radius:6px;border:1px solid rgba(80,200,120,.3);background:rgba(80,200,120,.12);color:rgba(80,200,120,.9);font-size:.7rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.ctrl-pop-btn:hover{background:rgba(80,200,120,.25);border-color:rgba(80,200,120,.5)}
 .src-dd-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);font-weight:700;margin-right:.4rem;flex-shrink:0}
 .src-active-info{font-size:.65rem;color:rgba(255,255,255,.5);margin-left:.25rem}
 .dual-panel{position:absolute;bottom:110px;left:10px;right:10px;z-index:25;display:none;background:rgba(255,255,255,.06);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,.12);transition:opacity .5s ease,transform .5s ease;box-shadow:0 8px 32px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)}
@@ -487,8 +494,8 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="/static/js/client-extract.js"></script>
-<script src="/static/js/player-core.js"></script>
+<script src="/static/js/client-extract.js?v=1787514387"></script>
+<script src="/static/js/player-core.js?v=1787514689"></script>
 <script>
 // ===== Player configurations =====
 const playerConfigs = {
