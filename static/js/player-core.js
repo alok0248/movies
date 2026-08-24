@@ -39,6 +39,14 @@ function _initBufEvents(vid) {
 
 var _sourceQueue = []; var _srcIdx = 0; var _triedUrls = {};
 
+function _makeProxyUrl(url) {
+  if (!url) return url;
+  try {
+    var u = new URL(url);
+    return location.origin + '/proxy/' + u.hostname + u.pathname + u.search;
+  } catch(e) { return url; }
+}
+
 function _playHls(url, mediaEl) {
   if (!mediaEl || !url) return;
   _srcIdx = 0;
@@ -61,7 +69,7 @@ function _tryCurrentSource(mediaEl) {
   if (_triedUrls[s.url]) { _srcIdx++; _tryCurrentSource(mediaEl); return; }
   _triedUrls[s.url] = 1;
   console.log('PLAY: '+s.server+' '+s.quality+' '+s.url.substring(0,80));
-  var url = s.url;
+  var url = _makeProxyUrl(s.url);
 
   if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
 
