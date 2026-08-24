@@ -2556,6 +2556,9 @@
                     if (data.action === 'added') {
                         updateAllWatchlistButtons(tmdbId, mediaType, true);
                         showWatchlistNotification(clickedButton, data.message, 'success');
+                    } else if (data.action === 'removed') {
+                        updateAllWatchlistButtons(tmdbId, mediaType, false);
+                        showWatchlistNotification(clickedButton, data.message, 'success');
                     } else if (data.action === 'exists') {
                         updateAllWatchlistButtons(tmdbId, mediaType, true);
                         showWatchlistNotification(clickedButton, data.message, 'warning');
