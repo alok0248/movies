@@ -2989,7 +2989,7 @@ def ajax_register(request):
                 # Send verification email
                 verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
                 try:
-                    send_mail(
+                    send_configured_email(
                         subject='Verify your email - NewMovies',
                         message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
                         from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@newmovies.linkpc.net',
@@ -3016,7 +3016,7 @@ def ajax_register(request):
         # Send verification email
         verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
         try:
-            send_mail(
+            send_configured_email(
                 subject='Verify your email - NewMovies',
                 message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
                 from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@newmovies.linkpc.net',
@@ -3085,7 +3085,7 @@ def ajax_forgot_password(request):
             reset_url = request.build_absolute_uri(f'/reset-password/{uid}/{token}/')
             subject = f'Password Reset for {SiteSettings.get_settings().brand_name}'
             message = f'Click the link to reset your password: {reset_url}'
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
+            send_configured_email(subject, message, [email])
             
             return JsonResponse({'success': True, 'message': 'Password reset link sent to your email'})
         except User.DoesNotExist:
@@ -6158,6 +6158,7 @@ def ajax_delete_ad_file(request):
 # Android User API (Register, Login, Sync) + Admin
 # ---------------------------------------------------------------------------
 from .models import SyncedUser, UserCloudData
+from .auth import send_configured_email
 from .auth import (
     create_user_token_pair, decode_jwt_token, reset_rate_limit,
     check_rate_limit, record_rate_limit_attempt, rate_limit_response,
@@ -6378,7 +6379,7 @@ def api_user_register(request):
     EmailVerification.objects.create(user=django_user, token=token)
     verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
     try:
-        send_mail(
+        send_configured_email(
             subject='Verify your email - NewMovies',
             message=f'Hi {display_name},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net'),
@@ -6562,7 +6563,7 @@ def api_user_forgot_password(request):
         uid = urlsafe_base64_encode(force_bytes(django_user.pk))
         reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
         try:
-            send_mail(
+            send_configured_email(
                 subject='Password Reset - NewMovies',
                 message=f'Click the link below to reset your password:\n\n{reset_url}\n\nIf you did not request this, please ignore this email.',
                 from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net'),

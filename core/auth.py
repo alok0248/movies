@@ -124,3 +124,65 @@ def rate_limit_response(retry_after):
         'message': f'Too many requests. Please try again in {retry_after // 60} minutes.',
         'retryAfter': retry_after,
     }, status=429)
+
+
+# ---------------------------------------------------------------------------
+# Email Sending Helper — uses saved SMTP settings from admin dashboard
+# ---------------------------------------------------------------------------
+import logging
+logger = logging.getLogger(__name__)
+
+
+def send_configured_email(subject, message, recipient_list):
+    """Send email using saved SMTP settings from SiteSettings.
+    Falls back to Django's default send_mail if no SMTP config is saved."""
+    from django.core.mail import EmailMessage
+    from django.core.mail.backends.smtp import EmailBackend as SmtpBackend
+    try:
+        from .models import SiteSettings
+        site = SiteSettings.get_settings()
+    except Exception:
+        site = None
+
+    # Build SMTP config from saved settings
+    host = getattr(site, 'email_host', None) if site else None
+    port = getattr(site, 'email_port', None) if site else None
+    user = getattr(site, 'email_host_user', None) if site else None
+    password = getattr(site, 'email_host_password', None) if site else None
+    use_tls = getattr(site, 'email_use_tls', True) if site else True
+    from_email = user or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net')
+
+    # If SMTP credentials are configured, use them directly
+    if host and user and password:
+        try:
+            backend = SmtpBackend(
+                host=host,
+                port=port or 587,
+                username=user,
+                password=password,
+                use_tls=use_tls,
+                fail_silently=False,
+            )
+            email = EmailMessage(
+                subject=subject,
+                body=message,
+                from_email=from_email,
+                to=recipient_list,
+                connection=backend,
+            )
+            email.send(fail_silently=False)
+            logger.info(f'Email sent to {recipient_list}: {subject}')
+            return True
+        except Exception as e:
+            logger.error(f'SMTP email failed: {e}')
+            # Fall through to Django default
+
+    # Fallback: use Django's default send_mail (console backend)
+    from django.core.mail import send_mail as _send_mail
+    try:
+        _send_mail(subject, message, from_email, recipient_list, fail_silently=True)
+        logger.info(f'Email sent (fallback) to {recipient_list}: {subject}')
+        return True
+    except Exception as e:
+        logger.error(f'Email send failed: {e}')
+        return False
