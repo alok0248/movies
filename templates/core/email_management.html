@@ -83,7 +83,7 @@
                             <div>
                                 <div class="text-white fw-bold">{{ tmpl.name }}</div>
                                 <div class="text-info small">Subject: {{ tmpl.subject }}</div>
-                                <div class="text-secondary small mt-1" style="white-space:pre-wrap;max-height:100px;overflow-y:auto;font-size:.75rem;">{{ tmpl.body|truncatechars:300 }}</div>
+                                <div class="text-secondary small mt-1" style="white-space:pre-wrap;max-height:200px;overflow-y:auto;font-size:.75rem;">{{ tmpl.body }}</div>
                                 {% if not tmpl.is_active %}<span class="badge bg-danger mt-1">Inactive</span>{% endif %}
                             </div>
                             <div class="d-flex gap-1">
@@ -233,8 +233,8 @@ var TMPL_DATA = {
 };
 
 function csrf() {
-    var c = document.cookie.match('(^|;)\\s*csrftoken=([^;]*)');
-    return c ? decodeURIComponent(c[2]) : '';
+    var v = document.cookie.match('(^|;)\s*csrftoken=([^;]*)');
+    return v ? decodeURIComponent(v[2]) : (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
 }
 
 // ─── Email CRUD ───
