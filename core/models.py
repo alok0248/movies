@@ -1385,3 +1385,82 @@ class UserCloudData(models.Model):
 
         self.data_version += 1
         self.save()
+
+
+PURPOSE_CHOICES = [
+    ('verification', 'Email Verification'),
+    ('password_reset', 'Password Reset'),
+    ('notification', 'Notifications'),
+    ('newsletter', 'Newsletter'),
+    ('marketing', 'Marketing'),
+    ('transactional', 'Transactional'),
+]
+
+
+class EmailAddress(models.Model):
+    """Multiple SMTP email addresses that admin can manage."""
+    email = models.EmailField(unique=True)
+    display_name = models.CharField(max_length=100, blank=True, default='')
+    smtp_host = models.CharField(max_length=100, default='smtp.gmail.com')
+    smtp_port = models.IntegerField(default=587)
+    smtp_username = models.EmailField(blank=True, default='')
+    smtp_password = models.CharField(max_length=200)
+    smtp_use_tls = models.BooleanField(default=True)
+    purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES, default='notification')
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False, help_text='Default email for its purpose')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_default', 'purpose', 'email']
+        verbose_name = 'Email Address'
+        verbose_name_plural = 'Email Addresses'
+
+    def __str__(self):
+        return f"{self.display_name or self.email} ({self.get_purpose_display()})"
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            EmailAddress.objects.filter(purpose=self.purpose, is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    def get_backend(self):
+        from django.core.mail.backends.smtp import EmailBackend
+        return EmailBackend(
+            host=self.smtp_host,
+            port=self.smtp_port,
+            username=self.smtp_username or self.email,
+            password=self.smtp_password,
+            use_tls=self.smtp_use_tls,
+            fail_silently=False,
+        )
+
+
+class EmailTemplate(models.Model):
+    """Email templates for different email types."""
+    PURPOSE_CHOICES = PURPOSE_CHOICES
+    name = models.CharField(max_length=100)
+    purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES)
+    subject = models.CharField(max_length=255)
+    body = models.TextField(help_text='Use {variable} placeholders: {name}, {email}, {link}, {code}')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['purpose', 'name']
+        verbose_name = 'Email Template'
+        verbose_name_plural = 'Email Templates'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_purpose_display()})"
+
+    def render(self, **kwargs):
+        subject = self.subject
+        body = self.body
+        for key, value in kwargs.items():
+            placeholder = '{' + key + '}'
+            subject = subject.replace(placeholder, str(value))
+            body = body.replace(placeholder, str(value))
+        return subject, body

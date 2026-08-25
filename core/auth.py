@@ -133,56 +133,67 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def send_configured_email(subject, message, recipient_list):
-    """Send email using saved SMTP settings from SiteSettings.
-    Falls back to Django's default send_mail if no SMTP config is saved."""
+def send_configured_email(subject, message, recipient_list, purpose='notification'):
+    """Send email using the admin-configured EmailAddress for the given purpose.
+    Falls back to SiteSettings, then to Django console backend."""
     from django.core.mail import EmailMessage
-    from django.core.mail.backends.smtp import EmailBackend as SmtpBackend
+
+    # 1. Try EmailAddress model (purpose-based)
+    try:
+        from .models import EmailAddress
+        addr = EmailAddress.objects.filter(purpose=purpose, is_active=True, is_default=True).first()
+        if not addr:
+            addr = EmailAddress.objects.filter(purpose=purpose, is_active=True).first()
+        if addr:
+            backend = addr.get_backend()
+            from_email = addr.smtp_username or addr.email
+            email = EmailMessage(subject=subject, body=message, from_email=from_email, to=recipient_list, connection=backend)
+            email.send(fail_silently=False)
+            logger.info(f'Email sent via {addr.email} ({purpose}) to {recipient_list}: {subject}')
+            return True
+    except Exception as e:
+        logger.error(f'EmailAddress send failed: {e}')
+
+    # 2. Fallback to SiteSettings SMTP config
     try:
         from .models import SiteSettings
         site = SiteSettings.get_settings()
-    except Exception:
-        site = None
-
-    # Build SMTP config from saved settings
-    host = getattr(site, 'email_host', None) if site else None
-    port = getattr(site, 'email_port', None) if site else None
-    user = getattr(site, 'email_host_user', None) if site else None
-    password = getattr(site, 'email_host_password', None) if site else None
-    use_tls = getattr(site, 'email_use_tls', True) if site else True
-    from_email = user or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net')
-
-    # If SMTP credentials are configured, use them directly
-    if host and user and password:
-        try:
+        host = getattr(site, 'email_host', None)
+        user = getattr(site, 'email_host_user', None)
+        password = getattr(site, 'email_host_password', None)
+        if host and user and password:
+            from django.core.mail.backends.smtp import EmailBackend as SmtpBackend
             backend = SmtpBackend(
-                host=host,
-                port=port or 587,
-                username=user,
-                password=password,
-                use_tls=use_tls,
-                fail_silently=False,
+                host=host, port=getattr(site, 'email_port', 587),
+                username=user, password=password,
+                use_tls=getattr(site, 'email_use_tls', True), fail_silently=False,
             )
-            email = EmailMessage(
-                subject=subject,
-                body=message,
-                from_email=from_email,
-                to=recipient_list,
-                connection=backend,
-            )
+            email = EmailMessage(subject=subject, body=message, from_email=user, to=recipient_list, connection=backend)
             email.send(fail_silently=False)
-            logger.info(f'Email sent to {recipient_list}: {subject}')
+            logger.info(f'Email sent via SiteSettings ({user}) to {recipient_list}: {subject}')
             return True
-        except Exception as e:
-            logger.error(f'SMTP email failed: {e}')
-            # Fall through to Django default
+    except Exception as e:
+        logger.error(f'SiteSettings email failed: {e}')
 
-    # Fallback: use Django's default send_mail (console backend)
+    # 3. Final fallback: Django console
     from django.core.mail import send_mail as _send_mail
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net')
     try:
         _send_mail(subject, message, from_email, recipient_list, fail_silently=True)
-        logger.info(f'Email sent (fallback) to {recipient_list}: {subject}')
+        logger.info(f'Email sent (console fallback) to {recipient_list}: {subject}')
         return True
     except Exception as e:
         logger.error(f'Email send failed: {e}')
         return False
+
+
+def get_email_template(purpose, **kwargs):
+    """Get and render an email template for the given purpose."""
+    try:
+        from .models import EmailTemplate
+        tmpl = EmailTemplate.objects.filter(purpose=purpose, is_active=True).first()
+        if tmpl:
+            return tmpl.render(**kwargs)
+    except Exception:
+        pass
+    return None, None
