@@ -1962,33 +1962,44 @@ def email_settings(request):
         if action == 'save_email':
             eid = request.POST.get('id')
             email_obj = EmailAddress.objects.filter(pk=eid).first() if eid else None
-            if email_obj:
-                email_obj.email = request.POST.get('email', email_obj.email)
-                email_obj.display_name = request.POST.get('display_name', '')
-                email_obj.smtp_host = request.POST.get('smtp_host', 'smtp.gmail.com')
-                email_obj.smtp_port = int(request.POST.get('smtp_port', 587))
-                email_obj.smtp_username = request.POST.get('smtp_username', '')
-                pwd = request.POST.get('smtp_password', '')
-                if pwd:
-                    email_obj.smtp_password = pwd
-                email_obj.smtp_use_tls = request.POST.get('smtp_use_tls') == 'on'
-                email_obj.purpose = request.POST.get('purpose', 'notification')
-                email_obj.is_active = request.POST.get('is_active') == 'on'
-                email_obj.is_default = request.POST.get('is_default') == 'on'
-                email_obj.save()
-            else:
-                email_obj = EmailAddress.objects.create(
-                    email=request.POST.get('email', ''),
-                    display_name=request.POST.get('display_name', ''),
-                    smtp_host=request.POST.get('smtp_host', 'smtp.gmail.com'),
-                    smtp_port=int(request.POST.get('smtp_port', 587)),
-                    smtp_username=request.POST.get('smtp_username', ''),
-                    smtp_password=request.POST.get('smtp_password', ''),
-                    smtp_use_tls=request.POST.get('smtp_use_tls') == 'on',
-                    purpose=request.POST.get('purpose', 'notification'),
-                    is_active=request.POST.get('is_active') == 'on',
-                    is_default=request.POST.get('is_default') == 'on',
-                )
+            new_email = request.POST.get('email', '').strip()
+            if not new_email:
+                return JsonResponse({'success': False, 'message': 'Email address is required.'}, status=400)
+            try:
+                if email_obj:
+                    # Check uniqueness against other records
+                    if EmailAddress.objects.filter(email=new_email).exclude(pk=email_obj.pk).exists():
+                        return JsonResponse({'success': False, 'message': 'This email address is already in use.'}, status=400)
+                    email_obj.email = new_email
+                    email_obj.display_name = request.POST.get('display_name', '')
+                    email_obj.smtp_host = request.POST.get('smtp_host', 'smtp.gmail.com')
+                    email_obj.smtp_port = int(request.POST.get('smtp_port', 587))
+                    email_obj.smtp_username = request.POST.get('smtp_username', '')
+                    pwd = request.POST.get('smtp_password', '')
+                    if pwd:
+                        email_obj.smtp_password = pwd
+                    email_obj.smtp_use_tls = request.POST.get('smtp_use_tls') == 'on'
+                    email_obj.purpose = request.POST.get('purpose', 'notification')
+                    email_obj.is_active = request.POST.get('is_active') == 'on'
+                    email_obj.is_default = request.POST.get('is_default') == 'on'
+                    email_obj.save()
+                else:
+                    if EmailAddress.objects.filter(email=new_email).exists():
+                        return JsonResponse({'success': False, 'message': 'This email address is already in use.'}, status=400)
+                    email_obj = EmailAddress.objects.create(
+                        email=new_email,
+                        display_name=request.POST.get('display_name', ''),
+                        smtp_host=request.POST.get('smtp_host', 'smtp.gmail.com'),
+                        smtp_port=int(request.POST.get('smtp_port', 587)),
+                        smtp_username=request.POST.get('smtp_username', ''),
+                        smtp_password=request.POST.get('smtp_password', ''),
+                        smtp_use_tls=request.POST.get('smtp_use_tls') == 'on',
+                        purpose=request.POST.get('purpose', 'notification'),
+                        is_active=request.POST.get('is_active') == 'on',
+                        is_default=request.POST.get('is_default') == 'on',
+                    )
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': f'Save failed: {str(e)}'}, status=500)
             return JsonResponse({'success': True, 'id': email_obj.id})
 
         # Delete email address
@@ -2039,9 +2050,55 @@ def email_settings(request):
     addresses = EmailAddress.objects.all()
     templates = EmailTemplate.objects.all()
     purposes = dict(PURPOSE_CHOICES)
+
+    # Group addresses by purpose (only non-empty groups)
+    grouped_addresses = []
+    purpose_order = ['verification', 'password_reset', 'notification', 'newsletter', 'marketing', 'transactional']
+    for pcode in purpose_order:
+        addrs = addresses.filter(purpose=pcode)
+        if addrs.exists():
+            grouped_addresses.append({
+                'code': pcode,
+                'label': purposes.get(pcode, pcode.title()),
+                'addresses': addrs,
+            })
+    # Catch any addresses with non-standard purpose
+    known = set(purpose_order)
+    for pcode in set(a.purpose for a in addresses):
+        if pcode not in known:
+            addrs = addresses.filter(purpose=pcode)
+            if addrs.exists():
+                grouped_addresses.append({
+                    'code': pcode,
+                    'label': purposes.get(pcode, pcode.title()),
+                    'addresses': addrs,
+                })
+
+    # Group templates by purpose (only non-empty groups)
+    grouped_templates = []
+    for pcode in purpose_order:
+        tmpls = templates.filter(purpose=pcode)
+        if tmpls.exists():
+            grouped_templates.append({
+                'code': pcode,
+                'label': purposes.get(pcode, pcode.title()),
+                'templates': tmpls,
+            })
+    for pcode in set(t.purpose for t in templates):
+        if pcode not in known:
+            tmpls = templates.filter(purpose=pcode)
+            if tmpls.exists():
+                grouped_templates.append({
+                    'code': pcode,
+                    'label': purposes.get(pcode, pcode.title()),
+                    'templates': tmpls,
+                })
+
     return render(request, 'core/email_management.html', {
         'addresses': addresses,
         'email_templates': templates,
+        'grouped_addresses': grouped_addresses,
+        'grouped_templates': grouped_templates,
         'purposes': purposes,
         'purpose_choices': PURPOSE_CHOICES,
         'back_url': 'admin_dashboard',
