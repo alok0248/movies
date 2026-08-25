@@ -6299,6 +6299,7 @@ def api_user_register(request):
         created = True
 
     # Send verification email
+    from .models import EmailVerification
     token = secrets.token_hex(32)
     EmailVerification.objects.create(user=django_user, token=token)
     verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
