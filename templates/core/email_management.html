@@ -233,8 +233,44 @@ var TMPL_DATA = {
 };
 
 function csrf() {
-    var v = document.cookie.match('(^|;)\s*csrftoken=([^;]*)');
-    return v ? decodeURIComponent(v[2]) : (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    if (m) return m[1];
+    var el = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (el) return el.value;
+    var meta = document.querySelector('meta[name=csrf-token]');
+    if (meta) return meta.getAttribute('content');
+    return '';
+}
+
+function ajaxPost(params, onSuccess) {
+    var parts = [];
+    for (var k in params) {
+        if (params[k] !== undefined && params[k] !== null) {
+            parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
+        }
+    }
+    var body = parts.join('&');
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-CSRFToken': csrf(),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: body
+    })
+    .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
+    .then(function(result) {
+        try {
+            var d = JSON.parse(result.text);
+            if (d.success) { location.reload(); }
+            else { alert(d.message || 'Failed to save'); }
+        } catch(e) {
+            console.error('Response:', result.text.substring(0, 500));
+            alert('Server error. Check console for details.');
+        }
+    })
+    .catch(function(e) { console.error('AJAX error:', e); alert('Network error: ' + e.message); });
 }
 
 // ─── Email CRUD ───
@@ -271,38 +307,31 @@ function openEmailModal(id) {
     new bootstrap.Modal(m).show();
 }
 
-async function saveEmail() {
-    var fd = new FormData();
-    fd.append('action', 'save_email');
-    var id = document.getElementById('emailId').value;
-    if (id) fd.append('id', id);
-    fd.append('email', document.getElementById('emailAddr').value);
-    fd.append('display_name', document.getElementById('emailDisplayName').value);
-    fd.append('purpose', document.getElementById('emailPurpose').value);
-    fd.append('smtp_host', document.getElementById('emailSmtpHost').value);
-    fd.append('smtp_port', document.getElementById('emailSmtpPort').value);
-    fd.append('smtp_username', document.getElementById('emailSmtpUser').value);
-    fd.append('smtp_password', document.getElementById('emailSmtpPass').value);
-    if (document.getElementById('emailTls').checked) fd.append('smtp_use_tls', 'on');
-    if (document.getElementById('emailActive').checked) fd.append('is_active', 'on');
-    if (document.getElementById('emailDefault').checked) fd.append('is_default', 'on');
-    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
-    var d = await r.json();
-    if (d.success) location.reload();
-    else alert(d.message || 'Failed to save');
+function saveEmail() {
+    var params = {
+        action: 'save_email',
+        id: document.getElementById('emailId').value || '',
+        email: document.getElementById('emailAddr').value,
+        display_name: document.getElementById('emailDisplayName').value,
+        purpose: document.getElementById('emailPurpose').value,
+        smtp_host: document.getElementById('emailSmtpHost').value,
+        smtp_port: document.getElementById('emailSmtpPort').value,
+        smtp_username: document.getElementById('emailSmtpUser').value,
+        smtp_password: document.getElementById('emailSmtpPass').value,
+        smtp_use_tls: document.getElementById('emailTls').checked ? 'on' : 'off',
+        is_active: document.getElementById('emailActive').checked ? 'on' : 'off',
+        is_default: document.getElementById('emailDefault').checked ? 'on' : 'off'
+    };
+    ajaxPost(params);
 }
 
-async function deleteEmail(id) {
+function deleteEmail(id) {
     if (!confirm('Delete this email address?')) return;
-    var fd = new FormData(); fd.append('action','delete_email'); fd.append('id',id);
-    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
-    var d = await r.json(); if (d.success) location.reload();
+    ajaxPost({action: 'delete_email', id: id});
 }
 
-async function toggleEmail(id) {
-    var fd = new FormData(); fd.append('action','toggle_email'); fd.append('id',id);
-    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
-    var d = await r.json(); if (d.success) location.reload();
+function toggleEmail(id) {
+    ajaxPost({action: 'toggle_email', id: id});
 }
 
 // ─── Template CRUD ───
@@ -329,27 +358,22 @@ function openTemplateModal(id) {
     new bootstrap.Modal(m).show();
 }
 
-async function saveTemplate() {
-    var fd = new FormData();
-    fd.append('action', 'save_template');
-    var id = document.getElementById('tmplId').value;
-    if (id) fd.append('id', id);
-    fd.append('name', document.getElementById('tmplName').value);
-    fd.append('purpose', document.getElementById('tmplPurpose').value);
-    fd.append('subject', document.getElementById('tmplSubject').value);
-    fd.append('body', document.getElementById('tmplBody').value);
-    if (document.getElementById('tmplActive').checked) fd.append('is_active', 'on');
-    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
-    var d = await r.json();
-    if (d.success) location.reload();
-    else alert(d.message || 'Failed to save');
+function saveTemplate() {
+    var params = {
+        action: 'save_template',
+        id: document.getElementById('tmplId').value || '',
+        name: document.getElementById('tmplName').value,
+        purpose: document.getElementById('tmplPurpose').value,
+        subject: document.getElementById('tmplSubject').value,
+        body: document.getElementById('tmplBody').value,
+        is_active: document.getElementById('tmplActive').checked ? 'on' : 'off'
+    };
+    ajaxPost(params);
 }
 
-async function deleteTemplate(id) {
+function deleteTemplate(id) {
     if (!confirm('Delete this template?')) return;
-    var fd = new FormData(); fd.append('action','delete_template'); fd.append('id',id);
-    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
-    var d = await r.json(); if (d.success) location.reload();
+    ajaxPost({action: 'delete_template', id: id});
 }
 </script>
 {% endblock %}
