@@ -1148,3 +1148,74 @@ class PlayHistory(models.Model):
         m, s = divmod(self.duration_seconds, 60)
         h, m = divmod(m, 60)
         return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+class UserCloudData(models.Model):
+    """Cloud storage for user data synced between Android app and web.
+    Stores playback progress, watch history, favorites, watchlist, and ratings."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='cloud_data')
+    playback_progress = models.JSONField(default=dict, blank=True)
+    seen_keys = models.JSONField(default=list, blank=True)
+    watch_history = models.JSONField(default=list, blank=True)
+    favorites = models.JSONField(default=list, blank=True)
+    watchlist_ids = models.JSONField(default=list, blank=True)
+    user_ratings = models.JSONField(default=dict, blank=True)
+    data_version = models.IntegerField(default=0)
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'User Cloud Data'
+        verbose_name_plural = 'User Cloud Data'
+
+    def __str__(self):
+        return f"CloudData: {self.user.username}"
+
+    def get_cloud_payload(self):
+        return {
+            'playbackProgress': self.playback_progress or {},
+            'seenKeys': self.seen_keys or [],
+            'watchHistory': self.watch_history or [],
+            'favorites': self.favorites or [],
+            'watchlist': self.watchlist_ids or [],
+            'userRatings': self.user_ratings or {},
+        }
+
+    def merge_incoming(self, incoming):
+        """Merge incoming data from Android app. App data wins on conflicts."""
+        if not incoming:
+            return
+        # Playback progress — app data wins
+        app_progress = incoming.get('playbackProgress', {})
+        if app_progress:
+            self.playback_progress.update(app_progress)
+        # Seen keys — union
+        app_seen = incoming.get('seenKeys', [])
+        if app_seen:
+            existing = set(self.seen_keys or [])
+            existing.update(app_seen)
+            self.seen_keys = list(existing)
+        # Watch history — prepend app history, deduplicate by mediaId
+        app_history = incoming.get('watchHistory', [])
+        if app_history:
+            existing_ids = {h.get('mediaId') for h in (self.watch_history or [])}
+            new_items = [h for h in app_history if h.get('mediaId') not in existing_ids]
+            self.watch_history = new_items + (self.watch_history or [])
+        # Favorites — union by mediaId
+        app_favs = incoming.get('favorites', [])
+        if app_favs:
+            existing_ids = {f.get('mediaId') for f in (self.favorites or [])}
+            new_favs = [f for f in app_favs if f.get('mediaId') not in existing_ids]
+            self.favorites = (self.favorites or []) + new_favs
+        # Watchlist — union
+        app_watchlist = incoming.get('watchlist', [])
+        if app_watchlist:
+            existing_ids = {w.get('mediaId') for w in (self.watchlist_ids or [])}
+            new_wl = [w for w in app_watchlist if w.get('mediaId') not in existing_ids]
+            self.watchlist_ids = (self.watchlist_ids or []) + new_wl
+        # Ratings — app data wins
+        app_ratings = incoming.get('userRatings', {})
+        if app_ratings:
+            self.user_ratings.update(app_ratings)
+        self.data_version += 1
+        self.save()

@@ -143,6 +143,96 @@
         </div>
     </div>
 
+    <!-- Linked Django User -->
+    {% if user_obj.user %}
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-link me-2 text-primary"></i>Linked Web Account</div>
+        <div class="card-body">
+            <table class="table table-dark table-borderless mb-0 small">
+                <tr><td class="text-secondary" style="width:35%">Web User ID</td><td class="text-white">#{{ user_obj.user.id }}</td></tr>
+                <tr><td class="text-secondary">Username</td><td class="text-white">{{ user_obj.user.username }}</td></tr>
+                <tr><td class="text-secondary">Email</td><td class="text-info">{{ user_obj.user.email }}</td></tr>
+                <tr><td class="text-secondary">Full Name</td><td class="text-white">{{ user_obj.user.first_name }} {{ user_obj.user.last_name }}</td></tr>
+                <tr><td class="text-secondary">Has Password</td><td>{% if user_obj.user.has_usable_password %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-warning">No (Android-only)</span>{% endif %}</td></tr>
+                <tr><td class="text-secondary">Active</td><td>{% if user_obj.user.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Inactive</span>{% endif %}</td></tr>
+                <tr><td class="text-secondary">Staff</td><td>{% if user_obj.user.is_staff %}<span class="badge bg-info">Yes</span>{% else %}No{% endif %}</td></tr>
+                <tr><td class="text-secondary">Date Joined</td><td class="text-white">{{ user_obj.user.date_joined }}</td></tr>
+                <tr><td class="text-secondary">Last Login</td><td class="text-white">{{ user_obj.user.last_login|default:'Never' }}</td></tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Cloud Sync Data -->
+    {% if cloud_data %}
+    <div class="card bg-dark border-secondary shadow-sm mb-4">
+        <div class="card-header border-secondary text-white fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-cloud me-2 text-info"></i>Cloud Sync Data</span>
+            <span class="badge bg-info">v{{ cloud_data.data_version }}</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-md-4 text-center">
+                    <div class="p-3 rounded" style="background:rgba(56,189,248,0.1);">
+                        <div class="h3 text-info mb-1">{{ cloud_data.playback_progress|length }}</div>
+                        <div class="text-secondary small">Playback Entries</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="p-3 rounded" style="background:rgba(168,85,247,0.1);">
+                        <div class="h3 mb-1" style="color:#a855f7;">{{ cloud_data.seen_keys|length }}</div>
+                        <div class="text-secondary small">Seen Items</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="p-3 rounded" style="background:rgba(251,191,36,0.1);">
+                        <div class="h3 text-warning mb-1">{{ cloud_data.watch_history|length }}</div>
+                        <div class="text-secondary small">Watch History</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="p-3 rounded" style="background:rgba(34,197,94,0.1);">
+                        <div class="h3 text-success mb-1">{{ cloud_data.favorites|length }}</div>
+                        <div class="text-secondary small">Favorites</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="p-3 rounded" style="background:rgba(239,68,68,0.1);">
+                        <div class="h3 text-danger mb-1">{{ cloud_data.watchlist_ids|length }}</div>
+                        <div class="text-secondary small">Watchlist</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="p-3 rounded" style="background:rgba(100,116,139,0.1);">
+                        <div class="h3 text-secondary mb-1">{{ cloud_data.user_ratings|length }}</div>
+                        <div class="text-secondary small">Ratings</div>
+                    </div>
+                </div>
+            </div>
+            {% if cloud_data.playback_progress %}
+            <hr class="border-secondary">
+            <h6 class="text-white mb-3"><i class="fas fa-play-circle me-2 text-info"></i>Playback Progress</h6>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm small">
+                    <thead><tr><th>Media Key</th><th>Position</th><th>Duration</th><th>Last Updated</th></tr></thead>
+                    <tbody>
+                    {% for key, entry in cloud_data.playback_progress.items %}
+                        <tr>
+                            <td><code class="text-info">{{ key }}</code></td>
+                            <td class="text-white">{{ entry.positionMs|default:0|floatformat:0 }}ms</td>
+                            <td class="text-white">{{ entry.durationMs|default:0|floatformat:0 }}ms</td>
+                            <td class="text-secondary">{{ entry.lastUpdated|default:'-' }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            <div class="text-secondary small mt-2"><i class="fas fa-clock me-1"></i>Last synced: {{ cloud_data.last_synced_at }} &middot; Data version: {{ cloud_data.data_version }}</div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Timestamps -->
     <div class="card bg-dark border-secondary shadow-sm">
         <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-clock me-2 text-secondary"></i>Activity Timestamps</div>
