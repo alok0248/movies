@@ -2044,6 +2044,74 @@ def email_settings(request):
             EmailTemplate.objects.filter(pk=tid).delete()
             return JsonResponse({'success': True})
 
+        # Test SMTP connection
+        if action == 'test_smtp':
+            import smtplib
+            from email.mime.text import MIMEText
+            host = request.POST.get('smtp_host', '').strip()
+            port = int(request.POST.get('smtp_port', 587))
+            username = request.POST.get('smtp_username', '').strip()
+            password = request.POST.get('smtp_password', '').strip()
+            use_tls = request.POST.get('smtp_use_tls') == 'on'
+            test_email = request.POST.get('email', '').strip()
+            if not host or not test_email:
+                return JsonResponse({'success': False, 'message': 'Email and SMTP host are required for testing.'})
+            if not username:
+                username = test_email
+            try:
+                msg = MIMEText('This is a test email from your NewMovies email settings.\n\nIf you see this, SMTP is working correctly!')
+                msg['Subject'] = 'NewMovies SMTP Test'
+                msg['From'] = f'{request.POST.get("display_name", "NewMovies")} <{test_email}>'
+                msg['To'] = test_email
+                server = smtplib.SMTP(host, port, timeout=10)
+                server.ehlo()
+                if use_tls:
+                    server.starttls()
+                    server.ehlo()
+                server.login(username, password)
+                server.sendmail(test_email, [test_email], msg.as_string())
+                server.quit()
+                return JsonResponse({'success': True, 'message': f'Test email sent successfully to {test_email}! Check your inbox.'})
+            except smtplib.SMTPAuthenticationError as e:
+                return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check your email and password/app password.'})
+            except smtplib.SMTPConnectError as e:
+                return JsonResponse({'success': False, 'message': f'Cannot connect to {host}:{port}. Check host and port.'})
+            except smtplib.SMTPException as e:
+                return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
+
+        # Test saved SMTP address
+        if action == 'test_saved_smtp':
+            import smtplib
+            from email.mime.text import MIMEText
+            eid = request.POST.get('id')
+            addr_obj = EmailAddress.objects.filter(pk=eid).first()
+            if not addr_obj:
+                return JsonResponse({'success': False, 'message': 'Email address not found.'})
+            try:
+                msg = MIMEText('This is a test email from your NewMovies email settings.\n\nIf you see this, SMTP is working correctly!')
+                msg['Subject'] = 'NewMovies SMTP Test'
+                msg['From'] = f'{addr_obj.display_name or "NewMovies"} <{addr_obj.email}>'
+                msg['To'] = addr_obj.email
+                server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=10)
+                server.ehlo()
+                if addr_obj.smtp_use_tls:
+                    server.starttls()
+                    server.ehlo()
+                server.login(addr_obj.smtp_username or addr_obj.email, addr_obj.smtp_password)
+                server.sendmail(addr_obj.email, [addr_obj.email], msg.as_string())
+                server.quit()
+                return JsonResponse({'success': True, 'message': f'Test email sent successfully to {addr_obj.email}! Check your inbox.'})
+            except smtplib.SMTPAuthenticationError as e:
+                return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check your email and password/app password.'})
+            except smtplib.SMTPConnectError as e:
+                return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
+            except smtplib.SMTPException as e:
+                return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
+
         return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
 
     # GET — render the page
