@@ -99,7 +99,12 @@
   .ep-select option{background:#1a1a1a;color:#fff}
   .ep-loading{font-size:.6rem;color:rgba(255,255,255,.3);font-style:italic}
 </style>
-</head>
+
+    /* Register browser proxy Service Worker */
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/static/sw-proxy.js").catch(function() {});
+    }
+  </head>
 <body>
 <div class="player-root">
   <!-- Player iframe -->
@@ -744,7 +749,7 @@ var _ve=(function(){
     if(hls){hls.destroy();hls=null}
     video.removeAttribute("src");video.load();
     if(url.indexOf(".m3u8")>-1){
-      loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,highBufferWatchdogPeriod:0.3,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,fragLoadingMaxRetry:8,levelLoadingMaxRetry:6,manifestLoadingMaxRetry:6,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:209715200})},url,function(h){hls=h},null);
+      loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8})},url,function(h){hls=h},null);
     }else{video.src=makeProxy(url);video.play().catch(function(){})}
   }
 
@@ -772,7 +777,7 @@ var _ve=(function(){
       });
     }
 
-    var hlsConfig={enableWorker:true,lowLatencyMode:false,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,highBufferWatchdogPeriod:0.3,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,fragLoadingMaxRetry:8,levelLoadingMaxRetry:6,manifestLoadingMaxRetry:6,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:209715200};
+    var hlsConfig={enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8};
     loadHLS(video,function(){return new Hls(hlsConfig)},videoUrl,function(h){hls=h},function(){videoReady=true;checkBoth()},true);
     loadHLS(audioVid,function(){return new Hls(hlsConfig)},audioUrl,function(h){hlsAudio=h},function(){audioReady=true;checkBoth()},false);
   }

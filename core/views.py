@@ -5574,12 +5574,12 @@ def proxy_view(request, target):
     }
 
     try:
-        resp = _req.get(target_url, headers=headers, timeout=(8, 30), stream=True, verify=True, allow_redirects=True)
+        resp = _req.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
         if resp.status_code == 403:
             headers.pop('Origin', None)
             headers.pop('Referer', None)
             resp.close()
-            resp = _req.get(target_url, headers=headers, timeout=(8, 30), stream=True, verify=True, allow_redirects=True)
+            resp = _req.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
         if resp.status_code >= 400:
             resp.close()
             return HttpResponse(f"Proxy error: {resp.status_code}", status=resp.status_code)
@@ -5635,7 +5635,7 @@ def proxy_view(request, target):
         # Non-m3u8: stream as-is, but fix content type for CDN-obfuscated video segments
         # CDN returns text/html for .html segments that are actually MPEG-TS video data
         real_content_type = content_type
-        first_chunk = resp.iter_content(chunk_size=16384)
+        first_chunk = resp.iter_content(chunk_size=262144)
         try:
             first_data = next(first_chunk)
         except StopIteration:

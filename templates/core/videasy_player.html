@@ -100,7 +100,12 @@
   .ep-select option{background:#1a1a1a;color:#fff}
   .ep-loading{font-size:.6rem;color:rgba(255,255,255,.3);font-style:italic}
 </style>
-</head>
+
+    /* Register browser proxy Service Worker */
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/static/sw-proxy.js").catch(function() {});
+    }
+  </head>
 <body>
 <div class="player-root">
   <!-- Player iframe -->
@@ -625,7 +630,7 @@ function openPopPlayer() {
     '</head><body><video id="v" controls autoplay></video>' +
     '<script>var v=document.getElementById("v");' +
     'if("' + url + '".indexOf(".m3u8")>-1){' +
-    'if(Hls.isSupported()){var h=new Hls({enableWorker:true,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,fragLoadingTimeOut:30000,fragLoadingMaxRetry:8,startFragPrefetch:true,maxBufferSize:209715200,startLevel:-1});h.loadSource("' + url + '");h.attachMedia(v);h.on(Hls.Events.MANIFEST_PARSED,function(){v.play()})}' +
+    'if(Hls.isSupported()){var h=new Hls({enableWorker:true,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,fragLoadingTimeOut:60000,fragLoadingMaxRetry:12,startFragPrefetch:true,maxBufferSize:524288000,startLevel:-1,maxBufferHole:0.5});h.loadSource("' + url + '");h.attachMedia(v);h.on(Hls.Events.MANIFEST_PARSED,function(){v.play()})}' +
     'else if(v.canPlayType("application/vnd.apple.mpegurl")){v.src="' + url + '"}}' +
     'else{v.src="' + url + '"}<\/script></body></html>');
   w.document.close();
