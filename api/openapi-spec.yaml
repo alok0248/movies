@@ -1,0 +1,683 @@
+openapi: 3.0.3
+info:
+  title: NewMovies Android User API
+  description: |
+    Complete API for the NewMovies Android app — registration, login, profile, cloud data sync.
+
+    ## Authentication
+    All endpoints require two forms of authentication:
+
+    1. **Basic Auth** (app-level) — validates the Android app identity
+       ```
+       Authorization: Basic dGVzdGluZzp0ZXN0aW5n
+       ```
+    2. **Android Headers** — app identity metadata
+       ```
+       X-Android-App: #198
+       X-Android-Build: 198
+       X-Android-User-Email: user@gmail.com
+       ```
+
+    3. **JWT Bearer Token** (user-level) — for profile endpoint
+       ```
+       Authorization: Bearer <jwt_token>
+       ```
+
+    ## Rate Limiting
+    - Login: **10 requests per 15 minutes** per IP + per email
+    - After 10 failures: **30-minute lockout**
+    - Successful login resets the counter
+
+    ## Email Restrictions
+    Only `gmail.com` and `yahoo.com` addresses are accepted for registration.
+  version: 2.0.0
+  contact:
+    name: NewMovies API Support
+    email: support@newmovies.linkpc.net
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://newmovies.linkpc.net
+    description: Production server
+  - url: http://127.0.0.1:8000
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Registration, login, token refresh
+  - name: Profile
+    description: User profile and subscription
+  - name: Sync
+    description: Bidirectional cloud data sync
+
+# ─── Reusable Components ────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: "App-level Basic Auth (base64 of testing:testing)"
+    BearerToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "User-level JWT access token"
+
+  headers:
+    X-Android-App:
+      schema:
+        type: string
+        example: "#198"
+      description: Android app identifier
+    X-Android-Build:
+      schema:
+        type: string
+        example: "198"
+      description: Android build number
+    X-Android-User-Email:
+      schema:
+        type: string
+        example: "user@gmail.com"
+      description: "User's email (for logging)"
+
+  schemas:
+    Subscription:
+      type: object
+      properties:
+        isSubscribed:
+          type: boolean
+          example: true
+        plan:
+          type: string
+          example: "VIP Premium"
+        status:
+          type: string
+          enum: [active, inactive, expired]
+          example: "active"
+        validUntil:
+          type: string
+          nullable: true
+          example: "2026-12-31"
+        daysRemaining:
+          type: integer
+          example: 130
+        features:
+          type: array
+          items:
+            type: string
+          example:
+            - "100% Ad-Free Streaming & UI"
+            - "4K Ultra HD & Dolby Atmos Streams"
+            - "VIP High-Speed Dedicated CDN"
+
+    UserObject:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "usr_8"
+        email:
+          type: string
+          format: email
+          example: "user@gmail.com"
+        displayName:
+          type: string
+          example: "Alok Kumar"
+        photoUrl:
+          type: string
+          format: uri
+          example: "https://ui-avatars.com/api/?name=Alok+Kumar&background=4F46E5&color=fff&size=128"
+        token:
+          type: string
+          description: "JWT access token (30-day expiry)"
+          example: "eyJhbGciOiJIUzI1NiIs..."
+        refreshToken:
+          type: string
+          description: "JWT refresh token (75-day expiry)"
+          example: "eyJhbGciOiJIUzI1NiIs..."
+        tokenExpiresIn:
+          type: integer
+          description: "Access token lifetime in seconds"
+          example: 2592000
+        isEmailVerified:
+          type: boolean
+          example: true
+
+    UserData:
+      type: object
+      properties:
+        playbackProgress:
+          type: object
+          description: "Key: mediaType_mediaId_season_episode"
+          additionalProperties:
+            type: object
+            properties:
+              mediaId:
+                type: integer
+              isTv:
+                type: boolean
+              season:
+                type: integer
+              episode:
+                type: integer
+              positionMs:
+                type: integer
+                description: Current playback position in milliseconds
+              durationMs:
+                type: integer
+                description: Total duration in milliseconds
+              title:
+                type: string
+              posterPath:
+                type: string
+              episodeTitle:
+                type: string
+              lastUpdated:
+                type: integer
+                description: Unix timestamp in milliseconds
+        seenKeys:
+          type: array
+          items:
+            type: string
+        watchHistory:
+          type: array
+          items:
+            type: object
+        favorites:
+          type: array
+          items:
+            type: object
+        watchlist:
+          type: array
+          items:
+            type: object
+            properties:
+              mediaId:
+                type: integer
+              isTv:
+                type: boolean
+              title:
+                type: string
+              posterPath:
+                type: string
+        userRatings:
+          type: object
+          additionalProperties:
+            type: number
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        message:
+          type: string
+        retryAfter:
+          type: integer
+          description: Seconds until the user can retry (only on 429)
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: error
+            message: "Missing Authorization header"
+    RateLimited:
+      description: Too many requests — rate limited
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: error
+            message: "Too many requests. Please try again in 15 minutes."
+            retryAfter: 900
+
+# ─── Paths ──────────────────────────────────────────────────────────────────
+paths:
+  # ─── REGISTER ─────────────────────────────────────────────────────────
+  /api/user/register/:
+    post:
+      operationId: registerUser
+      tags: [Auth]
+      summary: Register a new account
+      description: |
+        Creates a new user account and sends a 5-minute verification email.
+
+        **Validation:**
+        - Email must be gmail.com or yahoo.com
+        - Password minimum 6 characters
+        - Duplicate email returns 409
+
+        **Flow:**
+        1. App sends registration request
+        2. Server creates user (inactive) + sends verification email
+        3. User clicks link in email → account activated
+        4. User can now login
+
+        **Android-synced users:** If the email already exists from an Android sync
+        (no password), the password is set and verification email is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@gmail.com"
+                password:
+                  type: string
+                  minLength: 6
+                  example: "SecurePass123"
+                displayName:
+                  type: string
+                  example: "Alok Kumar"
+                deviceId:
+                  type: string
+                  example: "4f8a12bc90e381df"
+                deviceModel:
+                  type: string
+                  example: "Pixel 8 Pro"
+                osVersion:
+                  type: string
+                  example: "14"
+                appVersion:
+                  type: string
+                  example: "1.9.8"
+                buildNumber:
+                  type: integer
+                  example: 198
+                timestamp:
+                  type: integer
+                  description: Unix timestamp in milliseconds
+                  example: 1724580000000
+      responses:
+        '200':
+          description: Account created, verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Account registered. Please verify your email via the link sent to your inbox."
+                  requiresVerification:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/UserObject'
+                  subscription:
+                    $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  summary: Missing email or password
+                  value:
+                    status: error
+                    message: "Email and password are required"
+                weak_password:
+                  summary: Password too short
+                  value:
+                    status: error
+                    message: "Password must be at least 6 characters"
+                wrong_domain:
+                  summary: Non-gmail/yahoo email
+                  value:
+                    status: error
+                    message: "We don't support this email. Please use Gmail or Yahoo."
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                message: "Email is already registered. Please login instead."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Invalid app credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ─── LOGIN ────────────────────────────────────────────────────────────
+  /api/user/login/:
+    post:
+      operationId: loginUser
+      tags: [Auth]
+      summary: Login with email and password
+      description: |
+        Authenticates the user and returns full account data including
+        subscription status, cloud sync data, and JWT tokens.
+
+        **Rate Limiting (brute-force protection):**
+        - 10 attempts per 15 minutes per IP
+        - 10 attempts per 15 minutes per email
+        - After 10 failures: 30-minute lockout
+        - Successful login resets all counters
+
+        **Response includes:**
+        - User object with JWT tokens (access + refresh)
+        - Subscription status
+        - Full cloud data (playback progress, watchlist, history, favorites, ratings)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@gmail.com"
+                password:
+                  type: string
+                  example: "SecurePass123"
+                deviceId:
+                  type: string
+                deviceModel:
+                  type: string
+                osVersion:
+                  type: string
+                appVersion:
+                  type: string
+                buildNumber:
+                  type: integer
+                timestamp:
+                  type: integer
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Login successful"
+                  requiresVerification:
+                    type: boolean
+                    example: false
+                  user:
+                    $ref: '#/components/schemas/UserObject'
+                  subscription:
+                    $ref: '#/components/schemas/Subscription'
+                  userData:
+                    $ref: '#/components/schemas/UserData'
+        '401':
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                message: "Invalid password"
+        '403':
+          description: Email not verified or rate limited
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                    description: Email not verified
+                  - $ref: '#/components/schemas/ErrorResponse'
+                    description: Rate limited
+              examples:
+                not_verified:
+                  summary: Email not verified
+                  value:
+                    status: error
+                    message: "Email not verified. Please check your inbox for the verification link."
+                    requiresVerification: true
+                rate_limited:
+                  summary: Too many attempts
+                  value:
+                    status: error
+                    message: "Too many requests. Please try again in 15 minutes."
+                    retryAfter: 900
+        '404':
+          description: Email not registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                message: "Email is not registered. Please register first."
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ─── REFRESH TOKEN ────────────────────────────────────────────────────
+  /api/user/refresh/:
+    post:
+      operationId: refreshToken
+      tags: [Auth]
+      summary: Refresh access token
+      description: |
+        Exchange a valid refresh token for new access + refresh tokens.
+        Refresh tokens expire after 75 days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  description: The refresh token from a previous login/register
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                      email:
+                        type: string
+                      token:
+                        type: string
+                        description: New JWT access token
+                      refreshToken:
+                        type: string
+                        description: New JWT refresh token
+                      tokenExpiresIn:
+                        type: integer
+                        description: Access token lifetime in seconds
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ─── PROFILE ──────────────────────────────────────────────────────────
+  /api/user/profile/:
+    get:
+      operationId: getUserProfile
+      tags: [Profile]
+      summary: Get user profile and subscription
+      description: |
+        Returns the user's profile, subscription status, and full cloud data.
+
+        **Authentication:** Requires JWT Bearer token in Authorization header.
+
+        **Use case:** App opens → fetch latest profile/subscription on launch
+        without doing a full login.
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "Bearer <jwt_access_token>"
+          example: "Bearer eyJhbGciOiJIUzI1NiIs..."
+      responses:
+        '200':
+          description: Profile loaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/UserObject'
+                  subscription:
+                    $ref: '#/components/schemas/Subscription'
+                  userData:
+                    $ref: '#/components/schemas/UserData'
+        '401':
+          description: Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_token:
+                  summary: No token provided
+                  value:
+                    status: error
+                    message: "Missing Bearer token"
+                expired_token:
+                  summary: Token expired
+                  value:
+                    status: error
+                    message: "Invalid or expired token"
+
+  # ─── SYNC ─────────────────────────────────────────────────────────────
+  /api/user/sync/:
+    post:
+      operationId: syncUserData
+      tags: [Sync]
+      summary: Bidirectional data sync
+      description: |
+        **Bidirectional sync** of user data between the Android app and server.
+
+        **How it works:**
+        1. App sends its local `userData` (playback, watchlist, history, etc.)
+        2. Server merges into `UserCloudData` (app data wins on conflicts)
+        3. Server pushes cloud data into web-facing models (`WatchList`, `PlayHistory`)
+        4. Server returns `serverUserData` for the app to merge locally
+
+        **Conflict resolution:**
+        - `playbackProgress`: App data wins (higher positionMs)
+        - `seenKeys`: Union (all items kept)
+        - `watchHistory`: Prepend new items, deduplicate by mediaId
+        - `favorites`: Union by mediaId
+        - `watchlist`: Union by mediaId
+        - `userRatings`: App data wins
+
+        **Key format for playbackProgress:** `{mediaType}_{mediaId}_{season}_{episode}`
+        - Movie: `movie_939243_-1_-1`
+        - TV Episode: `tv_12345_2_3` (Season 2, Episode 3)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+                userId:
+                  type: string
+                token:
+                  type: string
+                appVersion:
+                  type: string
+                buildNumber:
+                  type: integer
+                deviceId:
+                  type: string
+                deviceModel:
+                  type: string
+                osVersion:
+                  type: string
+                action:
+                  type: string
+                  enum: [login_or_sync]
+                  example: "login_or_sync"
+                timestamp:
+                  type: integer
+                userData:
+                  $ref: '#/components/schemas/UserData'
+      responses:
+        '200':
+          description: Sync successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Data synchronized successfully"
+                  subscription:
+                    $ref: '#/components/schemas/Subscription'
+                  serverUserData:
+                    $ref: '#/components/schemas/UserData'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Invalid app credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

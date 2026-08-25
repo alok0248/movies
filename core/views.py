@@ -6158,6 +6158,10 @@ def ajax_delete_ad_file(request):
 # Android User API (Register, Login, Sync) + Admin
 # ---------------------------------------------------------------------------
 from .models import SyncedUser, UserCloudData
+from .auth import (
+    create_user_token_pair, decode_jwt_token, reset_rate_limit,
+    check_rate_limit, record_rate_limit_attempt, rate_limit_response,
+)
 import hashlib
 
 
@@ -6197,14 +6201,17 @@ def _validate_android_auth(request):
 
 
 def _user_payload(user_obj, django_user):
-    """Build the user object for API responses."""
+    """Build the user object for API responses with JWT tokens."""
     photo = django_user.email and f"https://ui-avatars.com/api/?name={django_user.first_name or django_user.username}&background=4F46E5&color=fff&size=128" or ''
+    tokens = create_user_token_pair(django_user)
     return {
         'userId': f'usr_{django_user.pk}',
         'email': django_user.email,
         'displayName': django_user.first_name or django_user.username,
         'photoUrl': user_obj.photo_url if user_obj and user_obj.photo_url else photo,
-        'token': hashlib.md5(f'{django_user.pk}:{django_user.email}'.encode()).hexdigest(),
+        'token': tokens['token'],
+        'refreshToken': tokens['refreshToken'],
+        'tokenExpiresIn': tokens['expiresIn'],
         'isEmailVerified': django_user.is_active,
     }
 
@@ -6410,9 +6417,21 @@ def api_user_login(request):
     if not email or not password:
         return JsonResponse({'status': 'error', 'message': 'Email and password are required'}, status=400)
 
-    # Authenticate
+    # Rate limit by IP
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    allowed, remaining, retry_after = check_rate_limit(ip, 'login')
+    if not allowed:
+        return rate_limit_response(retry_after)
+
+    # Also rate limit by email to prevent targeted brute force
+    allowed_email, _, retry_email = check_rate_limit(email, 'login_email')
+    if not allowed_email:
+        return rate_limit_response(retry_email)
+
     django_user = User.objects.filter(email=email).first()
     if not django_user:
+        record_rate_limit_attempt(ip, 'login')
+        record_rate_limit_attempt(email, 'login_email')
         return JsonResponse({'status': 'error', 'message': 'Email is not registered. Please register first.'}, status=404)
 
     if not django_user.has_usable_password():
@@ -6421,7 +6440,6 @@ def api_user_login(request):
             'message': 'This account was created from Android sync. Please register with a password first.',
         }, status=400)
 
-    # Check active status before authenticate() because ModelBackend rejects inactive users
     if not django_user.is_active:
         return JsonResponse({
             'status': 'error',
@@ -6431,7 +6449,13 @@ def api_user_login(request):
 
     auth_user = authenticate(request, username=django_user.username, password=password)
     if not auth_user:
+        record_rate_limit_attempt(ip, 'login')
+        record_rate_limit_attempt(email, 'login_email')
         return JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
+
+    # Success — reset rate limits
+    reset_rate_limit(ip, 'login')
+    reset_rate_limit(email, 'login_email')
 
     # Get or create synced profile
     user_obj, _ = SyncedUser.objects.get_or_create(
@@ -6488,6 +6512,69 @@ def api_user_sync(request):
         'message': 'Data synchronized successfully',
         'subscription': user_obj.subscription_payload(),
         'serverUserData': cloud.get_cloud_payload(),
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_user_profile(request):
+    """GET /api/user/profile/ — fetch user profile + subscription via JWT token."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    # Extract JWT from Authorization header
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    token = ''
+    if auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1]
+    elif auth_header.startswith('Basic '):
+        # Accept Basic auth as fallback for backward compat
+        pass
+    if not token:
+        return JsonResponse({'status': 'error', 'message': 'Missing Bearer token'}, status=401)
+    payload = decode_jwt_token(token)
+    if not payload:
+        return JsonResponse({'status': 'error', 'message': 'Invalid or expired token'}, status=401)
+    django_user = User.objects.filter(pk=int(payload.get('sub', 0))).first()
+    if not django_user:
+        return JsonResponse({'status': 'error', 'message': 'User not found'}, status=404)
+    user_obj = SyncedUser.objects.filter(user=django_user).first()
+    return JsonResponse(_build_user_response(django_user, user_obj, {
+        'message': 'Profile loaded successfully',
+    }))
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_refresh_token(request):
+    """POST /api/user/refresh/ — get new access token using refresh token."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+    refresh_token = body.get('refreshToken', '')
+    if not refresh_token:
+        return JsonResponse({'status': 'error', 'message': 'refreshToken is required'}, status=400)
+    payload = decode_jwt_token(refresh_token)
+    if not payload or payload.get('type') != 'refresh':
+        return JsonResponse({'status': 'error', 'message': 'Invalid or expired refresh token'}, status=401)
+    django_user = User.objects.filter(pk=int(payload.get('sub', 0))).first()
+    if not django_user or not django_user.is_active:
+        return JsonResponse({'status': 'error', 'message': 'User not found or inactive'}, status=401)
+    tokens = create_user_token_pair(django_user)
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Token refreshed',
+        'user': {
+            'userId': f'usr_{django_user.pk}',
+            'email': django_user.email,
+            'token': tokens['token'],
+            'refreshToken': tokens['refreshToken'],
+            'tokenExpiresIn': tokens['expiresIn'],
+        },
     })
 
 

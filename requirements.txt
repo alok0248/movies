@@ -7,3 +7,4 @@ django-mssql-backend>=2.7,<3
 pandas>=3.0,<4
 psutil>=7.2,<8
 beautifulsoup4>=4.15,<5
+PyJWT>=2.8,<3
