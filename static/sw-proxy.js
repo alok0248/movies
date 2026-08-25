@@ -1,19 +1,24 @@
 /*
- * Browser Proxy Service Worker
- * Intercepts /proxy/host/path requests and fetches directly from CDN.
- * This bypasses the Django server for video segment downloads,
- * resulting in much faster buffering.
+ * Browser Proxy Service Worker — Dual Session Architecture
+ *
+ * Session 1 (Playing):  Normal HLS.js playback via /proxy/ URLs
+ * Session 2 (Lookahead): Prefetch engine fetches segments 4 min ahead via this SW
+ *
+ * The SW intercepts /proxy/ requests, fetches directly from CDN,
+ * and stores prefetched segments in Cache API for instant retrieval.
  */
 
 const PROXY_PREFIX = '/proxy/';
 const VIDEASY_ORIGIN = 'https://videasy.to';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-
-// Cache for m3u8 manifests (short TTL to stay fresh)
-const manifestCache = new Map();
-const MANIFEST_CACHE_TTL = 3000; // 3 seconds
+const PREFETCH_CACHE = 'sw-prefetch-v1';
+const MANIFEST_CACHE = 'sw-manifest-v1';
+const MANIFEST_CACHE_TTL = 3000;
 
 self.addEventListener('install', function(event) {
+  event.waitUntil(
+    caches.open(PREFETCH_CACHE).then(function() { return; })
+  );
   self.skipWaiting();
 });
 
@@ -24,31 +29,67 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('fetch', function(event) {
   var url = event.request.url;
   var pathStart = url.indexOf(PROXY_PREFIX);
-
-  // Only intercept /proxy/ requests
   if (pathStart === -1) return;
 
-  // Skip m3u8 manifests — let the server handle manifest rewriting
-  if (url.indexOf('.m3u8') !== -1 && url.indexOf('.m3u8?') === -1 &&
-      url.substring(url.lastIndexOf('/') + 1).indexOf('.m3u8') !== -1) {
-    // Let manifest requests pass through to server for rewriting
-    // (they are tiny and need proper URL rewriting)
-    // BUT check: if the manifest URL already contains the full proxy path
-    // from the server-rewritten manifest, let it pass through
+  // Parse the request to detect prefetch mode
+  var prefetchHeader = event.request.headers.get('X-SW-Prefetch');
+  var isPrefetch = prefetchHeader === '1';
+
+  // For prefetch requests, check cache first
+  if (isPrefetch) {
+    event.respondWith(withPrefetchCache(event.request, url, pathStart));
     return;
   }
 
-  event.respondWith(
-    fetchDirect(event.request, pathStart)
-  );
+  // Normal playback requests: check prefetch cache first (instant!)
+  event.respondWith(normalFetch(event.request, url, pathStart));
 });
 
+/*
+ * Normal playback: check prefetch cache first, then fetch from CDN
+ * This means prefetched segments play instantly from cache.
+ */
+function normalFetch(request, url, pathStart) {
+  // Check prefetch cache first
+  return caches.open(PREFETCH_CACHE).then(function(cache) {
+    return cache.match(request).then(function(cached) {
+      if (cached) return cached;
+
+      // Not prefetched — fetch directly from CDN
+      return fetchDirect(request, pathStart);
+    });
+  });
+}
+
+/*
+ * Prefetch request: fetch from CDN, store in prefetch cache
+ */
+function withPrefetchCache(request, url, pathStart) {
+  // Check if already cached
+  return caches.open(PREFETCH_CACHE).then(function(cache) {
+    return cache.match(request).then(function(cached) {
+      if (cached) return cached;
+
+      // Fetch from CDN and cache it
+      return fetchDirect(request, pathStart).then(function(response) {
+        if (response && response.ok) {
+          // Clone before returning (Response body can only be read once)
+          var toCache = response.clone();
+          cache.put(request, toCache);
+        }
+        return response;
+      });
+    });
+  });
+}
+
+/*
+ * Core: Fetch directly from CDN with proper headers
+ */
 function fetchDirect(request, pathStart) {
   var url = request.url;
-  // Extract the CDN host + path from /proxy/cdn.host/rest/of/path
   var proxyPath = url.substring(pathStart + PROXY_PREFIX.length);
 
-  // Reconstruct the original CDN URL
   var cdnUrl;
   if (proxyPath.startsWith('http/')) {
     cdnUrl = 'http://' + proxyPath.substring(5);
@@ -56,17 +97,6 @@ function fetchDirect(request, pathStart) {
     cdnUrl = 'https://' + proxyPath;
   }
 
-  // Check manifest cache
-  var cacheKey = cdnUrl;
-  var cached = manifestCache.get(cacheKey);
-  if (cached && (Date.now() - cached.time) < MANIFEST_CACHE_TTL) {
-    return Promise.resolve(new Response(cached.body, {
-      status: 200,
-      headers: cached.headers
-    }));
-  }
-
-  // Build a new request with proper CDN headers
   var headers = new Headers();
   headers.set('User-Agent', USER_AGENT);
   headers.set('Origin', VIDEASY_ORIGIN);
@@ -75,7 +105,6 @@ function fetchDirect(request, pathStart) {
   headers.set('Accept-Encoding', 'identity');
   headers.set('Connection', 'keep-alive');
 
-  // Copy Range header if present (important for resuming)
   var rangeHeader = request.headers.get('Range');
   if (rangeHeader) {
     headers.set('Range', rangeHeader);
@@ -91,61 +120,65 @@ function fetchDirect(request, pathStart) {
 
   return fetch(cdnUrl, fetchOptions).then(function(response) {
     if (!response.ok) {
-      // CDN rejected — try without Origin/Referer
-      var fallbackHeaders = new Headers();
-      fallbackHeaders.set('User-Agent', USER_AGENT);
-      if (rangeHeader) fallbackHeaders.set('Range', rangeHeader);
+      // Try without Origin/Referer
+      var fb = new Headers();
+      fb.set('User-Agent', USER_AGENT);
+      if (rangeHeader) fb.set('Range', rangeHeader);
 
       return fetch(cdnUrl, {
         method: request.method,
-        headers: fallbackHeaders,
+        headers: fb,
         mode: 'cors',
         credentials: 'omit',
       }).then(function(r2) {
-        if (!r2.ok) {
-          // If CORS still fails, fall back to server proxy
-          return fetch(request);
-        }
+        if (!r2.ok) return fetch(request); // fallback to server proxy
         return addCorsHeaders(r2);
       }).catch(function() {
-        // Network error — fall back to server proxy
-        return fetch(request);
+        return fetch(request); // fallback to server proxy
       });
     }
-
-    // Cache small responses (manifests, init segments)
-    var contentType = response.headers.get('Content-Type') || '';
-    var contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
-
-    if (contentType.indexOf('mpegurl') !== -1 || contentLength < 100000) {
-      response.clone().text().then(function(body) {
-        var hdrs = {};
-        response.headers.forEach(function(v, k) { hdrs[k] = v; });
-        manifestCache.set(cacheKey, {
-          body: body,
-          headers: hdrs,
-          time: Date.now()
-        });
-      });
-    }
-
     return addCorsHeaders(response);
-  }).catch(function(err) {
-    // Direct CDN fetch failed — fall back to server proxy
-    console.log('[SW-Proxy] Direct fetch failed, falling back to server proxy:', err.message);
-    return fetch(request);
+  }).catch(function() {
+    return fetch(request); // fallback to server proxy
   });
 }
 
 function addCorsHeaders(response) {
-  var newHeaders = new Headers(response.headers);
-  newHeaders.set('Access-Control-Allow-Origin', '*');
-  newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  newHeaders.set('Access-Control-Allow-Headers', 'Range, Origin, Accept, Referer, User-Agent');
-
+  var h = new Headers(response.headers);
+  h.set('Access-Control-Allow-Origin', '*');
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
-    headers: newHeaders
+    headers: h
   });
 }
+
+/*
+ * Message handler: frontend can ask SW to prefetch a list of URLs
+ */
+self.addEventListener('message', function(event) {
+  var data = event.data;
+  if (!data || data.type !== 'prefetch-segments') return;
+
+  var urls = data.urls || [];
+  if (urls.length === 0) return;
+
+  caches.open(PREFETCH_CACHE).then(function(cache) {
+    var promises = urls.map(function(url) {
+      return cache.match(url).then(function(hit) {
+        if (hit) return; // already cached
+        // Fetch and cache
+        var pathStart = url.indexOf(PROXY_PREFIX);
+        if (pathStart === -1) return;
+        return fetchDirect({ url: url, headers: new Headers(), method: 'GET' }, pathStart)
+          .then(function(resp) {
+            if (resp && resp.ok) {
+              cache.put(url, resp.clone());
+            }
+          })
+          .catch(function() {});
+      });
+    });
+    Promise.all(promises);
+  });
+});
