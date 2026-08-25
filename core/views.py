@@ -6557,6 +6557,8 @@ def api_user_forgot_password(request):
     django_user = User.objects.filter(email=email).first()
     if django_user and django_user.has_usable_password():
         token = default_token_generator.make_token(django_user)
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
         uid = urlsafe_base64_encode(force_bytes(django_user.pk))
         reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
         try:
