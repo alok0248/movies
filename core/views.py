@@ -3128,6 +3128,7 @@ def ajax_login(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
+            _record_session(user, 'web', request)
             return JsonResponse({'success': True, 'message': 'Login successful'})
         # If no password provided, try email-based login for synced users
         if not password and '@' in username:
@@ -3140,6 +3141,7 @@ def ajax_login(request):
                         user.set_password(new_pass)
                         user.save()
                         login(request, user)
+                        _record_session(user, 'web', request)
                         return JsonResponse({'success': True, 'message': 'Password set and login successful'})
                     return JsonResponse({
                         'success': False,
@@ -6389,6 +6391,23 @@ FREE_SUBSCRIPTION = {
 }
 
 
+
+def _record_session(user, source, request, device_model='', os_version='', app_version=''):
+    """Record a login session for tracking logins, active sessions, and source."""
+    from .models import UserSession
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    ua = request.META.get('HTTP_USER_AGENT', '')
+    UserSession.objects.create(
+        user=user,
+        source=source,
+        ip_address=ip or None,
+        user_agent=ua[:500],
+        device_model=device_model,
+        os_version=os_version,
+        app_version=app_version,
+    )
+
+
 def _validate_android_auth(request):
     """Validate Basic Auth + Android headers. Returns (app_match, error_response)."""
     from .models import AndroidApp
@@ -6684,6 +6703,8 @@ def api_user_login(request):
         user_obj.app_version = body.get('appVersion', '')
         user_obj.build_number = body.get('buildNumber', 0)
         user_obj.save()
+
+    _record_session(auth_user, 'android', request, device_model=body.get('deviceModel', ''), os_version=body.get('osVersion', ''), app_version=body.get('appVersion', ''))
 
     return JsonResponse(_build_user_response(auth_user, user_obj, {
         'message': 'Login successful',
@@ -7114,6 +7135,7 @@ def ajax_resume_position(request):
 @user_passes_test(is_staff_or_superuser)
 def admin_user_list(request):
     """Admin page listing all Django users with block/edit/add actions."""
+    from .models import UserSession
     users = User.objects.all().order_by('-date_joined')
     search = request.GET.get('q', '').strip()
     if search:
@@ -7141,9 +7163,9 @@ def admin_user_list(request):
         users = users.filter(synced_profiles__isnull=True) | users.filter(synced_profiles__is_subscribed=False)
 
     if filter_source == 'android':
-        users = users.filter(synced_profiles__isnull=False)
+        users = users.filter(sessions__source='android').distinct()
     elif filter_source == 'web':
-        users = users.filter(synced_profiles__isnull=True)
+        users = users.exclude(sessions__source='android').distinct()
 
     # Deduplicate after OR queries
     users = users.distinct()
@@ -7160,6 +7182,37 @@ def admin_user_list(request):
     blocked = total - active
     subscribed_count = SyncedUser.objects.filter(is_subscribed=True).count()
 
+    # Session stats for each user on this page — attach as attributes
+    user_ids = [u.id for u in users]
+    if user_ids:
+        from django.db.models import Count, Max, Q
+        # Build lookup dicts
+        active_map = {}
+        logins_map = {}
+        source_map = {}
+        session_qs = UserSession.objects.filter(user_id__in=user_ids)
+        for row in session_qs.filter(is_active=True).values('user_id').annotate(c=Count('id')):
+            active_map[row['user_id']] = row['c']
+        for row in session_qs.values('user_id').annotate(c=Count('id')):
+            logins_map[row['user_id']] = row['c']
+        for row in session_qs.order_by('-logged_in_at').values('user_id').distinct()[:500]:
+            if row['user_id'] not in source_map:
+                # Get last source from annotation
+                pass
+        for row in session_qs.values('user_id').annotate(last_src=Max('source')):
+            source_map[row['user_id']] = row['last_src'] or ''
+        # Attach to each user object
+        for u in users:
+            u.session_active_count = active_map.get(u.id, 0)
+            u.session_total_logins = logins_map.get(u.id, 0)
+            u.session_last_source = source_map.get(u.id, '')
+
+    # Compute totals
+    total_active_sessions = UserSession.objects.filter(is_active=True).count()
+    total_logins = UserSession.objects.count()
+    android_users = UserSession.objects.filter(source='android').values('user_id').distinct().count()
+    web_users = UserSession.objects.filter(source='web').values('user_id').distinct().count()
+
     return render(request, 'core/admin_user_list.html', {
         'users': users,
         'total': total,
@@ -7170,6 +7223,10 @@ def admin_user_list(request):
         'filter_status': filter_status,
         'filter_sub': filter_sub,
         'filter_source': filter_source,
+        'total_active_sessions': total_active_sessions,
+        'total_logins': total_logins,
+        'android_users': android_users,
+        'web_users': web_users,
     })
 
 
@@ -7267,16 +7324,25 @@ def admin_user_delete(request, user_id):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_user_detail(request, user_id):
-    """Full user detail page with subscription, activity, cloud data."""
+    """Full user detail page with subscription, activity, cloud data, session history."""
+    from .models import UserSession
     detail_user = get_object_or_404(User, id=user_id)
     synced_profile = SyncedUser.objects.filter(user=detail_user).first()
     cloud_data = UserCloudData.objects.filter(user=detail_user).first()
     play_history = PlayHistory.objects.filter(user=detail_user).order_by('-last_played_at')[:50]
+    sessions = UserSession.objects.filter(user=detail_user).order_by('-logged_in_at')[:50]
+    total_logins = UserSession.objects.filter(user=detail_user).count()
+    active_sessions = UserSession.objects.filter(user=detail_user, is_active=True).count()
+    last_source = sessions.first().source if sessions else ''
     return render(request, 'core/admin_user_detail.html', {
         'detail_user': detail_user,
         'synced_profile': synced_profile,
         'cloud_data': cloud_data,
         'play_history': play_history,
+        'sessions': sessions,
+        'total_logins': total_logins,
+        'active_sessions': active_sessions,
+        'last_source': last_source,
     })
 
 
