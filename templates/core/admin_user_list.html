@@ -6,50 +6,89 @@
 {% block content %}
 <div class="container py-4">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
             <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color: #60a5fa;">
                 <i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard
             </a>
             <h2 class="text-white mt-2 mb-0"><i class="fas fa-users-cog me-2"></i>User Management</h2>
+            <div class="text-secondary small mt-1">Manage all users, subscriptions, and access</div>
         </div>
         <a href="{% url 'admin_user_add' %}" class="btn btn-success">
             <i class="fas fa-plus me-1"></i> Add User
         </a>
     </div>
 
-    <!-- Stats -->
+    <!-- Stats Row -->
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card bg-dark border-secondary text-center p-3">
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #60a5fa !important;">
                 <div class="text-secondary small">Total Users</div>
-                <div class="text-white fs-3 fw-bold">{{ total }}</div>
+                <div class="fs-3 fw-bold" style="color: #60a5fa;">{{ total }}</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-dark border-secondary text-center p-3">
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #22c55e !important;">
                 <div class="text-secondary small">Active</div>
                 <div class="text-success fs-3 fw-bold">{{ active }}</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-dark border-secondary text-center p-3">
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #ef4444 !important;">
                 <div class="text-secondary small">Blocked</div>
                 <div class="text-danger fs-3 fw-bold">{{ blocked }}</div>
             </div>
         </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #a855f7 !important;">
+                <div class="text-secondary small">Subscribed</div>
+                <div class="fs-3 fw-bold" style="color: #a855f7;">{{ subscribed_count }}</div>
+            </div>
+        </div>
     </div>
 
-    <!-- Search -->
-    <form class="mb-4">
-        <div class="input-group">
-            <input type="text" name="q" class="form-control bg-dark text-white border-secondary" placeholder="Search by username, email, or name..." value="{{ search }}">
-            <button class="btn btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
-            {% if search %}
-                <a href="{% url 'admin_user_list' %}" class="btn btn-outline-danger"><i class="fas fa-times"></i></a>
-            {% endif %}
+    <!-- Filters -->
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-body py-3">
+            <form class="row g-2 align-items-end" method="GET">
+                <div class="col-md-5">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-dark border-secondary text-secondary"><i class="fas fa-search"></i></span>
+                        <input type="text" name="q" class="form-control bg-dark text-white border-secondary" placeholder="Search username, email, name..." value="{{ search }}">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">All Status</option>
+                        <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="blocked" {% if filter_status == 'blocked' %}selected{% endif %}>Blocked</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="subscription" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">All Plans</option>
+                        <option value="subscribed" {% if filter_sub == 'subscribed' %}selected{% endif %}>Subscribed</option>
+                        <option value="free" {% if filter_sub == 'free' %}selected{% endif %}>Free</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="source" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">All Sources</option>
+                        <option value="web" {% if filter_source == 'web' %}selected{% endif %}>Web Only</option>
+                        <option value="android" {% if filter_source == 'android' %}selected{% endif %}>Android</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-outline-light btn-sm flex-grow-1" type="submit"><i class="fas fa-filter"></i></button>
+                        {% if search or filter_status or filter_sub or filter_source %}
+                            <a href="{% url 'admin_user_list' %}" class="btn btn-outline-danger btn-sm" title="Clear filters"><i class="fas fa-times"></i></a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
         </div>
-    </form>
+    </div>
 
     <!-- User Table -->
     <div class="card bg-dark border-secondary">
@@ -58,30 +97,48 @@
                 <table class="table table-dark table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Username</th>
+                            <th style="width:50px">#</th>
+                            <th>User</th>
                             <th>Email</th>
-                            <th>Name</th>
-                            <th>Role</th>
+                            <th>Source</th>
+                            <th>Plan</th>
                             <th>Status</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
+                            <th>Last Login</th>
+                            <th style="width:140px">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for u in users %}
                         <tr id="user-row-{{ u.id }}">
-                            <td>{{ u.id }}</td>
-                            <td class="text-white fw-bold">{{ u.username }}</td>
-                            <td style="color: #60a5fa;">{{ u.email|default:"—" }}</td>
-                            <td>{{ u.first_name }} {{ u.last_name }}</td>
+                            <td class="text-secondary">{{ u.id }}</td>
                             <td>
-                                {% if u.is_superuser %}
-                                    <span class="badge bg-warning text-dark">Super Admin</span>
-                                {% elif u.is_staff %}
-                                    <span class="badge bg-info">Staff</span>
+                                <a href="{% url 'admin_user_detail' u.id %}" class="text-decoration-none d-flex align-items-center gap-2">
+                                    {% if u.synced_profile and u.synced_profile.photo_url %}
+                                        <img src="{{ u.synced_profile.photo_url }}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" alt="">
+                                    {% else %}
+                                        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4F46E5,#7C3AED);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.7rem;font-weight:700;">{{ u.first_name|first|default:u.username|first|upper }}</div>
+                                    {% endif %}
+                                    <div>
+                                        <div class="text-white fw-bold small">{{ u.username }}</div>
+                                        {% if u.first_name or u.last_name %}
+                                            <div class="text-secondary" style="font-size:.7rem;">{{ u.first_name }} {{ u.last_name }}</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </td>
+                            <td style="color: #60a5fa; font-size:.82rem;">{{ u.email|default:"—" }}</td>
+                            <td>
+                                {% if u.synced_profile %}
+                                    <span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;"><i class="fas fa-mobile-alt me-1"></i>Android</span>
                                 {% else %}
-                                    <span class="badge bg-secondary">User</span>
+                                    <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;"><i class="fas fa-globe me-1"></i>Web</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.synced_profile and u.synced_profile.is_subscribed %}
+                                    <span class="badge" style="background:rgba(34,197,94,.15);color:#22c55e;"><i class="fas fa-crown me-1"></i>{{ u.synced_profile.plan|truncatechars:20 }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Free</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -91,10 +148,13 @@
                                     <span class="badge bg-danger" id="status-{{ u.id }}">Blocked</span>
                                 {% endif %}
                             </td>
-                            <td class="text-secondary small">{{ u.date_joined|date:"M d, Y" }}</td>
+                            <td class="text-secondary small">{{ u.last_login|date:"M d, Y H:i"|default:"Never" }}</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <a href="{% url 'admin_user_edit' u.id %}" class="btn btn-outline-info" title="Edit">
+                                    <a href="{% url 'admin_user_detail' u.id %}" class="btn btn-outline-info" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'admin_user_edit' u.id %}" class="btn btn-outline-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <button class="btn btn-outline-{% if u.is_active %}warning{% else %}success{% endif %}" title="{% if u.is_active %}Block{% else %}Unblock{% endif %}" onclick="toggleBlock({{ u.id }}, this)">
@@ -108,7 +168,10 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-secondary py-4">No users found</td>
+                            <td colspan="8" class="text-center text-secondary py-5">
+                                <i class="fas fa-users-slash fa-2x mb-2 d-block"></i>
+                                No users found
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -116,9 +179,35 @@
             </div>
         </div>
     </div>
+
+    <!-- Pagination -->
+    {% if users.has_other_pages %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% if users.has_previous %}
+                <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ users.previous_page_number }}&q={{ search }}&status={{ filter_status }}&subscription={{ filter_sub }}&source={{ filter_source }}">&laquo;</a></li>
+            {% endif %}
+            {% for num in users.paginator.page_range %}
+                {% if users.number == num %}
+                    <li class="page-item active"><span class="page-link" style="background:#e50914;border-color:#e50914;">{{ num }}</span></li>
+                {% elif num > users.number|add:'-3' and num < users.number|add:'3' %}
+                    <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ num }}&q={{ search }}&status={{ filter_status }}&subscription={{ filter_sub }}&source={{ filter_source }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if users.has_next %}
+                <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ users.next_page_number }}&q={{ search }}&status={{ filter_status }}&subscription={{ filter_sub }}&source={{ filter_source }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
 </div>
 
 <script>
+function getCsrfToken() {
+    var c = document.cookie.match('(^|;)\\s*csrftoken=([^;]*)');
+    return c ? decodeURIComponent(c[2]) : '';
+}
+
 async function toggleBlock(userId, btn) {
     try {
         const resp = await fetch(`/admin-dashboard/users/${userId}/block/`, {
@@ -126,37 +215,19 @@ async function toggleBlock(userId, btn) {
             headers: { 'X-CSRFToken': getCsrfToken() }
         });
         const data = await resp.json();
-        if (data.success) {
-            location.reload();
-        }
-    } catch (e) {
-        alert('Failed to toggle user status');
-    }
+        if (data.success) location.reload();
+    } catch (e) { alert('Failed to toggle user status'); }
 }
 
 async function deleteUser(userId, username) {
-    if (!confirm(`Are you sure you want to delete user "${username}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
     try {
         const resp = await fetch(`/admin-dashboard/users/${userId}/delete/`, {
             method: 'POST',
             headers: { 'X-CSRFToken': getCsrfToken() }
         });
-        if (resp.redirected || resp.ok) {
-            location.reload();
-        }
-    } catch (e) {
-        alert('Failed to delete user');
-    }
-}
-
-function getCsrfToken() {
-    const name = 'csrftoken';
-    const cookies = document.cookie.split(';');
-    for (let c of cookies) {
-        c = c.trim();
-        if (c.startsWith(name + '=')) return c.substring(name.length + 1);
-    }
-    return '';
+        if (resp.redirected || resp.ok) location.reload();
+    } catch (e) { alert('Failed to delete user'); }
 }
 </script>
 {% endblock %}
