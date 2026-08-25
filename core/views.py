@@ -6522,16 +6522,10 @@ def api_user_profile(request):
     app_match, err = _validate_android_auth(request)
     if err:
         return err
-    # Extract JWT from Authorization header
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-    token = ''
-    if auth_header.startswith('Bearer '):
-        token = auth_header.split(' ', 1)[1]
-    elif auth_header.startswith('Basic '):
-        # Accept Basic auth as fallback for backward compat
-        pass
+    # Extract JWT from X-User-Token header (can't use Authorization: Bearer since Basic auth uses it)
+    token = request.META.get('HTTP_X_USER_TOKEN', '')
     if not token:
-        return JsonResponse({'status': 'error', 'message': 'Missing Bearer token'}, status=401)
+        return JsonResponse({'status': 'error', 'message': 'Missing X-User-Token header'}, status=401)
     payload = decode_jwt_token(token)
     if not payload:
         return JsonResponse({'status': 'error', 'message': 'Invalid or expired token'}, status=401)

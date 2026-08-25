@@ -59,10 +59,10 @@ components:
       scheme: basic
       description: "App-level Basic Auth (base64 of testing:testing)"
     BearerToken:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: "User-level JWT access token"
+      type: apiKey
+      in: header
+      name: X-User-Token
+      description: "User-level JWT access token (since HTTP only allows one Authorization header)"
 
   headers:
     X-Android-App:
@@ -545,13 +545,13 @@ paths:
         **Use case:** App opens → fetch latest profile/subscription on launch
         without doing a full login.
       parameters:
-        - name: Authorization
+        - name: X-User-Token
           in: header
           required: true
           schema:
             type: string
-          description: "Bearer <jwt_access_token>"
-          example: "Bearer eyJhbGciOiJIUzI1NiIs..."
+          description: "JWT access token (from register/login response)"
+          example: "eyJhbGciOiJIUzI1NiIs..."
       responses:
         '200':
           description: Profile loaded successfully
