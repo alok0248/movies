@@ -1,0 +1,358 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ detail_user.username }} - User Detail{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1100px;">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <a href="{% url 'admin_user_list' %}" class="text-decoration-none" style="color: #60a5fa;">
+                <i class="fas fa-arrow-left me-1"></i> Back to Users
+            </a>
+            <div class="d-flex align-items-center gap-3 mt-2">
+                {% if synced_profile and synced_profile.photo_url %}
+                    <img src="{{ synced_profile.photo_url }}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid {% if synced_profile.is_subscribed %}#22c55e{% else %}#64748b{% endif %};">
+                {% else %}
+                    <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#4F46E5,#7C3AED);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;font-weight:700;">{{ detail_user.first_name|first|default:detail_user.username|first|upper }}</div>
+                {% endif %}
+                <div>
+                    <h1 class="text-white mb-0">{{ detail_user.first_name }} {{ detail_user.last_name|default:detail_user.username }}</h1>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="text-secondary">{{ detail_user.email }}</span>
+                        {% if not detail_user.is_active %}
+                            <span class="badge bg-danger">Blocked</span>
+                        {% endif %}
+                        {% if detail_user.is_superuser %}
+                            <span class="badge bg-warning text-dark">Super Admin</span>
+                        {% elif detail_user.is_staff %}
+                            <span class="badge bg-info">Staff</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'admin_user_edit' detail_user.id %}" class="btn btn-warning"><i class="fas fa-edit me-1"></i>Edit</a>
+            <button class="btn btn-{% if detail_user.is_active %}outline-warning{% else %}outline-success{% endif %}" onclick="toggleBlock({{ detail_user.id }})">
+                <i class="fas fa-{% if detail_user.is_active %}ban{% else %}check{% endif %} me-1"></i>{% if detail_user.is_active %}Block{% else %}Unblock{% endif %}
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Left Column -->
+        <div class="col-lg-8">
+            <!-- Subscription Card -->
+            <div class="card border-secondary shadow-sm mb-4 {% if synced_profile and synced_profile.is_subscribed %}border-success{% endif %}">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="text-white mb-0"><i class="fas fa-crown me-2" style="color:{% if synced_profile and synced_profile.is_subscribed %}#22c55e{% else %}#64748b{% endif %};"></i>Subscription</h5>
+                    <button class="btn btn-sm btn-outline-light" onclick="openSubscriptionModal()">
+                        <i class="fas fa-edit me-1"></i>Manage
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if synced_profile and synced_profile.is_subscribed %}
+                        <div class="row g-3 text-center">
+                            <div class="col-md-3">
+                                <div class="p-3 rounded" style="background:rgba(34,197,94,.1);">
+                                    <div class="h4 text-success mb-1">{{ synced_profile.plan|default:"VIP" }}</div>
+                                    <div class="text-secondary small">Plan</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 rounded" style="background:rgba(56,189,248,.1);">
+                                    <div class="h4 text-info mb-1">{{ synced_profile.valid_until|date:"M d, Y"|default:"—" }}</div>
+                                    <div class="text-secondary small">Valid Until</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 rounded" style="background:rgba(168,85,247,.1);">
+                                    <div class="h4 mb-1" style="color:#a855f7;">{{ synced_profile.days_remaining }}</div>
+                                    <div class="text-secondary small">Days Left</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 rounded" style="background:rgba(251,191,36,.1);">
+                                    <div class="h4 text-warning mb-1">{{ synced_profile.features|length }}</div>
+                                    <div class="text-secondary small">Features</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% if synced_profile.features %}
+                        <div class="mt-3">
+                            <div class="text-secondary small mb-2">Active Features:</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for f in synced_profile.features %}
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2"><i class="fas fa-check me-1"></i>{{ f }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-4">
+                            <div class="text-secondary mb-3"><i class="fas fa-user-tag fa-2x"></i></div>
+                            <div class="text-secondary">No active subscription</div>
+                            <button class="btn btn-outline-success mt-2" onclick="openSubscriptionModal()">
+                                <i class="fas fa-crown me-1"></i>Assign Plan
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Cloud Data -->
+            {% if cloud_data %}
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary">
+                    <h5 class="text-white mb-0"><i class="fas fa-cloud me-2 text-info"></i>Cloud Sync Data <span class="badge bg-info ms-2">v{{ cloud_data.data_version }}</span></h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:rgba(56,189,248,.1);">
+                                <div class="h4 text-info mb-0">{{ cloud_data.playback_progress|length }}</div>
+                                <div class="text-secondary small">Playback Entries</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:rgba(251,191,36,.1);">
+                                <div class="h4 text-warning mb-0">{{ cloud_data.watchlist_ids|length }}</div>
+                                <div class="text-secondary small">Watchlist Items</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:rgba(168,85,247,.1);">
+                                <div class="h4 mb-0" style="color:#a855f7;">{{ cloud_data.seen_keys|length }}</div>
+                                <div class="text-secondary small">Seen Items</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:rgba(34,197,94,.1);">
+                                <div class="h4 text-success mb-0">{{ cloud_data.favorites|length }}</div>
+                                <div class="text-secondary small">Favorites</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:rgba(239,68,68,.1);">
+                                <div class="h4 text-danger mb-0">{{ cloud_data.watch_history|length }}</div>
+                                <div class="text-secondary small">Watch History</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:rgba(100,116,139,.1);">
+                                <div class="h4 text-secondary mb-0">{{ cloud_data.user_ratings|length }}</div>
+                                <div class="text-secondary small">Ratings</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% if cloud_data.playback_progress %}
+                    <hr class="border-secondary">
+                    <h6 class="text-white mb-3"><i class="fas fa-play-circle me-2 text-info"></i>Playback Progress</h6>
+                    <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
+                        <table class="table table-dark table-sm small mb-0">
+                            <thead class="sticky-top"><tr style="background:#1e1e2a;"><th>Media</th><th>Position</th><th>Duration</th><th>%</th></tr></thead>
+                            <tbody>
+                            {% for key, entry in cloud_data.playback_progress.items %}
+                                {% with pos=entry.positionMs|default:0 dur=entry.durationMs|default:0 %}
+                                <tr>
+                                    <td><span class="text-info">{{ entry.title|default:key }}</span></td>
+                                    <td class="text-white">{{ pos }}ms</td>
+                                    <td class="text-white">{{ dur }}ms</td>
+                                    <td>
+                                        {% if dur > 0 %}
+                                        <div class="progress" style="height:6px;width:80px;">
+                                            <div class="progress-bar bg-info" style="width:{% widthratio pos dur 100 %}%;"></div>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endwith %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                    <div class="text-secondary small mt-2"><i class="fas fa-clock me-1"></i>Last synced: {{ cloud_data.last_synced_at|date:"M d, Y H:i" }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Play History -->
+            {% if play_history %}
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary">
+                    <h5 class="text-white mb-0"><i class="fas fa-history me-2 text-warning"></i>Play History <span class="badge bg-secondary ms-2">{{ play_history|length }}</span></h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                        <table class="table table-dark table-sm mb-0">
+                            <thead class="sticky-top"><tr style="background:#1e1e2a;"><th>Title</th><th>Type</th><th>Progress</th><th>Last Played</th></tr></thead>
+                            <tbody>
+                            {% for h in play_history %}
+                                <tr>
+                                    <td class="text-white">
+                                        {{ h.title }}
+                                        {% if h.season_number %}<span class="text-secondary"> S{{ h.season_number }}E{{ h.episode_number }}</span>{% endif %}
+                                    </td>
+                                    <td><span class="badge {% if h.media_type == 'tv' %}bg-info{% else %}bg-purple{% endif %}" style="{% if h.media_type == 'movie' %}background:rgba(168,85,247,.2);color:#c084fc;{% endif %}">{{ h.media_type|upper }}</span></td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height:6px;width:100px;">
+                                                <div class="progress-bar {% if h.completed %}bg-success{% else %}bg-info{% endif %}" style="width:{{ h.progress_percent }}%;"></div>
+                                            </div>
+                                            <span class="text-secondary small">{{ h.progress_percent }}%</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-secondary small">{{ h.last_played_at|date:"M d, H:i" }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-lg-4">
+            <!-- Account Info -->
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-user-circle me-2 text-primary"></i>Account</h5></div>
+                <div class="card-body">
+                    <table class="table table-dark table-borderless mb-0 small">
+                        <tr><td class="text-secondary" style="width:40%">User ID</td><td class="text-white">#{{ detail_user.id }}</td></tr>
+                        <tr><td class="text-secondary">Username</td><td class="text-white fw-bold">{{ detail_user.username }}</td></tr>
+                        <tr><td class="text-secondary">Email</td><td class="text-info">{{ detail_user.email|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">Full Name</td><td class="text-white">{{ detail_user.first_name }} {{ detail_user.last_name }}</td></tr>
+                        <tr><td class="text-secondary">Has Password</td><td>{% if detail_user.has_usable_password %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-warning text-dark">No</span>{% endif %}</td></tr>
+                        <tr><td class="text-secondary">Email Verified</td><td>{% if detail_user.is_active %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td></tr>
+                        <tr><td class="text-secondary">Joined</td><td class="text-white">{{ detail_user.date_joined|date:"M d, Y" }}</td></tr>
+                        <tr><td class="text-secondary">Last Login</td><td class="text-white">{{ detail_user.last_login|date:"M d, Y H:i"|default:"Never" }}</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Device Info -->
+            {% if synced_profile %}
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-mobile-alt me-2 text-info"></i>Android Device</h5></div>
+                <div class="card-body">
+                    <table class="table table-dark table-borderless mb-0 small">
+                        <tr><td class="text-secondary" style="width:40%">Device</td><td class="text-white">{{ synced_profile.device_model|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">OS</td><td class="text-white">Android {{ synced_profile.os_version|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">App Version</td><td class="text-white">{{ synced_profile.app_version|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">Build</td><td class="text-white">#{{ synced_profile.build_number|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">Device ID</td><td class="text-white text-break" style="font-size:.7rem;">{{ synced_profile.device_id|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">Google ID</td><td class="text-white text-break" style="font-size:.7rem;">{{ synced_profile.google_id|default:"—" }}</td></tr>
+                        <tr><td class="text-secondary">Last Synced</td><td class="text-white">{{ synced_profile.last_synced_at|date:"M d, Y H:i" }}</td></tr>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Actions -->
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</h5></div>
+                <div class="card-body d-grid gap-2">
+                    <a href="{% url 'admin_user_edit' detail_user.id %}" class="btn btn-outline-warning btn-sm"><i class="fas fa-edit me-1"></i>Edit User</a>
+                    <button class="btn btn-outline-{% if detail_user.is_active %}warning{% else %}success{% endif %} btn-sm" onclick="toggleBlock({{ detail_user.id }})">
+                        <i class="fas fa-{% if detail_user.is_active %}ban{% else %}check{% endif %} me-1"></i>{% if detail_user.is_active %}Block User{% else %}Unblock User{% endif %}
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteUser({{ detail_user.id }}, '{{ detail_user.username }}')">
+                        <i class="fas fa-trash me-1"></i>Delete User
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subscription Modal -->
+<div class="modal fade" id="subModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);">
+            <div class="modal-header border-secondary">
+                <h5 class="text-white"><i class="fas fa-crown me-2 text-warning"></i>Manage Subscription</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'admin_user_subscription' detail_user.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-white">Status</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="is_subscribed" id="subActive" {% if synced_profile and synced_profile.is_subscribed %}checked{% endif %} onchange="toggleSubFields()">
+                            <label class="form-check-label text-white" for="subActive">Active Subscription</label>
+                        </div>
+                    </div>
+                    <div id="subFields" style="{% if not synced_profile or not synced_profile.is_subscribed %}display:none;{% endif %}">
+                        <div class="mb-3">
+                            <label class="form-label text-white">Plan Name</label>
+                            <select name="plan" class="form-select bg-dark text-white border-secondary">
+                                <option value="Standard Free" {% if synced_profile.plan == 'Standard Free' %}selected{% endif %}>Standard Free</option>
+                                <option value="VIP Premium" {% if synced_profile.plan == 'VIP Premium' %}selected{% endif %}>VIP Premium</option>
+                                <option value="VIP Pro" {% if synced_profile.plan == 'VIP Pro' %}selected{% endif %}>VIP Pro</option>
+                                <option value="VIP Lifetime Access" {% if synced_profile.plan == 'VIP Lifetime Access' %}selected{% endif %}>VIP Lifetime Access</option>
+                                <option value="Custom" {% if synced_profile.plan == 'Custom' %}selected{% endif %}>Custom</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white">Custom Plan Name <span class="text-secondary">(if Custom selected)</span></label>
+                            <input type="text" name="custom_plan" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Family Plan">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white">Valid Until</label>
+                            <input type="date" name="valid_until" class="form-control bg-dark text-white border-secondary" value="{% if synced_profile.valid_until %}{{ synced_profile.valid_until|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white">Features <span class="text-secondary">(one per line)</span></label>
+                            <textarea name="features" class="form-control bg-dark text-white border-secondary" rows="5" placeholder="100% Ad-Free Streaming&#10;4K Ultra HD&#10;VIP Live TV Channels">{% for f in synced_profile.features %}{{ f }}
+{% endfor %}</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Save Subscription</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSubFields() {
+    document.getElementById('subFields').style.display = document.getElementById('subActive').checked ? 'block' : 'none';
+}
+function openSubscriptionModal() {
+    new bootstrap.Modal(document.getElementById('subModal')).show();
+}
+function getCsrfToken() {
+    var c = document.cookie.match('(^|;)\\s*csrftoken=([^;]*)');
+    return c ? decodeURIComponent(c[2]) : '';
+}
+async function toggleBlock(userId) {
+    try {
+        const resp = await fetch(`/admin-dashboard/users/${userId}/block/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        const data = await resp.json();
+        if (data.success) location.reload();
+    } catch (e) { alert('Failed to toggle user status'); }
+}
+async function deleteUser(userId, username) {
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    try {
+        const resp = await fetch(`/admin-dashboard/users/${userId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        if (resp.redirected || resp.ok) window.location = '{% url "admin_user_list" %}';
+    } catch (e) { alert('Failed to delete user'); }
+}
+</script>
+{% endblock %}

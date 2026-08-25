@@ -6872,12 +6872,51 @@ def admin_user_list(request):
     total = users.count()
     active = users.filter(is_active=True).count()
     blocked = total - active
+    # Filters
+    filter_status = request.GET.get('status', '').strip()
+    filter_sub = request.GET.get('subscription', '').strip()
+    filter_source = request.GET.get('source', '').strip()
+
+    if filter_status == 'active':
+        users = users.filter(is_active=True)
+    elif filter_status == 'blocked':
+        users = users.filter(is_active=False)
+
+    if filter_sub == 'subscribed':
+        users = users.filter(synced_profiles__is_subscribed=True)
+    elif filter_sub == 'free':
+        users = users.filter(synced_profiles__isnull=True) | users.filter(synced_profiles__is_subscribed=False)
+
+    if filter_source == 'android':
+        users = users.filter(synced_profiles__isnull=False)
+    elif filter_source == 'web':
+        users = users.filter(synced_profiles__isnull=True)
+
+    # Deduplicate after OR queries
+    users = users.distinct()
+
+    # Pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(users, 25)
+    page = request.GET.get('page')
+    users = paginator.get_page(page)
+
+    all_users = User.objects.all()
+    total = all_users.count()
+    active = all_users.filter(is_active=True).count()
+    blocked = total - active
+    subscribed_count = SyncedUser.objects.filter(is_subscribed=True).count()
+
     return render(request, 'core/admin_user_list.html', {
         'users': users,
         'total': total,
         'active': active,
         'blocked': blocked,
+        'subscribed_count': subscribed_count,
         'search': search,
+        'filter_status': filter_status,
+        'filter_sub': filter_sub,
+        'filter_source': filter_source,
     })
 
 
@@ -6970,3 +7009,58 @@ def admin_user_delete(request, user_id):
         user_obj.delete()
         messages.success(request, f'User {username} deleted')
     return redirect('admin_user_list')
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_detail(request, user_id):
+    """Full user detail page with subscription, activity, cloud data."""
+    detail_user = get_object_or_404(User, id=user_id)
+    synced_profile = SyncedUser.objects.filter(user=detail_user).first()
+    cloud_data = UserCloudData.objects.filter(user=detail_user).first()
+    play_history = PlayHistory.objects.filter(user=detail_user).order_by('-last_played_at')[:50]
+    return render(request, 'core/admin_user_detail.html', {
+        'detail_user': detail_user,
+        'synced_profile': synced_profile,
+        'cloud_data': cloud_data,
+        'play_history': play_history,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_subscription(request, user_id):
+    """Save subscription plan for a user."""
+    detail_user = get_object_or_404(User, id=user_id)
+    if request.method != 'POST':
+        return redirect('admin_user_detail', user_id=user_id)
+
+    is_subscribed = request.POST.get('is_subscribed') == 'on'
+    plan = request.POST.get('plan', 'Standard Free')
+    custom_plan = request.POST.get('custom_plan', '').strip()
+    if plan == 'Custom' and custom_plan:
+        plan = custom_plan
+    valid_until_str = request.POST.get('valid_until', '')
+    features_raw = request.POST.get('features', '')
+    features = [f.strip() for f in features_raw.split('\n') if f.strip()]
+
+    # Get or create SyncedUser profile for subscription
+    synced_profile, created = SyncedUser.objects.get_or_create(
+        user=detail_user,
+        defaults={'email': detail_user.email, 'display_name': detail_user.first_name},
+    )
+    synced_profile.is_subscribed = is_subscribed
+    synced_profile.plan = plan
+    synced_profile.features = features
+    if valid_until_str:
+        import datetime as _dt
+        try:
+            synced_profile.valid_until = _dt.date.fromisoformat(valid_until_str)
+        except ValueError:
+            pass
+    elif not is_subscribed:
+        synced_profile.valid_until = None
+    synced_profile.save()
+
+    messages.success(request, f'Subscription updated for {detail_user.username}')
+    return redirect('admin_user_detail', user_id=user_id)
