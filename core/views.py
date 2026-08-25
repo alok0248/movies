@@ -6088,94 +6088,337 @@ def ajax_delete_ad_file(request):
 
 
 # ---------------------------------------------------------------------------
-# Android User Sync API + Admin
+# Android User API (Register, Login, Sync) + Admin
 # ---------------------------------------------------------------------------
-from .models import SyncedUser
+from .models import SyncedUser, UserCloudData
+import hashlib
+
+
+# Default free-tier subscription payload
+FREE_SUBSCRIPTION = {
+    'isSubscribed': False,
+    'plan': 'Standard Free',
+    'status': 'active',
+    'validUntil': 'Unlimited',
+    'daysRemaining': 0,
+    'features': [
+        'Full HD Streaming',
+        'Standard Live TV Channels',
+        'Subtitles & Audio Tracks',
+        'Watchlist & Cloud Progress Sync',
+    ],
+}
+
+
+def _validate_android_auth(request):
+    """Validate Basic Auth + Android headers. Returns (app_match, error_response)."""
+    from .models import AndroidApp
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Basic '):
+        return None, JsonResponse({'status': 'error', 'message': 'Missing Authorization header'}, status=401)
+    try:
+        decoded = base64.b64decode(auth_header.split(' ', 1)[1]).decode('utf-8')
+        username, password = decoded.split(':', 1)
+    except Exception:
+        return None, JsonResponse({'status': 'error', 'message': 'Invalid Authorization header'}, status=401)
+    app_match = AndroidApp.objects.filter(
+        access_username=username, access_password=password, is_active=True,
+    ).first()
+    if not app_match:
+        return None, JsonResponse({'status': 'error', 'message': 'Invalid credentials'}, status=403)
+    return app_match, None
+
+
+def _user_payload(user_obj, django_user):
+    """Build the user object for API responses."""
+    photo = django_user.email and f"https://ui-avatars.com/api/?name={django_user.first_name or django_user.username}&background=4F46E5&color=fff&size=128" or ''
+    return {
+        'userId': f'usr_{django_user.pk}',
+        'email': django_user.email,
+        'displayName': django_user.first_name or django_user.username,
+        'photoUrl': user_obj.photo_url if user_obj and user_obj.photo_url else photo,
+        'token': hashlib.md5(f'{django_user.pk}:{django_user.email}'.encode()).hexdigest(),
+        'isEmailVerified': django_user.is_active,
+    }
+
+
+def _build_user_response(django_user, user_obj, extra=None):
+    """Build the full JSON response with user + subscription + userData."""
+    resp = {
+        'status': 'success',
+        'user': _user_payload(user_obj, django_user),
+        'subscription': user_obj.subscription_payload() if user_obj else FREE_SUBSCRIPTION,
+    }
+    # Add cloud data if available
+    cloud = getattr(django_user, 'cloud_data', None)
+    if cloud:
+        resp['userData'] = cloud.get_cloud_payload()
+    if extra:
+        resp.update(extra)
+    return resp
+
+
+def _ensure_user_and_profile(email, body):
+    """Create or get Django User + SyncedUser. Returns (django_user, user_obj, created)."""
+    display_name = body.get('displayName', '') or email.split('@')[0]
+    photo_url = body.get('photoUrl', '')
+    google_id = body.get('googleId', '')
+    device_id = body.get('deviceId', '')
+    device_model = body.get('deviceModel', '')
+    os_version = body.get('osVersion', '')
+    app_version = body.get('appVersion', '')
+    build_number = body.get('buildNumber', 0)
+
+    # Check if Django User already exists
+    django_user = User.objects.filter(email=email).first()
+    user_obj = SyncedUser.objects.filter(email=email).first()
+    created = False
+
+    if django_user and user_obj:
+        # Existing user — update profile
+        user_obj.display_name = display_name or user_obj.display_name
+        user_obj.photo_url = photo_url or user_obj.photo_url
+        user_obj.google_id = google_id or user_obj.google_id
+        user_obj.device_id = device_id or user_obj.device_id
+        user_obj.device_model = device_model or user_obj.device_model
+        user_obj.os_version = os_version or user_obj.os_version
+        user_obj.app_version = app_version or user_obj.app_version
+        user_obj.build_number = build_number or user_obj.build_number
+        user_obj.save()
+    elif django_user and not user_obj:
+        # Django User exists (web registration) but no SyncedUser — create profile
+        user_obj = SyncedUser.objects.create(
+            user=django_user, email=email, display_name=display_name,
+            photo_url=photo_url, google_id=google_id,
+            device_id=device_id, device_model=device_model,
+            os_version=os_version, app_version=app_version, build_number=build_number,
+        )
+    else:
+        # Brand new user — create both
+        base_username = email.split('@')[0]
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        django_user = User.objects.create_user(
+            username=username, email=email, password=None,
+        )
+        django_user.first_name = display_name
+        django_user.is_active = True
+        django_user.save()
+        user_obj = SyncedUser.objects.create(
+            user=django_user, email=email, display_name=display_name,
+            photo_url=photo_url, google_id=google_id,
+            device_id=device_id, device_model=device_model,
+            os_version=os_version, app_version=app_version, build_number=build_number,
+        )
+        created = True
+
+    # Ensure cloud data exists
+    UserCloudData.objects.get_or_create(user=django_user)
+    return django_user, user_obj, created
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def user_sync_api(request):
-    """POST /api/user/sync — receive login/sync from Android app."""
-    # Validate Basic Auth
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-    if not auth_header.startswith('Basic '):
-        return JsonResponse({'status': 'error', 'message': 'Missing Authorization header'}, status=401)
-    try:
-        import base64
-        decoded = base64.b64decode(auth_header.split(' ', 1)[1]).decode('utf-8')
-        username, password = decoded.split(':', 1)
-    except Exception:
-        return JsonResponse({'status': 'error', 'message': 'Invalid Authorization header'}, status=401)
+def api_user_register(request):
+    """POST /api/user/register — register a new Android user with email verification."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
 
-    # Validate credentials against stored endpoint credentials (first AndroidApp)
-    from .models import AndroidApp
-    app_identity = request.META.get('HTTP_X_ANDROID_APP', '')
-    build_id = request.META.get('HTTP_X_ANDROID_BUILD', '')
-    user_email_header = request.META.get('HTTP_X_ANDROID_USER_EMAIL', '')
-
-    # Check against registered Android apps
-    app_match = AndroidApp.objects.filter(
-        access_username=username,
-        access_password=password,
-        is_active=True,
-    ).first()
-    if not app_match:
-        return JsonResponse({'status': 'error', 'message': 'Invalid credentials'}, status=403)
-
-    # Parse request body
     try:
         body = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
 
-    email = body.get('email', '')
-    if not email:
-        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+    email = body.get('email', '').strip().lower()
+    password = body.get('password', '')
+    display_name = body.get('displayName', '')
 
-    # Upsert synced user
-    user_obj, created = SyncedUser.objects.update_or_create(
-        email=email,
-        defaults={
-            'display_name': body.get('displayName', ''),
-            'photo_url': body.get('photoUrl', ''),
-            'google_id': body.get('googleId', ''),
-            'app_version': body.get('appVersion', ''),
-            'build_number': body.get('buildNumber', 0),
-            'device_id': body.get('deviceId', ''),
-            'device_model': body.get('deviceModel', ''),
-            'os_version': body.get('osVersion', ''),
-        },
-    )
+    if not email or not password:
+        return JsonResponse({'status': 'error', 'message': 'Email and password are required'}, status=400)
 
-    # Auto-create or link Django User for web login
-    if not user_obj.user:
-        display_name = body.get('displayName', '') or email.split('@')[0]
-        username = email.split('@')[0]
-        # Ensure unique username
-        base_username = username
+    # Validate email domain
+    allowed_domains = ['gmail.com', 'yahoo.com', 'yahoo.co.in']
+    email_domain = email.split('@')[-1] if '@' in email else ''
+    if email_domain not in allowed_domains:
+        return JsonResponse({'status': 'error', 'message': "We don't support this email. Please use Gmail or Yahoo."}, status=400)
+
+    if len(password) < 6:
+        return JsonResponse({'status': 'error', 'message': 'Password must be at least 6 characters'}, status=400)
+
+    # Check if already registered
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user and existing_user.has_usable_password():
+        return JsonResponse({'status': 'error', 'message': 'Email is already registered. Please login instead.'}, status=409)
+
+    if existing_user:
+        # Android-synced user — set their password, send verification
+        existing_user.set_password(password)
+        existing_user.first_name = display_name or existing_user.first_name
+        existing_user.is_active = False
+        existing_user.save()
+        django_user = existing_user
+        user_obj, _ = SyncedUser.objects.get_or_create(
+            email=email,
+            defaults={
+                'user': django_user, 'display_name': display_name,
+                'device_id': body.get('deviceId', ''),
+                'device_model': body.get('deviceModel', ''),
+                'os_version': body.get('osVersion', ''),
+                'app_version': body.get('appVersion', ''),
+                'build_number': body.get('buildNumber', 0),
+            },
+        )
+        user_obj.user = django_user
+        user_obj.save(update_fields=['user'])
+        created = False
+    else:
+        # New user — create everything
+        base_username = email.split('@')[0]
+        username = base_username
         counter = 1
         while User.objects.filter(username=username).exists():
             username = f"{base_username}{counter}"
             counter += 1
-        # Create user with unusable password (login via email on web)
-        django_user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=None,
-        )
+        django_user = User.objects.create_user(username=username, email=email, password=password)
         django_user.first_name = display_name
+        django_user.is_active = False
         django_user.save()
-        user_obj.user = django_user
-        user_obj.save(update_fields=['user'])
-    elif not user_obj.user.has_usable_password():
-        # User exists but has no password — set one from googleId as fallback
-        pass
+        user_obj = SyncedUser.objects.create(
+            user=django_user, email=email, display_name=display_name,
+            device_id=body.get('deviceId', ''),
+            device_model=body.get('deviceModel', ''),
+            os_version=body.get('osVersion', ''),
+            app_version=body.get('appVersion', ''),
+            build_number=body.get('buildNumber', 0),
+        )
+        UserCloudData.objects.create(user=django_user)
+        created = True
 
+    # Send verification email
+    token = secrets.token_hex(32)
+    EmailVerification.objects.create(user=django_user, token=token)
+    verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
+    try:
+        send_mail(
+            subject='Verify your email - NewMovies',
+            message=f'Hi {display_name},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net'),
+            recipient_list=[email],
+            fail_silently=True,
+        )
+    except Exception as e:
+        logger.warning(f'Failed to send verification email: {e}')
+
+    resp = {
+        'status': 'success',
+        'message': 'Account registered. Please verify your email via the link sent to your inbox.',
+        'requiresVerification': True,
+        'user': _user_payload(user_obj, django_user),
+        'subscription': FREE_SUBSCRIPTION,
+    }
+    return JsonResponse(resp)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_login(request):
+    """POST /api/user/login — authenticate user and return full account + cloud data."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = body.get('email', '').strip().lower()
+    password = body.get('password', '')
+
+    if not email or not password:
+        return JsonResponse({'status': 'error', 'message': 'Email and password are required'}, status=400)
+
+    # Authenticate
+    django_user = User.objects.filter(email=email).first()
+    if not django_user:
+        return JsonResponse({'status': 'error', 'message': 'Email is not registered. Please register first.'}, status=404)
+
+    if not django_user.has_usable_password():
+        return JsonResponse({
+            'status': 'error',
+            'message': 'This account was created from Android sync. Please register with a password first.',
+        }, status=400)
+
+    auth_user = authenticate(request, username=django_user.username, password=password)
+    if not auth_user:
+        return JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
+
+    if not auth_user.is_active:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Email not verified. Please check your inbox for the verification link.',
+            'requiresVerification': True,
+        }, status=403)
+
+    # Get or create synced profile
+    user_obj, _ = SyncedUser.objects.get_or_create(
+        email=email, defaults={'user': auth_user, 'display_name': auth_user.first_name},
+    )
+    if not user_obj.user:
+        user_obj.user = auth_user
+        user_obj.save(update_fields=['user'])
+
+    # Update device info
+    device_id = body.get('deviceId', '')
+    if device_id:
+        user_obj.device_id = device_id
+        user_obj.device_model = body.get('deviceModel', '')
+        user_obj.os_version = body.get('osVersion', '')
+        user_obj.app_version = body.get('appVersion', '')
+        user_obj.build_number = body.get('buildNumber', 0)
+        user_obj.save()
+
+    return JsonResponse(_build_user_response(auth_user, user_obj, {
+        'message': 'Login successful',
+        'requiresVerification': False,
+    }))
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_sync(request):
+    """POST /api/user/sync — bidirectional sync of user data between app and server."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = body.get('email', '').strip().lower()
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    # Create or get user + profile
+    django_user, user_obj, created = _ensure_user_and_profile(email, body)
+
+    # Merge incoming userData from app into cloud data
+    incoming_data = body.get('userData', {})
+    cloud, _ = UserCloudData.objects.get_or_create(user=django_user)
+    cloud.merge_incoming(incoming_data)
+
+    # Build response with server-side cloud data (what the app should merge)
     return JsonResponse({
         'status': 'success',
-        'message': 'User synced successfully',
+        'message': 'Data synchronized successfully',
         'subscription': user_obj.subscription_payload(),
+        'serverUserData': cloud.get_cloud_payload(),
     })
 
 
@@ -6200,7 +6443,10 @@ def synced_users_list(request):
 def synced_user_detail(request, user_id):
     """Show full details for a single synced user."""
     user_obj = get_object_or_404(SyncedUser, id=user_id)
-    return render(request, 'core/synced_user_detail.html', {'user_obj': user_obj})
+    cloud_data = None
+    if user_obj.user:
+        cloud_data, _ = UserCloudData.objects.get_or_create(user=user_obj.user)
+    return render(request, 'core/synced_user_detail.html', {'user_obj': user_obj, 'cloud_data': cloud_data})
 
 
 @login_required
