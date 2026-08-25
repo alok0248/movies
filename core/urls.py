@@ -74,6 +74,8 @@ urlpatterns = [
     path('api/user/login', views.api_user_login),
     path('api/user/refresh/', views.api_user_refresh_token, name='api_user_refresh_token'),
     path('api/user/refresh', views.api_user_refresh_token),
+    path('api/user/forgot-password/', views.api_user_forgot_password, name='api_user_forgot_password'),
+    path('api/user/forgot-password', views.api_user_forgot_password),
     path('api/user/profile/', views.api_user_profile, name='api_user_profile'),
     path('api/user/profile', views.api_user_profile),
     path('admin-dashboard/synced-users/', views.synced_users_list, name='synced_users_list'),
