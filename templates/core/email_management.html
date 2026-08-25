@@ -48,6 +48,7 @@
                                     <div><i class="fas fa-lock me-1"></i>{% if addr.smtp_use_tls %}TLS{% else %}None{% endif %}</div>
                                 </div>
                                 <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-success" onclick="testSavedSmtp({{ addr.id }})" title="Test Connection" id="testBtn{{ addr.id }}"><i class="fas fa-vial"></i></button>
                                     <button class="btn btn-sm btn-outline-info" onclick="openEmailModal({{ addr.id }})" title="Edit"><i class="fas fa-edit"></i></button>
                                     <button class="btn btn-sm btn-outline-{% if addr.is_active %}warning{% else %}success{% endif %}" onclick="toggleEmail({{ addr.id }})" title="{% if addr.is_active %}Disable{% else %}Enable{% endif %}"><i class="fas fa-{% if addr.is_active %}pause{% else %}play{% endif %}"></i></button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="deleteEmail({{ addr.id }})" title="Delete"><i class="fas fa-trash"></i></button>
@@ -164,9 +165,15 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveEmail()"><i class="fas fa-save me-1"></i>Save</button>
+            <div class="modal-footer border-secondary d-flex justify-content-between">
+                <div>
+                    <button type="button" class="btn btn-outline-warning" onclick="testSmtpFromModal()" id="testSmtpBtn"><i class="fas fa-vial me-1"></i>Test Connection</button>
+                    <span id="testSmtpResult" class="ms-2 small"></span>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveEmail()"><i class="fas fa-save me-1"></i>Save</button>
+                </div>
             </div>
         </div>
     </div>
@@ -374,6 +381,80 @@ function saveTemplate() {
 function deleteTemplate(id) {
     if (!confirm('Delete this template?')) return;
     ajaxPost({action: 'delete_template', id: id});
+}
+
+// ─── Test SMTP ───
+function testSmtpFromModal() {
+    var btn = document.getElementById('testSmtpBtn');
+    var result = document.getElementById('testSmtpResult');
+    var email = document.getElementById('emailAddr').value.trim();
+    var host = document.getElementById('emailSmtpHost').value.trim();
+    var port = document.getElementById('emailSmtpPort').value;
+    var user = document.getElementById('emailSmtpUser').value.trim();
+    var pass = document.getElementById('emailSmtpPass').value.trim();
+    var tls = document.getElementById('emailTls').checked;
+    var displayName = document.getElementById('emailDisplayName').value.trim();
+    if (!email || !host) {
+        result.innerHTML = '<span class="text-danger">Email and Host are required</span>';
+        return;
+    }
+    if (!pass) {
+        result.innerHTML = '<span class="text-danger">Enter password to test</span>';
+        return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+    result.innerHTML = '<span class="text-warning">Connecting...</span>';
+    var parts = [];
+    var params = { action: 'test_smtp', email: email, smtp_host: host, smtp_port: port, smtp_username: user, smtp_password: pass, smtp_use_tls: tls ? 'on' : 'off', display_name: displayName };
+    for (var k in params) { parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k])); }
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: parts.join('&')
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-vial me-1"></i>Test Connection';
+        if (d.success) {
+            result.innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i>' + d.message + '</span>';
+        } else {
+            result.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle me-1"></i>' + d.message + '</span>';
+        }
+    })
+    .catch(function(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-vial me-1"></i>Test Connection';
+        result.innerHTML = '<span class="text-danger">Network error: ' + e.message + '</span>';
+    });
+}
+
+function testSavedSmtp(id) {
+    var btn = document.getElementById('testBtn' + id);
+    if (!btn) return;
+    var origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    var parts = [];
+    var params = { action: 'test_saved_smtp', id: id };
+    for (var k in params) { parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k])); }
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: parts.join('&')
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+        alert(d.message || (d.success ? 'Test passed!' : 'Test failed'));
+    })
+    .catch(function(e) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+        alert('Network error: ' + e.message);
+    });
 }
 </script>
 {% endblock %}
