@@ -1951,17 +1951,99 @@ def url_blocking_settings(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def email_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = EmailSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = EmailSettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'Email Settings',
+    """Email management page — SMTP addresses, purpose assignment, and templates."""
+    from .models import EmailAddress, EmailTemplate, PURPOSE_CHOICES
+
+    # Handle AJAX actions
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        action = request.POST.get('action') or request.GET.get('action')
+
+        # Add / Edit email address
+        if action == 'save_email':
+            eid = request.POST.get('id')
+            email_obj = EmailAddress.objects.filter(pk=eid).first() if eid else None
+            if email_obj:
+                email_obj.email = request.POST.get('email', email_obj.email)
+                email_obj.display_name = request.POST.get('display_name', '')
+                email_obj.smtp_host = request.POST.get('smtp_host', 'smtp.gmail.com')
+                email_obj.smtp_port = int(request.POST.get('smtp_port', 587))
+                email_obj.smtp_username = request.POST.get('smtp_username', '')
+                pwd = request.POST.get('smtp_password', '')
+                if pwd:
+                    email_obj.smtp_password = pwd
+                email_obj.smtp_use_tls = request.POST.get('smtp_use_tls') == 'on'
+                email_obj.purpose = request.POST.get('purpose', 'notification')
+                email_obj.is_active = request.POST.get('is_active') == 'on'
+                email_obj.is_default = request.POST.get('is_default') == 'on'
+                email_obj.save()
+            else:
+                email_obj = EmailAddress.objects.create(
+                    email=request.POST.get('email', ''),
+                    display_name=request.POST.get('display_name', ''),
+                    smtp_host=request.POST.get('smtp_host', 'smtp.gmail.com'),
+                    smtp_port=int(request.POST.get('smtp_port', 587)),
+                    smtp_username=request.POST.get('smtp_username', ''),
+                    smtp_password=request.POST.get('smtp_password', ''),
+                    smtp_use_tls=request.POST.get('smtp_use_tls') == 'on',
+                    purpose=request.POST.get('purpose', 'notification'),
+                    is_active=request.POST.get('is_active') == 'on',
+                    is_default=request.POST.get('is_default') == 'on',
+                )
+            return JsonResponse({'success': True, 'id': email_obj.id})
+
+        # Delete email address
+        if action == 'delete_email':
+            eid = request.POST.get('id')
+            EmailAddress.objects.filter(pk=eid).delete()
+            return JsonResponse({'success': True})
+
+        # Toggle email active
+        if action == 'toggle_email':
+            eid = request.POST.get('id')
+            obj = EmailAddress.objects.filter(pk=eid).first()
+            if obj:
+                obj.is_active = not obj.is_active
+                obj.save(update_fields=['is_active'])
+            return JsonResponse({'success': True, 'is_active': obj.is_active if obj else False})
+
+        # Save template
+        if action == 'save_template':
+            tid = request.POST.get('id')
+            tmpl = EmailTemplate.objects.filter(pk=tid).first() if tid else None
+            if tmpl:
+                tmpl.name = request.POST.get('name', tmpl.name)
+                tmpl.purpose = request.POST.get('purpose', tmpl.purpose)
+                tmpl.subject = request.POST.get('subject', tmpl.subject)
+                tmpl.body = request.POST.get('body', tmpl.body)
+                tmpl.is_active = request.POST.get('is_active') == 'on'
+                tmpl.save()
+            else:
+                tmpl = EmailTemplate.objects.create(
+                    name=request.POST.get('name', ''),
+                    purpose=request.POST.get('purpose', 'notification'),
+                    subject=request.POST.get('subject', ''),
+                    body=request.POST.get('body', ''),
+                    is_active=request.POST.get('is_active') == 'on',
+                )
+            return JsonResponse({'success': True, 'id': tmpl.id})
+
+        # Delete template
+        if action == 'delete_template':
+            tid = request.POST.get('id')
+            EmailTemplate.objects.filter(pk=tid).delete()
+            return JsonResponse({'success': True})
+
+        return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
+
+    # GET — render the page
+    addresses = EmailAddress.objects.all()
+    templates = EmailTemplate.objects.all()
+    purposes = dict(PURPOSE_CHOICES)
+    return render(request, 'core/email_management.html', {
+        'addresses': addresses,
+        'email_templates': templates,
+        'purposes': purposes,
+        'purpose_choices': PURPOSE_CHOICES,
         'back_url': 'admin_dashboard',
     })
 

@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% block title %}Email Management - Admin{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width:1100px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;"><i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard</a>
+            <h2 class="text-white mt-2 mb-0"><i class="fas fa-envelope me-2 text-info"></i>Email Management</h2>
+            <div class="text-secondary small mt-1">Configure SMTP addresses, assign purposes, and manage email templates</div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="emailTabs">
+        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-addresses"><i class="fas fa-server me-1"></i> SMTP Addresses</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-templates"><i class="fas fa-file-alt me-1"></i> Message Templates</a></li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- ═══ TAB 1: SMTP Addresses ═══ -->
+        <div class="tab-pane fade show active" id="tab-addresses">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="text-white mb-0">SMTP Email Addresses</h5>
+                <button class="btn btn-success btn-sm" onclick="openEmailModal()"><i class="fas fa-plus me-1"></i> Add Email</button>
+            </div>
+
+            <!-- Purpose groups -->
+            {% for code, label in purpose_choices %}
+            {% with group=addresses|dictsort:"purpose" %}
+            <div class="mb-4">
+                <h6 class="text-secondary mb-2"><i class="fas fa-tag me-1"></i>{{ label }}</h6>
+                <div class="row g-3">
+                    {% for addr in addresses %}
+                    {% if addr.purpose == code %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card bg-dark border-secondary h-100" style="{% if addr.is_default %}border-color:#22c55e !important;{% endif %}{% if not addr.is_active %}opacity:.5;{% endif %}">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <div class="text-white fw-bold">{{ addr.display_name|default:addr.email }}</div>
+                                        <div class="text-secondary small" style="font-size:.75rem;">{{ addr.email }}</div>
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        {% if addr.is_default %}<span class="badge bg-success">Default</span>{% endif %}
+                                        {% if not addr.is_active %}<span class="badge bg-danger">Off</span>{% endif %}
+                                    </div>
+                                </div>
+                                <div class="text-secondary small mb-2">
+                                    <div><i class="fas fa-server me-1"></i>{{ addr.smtp_host }}:{{ addr.smtp_port }}</div>
+                                    <div><i class="fas fa-lock me-1"></i>{% if addr.smtp_use_tls %}TLS{% else %}None{% endif %}</div>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-info" onclick="openEmailModal({{ addr.id }})" title="Edit"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-outline-{% if addr.is_active %}warning{% else %}success{% endif %}" onclick="toggleEmail({{ addr.id }})" title="{% if addr.is_active %}Disable{% else %}Enable{% endif %}"><i class="fas fa-{% if addr.is_active %}pause{% else %}play{% endif %}"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteEmail({{ addr.id }})" title="Delete"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endwith %}
+            {% empty %}
+            <div class="text-center text-secondary py-5">
+                <i class="fas fa-envelope-open fa-2x mb-2 d-block"></i>
+                No email addresses configured yet.<br>Click "Add Email" to set up your first SMTP address.
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- ═══ TAB 2: Message Templates ═══ -->
+        <div class="tab-pane fade" id="tab-templates">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="text-white mb-0">Email Templates</h5>
+                <button class="btn btn-success btn-sm" onclick="openTemplateModal()"><i class="fas fa-plus me-1"></i> Add Template</button>
+            </div>
+
+            {% for code, label in purpose_choices %}
+            <div class="mb-4">
+                <h6 class="text-secondary mb-2"><i class="fas fa-tag me-1"></i>{{ label }}</h6>
+                {% for tmpl in email_templates %}
+                {% if tmpl.purpose == code %}
+                <div class="card bg-dark border-secondary mb-2">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="text-white fw-bold">{{ tmpl.name }}</div>
+                                <div class="text-info small">Subject: {{ tmpl.subject }}</div>
+                                <div class="text-secondary small mt-1" style="white-space:pre-wrap;max-height:100px;overflow-y:auto;font-size:.75rem;">{{ tmpl.body|truncatechars:300 }}</div>
+                                {% if not tmpl.is_active %}<span class="badge bg-danger mt-1">Inactive</span>{% endif %}
+                            </div>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-info" onclick="openTemplateModal({{ tmpl.id }})" title="Edit"><i class="fas fa-edit"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate({{ tmpl.id }})" title="Delete"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% empty %}
+            <div class="text-center text-secondary py-5">
+                <i class="fas fa-file-alt fa-2x mb-2 d-block"></i>
+                No email templates created yet.<br>Click "Add Template" to create your first template.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Email Address Modal ═══ -->
+<div class="modal fade" id="emailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);">
+            <div class="modal-header border-secondary">
+                <h5 class="text-white"><i class="fas fa-envelope me-2 text-info"></i><span id="emailModalTitle">Add Email</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="emailId">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label text-white small">Email Address *</label>
+                        <input type="email" id="emailAddr" class="form-control bg-dark text-white border-secondary" placeholder="you@gmail.com">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white small">Display Name</label>
+                        <input type="text" id="emailDisplayName" class="form-control bg-dark text-white border-secondary" placeholder="NewMovies">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white small">Purpose *</label>
+                        <select id="emailPurpose" class="form-select bg-dark text-white border-secondary">
+                            {% for code, label in purpose_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label text-white small">SMTP Host</label>
+                        <input type="text" id="emailSmtpHost" class="form-control bg-dark text-white border-secondary" value="smtp.gmail.com">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label text-white small">Port</label>
+                        <input type="number" id="emailSmtpPort" class="form-control bg-dark text-white border-secondary" value="587">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white small">SMTP Username</label>
+                        <input type="email" id="emailSmtpUser" class="form-control bg-dark text-white border-secondary" placeholder="Same as email if blank">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white small">SMTP Password *</label>
+                        <input type="password" id="emailSmtpPass" class="form-control bg-dark text-white border-secondary" placeholder="App password">
+                    </div>
+                    <div class="col-12 d-flex gap-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="emailTls" checked>
+                            <label class="form-check-label text-white" for="emailTls">Use TLS</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="emailActive" checked>
+                            <label class="form-check-label text-white" for="emailActive">Active</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="emailDefault">
+                            <label class="form-check-label text-white" for="emailDefault">Default for this purpose</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveEmail()"><i class="fas fa-save me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Template Modal ═══ -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);">
+            <div class="modal-header border-secondary">
+                <h5 class="text-white"><i class="fas fa-file-alt me-2 text-warning"></i><span id="tmplModalTitle">Add Template</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tmplId">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label text-white small">Template Name *</label>
+                        <input type="text" id="tmplName" class="form-control bg-dark text-white border-secondary" placeholder="Welcome Email">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white small">Purpose *</label>
+                        <select id="tmplPurpose" class="form-select bg-dark text-white border-secondary">
+                            {% for code, label in purpose_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-white small">Subject Line *</label>
+                        <input type="text" id="tmplSubject" class="form-control bg-dark text-white border-secondary" placeholder="Verify your email - {site_name}">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-white small">Body * <span class="text-secondary">(Use {name}, {email}, {link}, {code} placeholders)</span></label>
+                        <textarea id="tmplBody" class="form-control bg-dark text-white border-secondary" rows="10" placeholder="Hi {name},&#10;&#10;Click the link below to verify your email:&#10;{link}&#10;&#10;This link expires in 5 minutes."></textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="tmplActive" checked>
+                            <label class="form-check-label text-white" for="tmplActive">Active</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Data ═══ -->
+<script>
+var EMAIL_DATA = {
+    {% for addr in addresses %}
+    {{ addr.id }}: { id:{{ addr.id }}, email:'{{ addr.email }}', display_name:'{{ addr.display_name }}', smtp_host:'{{ addr.smtp_host }}', smtp_port:{{ addr.smtp_port }}, smtp_username:'{{ addr.smtp_username }}', smtp_use_tls:{{ addr.smtp_use_tls|yesno:"true,false" }}, purpose:'{{ addr.purpose }}', is_active:{{ addr.is_active|yesno:"true,false" }}, is_default:{{ addr.is_default|yesno:"true,false" }} },
+    {% endfor %}
+};
+var TMPL_DATA = {
+    {% for t in email_templates %}
+    {{ t.id }}: { id:{{ t.id }}, name:'{{ t.name|escapejs }}', purpose:'{{ t.purpose }}', subject:'{{ t.subject|escapejs }}', body:`{{ t.body|escapejs }}`, is_active:{{ t.is_active|yesno:"true,false" }} },
+    {% endfor %}
+};
+
+function csrf() {
+    var c = document.cookie.match('(^|;)\\s*csrftoken=([^;]*)');
+    return c ? decodeURIComponent(c[2]) : '';
+}
+
+// ─── Email CRUD ───
+function openEmailModal(id) {
+    var m = document.getElementById('emailModal');
+    if (id && EMAIL_DATA[id]) {
+        var e = EMAIL_DATA[id];
+        document.getElementById('emailModalTitle').textContent = 'Edit Email';
+        document.getElementById('emailId').value = e.id;
+        document.getElementById('emailAddr').value = e.email;
+        document.getElementById('emailDisplayName').value = e.display_name;
+        document.getElementById('emailPurpose').value = e.purpose;
+        document.getElementById('emailSmtpHost').value = e.smtp_host;
+        document.getElementById('emailSmtpPort').value = e.smtp_port;
+        document.getElementById('emailSmtpUser').value = e.smtp_username;
+        document.getElementById('emailSmtpPass').value = '';
+        document.getElementById('emailTls').checked = e.smtp_use_tls;
+        document.getElementById('emailActive').checked = e.is_active;
+        document.getElementById('emailDefault').checked = e.is_default;
+    } else {
+        document.getElementById('emailModalTitle').textContent = 'Add Email';
+        document.getElementById('emailId').value = '';
+        document.getElementById('emailAddr').value = '';
+        document.getElementById('emailDisplayName').value = '';
+        document.getElementById('emailPurpose').value = 'notification';
+        document.getElementById('emailSmtpHost').value = 'smtp.gmail.com';
+        document.getElementById('emailSmtpPort').value = 587;
+        document.getElementById('emailSmtpUser').value = '';
+        document.getElementById('emailSmtpPass').value = '';
+        document.getElementById('emailTls').checked = true;
+        document.getElementById('emailActive').checked = true;
+        document.getElementById('emailDefault').checked = false;
+    }
+    new bootstrap.Modal(m).show();
+}
+
+async function saveEmail() {
+    var fd = new FormData();
+    fd.append('action', 'save_email');
+    var id = document.getElementById('emailId').value;
+    if (id) fd.append('id', id);
+    fd.append('email', document.getElementById('emailAddr').value);
+    fd.append('display_name', document.getElementById('emailDisplayName').value);
+    fd.append('purpose', document.getElementById('emailPurpose').value);
+    fd.append('smtp_host', document.getElementById('emailSmtpHost').value);
+    fd.append('smtp_port', document.getElementById('emailSmtpPort').value);
+    fd.append('smtp_username', document.getElementById('emailSmtpUser').value);
+    fd.append('smtp_password', document.getElementById('emailSmtpPass').value);
+    if (document.getElementById('emailTls').checked) fd.append('smtp_use_tls', 'on');
+    if (document.getElementById('emailActive').checked) fd.append('is_active', 'on');
+    if (document.getElementById('emailDefault').checked) fd.append('is_default', 'on');
+    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
+    var d = await r.json();
+    if (d.success) location.reload();
+    else alert(d.message || 'Failed to save');
+}
+
+async function deleteEmail(id) {
+    if (!confirm('Delete this email address?')) return;
+    var fd = new FormData(); fd.append('action','delete_email'); fd.append('id',id);
+    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
+    var d = await r.json(); if (d.success) location.reload();
+}
+
+async function toggleEmail(id) {
+    var fd = new FormData(); fd.append('action','toggle_email'); fd.append('id',id);
+    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
+    var d = await r.json(); if (d.success) location.reload();
+}
+
+// ─── Template CRUD ───
+function openTemplateModal(id) {
+    var m = document.getElementById('templateModal');
+    if (id && TMPL_DATA[id]) {
+        var t = TMPL_DATA[id];
+        document.getElementById('tmplModalTitle').textContent = 'Edit Template';
+        document.getElementById('tmplId').value = t.id;
+        document.getElementById('tmplName').value = t.name;
+        document.getElementById('tmplPurpose').value = t.purpose;
+        document.getElementById('tmplSubject').value = t.subject;
+        document.getElementById('tmplBody').value = t.body;
+        document.getElementById('tmplActive').checked = t.is_active;
+    } else {
+        document.getElementById('tmplModalTitle').textContent = 'Add Template';
+        document.getElementById('tmplId').value = '';
+        document.getElementById('tmplName').value = '';
+        document.getElementById('tmplPurpose').value = 'verification';
+        document.getElementById('tmplSubject').value = '';
+        document.getElementById('tmplBody').value = '';
+        document.getElementById('tmplActive').checked = true;
+    }
+    new bootstrap.Modal(m).show();
+}
+
+async function saveTemplate() {
+    var fd = new FormData();
+    fd.append('action', 'save_template');
+    var id = document.getElementById('tmplId').value;
+    if (id) fd.append('id', id);
+    fd.append('name', document.getElementById('tmplName').value);
+    fd.append('purpose', document.getElementById('tmplPurpose').value);
+    fd.append('subject', document.getElementById('tmplSubject').value);
+    fd.append('body', document.getElementById('tmplBody').value);
+    if (document.getElementById('tmplActive').checked) fd.append('is_active', 'on');
+    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
+    var d = await r.json();
+    if (d.success) location.reload();
+    else alert(d.message || 'Failed to save');
+}
+
+async function deleteTemplate(id) {
+    if (!confirm('Delete this template?')) return;
+    var fd = new FormData(); fd.append('action','delete_template'); fd.append('id',id);
+    var r = await fetch(window.location.href, { method:'POST', headers:{'X-CSRFToken':csrf(),'X-Requested-With':'XMLHttpRequest'}, body:fd });
+    var d = await r.json(); if (d.success) location.reload();
+}
+</script>
+{% endblock %}
