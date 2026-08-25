@@ -47,6 +47,34 @@
         </div>
     </div>
 
+    <!-- Login Tracker Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #f59e0b !important;">
+                <div class="text-secondary small">Total Logins</div>
+                <div class="fs-3 fw-bold" style="color: #f59e0b;">{{ total_logins }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #22d3ee !important;">
+                <div class="text-secondary small">Active Sessions</div>
+                <div class="fs-3 fw-bold" style="color: #22d3ee;">{{ total_active_sessions }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #c084fc !important;">
+                <div class="text-secondary small">Android Users</div>
+                <div class="fs-3 fw-bold" style="color: #c084fc;">{{ android_users }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-dark border-secondary text-center p-3" style="border-left: 3px solid #60a5fa !important;">
+                <div class="text-secondary small">Web Users</div>
+                <div class="fs-3 fw-bold" style="color: #60a5fa;">{{ web_users }}</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Filters -->
     <div class="card bg-dark border-secondary mb-4">
         <div class="card-body py-3">
@@ -101,6 +129,8 @@
                             <th>User</th>
                             <th>Email</th>
                             <th>Source</th>
+                            <th>Logins</th>
+                            <th>Active</th>
                             <th>Plan</th>
                             <th>Status</th>
                             <th>Last Login</th>
@@ -128,10 +158,28 @@
                             </td>
                             <td style="color: #60a5fa; font-size:.82rem;">{{ u.email|default:"—" }}</td>
                             <td>
-                                {% if u.synced_profile %}
+                                {% if u.session_last_source == 'android' or u.synced_profile %}
+                                    <span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;"><i class="fas fa-mobile-alt me-1"></i>Android</span>
+                                {% elif u.session_last_source == 'web' %}
+                                    <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;"><i class="fas fa-globe me-1"></i>Web</span>
+                                {% elif u.synced_profile %}
                                     <span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;"><i class="fas fa-mobile-alt me-1"></i>Android</span>
                                 {% else %}
                                     <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;"><i class="fas fa-globe me-1"></i>Web</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge" style="background:rgba(245,158,11,.15);color:#f59e0b;" title="Total logins">
+                                    <i class="fas fa-sign-in-alt me-1"></i> {{ u.session_total_logins|default:0 }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {% if u.session_active_count > 0 %}
+                                    <span class="badge" style="background:rgba(34,211,238,.15);color:#22d3ee;" title="Active sessions">
+                                        <i class="fas fa-circle me-1" style="font-size:.5rem;"></i> {{ u.session_active_count }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary" title="No active sessions">0</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -168,7 +216,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-secondary py-5">
+                            <td colspan="10" class="text-center text-secondary py-5">
                                 <i class="fas fa-users-slash fa-2x mb-2 d-block"></i>
                                 No users found
                             </td>

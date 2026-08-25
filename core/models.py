@@ -1464,3 +1464,59 @@ class EmailTemplate(models.Model):
             subject = subject.replace(placeholder, str(value))
             body = body.replace(placeholder, str(value))
         return subject, body
+
+
+# ---------------------------------------------------------------------------
+# User Session / Login Tracker
+# ---------------------------------------------------------------------------
+
+
+class UserSession(models.Model):
+    """Track every login with source, IP, device info, and active status."""
+    SOURCE_CHOICES = [
+        ('web', 'Web'),
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='web')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, default='')
+    device_model = models.CharField(max_length=200, blank=True, default='')
+    os_version = models.CharField(max_length=100, blank=True, default='')
+    app_version = models.CharField(max_length=50, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    logged_in_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    logged_out_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-logged_in_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user', 'source']),
+        ]
+
+    def __str__(self):
+        status = 'Active' if self.is_active else 'Offline'
+        return f"{self.user.username} — {self.source} ({status})"
+
+    def mark_logout(self):
+        from django.utils import timezone
+        self.is_active = False
+        self.logged_out_at = timezone.now()
+        self.save(update_fields=['is_active', 'logged_out_at'])
+
+    @classmethod
+    def active_count(cls, user):
+        return cls.objects.filter(user=user, is_active=True).count()
+
+    @classmethod
+    def total_logins(cls, user):
+        return cls.objects.filter(user=user).count()
+
+    @classmethod
+    def last_source(cls, user):
+        last = cls.objects.filter(user=user).order_by('-logged_in_at').first()
+        return last.source if last else ''

@@ -381,6 +381,71 @@
             </div>
             {% endif %}
 
+            <!-- Login Tracker -->
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-chart-line me-2 text-warning"></i>Login Tracker</h5></div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-4 text-center">
+                            <div class="h4 mb-0" style="color:#f59e0b;">{{ total_logins }}</div>
+                            <div class="text-secondary small">Total Logins</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="h4 mb-0" style="color:#22d3ee;">{{ active_sessions }}</div>
+                            <div class="text-secondary small">Active Sessions</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            {% if last_source == 'android' %}
+                                <div class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;font-size:.9rem;"><i class="fas fa-mobile-alt me-1"></i>Android</div>
+                            {% elif last_source == 'web' %}
+                                <div class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.9rem;"><i class="fas fa-globe me-1"></i>Web</div>
+                            {% else %}
+                                <div class="badge bg-secondary">Unknown</div>
+                            {% endif %}
+                            <div class="text-secondary small">Last Source</div>
+                        </div>
+                    </div>
+
+                    {% if sessions %}
+                    <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
+                        <table class="table table-dark table-hover table-sm mb-0 small">
+                            <thead><tr><th>Source</th><th>IP</th><th>Device</th><th>Logged In</th><th>Status</th></tr></thead>
+                            <tbody>
+                            {% for s in sessions %}
+                                <tr>
+                                    <td>
+                                        {% if s.source == 'android' %}
+                                            <span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;"><i class="fas fa-mobile-alt me-1"></i>Android</span>
+                                        {% elif s.source == 'web' %}
+                                            <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;"><i class="fas fa-globe me-1"></i>Web</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ s.source }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-secondary">{{ s.ip_address|default:"—" }}</td>
+                                    <td class="text-white">{{ s.device_model|default:s.user_agent|truncatechars:40|default:"—" }}</td>
+                                    <td class="text-secondary">{{ s.logged_in_at|date:"M d, Y H:i" }}</td>
+                                    <td>
+                                        {% if s.is_active %}
+                                            <span class="badge" style="background:rgba(34,211,238,.15);color:#22d3ee;"><i class="fas fa-circle" style="font-size:.45rem;"></i> Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Offline</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                        <div class="text-center text-secondary py-3">
+                            <i class="fas fa-sign-in-alt fa-lg mb-1 d-block"></i>
+                            <small>No login sessions recorded yet</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- Quick Actions -->
             <div class="card bg-dark border-secondary shadow-sm">
                 <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</h5></div>
