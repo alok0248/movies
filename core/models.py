@@ -1219,3 +1219,107 @@ class UserCloudData(models.Model):
             self.user_ratings.update(app_ratings)
         self.data_version += 1
         self.save()
+        # After merging, push cloud data into web models
+        self.sync_to_web_models()
+
+    def sync_to_web_models(self):
+        """Push cloud data into web-facing WatchList and PlayHistory models."""
+        from .models import WatchList, PlayHistory
+        if not self.user:
+            return
+
+        # --- Watchlist: cloud -> WatchList ---
+        cloud_wl = self.watchlist_ids or []
+        if cloud_wl:
+            existing_wl = {
+                (w.tmdb_id, w.media_type): w
+                for w in WatchList.objects.filter(user=self.user)
+            }
+            for item in cloud_wl:
+                mid = item.get('mediaId')
+                mtype = 'tv' if item.get('isTv') else 'movie'
+                if mid and (mid, mtype) not in existing_wl:
+                    WatchList.objects.get_or_create(
+                        user=self.user, tmdb_id=mid, media_type=mtype,
+                        defaults={
+                            'title': item.get('title', ''),
+                            'poster_path': item.get('posterPath', ''),
+                        },
+                    )
+
+        # --- Playback progress -> PlayHistory ---
+        cloud_progress = self.playback_progress or {}
+        for key, entry in cloud_progress.items():
+            mid = entry.get('mediaId')
+            is_tv = entry.get('isTv', False)
+            season = entry.get('season', -1)
+            episode = entry.get('episode', -1)
+            if not mid:
+                continue
+            media_type = 'tv' if is_tv else 'movie'
+            pos_ms = entry.get('positionMs', 0)
+            dur_ms = entry.get('durationMs', 0)
+            PlayHistory.objects.update_or_create(
+                user=self.user, tmdb_id=mid, media_type=media_type,
+                season_number=season if season >= 0 else None,
+                episode_number=episode if episode >= 0 else None,
+                defaults={
+                    'title': entry.get('title', ''),
+                    'poster_path': entry.get('posterPath', ''),
+                    'duration_seconds': pos_ms // 1000,
+                    'total_duration_seconds': dur_ms // 1000,
+                    'completed': dur_ms > 0 and (pos_ms / dur_ms) > 0.95,
+                },
+            )
+
+    def sync_from_web_models(self):
+        """Pull web WatchList + PlayHistory into cloud data."""
+        from .models import WatchList, PlayHistory
+        if not self.user:
+            return
+
+        # --- WatchList -> cloud watchlist_ids ---
+        web_wl = WatchList.objects.filter(user=self.user)
+        cloud_existing = {w.get('mediaId'): w for w in (self.watchlist_ids or [])}
+        for item in web_wl:
+            if item.tmdb_id not in cloud_existing:
+                cloud_item = {
+                    'mediaId': item.tmdb_id,
+                    'isTv': item.media_type == 'tv',
+                    'title': item.title,
+                    'posterPath': item.poster_path or '',
+                }
+                self.watchlist_ids = (self.watchlist_ids or []) + [cloud_item]
+                cloud_existing[item.tmdb_id] = cloud_item
+
+        # --- PlayHistory -> cloud playback_progress ---
+        web_history = PlayHistory.objects.filter(user=self.user)
+        for h in web_history:
+            season = h.season_number if h.season_number is not None else -1
+            episode = h.episode_number if h.episode_number is not None else -1
+            key = f"{'tv' if h.media_type == 'tv' else 'movie'}_{h.tmdb_id}_{season}_{episode}"
+            if key not in self.playback_progress:
+                self.playback_progress[key] = {
+                    'mediaId': h.tmdb_id,
+                    'isTv': h.media_type == 'tv',
+                    'season': season,
+                    'episode': episode,
+                    'positionMs': h.duration_seconds * 1000,
+                    'durationMs': h.total_duration_seconds * 1000,
+                    'title': h.title,
+                    'posterPath': h.poster_path or '',
+                    'lastUpdated': int(h.last_played_at.timestamp() * 1000) if h.last_played_at else 0,
+                }
+            else:
+                # Update if web has newer data
+                existing = self.playback_progress[key]
+                existing_pos = existing.get('positionMs', 0)
+                new_pos = h.duration_seconds * 1000
+                if new_pos > existing_pos:
+                    existing['positionMs'] = new_pos
+                    existing['durationMs'] = h.total_duration_seconds * 1000
+                    existing['title'] = h.title
+                    existing['lastUpdated'] = int(h.last_played_at.timestamp() * 1000) if h.last_played_at else 0
+
+        self.data_version += 1
+        self.save()
