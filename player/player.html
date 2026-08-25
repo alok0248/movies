@@ -747,8 +747,10 @@ var _ve=(function(){
   // Single play
   function playUrl(url){
     if(hls){hls.destroy();hls=null}
+    _stopPrefetch();
     video.removeAttribute("src");video.load();
     if(url.indexOf(".m3u8")>-1){
+      _startPrefetch(url);
       loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8})},url,function(h){hls=h},null);
     }else{video.src=makeProxy(url);video.play().catch(function(){})}
   }
@@ -756,6 +758,7 @@ var _ve=(function(){
   // Dual play
   function playDual(videoUrl,audioUrl){
     if(hls){hls.destroy();hls=null}if(hlsAudio){hlsAudio.destroy();hlsAudio=null}
+    _stopPrefetch();
     savedTime=video.currentTime||0;
     video.removeAttribute("src");video.load();
     audioVid.removeAttribute("src");audioVid.load();
@@ -780,6 +783,7 @@ var _ve=(function(){
     var hlsConfig={enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8};
     loadHLS(video,function(){return new Hls(hlsConfig)},videoUrl,function(h){hls=h},function(){videoReady=true;checkBoth()},true);
     loadHLS(audioVid,function(){return new Hls(hlsConfig)},audioUrl,function(h){hlsAudio=h},function(){audioReady=true;checkBoth()},false);
+    _startPrefetch(videoUrl);
   }
 
   // Generic HLS loader
@@ -827,6 +831,159 @@ var _ve=(function(){
     }
     return out.join("\n");
   }
+
+  /* =========================================================================
+   * DUAL SESSION PREFETCH ENGINE
+   * Session 1: Normal HLS.js playback (visible player)
+   * Session 2: Lookahead prefetch — always 4 min ahead, fetching via browser proxy
+   * ========================================================================= */
+  var _prefetch = {
+    active: false,
+    timer: null,
+    originalUrl: '',   // the original .m3u8 URL (before proxy)
+    segments: [],      // parsed segment URLs from manifest
+    lastFetched: 0,
+    aheadSeconds: 240, // 4 minutes ahead
+    pollInterval: 3000,
+    cache: new Map(),
+    maxCacheEntries: 200
+  };
+
+  function _startPrefetch(originalM3u8Url) {
+    if (_prefetch.active) _stopPrefetch();
+    _prefetch.originalUrl = originalM3u8Url;
+    _prefetch.active = true;
+    _prefetch.segments = [];
+    _prefetch.cache.clear();
+    _prefetch.timer = setInterval(_prefetchTick, _prefetch.pollInterval);
+    _prefetchTick(); // immediate first run
+  }
+
+  function _stopPrefetch() {
+    _prefetch.active = false;
+    if (_prefetch.timer) { clearInterval(_prefetch.timer); _prefetch.timer = null; }
+    _prefetch.segments = [];
+    _prefetch.cache.clear();
+  }
+
+  function _prefetchTick() {
+    if (!_prefetch.active || !_prefetch.originalUrl) return;
+    var pos = video.currentTime || 0;
+    var targetTime = pos + _prefetch.aheadSeconds;
+
+    // Re-fetch manifest periodically (every 10s) to get updated segment list
+    var now = Date.now();
+    var needManifest = (now - _prefetch.lastFetched > 10000) || _prefetch.segments.length === 0;
+    if (needManifest) {
+      _fetchManifestAndPrefetch(targetTime);
+    } else {
+      _prefetchSegmentsAtTime(targetTime);
+    }
+  }
+
+  function _fetchManifestAndPrefetch(targetTime) {
+    var px = makeProxy(_prefetch.originalUrl);
+    fetch(px).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function(text) {
+      _prefetch.lastFetched = Date.now();
+      // Parse segment URLs from the manifest
+      var lines = text.split('\n');
+      var base = _prefetch.originalUrl.substring(0, _prefetch.originalUrl.lastIndexOf('/') + 1);
+      var segments = [];
+      var duration = 0;
+      var totalTime = 0;
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.charAt(0) === '#') {
+          // Extract EXTINF duration
+          var match = line.match(/EXTINF:([\d.]+)/);
+          if (match) duration = parseFloat(match[1]);
+          continue;
+        }
+        if (line === '') continue;
+        var fullUrl = line.indexOf('http') === 0 ? line : base + line;
+        var proxyUrl = makeProxy(fullUrl);
+        segments.push({ url: proxyUrl, time: totalTime, duration: duration });
+        totalTime += duration;
+        duration = 0;
+      }
+      _prefetch.segments = segments;
+      _prefetchSegmentsAtTime(targetTime);
+    }).catch(function() {});
+  }
+
+  function _prefetchSegmentsAtTime(targetTime) {
+    var segs = _prefetch.segments;
+    if (!segs.length) return;
+
+    // Find segments within the lookahead window
+    var windowStart = targetTime - 30; // 30s before target
+    var windowEnd = targetTime + 30;   // 30s after target
+    var toFetch = [];
+
+    for (var i = 0; i < segs.length; i++) {
+      var seg = segs[i];
+      if (seg.time >= windowStart && seg.time <= windowEnd) {
+        if (!_prefetch.cache.has(seg.url)) {
+          toFetch.push(seg.url);
+        }
+      }
+    }
+
+    if (toFetch.length === 0) return;
+
+    // Trim cache if too large
+    if (_prefetch.cache.size > _prefetch.maxCacheEntries) {
+      var keys = Array.from(_prefetch.cache.keys());
+      for (var j = 0; j < keys.length - _prefetch.maxCacheEntries + 20; j++) {
+        _prefetch.cache.delete(keys[j]);
+      }
+    }
+
+    // Use Service Worker message for batch prefetch
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'prefetch-segments',
+        urls: toFetch
+      });
+    }
+
+    // Also fetch in parallel via SW header
+    for (var k = 0; k < toFetch.length; k++) {
+      _prefetchSegment(toFetch[k]);
+    }
+  }
+
+  function _prefetchSegment(url) {
+    if (_prefetch.cache.has(url)) return;
+    _prefetch.cache.set(url, true);
+
+    fetch(url, {
+      headers: { 'X-SW-Prefetch': '1' },
+      mode: 'cors',
+      credentials: 'omit'
+    }).then(function(r) {
+      if (!r.ok) _prefetch.cache.delete(url);
+    }).catch(function() {
+      _prefetch.cache.delete(url);
+    });
+  }
+
+  // Hook into play events to start/stop prefetch
+  var _originalPlayUrl = playUrl;
+  var _originalPlayDual = playDual;
+
+  function _hookPlay() {
+    video.addEventListener('playing', function() {
+      if (_prefetch.originalUrl && _prefetch.active) return;
+      // Start prefetch with the last known URL
+    }, false);
+    video.addEventListener('pause', function() {}, false);
+    video.addEventListener('ended', function() { _stopPrefetch(); }, false);
+  }
+  _hookPlay();
 
   try{//standalone: no parent}catch(e){}
 
