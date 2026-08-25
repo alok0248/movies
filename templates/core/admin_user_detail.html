@@ -203,10 +203,10 @@
                         <h6 class="text-white mb-3"><i class="fas fa-bookmark me-2 text-warning"></i>Watchlist</h6>
                         {% if cloud_data.watchlist_ids %}
                         <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
-                            <thead><tr><th>ID</th><th>Title</th><th>Type</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Action</th></tr></thead>
                             <tbody>
                             {% for item in cloud_data.watchlist_ids %}
-                                <tr><td class="text-warning">{{ item.mediaId|default:item.id|default:"—" }}</td><td class="text-white">{{ item.title|default:"—" }}</td><td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td></tr>
+                                <tr><td class="text-warning">{{ item.mediaId|default:item.id|default:"—" }}</td><td class="text-white">{{ item.title|default:"—" }}</td><td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td><td>{% with mid=item.mediaId|default:item.id %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td></tr>
                             {% endfor %}
                             </tbody>
                         </table></div>
@@ -228,10 +228,10 @@
                         <h6 class="text-white mb-3"><i class="fas fa-heart me-2 text-success"></i>Favorites</h6>
                         {% if cloud_data.favorites %}
                         <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
-                            <thead><tr><th>ID</th><th>Title</th><th>Type</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Action</th></tr></thead>
                             <tbody>
                             {% for item in cloud_data.favorites %}
-                                <tr><td class="text-success">{{ item.mediaId|default:item.id|default:"—" }}</td><td class="text-white">{{ item.title|default:"—" }}</td><td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td></tr>
+                                <tr><td class="text-success">{{ item.mediaId|default:item.id|default:"—" }}</td><td class="text-white">{{ item.title|default:"—" }}</td><td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td><td>{% with mid=item.mediaId|default:item.id %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td></tr>
                             {% endfor %}
                             </tbody>
                         </table></div>
@@ -244,16 +244,16 @@
                         <h6 class="text-white mb-3"><i class="fas fa-history me-2 text-danger"></i>Watch History</h6>
                         {% if cloud_data.watch_history %}
                         <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
-                            <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Season</th><th>Episode</th><th>Watched At</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>S/E</th><th>Watched At</th><th>Action</th></tr></thead>
                             <tbody>
                             {% for item in cloud_data.watch_history %}
                                 <tr>
                                     <td class="text-danger">{{ item.mediaId|default:item.id|default:"—" }}</td>
                                     <td class="text-white">{{ item.title|default:"—" }}</td>
                                     <td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td>
-                                    <td class="text-secondary">{{ item.season|default:"—" }}</td>
-                                    <td class="text-secondary">{{ item.episode|default:"—" }}</td>
+                                    <td class="text-secondary">{% if item.season and item.season >= 0 %}S{{ item.season }}E{{ item.episode }}{% else %}—{% endif %}</td>
                                     <td class="text-secondary">{{ item.watchedAt|default:item.lastUpdated|default:"—" }}</td>
+                                    <td>{% with mid=item.mediaId|default:item.id %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
                                 </tr>
                             {% endfor %}
                             </tbody>
