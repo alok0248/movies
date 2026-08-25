@@ -6354,16 +6354,17 @@ def api_user_login(request):
             'message': 'This account was created from Android sync. Please register with a password first.',
         }, status=400)
 
-    auth_user = authenticate(request, username=django_user.username, password=password)
-    if not auth_user:
-        return JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
-
-    if not auth_user.is_active:
+    # Check active status before authenticate() because ModelBackend rejects inactive users
+    if not django_user.is_active:
         return JsonResponse({
             'status': 'error',
             'message': 'Email not verified. Please check your inbox for the verification link.',
             'requiresVerification': True,
         }, status=403)
+
+    auth_user = authenticate(request, username=django_user.username, password=password)
+    if not auth_user:
+        return JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
 
     # Get or create synced profile
     user_obj, _ = SyncedUser.objects.get_or_create(
