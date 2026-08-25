@@ -3199,12 +3199,12 @@ def ajax_register(request):
                     send_configured_email(
                         subject='Verify your email - NewMovies',
                         message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
-                        from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@newmovies.linkpc.net',
                         recipient_list=[email],
+                        purpose='verification',
                         fail_silently=True,
                     )
                 except Exception as e:
-                    logger.warning(f'Failed to send verification email: {e}')
+                    logger.warning(f'Failed to send verification email: {e}', exc_info=True)
                 return JsonResponse({'success': True, 'message': 'Verification email sent. Please check your inbox.', 'requires_verification': True})
         
         if User.objects.filter(username=username).exists():
@@ -3226,12 +3226,12 @@ def ajax_register(request):
             send_configured_email(
                 subject='Verify your email - NewMovies',
                 message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
-                from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@newmovies.linkpc.net',
                 recipient_list=[email],
+                purpose='verification',
                 fail_silently=True,
             )
         except Exception as e:
-            logger.warning(f'Failed to send verification email: {e}')
+            logger.warning(f'Failed to send verification email: {e}', exc_info=True)
         
         return JsonResponse({'success': True, 'message': 'Verification email sent. Please check your inbox.', 'requires_verification': True})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
@@ -3292,7 +3292,7 @@ def ajax_forgot_password(request):
             reset_url = request.build_absolute_uri(f'/reset-password/{uid}/{token}/')
             subject = f'Password Reset for {SiteSettings.get_settings().brand_name}'
             message = f'Click the link to reset your password: {reset_url}'
-            send_configured_email(subject, message, [email])
+            send_configured_email(subject, message, [email], purpose='password_reset')
             
             return JsonResponse({'success': True, 'message': 'Password reset link sent to your email'})
         except User.DoesNotExist:
@@ -6591,12 +6591,12 @@ def api_user_register(request):
         send_configured_email(
             subject='Verify your email - NewMovies',
             message=f'Hi {display_name},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net'),
             recipient_list=[email],
+            purpose='verification',
             fail_silently=True,
         )
     except Exception as e:
-        logger.warning(f'Failed to send verification email: {e}')
+        logger.warning(f'Failed to send verification email: {e}', exc_info=True)
 
     resp = {
         'status': 'success',
@@ -6779,12 +6779,12 @@ def api_user_forgot_password(request):
             send_configured_email(
                 subject='Password Reset - NewMovies',
                 message=f'Click the link below to reset your password:\n\n{reset_url}\n\nIf you did not request this, please ignore this email.',
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net'),
                 recipient_list=[email],
+                purpose='password_reset',
                 fail_silently=True,
             )
         except Exception as e:
-            logger.warning(f'Failed to send reset email: {e}')
+            logger.warning(f'Failed to send reset email: {e}', exc_info=True)
     return JsonResponse({
         'status': 'success',
         'message': 'Password reset instructions sent to your email.',

@@ -133,9 +133,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def send_configured_email(subject, message, recipient_list, purpose='notification'):
+def send_configured_email(subject, message, recipient_list=None, purpose='notification', from_email=None, fail_silently=True, **kwargs):
     """Send email using the admin-configured EmailAddress for the given purpose.
     Falls back to SiteSettings, then to Django console backend."""
+    if recipient_list is None:
+        recipient_list = []
     from django.core.mail import EmailMessage
 
     # 1. Try EmailAddress model (purpose-based)
@@ -148,11 +150,11 @@ def send_configured_email(subject, message, recipient_list, purpose='notificatio
             backend = addr.get_backend()
             from_email = addr.smtp_username or addr.email
             email = EmailMessage(subject=subject, body=message, from_email=from_email, to=recipient_list, connection=backend)
-            email.send(fail_silently=False)
+            email.send(fail_silently=fail_silently)
             logger.info(f'Email sent via {addr.email} ({purpose}) to {recipient_list}: {subject}')
             return True
     except Exception as e:
-        logger.error(f'EmailAddress send failed: {e}')
+        logger.error(f'EmailAddress send failed: {e}', exc_info=True)
 
     # 2. Fallback to SiteSettings SMTP config
     try:
@@ -168,12 +170,12 @@ def send_configured_email(subject, message, recipient_list, purpose='notificatio
                 username=user, password=password,
                 use_tls=getattr(site, 'email_use_tls', True), fail_silently=False,
             )
-            email = EmailMessage(subject=subject, body=message, from_email=user, to=recipient_list, connection=backend)
-            email.send(fail_silently=False)
+            email = EmailMessage(subject=subject, body=message, from_email=from_email or user, to=recipient_list, connection=backend)
+            email.send(fail_silently=fail_silently)
             logger.info(f'Email sent via SiteSettings ({user}) to {recipient_list}: {subject}')
             return True
     except Exception as e:
-        logger.error(f'SiteSettings email failed: {e}')
+        logger.error(f'SiteSettings email failed: {e}', exc_info=True)
 
     # 3. Final fallback: Django console
     from django.core.mail import send_mail as _send_mail
