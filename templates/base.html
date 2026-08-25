@@ -2860,11 +2860,21 @@
                     cards.forEach(function(c) {
                         var id = c.dataset.tmdbId || c.dataset.mediaId;
                         var item = d.items[String(id)];
-                        if (!item || item.completed) return;
+                        if (!item) return;
                         var imgContainer = c.querySelector('.card-image-container');
                         if (!imgContainer) return;
-                        var existing = imgContainer.querySelector('.progress-bar-overlay');
-                        if (existing) existing.remove();
+                        var existingBar = imgContainer.querySelector('.progress-bar-overlay');
+                        if (existingBar) existingBar.remove();
+                        var existingBadge = imgContainer.querySelector('.completed-badge');
+                        if (existingBadge) existingBadge.remove();
+                        if (item.completed) {
+                            var badge = document.createElement('div');
+                            badge.className = 'completed-badge';
+                            badge.style.cssText = 'position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:#22c55e;display:flex;align-items:center;justify-content:center;z-index:5;font-size:.65rem;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);';
+                            badge.innerHTML = '<i class="fas fa-check"></i>';
+                            imgContainer.appendChild(badge);
+                            return;
+                        }
                         var pct = item.progress || 0;
                         if (pct < 1) return;
                         var bar = document.createElement('div');

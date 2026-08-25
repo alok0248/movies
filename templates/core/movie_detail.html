@@ -374,6 +374,14 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 <div class="det-player-layout">
     <div class="det-player-left">
         <div class="deferred-ad-slot" data-ad-position="above_player" data-ad-positions="above_player"></div>
+        <div id="resumeBanner" style="display:none;background:linear-gradient(135deg,rgba(229,9,20,.15),rgba(229,9,20,.05));border:1px solid rgba(229,9,20,.3);border-radius:12px;padding:12px 18px;margin-bottom:12px;align-items:center;gap:12px;cursor:pointer;" onclick="document.getElementById('resumeBanner').style.display='none';">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--brand,#e50914);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-play" style="color:#fff;font-size:.8rem;"></i></div>
+            <div>
+                <div style="font-size:.82rem;font-weight:700;color:var(--text,#f0f0f5);"><span class="resume-title"></span></div>
+                <div style="font-size:.72rem;color:#aaa;"><span class="resume-time" style="color:var(--brand,#e50914);font-weight:600;"></span> — Video will auto-resume</div>
+            </div>
+            <div style="margin-left:auto;color:#666;font-size:.75rem;"><i class="fas fa-times"></i></div>
+        </div>
         <div class="det-player-box" id="playerContainer"></div>
         <div class="deferred-ad-slot" data-ad-position="below_player" data-ad-positions="below_player"></div>
     </div>
@@ -742,9 +750,13 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         return document.getElementById('mainVideo');
     }
 
+    var _lastSave = 0;
     function recordProgress() {
         var v = getVideoEl();
         if (!v || !v.currentTime || v.currentTime < 5) return;
+        var now = Date.now();
+        if (now - _lastSave < 8000) return;
+        _lastSave = now;
         var completed = v.duration && (v.currentTime / v.duration) > 0.95;
         var payload = Object.assign({}, playData, {
             duration_seconds: Math.floor(v.currentTime),
@@ -766,6 +778,15 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         .then(function(d) {
             if (d.success && d.position > 10) {
                 window._resumePosition = d.position;
+                var mins = Math.floor(d.position / 60);
+                var secs = Math.floor(d.position % 60);
+                var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                var banner = document.getElementById('resumeBanner');
+                if (banner) {
+                    banner.style.display = 'flex';
+                    banner.querySelector('.resume-time').textContent = 'Resume from ' + timeStr;
+                    if (d.title) banner.querySelector('.resume-title').textContent = d.title;
+                }
             }
         })
         .catch(function() {});
@@ -775,7 +796,7 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
     function _startTracking() {
         if (_progressInterval) return;
         recordProgress();
-        _progressInterval = setInterval(recordProgress, 15000);
+        _progressInterval = setInterval(recordProgress, 10000);
     }
     // Method 1: postMessage from iframe player
     window.addEventListener('message', function(ev) {
