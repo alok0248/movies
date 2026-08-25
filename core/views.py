@@ -3134,6 +3134,15 @@ def ajax_toggle_watchlist(request):
 
         if existing.exists():
             existing.delete()
+            # Remove from cloud data too
+            from .models import UserCloudData
+            cloud, _ = UserCloudData.objects.get_or_create(user=request.user)
+            is_tv = media_type == 'tv'
+            cloud.watchlist_ids = [
+                w for w in (cloud.watchlist_ids or [])
+                if not (w.get('mediaId') == tmdb_id and w.get('isTv') == is_tv)
+            ]
+            cloud.save(update_fields=['watchlist_ids'])
             return JsonResponse({'success': True, 'action': 'removed', 'message': 'Removed from watchlist'})
 
         WatchList.objects.create(
@@ -3143,6 +3152,19 @@ def ajax_toggle_watchlist(request):
             title=title,
             poster_path=poster_path
         )
+        # Add to cloud data too
+        from .models import UserCloudData
+        cloud, _ = UserCloudData.objects.get_or_create(user=request.user)
+        is_tv = media_type == 'tv'
+        existing_cloud = [w for w in (cloud.watchlist_ids or []) if w.get('mediaId') == tmdb_id and w.get('isTv') == is_tv]
+        if not existing_cloud:
+            cloud.watchlist_ids = (cloud.watchlist_ids or []) + [{
+                'mediaId': tmdb_id,
+                'isTv': is_tv,
+                'title': title,
+                'posterPath': poster_path,
+            }]
+            cloud.save(update_fields=['watchlist_ids'])
         return JsonResponse({'success': True, 'action': 'added', 'message': 'Added to watchlist'})
 
     return JsonResponse({'success': False, 'message': 'Invalid request'})
@@ -3159,6 +3181,16 @@ def ajax_check_watchlist(request):
         tmdb_id=tmdb_id,
         media_type=media_type
     ).exists()
+    # Also check cloud data (Android-synced watchlist)
+    if not in_watchlist:
+        from .models import UserCloudData
+        cloud = UserCloudData.objects.filter(user=request.user).first()
+        if cloud:
+            is_tv = media_type == 'tv'
+            in_watchlist = any(
+                w.get('mediaId') == tmdb_id and w.get('isTv') == is_tv
+                for w in (cloud.watchlist_ids or [])
+            )
     return JsonResponse({'in_watchlist': in_watchlist})
 
 
@@ -3168,8 +3200,10 @@ def watchlist(request):
     
     movie_items = []
     series_items = []
+    existing_tmdb_ids = set()
     
     for item in watchlist_items:
+        existing_tmdb_ids.add((item.tmdb_id, item.media_type))
         processed_item = {
             'title': item.title,
             'slug': slugify(item.title),
@@ -3188,7 +3222,40 @@ def watchlist(request):
             movie_items.append(processed_item)
         else:
             series_items.append(processed_item)
-    
+
+    # Also pull items from UserCloudData (Android-synced watchlist)
+    from .models import UserCloudData
+    cloud, _ = UserCloudData.objects.get_or_create(user=request.user)
+    for cloud_item in (cloud.watchlist_ids or []):
+        mid = cloud_item.get('mediaId')
+        is_tv = cloud_item.get('isTv', False)
+        mtype = 'tv' if is_tv else 'movie'
+        if mid and (mid, mtype) not in existing_tmdb_ids:
+            # Also create the WatchList entry so it persists
+            WatchList.objects.get_or_create(
+                user=request.user, tmdb_id=mid, media_type=mtype,
+                defaults={
+                    'title': cloud_item.get('title', ''),
+                    'poster_path': cloud_item.get('posterPath', ''),
+                },
+            )
+            processed_item = {
+                'title': cloud_item.get('title', ''),
+                'slug': slugify(cloud_item.get('title', str(mid))),
+                'cover_url': f"{settings.TMDB_IMAGE_BASE_URL}{cloud_item.get('posterPath', '')}" if cloud_item.get('posterPath') else None,
+                'id': mid,
+                'poster_path': cloud_item.get('posterPath', ''),
+                'vote_average': 0,
+                'year': '',
+                'first_air_date': '',
+                'release_date': '',
+                'overview': ''
+            }
+            if mtype == 'movie':
+                movie_items.append(processed_item)
+            else:
+                series_items.append(processed_item)
+
     return render(request, 'core/watchlist.html', {
         'watchlist_items': watchlist_items,
         'movies': movie_items,
@@ -6572,6 +6639,46 @@ def ajax_record_play_progress(request):
             'completed': completed,
         }
     )
+    # Also sync to UserCloudData for Android app
+    from .models import UserCloudData
+    cloud, _ = UserCloudData.objects.get_or_create(user=request.user)
+    is_tv = media_type == 'tv'
+    s = season_number if season_number is not None else -1
+    e = episode_number if episode_number is not None else -1
+    key = f"{'tv' if is_tv else 'movie'}_{tmdb_id}_{s}_{e}"
+    cloud.playback_progress[key] = {
+        'mediaId': tmdb_id,
+        'isTv': is_tv,
+        'season': s,
+        'episode': e,
+        'positionMs': duration_seconds * 1000,
+        'durationMs': total_duration_seconds * 1000,
+        'title': title,
+        'posterPath': poster_path or '',
+        'episodeTitle': episode_title,
+        'lastUpdated': int(timezone.now().timestamp() * 1000),
+    }
+    # Also add to watch history in cloud
+    history_entry = {
+        'mediaId': tmdb_id,
+        'isTv': is_tv,
+        'title': title,
+        'posterPath': poster_path or '',
+        'season': s,
+        'episode': e,
+        'lastUpdated': int(timezone.now().timestamp() * 1000),
+    }
+    existing_ids = {h.get('mediaId') for h in (cloud.watch_history or [])}
+    if tmdb_id not in existing_ids:
+        cloud.watch_history = [history_entry] + (cloud.watch_history or [])
+    else:
+        # Update existing entry position
+        for h in (cloud.watch_history or []):
+            if h.get('mediaId') == tmdb_id:
+                h['lastUpdated'] = history_entry['lastUpdated']
+                break
+    cloud.data_version += 1
+    cloud.save()
     return JsonResponse({'success': True, 'created': created})
 
 
@@ -6633,12 +6740,34 @@ def ajax_resume_position(request):
     if episode:
         kwargs['episode_number'] = int(episode)
     last = PlayHistory.objects.filter(**kwargs).order_by('-last_played_at').first()
-    if last and not last.completed and last.duration_seconds > 10:
+    # Also check UserCloudData (Android-synced resume)
+    cloud_pos = 0
+    cloud_title = ''
+    cloud_progress = 0
+    from .models import UserCloudData
+    cloud = UserCloudData.objects.filter(user=request.user).first()
+    if cloud:
+        is_tv = media_type == 'tv'
+        s = int(season) if season else -1
+        e = int(episode) if episode else -1
+        key = f"{'tv' if is_tv else 'movie'}_{tmdb_id}_{s}_{e}"
+        entry = (cloud.playback_progress or {}).get(key)
+        if entry:
+            cloud_pos = entry.get('positionMs', 0) // 1000
+            dur = entry.get('durationMs', 0) // 1000
+            cloud_title = entry.get('title', '')
+            cloud_progress = round((cloud_pos / dur) * 100) if dur > 0 else 0
+    # Use whichever has the higher position
+    web_pos = last.duration_seconds if last and not last.completed and last.duration_seconds > 10 else 0
+    if cloud_pos > web_pos:
         return JsonResponse({
-            'success': True,
-            'position': last.duration_seconds,
-            'progress': last.progress_percent,
-            'title': last.title,
+            'success': True, 'position': cloud_pos,
+            'progress': cloud_progress, 'title': cloud_title,
+        })
+    if web_pos > 0:
+        return JsonResponse({
+            'success': True, 'position': web_pos,
+            'progress': last.progress_percent, 'title': last.title,
         })
     return JsonResponse({'success': True, 'position': 0})
 
