@@ -1160,6 +1160,9 @@ class UserCloudData(models.Model):
     favorites = models.JSONField(default=list, blank=True)
     watchlist_ids = models.JSONField(default=list, blank=True)
     user_ratings = models.JSONField(default=dict, blank=True)
+    app_settings = models.JSONField(default=dict, blank=True)
+    downloads = models.JSONField(default=list, blank=True)
+    playlists = models.JSONField(default=list, blank=True)
     data_version = models.IntegerField(default=0)
     last_synced_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1173,50 +1176,90 @@ class UserCloudData(models.Model):
 
     def get_cloud_payload(self):
         return {
+            'version': 1,
+            'timestamp': int(self.last_synced_at.timestamp() * 1000) if self.last_synced_at else 0,
+            'settings': self.app_settings or {},
             'playbackProgress': self.playback_progress or {},
             'seenKeys': self.seen_keys or [],
             'watchHistory': self.watch_history or [],
             'favorites': self.favorites or [],
             'watchlist': self.watchlist_ids or [],
             'userRatings': self.user_ratings or {},
+            'downloads': self.downloads or [],
+            'playlists': self.playlists or [],
         }
 
     def merge_incoming(self, incoming):
-        """Merge incoming data from Android app. App data wins on conflicts."""
+        """Merge incoming data from Android app. App data wins on conflicts.
+        Handles both old format (positionMs/mediaId) and new format (position/id)."""
         if not incoming:
             return
-        # Playback progress — app data wins
+
+        def _get_id(item):
+            """Get mediaId from item — supports both 'mediaId' and 'id' keys."""
+            return item.get('mediaId') or item.get('id')
+
+        # Playback progress — app data wins, normalize fields
         app_progress = incoming.get('playbackProgress', {})
         if app_progress:
-            self.playback_progress.update(app_progress)
+            for key, entry in app_progress.items():
+                # Normalize: position -> positionMs, duration -> durationMs
+                if 'position' in entry and 'positionMs' not in entry:
+                    entry['positionMs'] = entry.pop('position')
+                if 'duration' in entry and 'durationMs' not in entry:
+                    entry['durationMs'] = entry.pop('duration')
+                if 'updatedAt' in entry and 'lastUpdated' not in entry:
+                    entry['lastUpdated'] = entry.pop('updatedAt')
+                self.playback_progress[key] = entry
+
+        # Settings — app data wins
+        app_settings = incoming.get('settings', {})
+        if app_settings:
+            self.app_settings = app_settings
+
         # Seen keys — union
         app_seen = incoming.get('seenKeys', [])
         if app_seen:
             existing = set(self.seen_keys or [])
             existing.update(app_seen)
             self.seen_keys = list(existing)
-        # Watch history — prepend app history, deduplicate by mediaId
+
+        # Watch history — prepend, deduplicate by id
         app_history = incoming.get('watchHistory', [])
         if app_history:
-            existing_ids = {h.get('mediaId') for h in (self.watch_history or [])}
-            new_items = [h for h in app_history if h.get('mediaId') not in existing_ids]
+            existing_ids = {_get_id(h) for h in (self.watch_history or [])}
+            new_items = [h for h in app_history if _get_id(h) not in existing_ids]
             self.watch_history = new_items + (self.watch_history or [])
-        # Favorites — union by mediaId
+
+        # Favorites — union by id
         app_favs = incoming.get('favorites', [])
         if app_favs:
-            existing_ids = {f.get('mediaId') for f in (self.favorites or [])}
-            new_favs = [f for f in app_favs if f.get('mediaId') not in existing_ids]
+            existing_ids = {_get_id(f) for f in (self.favorites or [])}
+            new_favs = [f for f in app_favs if _get_id(f) not in existing_ids]
             self.favorites = (self.favorites or []) + new_favs
-        # Watchlist — union
+
+        # Watchlist — union by id
         app_watchlist = incoming.get('watchlist', [])
         if app_watchlist:
-            existing_ids = {w.get('mediaId') for w in (self.watchlist_ids or [])}
-            new_wl = [w for w in app_watchlist if w.get('mediaId') not in existing_ids]
+            existing_ids = {_get_id(w) for w in (self.watchlist_ids or [])}
+            new_wl = [w for w in app_watchlist if _get_id(w) not in existing_ids]
             self.watchlist_ids = (self.watchlist_ids or []) + new_wl
+
         # Ratings — app data wins
         app_ratings = incoming.get('userRatings', {})
         if app_ratings:
             self.user_ratings.update(app_ratings)
+
+        # Downloads — app data wins
+        app_downloads = incoming.get('downloads', [])
+        if app_downloads:
+            self.downloads = app_downloads
+
+        # Playlists — app data wins
+        app_playlists = incoming.get('playlists', [])
+        if app_playlists:
+            self.playlists = app_playlists
+
         self.data_version += 1
         self.save()
         # After merging, push cloud data into web models
@@ -1236,7 +1279,7 @@ class UserCloudData(models.Model):
                 for w in WatchList.objects.filter(user=self.user)
             }
             for item in cloud_wl:
-                mid = item.get('mediaId')
+                mid = item.get('mediaId') or item.get('id')
                 mtype = 'tv' if item.get('isTv') else 'movie'
                 if mid and (mid, mtype) not in existing_wl:
                     WatchList.objects.get_or_create(
@@ -1251,11 +1294,30 @@ class UserCloudData(models.Model):
         cloud_progress = self.playback_progress or {}
         for key, entry in cloud_progress.items():
             mid = entry.get('mediaId')
+            if not mid:
+                # Try parsing from key: movie_550, movie_550_-1_-1, tv_123_2_3
+                parts = key.split('_')
+                if len(parts) >= 2:
+                    try:
+                        mid = int(parts[1])
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    continue
             is_tv = entry.get('isTv', False)
+            if not is_tv and key.startswith('tv_'):
+                is_tv = True
             season = entry.get('season', -1)
             episode = entry.get('episode', -1)
-            if not mid:
-                continue
+            # Parse season/episode from key if not in entry
+            if season < 0 or episode < 0:
+                parts = key.split('_')
+                if len(parts) >= 4:
+                    try:
+                        season = int(parts[2])
+                        episode = int(parts[3])
+                    except (ValueError, TypeError):
+                        pass
             media_type = 'tv' if is_tv else 'movie'
             pos_ms = entry.get('positionMs', 0)
             dur_ms = entry.get('durationMs', 0)

@@ -6506,12 +6506,13 @@ def api_user_sync(request):
     cloud, _ = UserCloudData.objects.get_or_create(user=django_user)
     cloud.merge_incoming(incoming_data)
 
-    # Build response with server-side cloud data (what the app should merge)
+    # Build response — subscription + merged cloud data for app to restore
+    sub_payload = user_obj.subscription_payload() if user_obj else FREE_SUBSCRIPTION
     return JsonResponse({
         'status': 'success',
-        'message': 'Data synchronized successfully',
-        'subscription': user_obj.subscription_payload(),
-        'serverUserData': cloud.get_cloud_payload(),
+        'message': 'User data synced successfully',
+        'subscription': sub_payload,
+        'userData': cloud.get_cloud_payload(),
     })
 
 
@@ -6536,6 +6537,42 @@ def api_user_profile(request):
     return JsonResponse(_build_user_response(django_user, user_obj, {
         'message': 'Profile loaded successfully',
     }))
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_forgot_password(request):
+    """POST /api/user/forgot-password — send password reset email."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+    email = body.get('email', '').strip().lower()
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+    # Always return success to prevent email enumeration
+    django_user = User.objects.filter(email=email).first()
+    if django_user and django_user.has_usable_password():
+        token = default_token_generator.make_token(django_user)
+        uid = urlsafe_base64_encode(force_bytes(django_user.pk))
+        reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
+        try:
+            send_mail(
+                subject='Password Reset - NewMovies',
+                message=f'Click the link below to reset your password:\n\n{reset_url}\n\nIf you did not request this, please ignore this email.',
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.linkpc.net'),
+                recipient_list=[email],
+                fail_silently=True,
+            )
+        except Exception as e:
+            logger.warning(f'Failed to send reset email: {e}')
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Password reset instructions sent to your email.',
+    })
 
 
 @csrf_exempt
