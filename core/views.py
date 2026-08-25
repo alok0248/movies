@@ -6431,9 +6431,11 @@ def _build_user_response(django_user, user_obj, extra=None):
         'user': _user_payload(user_obj, django_user),
         'subscription': user_obj.subscription_payload() if user_obj else FREE_SUBSCRIPTION,
     }
-    # Add cloud data if available
+    # Pull web data into cloud, then return merged payload
     cloud = getattr(django_user, 'cloud_data', None)
     if cloud:
+        cloud.sync_from_web_models()
+        cloud.refresh_from_db()
         resp['userData'] = cloud.get_cloud_payload()
     if extra:
         resp.update(extra)
@@ -6713,6 +6715,10 @@ def api_user_sync(request):
     incoming_data = body.get('userData', {})
     cloud, _ = UserCloudData.objects.get_or_create(user=django_user)
     cloud.merge_incoming(incoming_data)
+
+    # Also pull web WatchList + PlayHistory into cloud so the app gets it
+    cloud.sync_from_web_models()
+    cloud.refresh_from_db()
 
     # Build response — subscription + merged cloud data for app to restore
     sub_payload = user_obj.subscription_payload() if user_obj else FREE_SUBSCRIPTION
