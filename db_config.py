@@ -5,7 +5,11 @@ BASE_DIR = Path(__file__).resolve().parent
 
 
 def get_db_config():
-    """Return database configuration with local + optional external DB."""
+    """Return database configuration with local + optional external DB.
+
+    External DB is loaded from DBConnectionConfig model (admin-entered via UI).
+    No .env files needed — everything is managed from the admin dashboard.
+    """
     db_engine = os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3')
     db_name = os.environ.get('DB_NAME', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'db.sqlite3'))
 
@@ -23,97 +27,23 @@ def get_db_config():
         config['default']['HOST'] = os.environ.get('DB_HOST', 'localhost')
         config['default']['PORT'] = os.environ.get('DB_PORT', '5432')
 
-    # Load external DB from .env file (VM-local only, never committed)
-    config = _load_external_from_env(config)
-
-    # Try to load external DB from server_config.py (VM-local only)
-    config = _load_external_db(config)
-
-    # Try to load from DBConnectionConfig model (for admin-configured external DB)
+    # Load external DB from admin-entered DBConnectionConfig model
     config = _load_external_from_model(config)
 
     return config
 
 
-def _load_external_from_env(config):
-    """Load external DB from .env file (preferred — never committed to git)."""
-    env_path = BASE_DIR / '.env'
-    if not env_path.exists():
-        return config
-
-    try:
-        env = {}
-        with open(env_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                if '=' in line:
-                    key, _, val = line.partition('=')
-                    env[key.strip()] = val.strip()
-
-        host = env.get('EXTERNAL_DB_HOST', '')
-        port = env.get('EXTERNAL_DB_PORT', '3306')
-        db_name = env.get('EXTERNAL_DB_NAME', '')
-        user = env.get('EXTERNAL_DB_USER', '')
-        password = env.get('EXTERNAL_DB_PASSWORD', '')
-        engine_key = env.get('EXTERNAL_DB_ENGINE', 'mysql').lower()
-
-        if not host or not user or not password:
-            return config
-
-        engine_map = {
-            'mysql': 'django.db.backends.mysql',
-            'oracle': 'django.db.backends.oracle',
-            'postgresql': 'django.db.backends.postgresql',
-            'mssql': 'django.db.backends.mssql',
-        }
-        engine = engine_map.get(engine_key, 'django.db.backends.mysql')
-
-        db_cfg = {
-            'ENGINE': engine,
-            'NAME': db_name,
-            'USER': user,
-            'PASSWORD': password,
-            'HOST': host,
-            'PORT': str(port),
-            'OPTIONS': {
-                'charset': 'utf8mb4',
-            },
-        }
-        config['external'] = db_cfg
-    except Exception:
-        pass
-    return config
-
-
-def _load_external_db(config):
-    """Load external DB config from server_config.py if it exists."""
-    config_path = BASE_DIR / 'server_config.py'
-    if config_path.exists():
-        try:
-            import importlib.util
-            spec = importlib.util.spec_from_file_location('server_config', str(config_path))
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            if hasattr(mod, 'DB_CONFIG') and isinstance(mod.DB_CONFIG, dict):
-                db_cfg = mod.DB_CONFIG.copy()
-                # Remove extra params that Django doesn't understand
-                django_keys = {'ENGINE', 'NAME', 'USER', 'PASSWORD', 'HOST', 'PORT', 'OPTIONS', 'CONN_MAX_AGE', 'CONN_HEALTH_CHECKS', 'AUTOCOMMIT', 'ATOMIC_REQUESTS', 'TIME_ZONE'}
-                options = {k: v for k, v in db_cfg.items() if k not in django_keys}
-                if options:
-                    db_cfg['OPTIONS'] = options
-                config['external'] = db_cfg
-        except Exception:
-            pass
-    return config
-
-
 def _load_external_from_model(config):
-    """Load external DB from DBConnectionConfig model."""
-    # Avoid circular import — only import when Django is ready
+    """Load external DB from DBConnectionConfig model (admin-entered via UI).
+
+    Priority:
+    1. Admin enters DB details on admin-dashboard/settings/db-connections/
+    2. Sets one as 'Default' and enables routing on admin-dashboard/settings/db-routing/
+    3. Django picks up the config here on next request/restart
+    """
     if 'django' not in __import__('sys').modules:
         return config
+
     try:
         from core.models import DBConnectionConfig, DBRoutingConfig
         routing = DBRoutingConfig.get_config()
@@ -143,8 +73,11 @@ def _load_external_from_model(config):
         }
         if conn.extra_params:
             db_cfg['OPTIONS'] = conn.extra_params
+        elif conn.db_type == 'mysql':
+            db_cfg['OPTIONS'] = {'charset': 'utf8mb4'}
 
         config['external'] = db_cfg
     except Exception:
         pass
+
     return config
