@@ -1520,3 +1520,33 @@ class UserSession(models.Model):
     def last_source(cls, user):
         last = cls.objects.filter(user=user).order_by('-logged_in_at').first()
         return last.source if last else ''
+
+
+class EmailSendLog(models.Model):
+    """Track every email sent from the platform."""
+    address = models.ForeignKey('EmailAddress', on_delete=models.SET_NULL, null=True, blank=True, help_text='SMTP address used')
+    recipient = models.EmailField(help_text='Recipient email address')
+    subject = models.CharField(max_length=500)
+    purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES, default='notification')
+    status = models.CharField(max_length=20, choices=[
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    ])
+    error_message = models.TextField(blank=True, default='')
+    sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text='Admin who triggered it')
+    source = models.CharField(max_length=20, choices=[
+        ('test_mail', 'Test Mail'),
+        ('verification', 'Email Verification'),
+        ('password_reset', 'Password Reset'),
+        ('notification', 'Notification'),
+        ('api', 'API'),
+    ], default='test_mail')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Email Send Log'
+        verbose_name_plural = 'Email Send Logs'
+
+    def __str__(self):
+        return f"{self.status}: {self.subject} → {self.recipient} ({self.created_at})"
