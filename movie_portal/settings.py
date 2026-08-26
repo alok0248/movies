@@ -1,6 +1,14 @@
 import os
 import json
 from pathlib import Path
+
+# Install PyMySQL as MySQLdb for Oracle Cloud MySQL compatibility
+try:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+except ImportError:
+    pass
+
 from db_config import get_db_config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.

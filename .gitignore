@@ -48,3 +48,4 @@ node_modules/
 # extractor/    # INCLUDED - video extraction tools
 # player/       # INCLUDED - player test files
 .git.corrupt/
+server_config.py

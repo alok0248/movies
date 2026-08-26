@@ -23,12 +23,67 @@ def get_db_config():
         config['default']['HOST'] = os.environ.get('DB_HOST', 'localhost')
         config['default']['PORT'] = os.environ.get('DB_PORT', '5432')
 
+    # Load external DB from .env file (VM-local only, never committed)
+    config = _load_external_from_env(config)
+
     # Try to load external DB from server_config.py (VM-local only)
     config = _load_external_db(config)
 
     # Try to load from DBConnectionConfig model (for admin-configured external DB)
     config = _load_external_from_model(config)
 
+    return config
+
+
+def _load_external_from_env(config):
+    """Load external DB from .env file (preferred — never committed to git)."""
+    env_path = BASE_DIR / '.env'
+    if not env_path.exists():
+        return config
+
+    try:
+        env = {}
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    key, _, val = line.partition('=')
+                    env[key.strip()] = val.strip()
+
+        host = env.get('EXTERNAL_DB_HOST', '')
+        port = env.get('EXTERNAL_DB_PORT', '3306')
+        db_name = env.get('EXTERNAL_DB_NAME', '')
+        user = env.get('EXTERNAL_DB_USER', '')
+        password = env.get('EXTERNAL_DB_PASSWORD', '')
+        engine_key = env.get('EXTERNAL_DB_ENGINE', 'mysql').lower()
+
+        if not host or not user or not password:
+            return config
+
+        engine_map = {
+            'mysql': 'django.db.backends.mysql',
+            'oracle': 'django.db.backends.oracle',
+            'postgresql': 'django.db.backends.postgresql',
+            'mssql': 'django.db.backends.mssql',
+        }
+        engine = engine_map.get(engine_key, 'django.db.backends.mysql')
+
+        db_cfg = {
+            'ENGINE': engine,
+            'NAME': db_name,
+            'USER': user,
+            'PASSWORD': password,
+            'HOST': host,
+            'PORT': str(port),
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            },
+        }
+        config['external'] = db_cfg
+    except Exception:
+        pass
     return config
 
 
