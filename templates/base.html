@@ -903,11 +903,17 @@
                                     <div class="dropdown-divider"></div>
                                     <div class="provider-dropdown-grid">
                                         {% for provider in enabled_providers %}
+                                        {% if user.is_authenticated or forloop.counter <= 3 %}
                                         <a class="dropdown-item{% if active_provider.id == provider.id %} active{% endif %}" href="{% if request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' or request.resolver_match.url_name == 'series_detail_by_id' %}{% url 'series_list' %}{% else %}{% url 'movie_list' %}{% endif %}?provider={{ provider.slug }}" title="{{ provider.name }}">{{ provider.name }}</a>
+                                        {% endif %}
                                         {% empty %}
                                         <span class="dropdown-item-text text-muted">No enabled providers. Sync them from Admin.</span>
                                         {% endfor %}
                                     </div>
+                                    {% if not user.is_authenticated and enabled_providers|length > 3 %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item text-center" href="{% url 'public_providers' %}" style="color:#818cf8;"><i class="fas fa-lock me-1"></i>View All {{ enabled_providers|length }} Providers → Sign In</a>
+                                    {% endif %}
                                 </div>
                             </li>
                         {% elif item.built_in_id == 'genres' %}
@@ -994,6 +1000,48 @@
                                 <a class="nav-link" href="{% url 'upcoming' %}">
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
+                            </li>
+                        {% elif item.built_in_id == 'watch_regions' %}
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'public_watch_regions' %}" id="regionDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-globe"></i> {{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="regionDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'public_watch_regions' %}"><i class="fas fa-th-list me-2"></i>All Regions</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% for region in watch_regions_nav|slice:":12" %}
+                                    <li><a class="dropdown-item" href="{% url 'public_providers' %}?region={{ region.code }}">{{ region.code }} — {{ region.name }}</a></li>
+                                    {% endfor %}
+                                    {% if watch_regions_nav|length > 12 %}
+                                    <li><a class="dropdown-item text-info" href="{% url 'public_watch_regions' %}">View All {{ watch_regions_nav|length }} Regions →</a></li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'public_watch_regions' %}"><i class="fas fa-globe"></i> {{ item.name }}</a>
+                            </li>
+                        {% elif item.built_in_id == 'providers' %}
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'public_providers' %}" id="providersNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-play-circle"></i> {{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="providersNavDropdown" style="min-width:280px;">
+                                    <li><a class="dropdown-item" href="{% url 'public_providers' %}"><i class="fas fa-th me-2"></i>All Providers</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% for provider in enabled_providers|slice:":10" %}
+                                    <li>
+                                        <a class="dropdown-item d-flex align-items-center" href="{% url 'public_providers' %}?provider={{ provider.slug }}">
+                                            {% if provider.logo_path %}<img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.name }}" style="height:20px;margin-right:8px;border-radius:3px;">{% endif %}{{ provider.name }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if enabled_providers|length > 10 %}
+                                    <li><a class="dropdown-item text-info" href="{% url 'public_providers' %}">View All {{ enabled_providers|length }} Providers →</a></li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'public_providers' %}"><i class="fas fa-play-circle"></i> {{ item.name }}</a>
                             </li>
                         {% elif item.item_type == 'custom' %}
                             <li class="nav-item">
