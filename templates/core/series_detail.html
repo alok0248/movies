@@ -903,6 +903,7 @@ const playerConfigs = {
 const SERIES_TMDB_ID = {{ series_id }};
 const SERIES_IMDB_ID = "{{ series.imdb_id|default:''|escapejs }}";
 const seriesTitle = "{{ series.title|escapejs }}";
+const SERIES_POSTER_PATH = "{{ series.poster_path|default:""|escapejs }}";
 const isAdminUser = {% if request.user.is_staff or request.user.is_superuser %}true{% else %}false{% endif %};
 
 let currentSeason = {{ current_season }};
@@ -1144,6 +1145,44 @@ function updateEpisodeProgressIndicators() {
 }
 
 /* Episode splash — shows while extracting */
+function _getSeriesFallback() {
+    var src = '';
+    var heroBg = document.querySelector('.det-hero-bg');
+    if (heroBg) {
+        var bg = getComputedStyle(heroBg).backgroundImage;
+        if (bg && bg !== 'none') src = bg.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
+    }
+    if (!src) {
+        var posterImg = document.querySelector('.det-poster img, .det-poster-wrap img');
+        if (posterImg) src = posterImg.src;
+    }
+    if (!src && typeof SERIES_POSTER_PATH !== 'undefined' && SERIES_POSTER_PATH) {
+        src = 'https://image.tmdb.org/t/p/w780' + SERIES_POSTER_PATH;
+    }
+    return src;
+}
+
+function _loadImageWithFallback(imgEl, thumbEl, primarySrc, fallbackSrc) {
+    if (!imgEl || !thumbEl) return;
+    thumbEl.style.display = '';
+    if (primarySrc) {
+        imgEl.src = primarySrc;
+        imgEl.onerror = function() {
+            if (fallbackSrc && fallbackSrc !== primarySrc) {
+                imgEl.onerror = function() { thumbEl.style.display = 'none'; };
+                imgEl.src = fallbackSrc;
+            } else {
+                thumbEl.style.display = 'none';
+            }
+        };
+    } else if (fallbackSrc) {
+        imgEl.src = fallbackSrc;
+        imgEl.onerror = function() { thumbEl.style.display = 'none'; };
+    } else {
+        thumbEl.style.display = 'none';
+    }
+}
+
 function showEpSplash(ep, epNum) {
     var splash = document.getElementById('epSplash');
     if (!splash) return;
@@ -1153,28 +1192,10 @@ function showEpSplash(ep, epNum) {
     var overview = document.getElementById('epSplashOverview');
     var badge = document.getElementById('epSplashBadge');
     var thumb = document.getElementById('epSplashThumb');
-    // Find series poster as fallback
-    var seriesPoster = document.querySelector('.det-hero-bg');
-    var fallbackSrc = '';
-    if (seriesPoster) {
-        var bg = getComputedStyle(seriesPoster).backgroundImage;
-        if (bg && bg !== 'none') fallbackSrc = bg.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
-    }
-    if (!fallbackSrc) {
-        var posterImg = document.querySelector('.det-poster img');
-        if (posterImg) fallbackSrc = posterImg.src;
-    }
+    var fallback = _getSeriesFallback();
     if (ep) {
-        var imgSrc = ep.still_path ? ('https://image.tmdb.org/t/p/w780' + ep.still_path) : fallbackSrc;
-        if (img) {
-            if (imgSrc) {
-                img.src = imgSrc;
-                img.onerror = function() { thumb.style.display = 'none'; };
-                thumb.style.display = '';
-            } else {
-                thumb.style.display = 'none';
-            }
-        }
+        var epSrc = ep.still_path ? ('https://image.tmdb.org/t/p/w780' + ep.still_path) : '';
+        _loadImageWithFallback(img, thumb, epSrc, fallback);
         if (title) title.textContent = ep.name || 'Episode ' + epNum;
         if (meta) {
             var html = '<span>S' + currentSeason + ' · E' + epNum + '</span>';
@@ -1270,23 +1291,14 @@ function updatePauseOverlayInfo() {
     else if (et) et.textContent = '';
     if (ov && ep && ep.overview) ov.textContent = ep.overview;
     else if (ov) ov.textContent = '';
-    // Use episode still or series poster as fallback
-    var poFallback = '';
-    var poPoster = document.querySelector('.det-hero-bg');
-    if (poPoster) {
-        var poBg = getComputedStyle(poPoster).backgroundImage;
-        if (poBg && poBg !== 'none') poFallback = poBg.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
-    }
-    if (!poFallback) {
-        var poPI = document.querySelector('.det-poster img');
-        if (poPI) poFallback = poPI.src;
-    }
-    if (thumb && thumbImg && ep) {
-        var src = ep.still_path ? ('https://image.tmdb.org/t/p/w300' + ep.still_path) : poFallback;
-        if (src) { thumbImg.src = src; thumb.style.display = ''; }
-        else { thumb.style.display = 'none'; }
-    } else if (thumb) {
-        thumb.style.display = 'none';
+    var fallback = _getSeriesFallback();
+    if (thumb && thumbImg) {
+        if (ep) {
+            var epSrc = ep.still_path ? ('https://image.tmdb.org/t/p/w300' + ep.still_path) : '';
+            _loadImageWithFallback(thumbImg, thumb, epSrc, fallback);
+        } else {
+            _loadImageWithFallback(thumbImg, thumb, '', fallback);
+        }
     }
 }
 
