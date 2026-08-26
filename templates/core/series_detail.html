@@ -98,6 +98,21 @@
 .pause-overlay .po-ep-title{font-size:1rem;color:rgba(255,255,255,.85);margin-top:.4rem;font-weight:600}
 .pause-overlay .po-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.1)}
 .pause-overlay .po-progress-fill{height:100%;background:var(--brand,#e50914);border-radius:0 2px 0 0;transition:width .3s}
+
+/* Episode info splash (shown while extracting) */
+.ep-splash{position:absolute;inset:0;z-index:14;display:none;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(0,0,0,.95),rgba(15,15,25,.98));border-radius:16px;padding:2rem;text-align:center;transition:opacity .4s ease}
+.ep-splash.visible{display:flex}
+.ep-splash.hidden{opacity:0;pointer-events:none}
+.ep-splash-thumb{width:min(60%,360px);aspect-ratio:16/9;border-radius:12px;overflow:hidden;margin-bottom:1.2rem;box-shadow:0 8px 40px rgba(0,0,0,.5);position:relative}
+.ep-splash-thumb img{width:100%;height:100%;object-fit:cover}
+.ep-splash-thumb .ep-splash-badge{position:absolute;top:10px;left:10px;padding:4px 10px;border-radius:6px;background:var(--brand,#e50914);color:#fff;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.ep-splash-title{font-size:1.5rem;font-weight:800;color:#fff;margin-bottom:.3rem;text-shadow:0 2px 10px rgba(0,0,0,.5)}
+.ep-splash-meta{font-size:.85rem;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:.6rem;justify-content:center;flex-wrap:wrap;margin-bottom:.6rem}
+.ep-splash-meta .ep-splash-rating{color:#ffc107}
+.ep-splash-overview{font-size:.82rem;color:rgba(255,255,255,.4);line-height:1.6;max-width:500px;margin-bottom:1.2rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ep-splash-status{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:rgba(255,255,255,.4)}
+.ep-splash-status .ep-splash-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--brand,#e50914);border-radius:50%;animation:spin .8s linear infinite}
+html[data-theme="light"] .ep-splash{background:linear-gradient(135deg,rgba(0,0,0,.92),rgba(15,15,25,.95))}
 html[data-theme="light"] .pause-overlay{background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.15) 70%,transparent 100%)}
 
 /* Player loading overlay */
@@ -484,20 +499,41 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
             <div class="det-player-box" id="player-container"></div>
             <!-- Transparent click catcher for iframe players -->
             <div id="playerClickCatcher" style="position:absolute;inset:0;z-index:12;cursor:pointer;"></div>
+            <!-- Episode info splash (shown while extracting) -->
+            <div class="ep-splash" id="epSplash">
+                <div class="ep-splash-thumb" id="epSplashThumb">
+                    <img id="epSplashImg" src="" alt="">
+                    <span class="ep-splash-badge" id="epSplashBadge">Loading</span>
+                </div>
+                <div class="ep-splash-title" id="epSplashTitle"></div>
+                <div class="ep-splash-meta" id="epSplashMeta"></div>
+                <div class="ep-splash-overview" id="epSplashOverview"></div>
+                <div class="ep-splash-status">
+                    <div class="ep-splash-spinner"></div>
+                    <span>Extracting playable stream…</span>
+                </div>
+            </div>
             <!-- Netflix-style pause overlay (outside player box so it survives rebuilds) -->
             <div class="pause-overlay" id="pauseOverlay" onclick="resumeFromOverlay()">
                 <div class="po-top">
                     <span class="po-badge">{{ series.title }}</span>
                     <span class="po-close" onclick="event.stopPropagation();resumeFromOverlay()"><i class="fas fa-times"></i></span>
                 </div>
-                <div class="po-title">{{ series.title }}</div>
-                <div class="po-ep-title" id="poEpisodeTitle"></div>
-                <div class="po-meta">
-                    <span class="po-season" id="poSeason">Season <span id="poSeasonNum"></span></span>
-                    <span class="po-dot"></span>
-                    <span id="poEpisode">Episode <span id="poEpisodeNum"></span></span>
+                <div style="display:flex;gap:1.2rem;align-items:flex-end;width:100%;">
+                    <div id="poThumb" style="width:180px;min-width:120px;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.3);flex-shrink:0;display:none;">
+                        <img id="poThumbImg" src="" alt="" style="width:100%;height:100%;object-fit:cover;">
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div class="po-title">{{ series.title }}</div>
+                        <div class="po-ep-title" id="poEpisodeTitle"></div>
+                        <div class="po-meta">
+                            <span class="po-season" id="poSeason">Season <span id="poSeasonNum"></span></span>
+                            <span class="po-dot"></span>
+                            <span id="poEpisode">Episode <span id="poEpisodeNum"></span></span>
+                        </div>
+                        <div id="poOverview" style="font-size:.78rem;color:rgba(255,255,255,.45);line-height:1.5;max-width:500px;margin-top:.4rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"></div>
+                    </div>
                 </div>
-                <div id="poOverview" style="font-size:.78rem;color:rgba(255,255,255,.45);line-height:1.5;max-width:600px;margin-top:.4rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"></div>
                 <div class="po-progress"><div class="po-progress-fill" id="poProgressFill" style="width:0%"></div></div>
             </div>
         </div>
@@ -886,9 +922,68 @@ function playEpisode(epNum) {
     });
     var ep = currentEpisodesData.find(function(x) { return x.episode_number === epNum; });
     if (ep) updateEpisodeDetails(ep);
+    // Show episode splash while extracting
+    showEpSplash(ep, epNum);
     updatePlayerUrl();
     updatePauseOverlayInfo();
 }
+
+/* Episode splash — shows while extracting */
+function showEpSplash(ep, epNum) {
+    var splash = document.getElementById('epSplash');
+    if (!splash) return;
+    var img = document.getElementById('epSplashImg');
+    var title = document.getElementById('epSplashTitle');
+    var meta = document.getElementById('epSplashMeta');
+    var overview = document.getElementById('epSplashOverview');
+    var badge = document.getElementById('epSplashBadge');
+    var thumb = document.getElementById('epSplashThumb');
+    if (ep) {
+        if (img && ep.still_path) { img.src = 'https://image.tmdb.org/t/p/w780' + ep.still_path; thumb.style.display = ''; }
+        else if (thumb) { thumb.style.display = 'none'; }
+        if (title) title.textContent = ep.name || 'Episode ' + epNum;
+        if (meta) {
+            var html = '<span>S' + currentSeason + ' · E' + epNum + '</span>';
+            if (ep.vote_average) html += '<span class="ep-splash-rating">★ ' + ep.vote_average + '</span>';
+            if (ep.air_date) html += '<span>' + ep.air_date + '</span>';
+            if (ep.runtime) html += '<span>' + ep.runtime + ' min</span>';
+            meta.innerHTML = html;
+        }
+        if (overview) overview.textContent = ep.overview || '';
+        if (badge) badge.textContent = 'S' + currentSeason + 'E' + epNum;
+    }
+    splash.classList.add('visible');
+    splash.classList.remove('hidden');
+}
+
+function hideEpSplash() {
+    var splash = document.getElementById('epSplash');
+    if (!splash) return;
+    splash.classList.remove('visible');
+    splash.classList.add('hidden');
+    setTimeout(function() { splash.classList.remove('hidden'); }, 400);
+}
+
+// Auto-hide splash when video starts playing
+(function() {
+    function hookPlay() {
+        var v = document.getElementById('mainVideo');
+        if (v && !v._splashHooked) {
+            v._splashHooked = true;
+            v.addEventListener('playing', function() { hideEpSplash(); });
+        }
+    }
+    setInterval(hookPlay, 1000);
+    // Also hide when iframe loads
+    var obs = new MutationObserver(function() {
+        var iframe = document.querySelector('#player-container iframe');
+        if (iframe) {
+            iframe.addEventListener('load', function() { setTimeout(hideEpSplash, 2000); });
+        }
+    });
+    var pc = document.getElementById('player-container');
+    if (pc) obs.observe(pc, {childList: true, subtree: true });
+})();
 
 async function loadEpisodesForSeason(seasonNumber) {
     try {
@@ -932,6 +1027,8 @@ function updatePauseOverlayInfo() {
     var en = document.getElementById('poEpisodeNum');
     var et = document.getElementById('poEpisodeTitle');
     var ov = document.getElementById('poOverview');
+    var thumb = document.getElementById('poThumb');
+    var thumbImg = document.getElementById('poThumbImg');
     if (sn) sn.textContent = currentSeason;
     if (en) en.textContent = currentEpisode;
     var ep = currentEpisodesData ? currentEpisodesData.find(function(x) { return x.episode_number === currentEpisode; }) : null;
@@ -939,6 +1036,12 @@ function updatePauseOverlayInfo() {
     else if (et) et.textContent = '';
     if (ov && ep && ep.overview) ov.textContent = ep.overview;
     else if (ov) ov.textContent = '';
+    if (thumb && thumbImg && ep && ep.still_path) {
+        thumbImg.src = 'https://image.tmdb.org/t/p/w300' + ep.still_path;
+        thumb.style.display = '';
+    } else if (thumb) {
+        thumb.style.display = 'none';
+    }
 }
 
 function showPauseOverlay() {
