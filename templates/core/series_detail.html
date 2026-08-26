@@ -144,25 +144,76 @@ html[data-theme="light"] .ctrl-pop-btn{display:inline-flex;align-items:center;ga
 .src-dd-label{color:rgba(26,26,46,.5)}
 html[data-theme="light"] .ctrl-toggle{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);color:rgba(26,26,46,.6)}
 
-/* Light mode: Episode tabs, selectors, now-playing, episode list */
-html[data-theme="light"] .ep-tab{background:rgba(0,0,0,.04);color:rgba(26,26,46,.6);border-color:rgba(0,0,0,.08)}
-html[data-theme="light"] .ep-tab:hover{background:rgba(0,0,0,.08);color:#1a1a2e}
-html[data-theme="light"] .ep-tab.active{background:rgba(229,9,20,.1);color:#1a1a2e;border-color:rgba(229,9,20,.3)}
-html[data-theme="light"] .ep-tab.future{opacity:.5;border-style:dashed}
-html[data-theme="light"] .ep-tabs-bar{border-bottom-color:rgba(0,0,0,.06)}
-html[data-theme="light"] .ep-tabs-season select{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.1);color:#333}
-html[data-theme="light"] .ep-tabs-season select option{background:#fff;color:#333}
-html[data-theme="light"] .ep-list-card{background:rgba(0,0,0,.02);border-color:rgba(0,0,0,.06)}
-html[data-theme="light"] .ep-list-card:hover{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1)}
-html[data-theme="light"] .ep-list-card.active{border-color:var(--brand,#e50914);background:rgba(229,9,20,.06)}
-html[data-theme="light"] .ep-list-card .ep-num{color:var(--brand,#e50914)}
-html[data-theme="light"] .ep-list-card .ep-text div[style*="color:#fff"]{color:#1a1a2e !important}
-html[data-theme="light"] .ep-future-badge{background:rgba(251,191,36,.12);color:#92400e}
-html[data-theme="light"] .ep-list-card.future-ep{border-color:rgba(0,0,0,.08)}
-html[data-theme="light"] .det-sel-group select{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.1);color:#333}
-html[data-theme="light"] .det-sel-group select option{background:#fff;color:#333}
-html[data-theme="light"] .det-selectors label{color:rgba(0,0,0,.4)}
-html[data-theme="light"] .buf-ring{border-color:rgba(0,0,0,.1);border-top-color:var(--brand,#e50914)}{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1.2)}}
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT MODE — Full override for every hardcoded rgba(255,255,255,...)
+   ═══════════════════════════════════════════════════════════════════ */
+html[data-theme="light"] { color: #1a1a2e; }
+html[data-theme="light"] .det-hero-inner { color: #1a1a2e; }
+html[data-theme="light"] .det-title { color: #1a1a2e; }
+html[data-theme="light"] .det-tagline { color: rgba(0,0,0,.45); }
+html[data-theme="light"] .det-genre-chip { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.08); color: rgba(0,0,0,.7); }
+html[data-theme="light"] .det-quick-meta { color: rgba(0,0,0,.5); }
+html[data-theme="light"] .det-overview { color: rgba(0,0,0,.6); }
+html[data-theme="light"] .det-actions .det-btn-play { color: #fff; }
+html[data-theme="light"] .det-btn-ghost { background: rgba(0,0,0,.05); color: rgba(0,0,0,.7); border-color: rgba(0,0,0,.1); }
+html[data-theme="light"] .det-btn-ghost:hover { background: rgba(0,0,0,.08); color: #1a1a2e; border-color: rgba(0,0,0,.15); }
+html[data-theme="light"] .det-servers-label { color: rgba(0,0,0,.3); }
+html[data-theme="light"] .det-server-pill { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); color: rgba(0,0,0,.5); }
+html[data-theme="light"] .det-server-pill:hover { background: rgba(0,0,0,.06); color: #1a1a2e; }
+html[data-theme="light"] .det-player-right { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.06); }
+html[data-theme="light"] .det-sidebar-title { color: #1a1a2e; }
+html[data-theme="light"] .det-sidebar-meta { color: rgba(0,0,0,.5); }
+html[data-theme="light"] .det-sidebar-overview { color: rgba(0,0,0,.55); }
+html[data-theme="light"] .det-sidebar-label { color: rgba(0,0,0,.3); }
+html[data-theme="light"] .det-sidebar-chip { background: rgba(0,0,0,.05); color: rgba(0,0,0,.6); }
+html[data-theme="light"] .det-sidebar-sel label { color: rgba(0,0,0,.3); }
+html[data-theme="light"] .det-sidebar-sel select { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); color: #333; }
+html[data-theme="light"] .det-sidebar-sel select option { background: #fff; color: #333; }
+html[data-theme="light"] .det-sidebar-ep-meta { color: rgba(0,0,0,.4); }
+html[data-theme="light"] .det-sidebar-ep-desc { color: rgba(0,0,0,.45); }
+html[data-theme="light"] .det-info-card { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.06); }
+html[data-theme="light"] .det-info-card .ic-label { color: rgba(0,0,0,.4); }
+html[data-theme="light"] .det-info-card .ic-value { color: #1a1a2e; }
+html[data-theme="light"] .det-section-head { color: #1a1a2e; }
+html[data-theme="light"] .det-ep-card { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.06); }
+html[data-theme="light"] .det-ep-card .det-ep-title { color: #1a1a2e; }
+html[data-theme="light"] .det-ep-card .det-ep-meta { color: rgba(0,0,0,.4); }
+html[data-theme="light"] .det-ep-overview { color: rgba(0,0,0,.55); }
+html[data-theme="light"] .det-related-card { background: rgba(0,0,0,.02); }
+html[data-theme="light"] .det-wiki { border-color: rgba(0,0,0,.06); background: rgba(0,0,0,.02); }
+html[data-theme="light"] .det-wiki h3 { color: #1a1a2e; }
+html[data-theme="light"] .det-wiki p { color: rgba(0,0,0,.6); }
+html[data-theme="light"] .det-bookmark-btn { background: rgba(255,255,255,.8); border-color: rgba(0,0,0,.1); color: rgba(0,0,0,.7); }
+html[data-theme="light"] .player-loading-overlay { background: rgba(255,255,250,.85); }
+html[data-theme="light"] .player-loading-text { color: rgba(0,0,0,.7); }
+html[data-theme="light"] .player-loading-subtext { color: rgba(0,0,0,.35); }
+html[data-theme="light"] .buf-text { color: rgba(0,0,0,.6); }
+html[data-theme="light"] .buf-info { color: rgba(0,0,0,.5); }
+html[data-theme="light"] .buf-ring { border-color: rgba(0,0,0,.1); border-top-color: var(--brand,#e50914); }
+
+/* Episode tabs & selectors */
+html[data-theme="light"] .ep-tab { background: rgba(0,0,0,.04); color: rgba(26,26,46,.6); border-color: rgba(0,0,0,.08); }
+html[data-theme="light"] .ep-tab:hover { background: rgba(0,0,0,.08); color: #1a1a2e; }
+html[data-theme="light"] .ep-tab.active { background: rgba(229,9,20,.1); color: #1a1a2e; border-color: rgba(229,9,20,.3); }
+html[data-theme="light"] .ep-tab.future { opacity: .5; border-style: dashed; }
+html[data-theme="light"] .ep-tabs-bar { border-bottom-color: rgba(0,0,0,.06); }
+html[data-theme="light"] .ep-tabs-season select { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.1); color: #333; }
+html[data-theme="light"] .ep-tabs-season select option { background: #fff; color: #333; }
+html[data-theme="light"] .det-selectors label { color: rgba(0,0,0,.4); }
+html[data-theme="light"] .det-sel-group select { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.1); color: #333; }
+html[data-theme="light"] .det-sel-group select option { background: #fff; color: #333; }
+
+/* Episode list */
+html[data-theme="light"] .ep-list-card { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.06); }
+html[data-theme="light"] .ep-list-card:hover { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.1); }
+html[data-theme="light"] .ep-list-card.active { border-color: var(--brand,#e50914); background: rgba(229,9,20,.06); }
+html[data-theme="light"] .ep-list-card .ep-num { color: var(--brand,#e50914); }
+html[data-theme="light"] .ep-future-badge { background: rgba(251,191,36,.12); color: #92400e; }
+html[data-theme="light"] .ep-list-card.future-ep { border-color: rgba(0,0,0,.08); }
+
+/* Pause overlay — keep dark even in light mode (over video) */
+html[data-theme="light"] .pause-overlay { background: linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.6) 40%,rgba(0,0,0,.15) 70%,transparent 100%); }
+html[data-theme="light"] .po-title, html[data-theme="light"] .po-ep-title, html[data-theme="light"] .po-meta, html[data-theme="light"] .po-overview { color: #fff; }
 
 /* Content */
 .det-content{max-width:1200px;margin:0 auto;padding:0 4vw 2rem}
@@ -198,6 +249,9 @@ html[data-theme="light"] .buf-ring{border-color:rgba(0,0,0,.1);border-top-color:
 /* Episode tabs (horizontal scrollable pills under player) */
 .ep-tabs-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;padding:.8rem 0;border-bottom:1px solid rgba(255,255,255,.06)}
 .ep-tabs-season{flex-shrink:0}
+.ep-season-select{padding:6px 30px 6px 10px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8);font-size:.8rem;font-weight:600;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888' d='M5 7L0 2h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;font-family:inherit;}
+html[data-theme="light"] .ep-season-select{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.1);color:#333;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23333' d='M5 7L0 2h10z'/%3E%3C/svg%3E");}
+html[data-theme="light"] .ep-season-select option{background:#fff;color:#333;}
 .ep-tabs-scroll{display:flex;gap:.4rem;overflow-x:auto;scrollbar-width:none;flex:1;padding:.2rem 0}
 .ep-tabs-scroll::-webkit-scrollbar{display:none}
 .ep-tab{flex-shrink:0;padding:.4rem 1rem;border-radius:8px;font-size:.75rem;font-weight:600;background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:all .2s;white-space:nowrap;position:relative}
@@ -503,7 +557,7 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
     <!-- Episode Tabs + Season Selector -->
     <div class="ep-tabs-bar">
         <div class="ep-tabs-season">
-            <select id="seasonSelect" style="padding:6px 30px 6px 10px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8);font-size:.8rem;font-weight:600;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888' d='M5 7L0 2h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;font-family:inherit;">
+            <select id="seasonSelect" class="ep-season-select">
                 {% for season in seasons %}
                 <option value="{{ season.season_number }}" {% if season.season_number == current_season %}selected{% endif %}>{{ season.name }}</option>
                 {% endfor %}
