@@ -448,6 +448,13 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 .src-selector.folded{display:none!important}
 .dual-panel.folding{opacity:0!important;transform:translateY(8px) scale(.95);pointer-events:none;transition:all .35s ease}
 .dual-panel.folded{display:none!important}
+
+/* Fullscreen styles */
+.det-player-left:fullscreen{background:#000;display:flex;flex-direction:column;justify-content:center}
+.det-player-left:fullscreen .det-player-box{border-radius:0;flex:1}
+.det-player-left:fullscreen .ep-splash{border-radius:0}
+.det-player-left:fullscreen .pause-overlay{border-radius:0}
+.det-player-left:fullscreen .player-controls-row{border-radius:0}
 .src-dd{position:relative;display:inline-block}
 .src-dd-btn{display:inline-flex;align-items:center;gap:.4rem;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.1);color:#fff;font-size:.7rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:90px}
 .src-dd-btn:hover{background:rgba(255,255,255,.1);color:#fff}
@@ -1263,15 +1270,152 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
     }
 })();
 
-/* Forward arrow keys to player iframe */
-document.addEventListener('keydown', function(ev) {
-    var iframe = document.querySelector('#player-container iframe');
-    if (!iframe) return;
-    if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
-        ev.preventDefault();
-        iframe.focus();
+/* ═══════════════════════════════════════════════════════════════════
+   Netflix-style Keyboard Controls
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+    function getVideo() { return document.getElementById('mainVideo'); }
+    function getIframe() { return document.querySelector('#player-container iframe'); }
+
+    document.addEventListener('keydown', function(ev) {
+        // Don't intercept when typing in inputs
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'SELECT' || ev.target.isContentEditable) return;
+
+        var v = getVideo();
+        var iframe = getIframe();
+        var key = ev.key;
+        var code = ev.code;
+
+        // --- Space / K: Play/Pause ---
+        if (key === ' ' || key === 'k' || key === 'K') {
+            ev.preventDefault();
+            if (v) { v.paused ? v.play().catch(function(){}) : v.pause(); }
+            else if (iframe && iframe.contentWindow) { iframe.contentWindow.postMessage(JSON.stringify({method: 'togglePlay'}), '*'); }
+            return;
+        }
+
+        // --- Arrow Left: Seek back 10s ---
+        if (key === 'ArrowLeft') {
+            ev.preventDefault();
+            if (v) { v.currentTime = Math.max(0, v.currentTime - 10); }
+            else if (iframe && iframe.contentWindow) { iframe.contentWindow.postMessage(JSON.stringify({method: 'seek', position: -10}), '*'); }
+            return;
+        }
+
+        // --- Arrow Right: Seek forward 10s ---
+        if (key === 'ArrowRight') {
+            ev.preventDefault();
+            if (v) { v.currentTime = Math.min(v.duration || 0, v.currentTime + 10); }
+            else if (iframe && iframe.contentWindow) { iframe.contentWindow.postMessage(JSON.stringify({method: 'seek', position: 10}), '*'); }
+            return;
+        }
+
+        // --- Arrow Up: Volume up 5% ---
+        if (key === 'ArrowUp') {
+            ev.preventDefault();
+            if (v) { v.volume = Math.min(1, v.volume + 0.05); }
+            return;
+        }
+
+        // --- Arrow Down: Volume down 5% ---
+        if (key === 'ArrowDown') {
+            ev.preventDefault();
+            if (v) { v.volume = Math.max(0, v.volume - 0.05); }
+            return;
+        }
+
+        // --- J: Seek back 10s ---
+        if (key === 'j' || key === 'J') {
+            ev.preventDefault();
+            if (v) { v.currentTime = Math.max(0, v.currentTime - 10); }
+            return;
+        }
+
+        // --- L: Seek forward 10s ---
+        if (key === 'l' || key === 'L') {
+            ev.preventDefault();
+            if (v) { v.currentTime = Math.min(v.duration || 0, v.currentTime + 10); }
+            return;
+        }
+
+        // --- Left Shift + Arrow Left: Seek back 5s (Netflix-style fine seek) ---
+        if (key === 'ArrowLeft' && ev.shiftKey) {
+            ev.preventDefault();
+            if (v) { v.currentTime = Math.max(0, v.currentTime - 5); }
+            return;
+        }
+
+        // --- Left Shift + Arrow Right: Seek forward 5s ---
+        if (key === 'ArrowRight' && ev.shiftKey) {
+            ev.preventDefault();
+            if (v) { v.currentTime = Math.min(v.duration || 0, v.currentTime + 5); }
+            return;
+        }
+
+        // --- F: Toggle fullscreen ---
+        if (key === 'f' || key === 'F') {
+            ev.preventDefault();
+            var playerBox = document.getElementById('player-container');
+            if (!playerBox) return;
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            } else {
+                (playerBox.requestFullscreen || playerBox.webkitRequestFullscreen).call(playerBox);
+            }
+            return;
+        }
+
+        // --- M: Toggle mute ---
+        if (key === 'm' || key === 'M') {
+            ev.preventDefault();
+            if (v) { v.muted = !v.muted; }
+            return;
+        }
+
+        // --- 0-9: Seek to 0%-90% of video ---
+        if (key >= '0' && key <= '9' && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+            ev.preventDefault();
+            if (v && v.duration) { v.currentTime = (parseInt(key) / 10) * v.duration; }
+            return;
+        }
+
+        // --- > (Shift+.): Increase playback speed ---
+        if (key === '>') {
+            ev.preventDefault();
+            if (v) { v.playbackRate = Math.min(2, v.playbackRate + 0.25); showSpeedToast(v.playbackRate); }
+            return;
+        }
+
+        // --- < (Shift+,): Decrease playback speed ---
+        if (key === '<') {
+            ev.preventDefault();
+            if (v) { v.playbackRate = Math.max(0.25, v.playbackRate - 0.25); showSpeedToast(v.playbackRate); }
+            return;
+        }
+
+        // --- C: Toggle subtitles (if available) ---
+        // (placeholder — subtitles require track support)
+
+        // --- Escape: Exit fullscreen or close overlays ---
+        if (key === 'Escape') {
+            closeTrailer();
+            return;
+        }
+    });
+
+    // Speed toast notification
+    function showSpeedToast(rate) {
+        var existing = document.getElementById('speedToast');
+        if (existing) existing.remove();
+        var toast = document.createElement('div');
+        toast.id = 'speedToast';
+        toast.textContent = rate + 'x';
+        toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);color:#fff;padding:12px 24px;border-radius:10px;font-size:1.2rem;font-weight:700;z-index:99999;pointer-events:none;transition:opacity .5s;backdrop-filter:blur(8px);';
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.style.opacity = '0'; }, 800);
+        setTimeout(function() { toast.remove(); }, 1300);
     }
-});
+})();
 function downloadEpisode() {
     var btn = document.getElementById('download-series-btn');
     var fname = seriesTitle + ' S' + String(currentSeason).padStart(2,'0') + 'E' + String(currentEpisode).padStart(2,'0');
