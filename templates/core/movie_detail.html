@@ -1001,7 +1001,15 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
     function _startTracking() {
         if (_progressInterval) return;
         recordProgress();
-        _progressInterval = setInterval(recordProgress, 5000);
+        _progressInterval = setInterval(function() {
+            recordProgress();
+            var now = Date.now();
+            if (!window._lastServerSync) window._lastServerSync = 0;
+            if (now - window._lastServerSync > 30000) {
+                window._lastServerSync = now;
+                syncToServer();
+            }
+        }, 5000);
     }
 
     // Method 1: postMessage from iframe player
