@@ -206,11 +206,7 @@ CACHES = {
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 
 # Template caching
-TEMPLATES[0]['OPTIONS']['loaders'][0] = (
-    ('django.template.loaders.cached.Loader', TEMPLATES[0]['OPTIONS']['loaders'][0])
-    if isinstance(TEMPLATES[0]['OPTIONS']['loaders'][0], str)
-    else TEMPLATES[0]['OPTIONS']['loaders'][0]
-)
+# (skip if loaders not configured as expected)
 
 # Static files caching
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
