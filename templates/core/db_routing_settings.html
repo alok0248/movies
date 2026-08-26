@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary me-3"><i class="fas fa-arrow-left"></i></a>
+        <h1 class="mb-0">
+            <i class="fas fa-route me-3 text-warning"></i>Data Storage Routing
+        </h1>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert" style="background: {% if message.tags == 'success' %}rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#22c55e{% elif message.tags == 'error' %}rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#ef4444{% else %}rgba(56,189,248,.15);border-color:rgba(56,189,248,.3);color:#38bdf8{% endif %};">
+        {{ message }}
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <!-- Left: Routing Config + Migration -->
+        <div class="col-lg-7">
+            <!-- Routing Toggle Card -->
+            <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,#1a1a2e,#16213e);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-white mb-0"><i class="fas fa-toggle-on me-2 text-success"></i>Storage Location</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-secondary mb-3">Choose where user-related data (users, watchlist, play history, sessions, cloud sync) is stored. Website configuration always stays on the local database.</p>
+
+                    <div class="row g-3 mb-4">
+                        <!-- Current Status -->
+                        <div class="col-12">
+                            <div class="p-3 rounded d-flex align-items-center justify-content-between" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
+                                <div>
+                                    <div class="text-secondary small mb-1">Current Storage</div>
+                                    <h5 class="mb-0 {% if routing.use_external_db %}text-success{% else %}text-info{% endif %}">
+                                        {% if routing.use_external_db %}
+                                            <i class="fas fa-server me-2"></i>External Database
+                                        {% else %}
+                                            <i class="fas fa-hdd me-2"></i>Local Database (Default)
+                                        {% endif %}
+                                    </h5>
+                                </div>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="toggle_external">
+                                    <button type="submit" class="btn btn-lg {% if routing.use_external_db %}btn-danger{% else %}btn-success{% endif %} fw-semibold px-4">
+                                        {% if routing.use_external_db %}
+                                            <i class="fas fa-toggle-off me-2"></i>Switch to Local
+                                        {% else %}
+                                            <i class="fas fa-toggle-on me-2"></i>Switch to External
+                                        {% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- What Goes Where -->
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.15);">
+                                <h6 class="text-info mb-2"><i class="fas fa-hdd me-2"></i>Always Local</h6>
+                                <ul class="text-secondary small mb-0" style="list-style:none;padding-left:0;">
+                                    <li class="mb-1"><i class="fas fa-check text-info me-2"></i>Site Settings</li>
+                                    <li class="mb-1"><i class="fas fa-check text-info me-2"></i>Content Rows</li>
+                                    <li class="mb-1"><i class="fas fa-check text-info me-2"></i>Player Configs</li>
+                                    <li class="mb-1"><i class="fas fa-check text-info me-2"></i>Ads & Providers</li>
+                                    <li class="mb-1"><i class="fas fa-check text-info me-2"></i>Android Apps</li>
+                                    <li class="mb-1"><i class="fas fa-check text-info me-2"></i>Email SMTP Settings</li>
+                                    <li><i class="fas fa-check text-info me-2"></i>DB Connection Configs</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);">
+                                <h6 class="text-success mb-2"><i class="fas fa-server me-2"></i>Moves to External</h6>
+                                <ul class="text-secondary small mb-0" style="list-style:none;padding-left:0;">
+                                    <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Users (web + Android)</li>
+                                    <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Watchlist</li>
+                                    <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Play History</li>
+                                    <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Cloud Sync Data</li>
+                                    <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Login Sessions</li>
+                                    <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Email Verifications</li>
+                                    <li><i class="fas fa-check text-success me-2"></i>Synced Profiles</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Migration Card -->
+            <div class="card border-0 shadow-lg" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-white mb-0"><i class="fas fa-exchange-alt me-2 text-warning"></i>Data Migration</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-secondary mb-3">Move existing user data between local and external databases. This copies records without deleting from the source.</p>
+
+                    {% if active_conn %}
+                    <div class="d-flex gap-3">
+                        <form method="post" onsubmit="return confirm('Migrate ALL user data to external database?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="migrate_data">
+                            <input type="hidden" name="direction" value="to_external">
+                            <button type="submit" class="btn btn-success fw-semibold px-4">
+                                <i class="fas fa-arrow-right me-2"></i>Migrate to External DB
+                            </button>
+                        </form>
+                        <form method="post" onsubmit="return confirm('Migrate ALL user data back to local database?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="migrate_data">
+                            <input type="hidden" name="direction" value="to_local">
+                            <button type="submit" class="btn btn-info fw-semibold px-4">
+                                <i class="fas fa-arrow-left me-2"></i>Migrate to Local DB
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="alert" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3);color:#fbbf24;">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No active default connection found. <a href="{% url 'db_connection_settings' %}" style="color:#fbbf24;">Configure one first</a>.
+                    </div>
+                    {% endif %}
+
+                    <!-- Migration Status -->
+                    {% if routing.last_migrated_at %}
+                    <div class="mt-3 p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-secondary">Last Migration</small>
+                            <span class="badge {% if routing.last_migration_status == 'success' %}bg-success{% elif routing.last_migration_status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}" style="font-size:.65rem;">
+                                {{ routing.last_migration_status|title }}
+                            </span>
+                        </div>
+                        <small class="text-secondary">{{ routing.last_migrated_at|timesince }} ago</small>
+                        {% if routing.last_migration_message %}
+                        <div class="mt-2 small" style="color:#a0a0b0;word-break:break-all;">{{ routing.last_migration_message }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Data Counts -->
+        <div class="col-lg-5">
+            <!-- Local DB Data -->
+            <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,#1a1a2e,#16213e);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-info mb-0"><i class="fas fa-hdd me-2"></i>Local Database</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Users</span>
+                        <span class="badge bg-info">{{ local_user_count }}</span>
+                    </div>
+                    <hr style="border-color:rgba(255,255,255,.06);">
+                    {% for key, label in data_labels.items %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">{{ label }}</span>
+                        <span class="badge bg-info">{{ local_data|default_if_none:"0"|get:key }}</span>
+                    </div>
+                    {% endfor %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Watchlist</span>
+                        <span class="badge bg-info">{{ local_data.watchlist }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Play History</span>
+                        <span class="badge bg-info">{{ local_data.play_history }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Cloud Data</span>
+                        <span class="badge bg-info">{{ local_data.cloud_data }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Synced Users</span>
+                        <span class="badge bg-info">{{ local_data.synced_users }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-secondary">Sessions</span>
+                        <span class="badge bg-info">{{ local_data.sessions }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- External DB Data -->
+            <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,#065f46,#0f172a);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-success mb-0"><i class="fas fa-server me-2"></i>External Database</h5>
+                </div>
+                <div class="card-body">
+                    {% if routing.external_db_ready %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Users</span>
+                        <span class="badge bg-success">{{ external_user_count }}</span>
+                    </div>
+                    <hr style="border-color:rgba(255,255,255,.06);">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Watchlist</span>
+                        <span class="badge bg-success">{{ external_data.watchlist|default:"0" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Play History</span>
+                        <span class="badge bg-success">{{ external_data.play_history|default:"0" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Cloud Data</span>
+                        <span class="badge bg-success">{{ external_data.cloud_data|default:"0" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Synced Users</span>
+                        <span class="badge bg-success">{{ external_data.synced_users|default:"0" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-secondary">Sessions</span>
+                        <span class="badge bg-success">{{ external_data.sessions|default:"0" }}</span>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-plug fa-2x text-secondary mb-2" style="opacity:.3;"></i>
+                        <p class="text-secondary mb-1">No external DB configured</p>
+                        <a href="{% url 'db_connection_settings' %}" class="text-success small">Set up a connection</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Info -->
+            <div class="card border-0 shadow-lg" style="background:linear-gradient(135deg,#2d1b4e,#0f172a);">
+                <div class="card-body">
+                    <h6 class="text-white mb-2"><i class="fas fa-info-circle me-2 text-purple-300"></i>How It Works</h6>
+                    <ul class="text-secondary small mb-0" style="list-style:none;padding-left:0;">
+                        <li class="mb-1"><i class="fas fa-check text-purple-300 me-2"></i>Website config always stays on local SQLite</li>
+                        <li class="mb-1"><i class="fas fa-check text-purple-300 me-2"></i>User data moves to external DB when enabled</li>
+                        <li class="mb-1"><i class="fas fa-check text-purple-300 me-2"></i>Migration copies data without deleting source</li>
+                        <li><i class="fas fa-check text-purple-300 me-2"></i>Server restart needed after toggling</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .text-purple-300 { color: #c4b5fd; }
+</style>
+{% endblock %}

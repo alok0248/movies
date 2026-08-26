@@ -7613,3 +7613,145 @@ def ajax_write_db_config(request):
             'success': False,
             'message': f'Failed to write config: {e}',
         })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def db_routing_settings(request):
+    """Admin page to control where user data is stored (local vs external DB)."""
+    from .models import DBRoutingConfig, DBConnectionConfig
+    from django.utils import timezone as tz
+
+    routing = DBRoutingConfig.get_config()
+    active_conn = DBConnectionConfig.objects.filter(is_active=True, is_default=True).first()
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'toggle_external':
+            routing.use_external_db = not routing.use_external_db
+            if routing.use_external_db and not active_conn:
+                messages.error(request, 'No active default connection found. Configure one in Database Connections first.')
+                routing.use_external_db = False
+            routing.save()
+            status = 'ENABLED' if routing.use_external_db else 'DISABLED'
+            messages.success(request, f'External DB routing {status}. Restart server for changes to take full effect.')
+            return redirect('db_routing_settings')
+
+        elif action == 'migrate_data':
+            direction = request.POST.get('direction', '')  # 'to_external' or 'to_local'
+            try:
+                result = _migrate_user_data(direction, routing)
+                routing.last_migrated_at = tz.now()
+                routing.last_migration_status = 'success'
+                routing.last_migration_message = result
+                routing.save(update_fields=['last_migrated_at', 'last_migration_status', 'last_migration_message'])
+                messages.success(request, f'Data migration complete: {result}')
+            except Exception as e:
+                routing.last_migrated_at = tz.now()
+                routing.last_migration_status = 'failed'
+                routing.last_migration_message = str(e)
+                routing.save(update_fields=['last_migrated_at', 'last_migration_status', 'last_migration_message'])
+                messages.error(request, f'Migration failed: {e}')
+            return redirect('db_routing_settings')
+
+    # Get counts from both databases
+    from django.db import connections
+    from django.contrib.auth.models import User
+    from .models import WatchList, PlayHistory, UserCloudData, SyncedUser, UserSession
+
+    local_user_count = User.objects.using('default').count()
+    external_user_count = 0
+
+    try:
+        if routing.use_external_db and routing.external_db_ready and 'external' in connections:
+            external_user_count = User.objects.using('external').count()
+    except Exception:
+        pass
+
+    # Count user-related data on default DB
+    local_data = {
+        'watchlist': WatchList.objects.using('default').count(),
+        'play_history': PlayHistory.objects.using('default').count(),
+        'cloud_data': UserCloudData.objects.using('default').count(),
+        'synced_users': SyncedUser.objects.using('default').count(),
+        'sessions': UserSession.objects.using('default').count(),
+    }
+    external_data = {}
+    try:
+        if routing.use_external_db and routing.external_db_ready and 'external' in connections:
+            external_data = {
+                'watchlist': WatchList.objects.using('external').count(),
+                'play_history': PlayHistory.objects.using('external').count(),
+                'cloud_data': UserCloudData.objects.using('external').count(),
+                'synced_users': SyncedUser.objects.using('external').count(),
+                'sessions': UserSession.objects.using('external').count(),
+            }
+    except Exception:
+        pass
+
+    return render(request, 'core/db_routing_settings.html', {
+        'routing': routing,
+        'active_conn': active_conn,
+        'local_user_count': local_user_count,
+        'external_user_count': external_user_count,
+        'local_data': local_data,
+        'external_data': external_data,
+        'back_url': 'admin_dashboard',
+    })
+
+
+def _migrate_user_data(direction, routing):
+    """Migrate user data between local and external databases.
+    direction: 'to_external' or 'to_local'
+    Returns a summary string."""
+    from django.db import connections
+    from django.contrib.auth.models import User
+    from .models import (
+        SyncedUser, UserSession, PlayHistory, UserCloudData,
+        EmailVerification, WatchList, UserActivity, EmailSendLog,
+    )
+
+    source = 'default' if direction == 'to_external' else 'external'
+    target = 'external' if direction == 'to_external' else 'default'
+
+    # Verify both DBs are accessible
+    for db_name in [source, target]:
+        if db_name not in connections:
+            raise Exception(f'Database "{db_name}" is not configured. Save a default connection first.')
+        try:
+            connections[db_name].ensure_connection()
+        except Exception as e:
+            raise Exception(f'Cannot connect to {db_name} database: {e}')
+
+    counts = {}
+    model_map = [
+        ('Users', User),
+        ('Watchlist', WatchList),
+        ('Play History', PlayHistory),
+        ('Cloud Data', UserCloudData),
+        ('Synced Users', SyncedUser),
+        ('Sessions', UserSession),
+        ('Activities', UserActivity),
+        ('Verifications', EmailVerification),
+    ]
+
+    for label, model in model_map:
+        try:
+            source_qs = model.objects.using(source)
+            target_qs = model.objects.using(target)
+            source_count = source_qs.count()
+            migrated = 0
+
+            for obj in source_qs.iterator():
+                # Check if already exists in target (by pk)
+                if not target_qs.filter(pk=obj.pk).exists():
+                    obj.save(using=target)
+                    migrated += 1
+
+            counts[label] = f'{migrated} migrated ({source_count} total)'
+        except Exception as e:
+            counts[label] = f'Error: {e}'
+
+    summary = '; '.join(f'{k}: {v}' for k, v in counts.items())
+    return summary or 'No data to migrate'
