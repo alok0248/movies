@@ -252,28 +252,27 @@ var _activeSrcIdx = 0;
 function _renderSourceList(){
   var box=document.getElementById('sourceSelector');
   if(!box||!_allSources.length)return;
-  /* Deduplicate by URL */
-  var seen={};var unique=[];
-  _allSources.forEach(function(s,i){if(!seen[s.url]){seen[s.url]=1;unique.push({s:s,idx:i});}});
-  /* Sort: group by language then quality */
-  var qo={'2160p':0,'2160':0,'4k':0,'1080p':1,'1080':1,'720p':2,'720':2,'480p':3,'480':3,'360p':4,'360':4};
-  unique.sort(function(a,b){
-    var la=(a.s.language||'Original').toLowerCase();var lb=(b.s.language||'Original').toLowerCase();
-    if(la!==lb)return la.localeCompare(lb);
-    var qa=(a.s.quality||'?').toLowerCase();var qb=(b.s.quality||'?').toLowerCase();
-    return (qo[qa]||50)-(qo[qb]||50);
+  /* Group by URL — same URL = same stream (adaptive HLS with multiple qualities) */
+  var urlMap={};
+  _allSources.forEach(function(s,i){
+    var u=s.url;if(!urlMap[u])urlMap[u]={s:s,idx:i,quals:[],lang:s.language||'Original',server:s.server||s.server_name||'?'};
+    var q=s.quality||'?';if(urlMap[u].quals.indexOf(q)===-1)urlMap[u].quals.push(q);
   });
-  /* Build flat list of all streams */
+  var unique=Object.values(urlMap);
+  var qo={'2160p':0,'2160':0,'4k':0,'1080p':1,'1080':1,'720p':2,'720':2,'480p':3,'480':3,'360p':4,'360':4,'auto':99};
+  unique.sort(function(a,b){return a.server.localeCompare(b.server);});
+  /* Build flat list of streams */
   var html='';
   unique.forEach(function(u,i){
     var s=u.s;
-    var lang=s.language||'Original';
-    var q=s.quality||'?';
-    var server=s.server||s.server_name||'?';
+    var lang=u.lang;
+    var quals=u.quals.slice().sort(function(a,b){return(qo[a.toLowerCase()]||50)-(qo[b.toLowerCase()]||50);});
+    var qLabel=quals.length>1?quals[0]+'-'+quals[quals.length-1]:quals[0]||'?';
+    var server=u.server;
     var active=(i===_activeSrcIdx)?' active':'';
     html+='<div class="src-item'+active+'" data-src-idx="'+i+'" onclick="_pickStream('+i+')">';
     html+='<span class="src-lang">'+lang+'</span>';
-    html+='<span class="src-q">'+q+'</span>';
+    html+='<span class="src-q">'+qLabel+'</span>';
     html+='<span class="src-server">'+server+'</span>';
     html+='</div>';
   });
@@ -308,12 +307,7 @@ function _findBestMatch() {
 function _updateSrcInfo() {
   var info = document.getElementById('srcInfo');
   if (!info) return;
-  var seen = {}; var unique = [];
-  _allSources.forEach(function(s, i) {
-    var k = (s.quality||'?') + '|' + (s.language||'') + '|' + (s.server||'');
-    if (!seen[k]) { seen[k]=1; unique.push({s:s,idx:i}); }
-  });
-  info.textContent = unique.length + ' streams';
+  info.textContent = _uniqueSources.length + ' stream' + (_uniqueSources.length!==1?'s':'');
 }
 
 function selectSource(idx) {
