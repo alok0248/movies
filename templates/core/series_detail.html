@@ -82,6 +82,25 @@
 .det-player-box{position:relative;width:100%;aspect-ratio:16/9;min-height:200px;border-radius:16px;overflow:visible;background:#000;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .det-player-box iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 
+/* Netflix-style pause overlay */
+.pause-overlay{position:absolute;inset:0;z-index:15;display:none;flex-direction:column;align-items:flex-start;justify-content:flex-end;background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.7) 40%,rgba(0,0,0,.2) 70%,transparent 100%);backdrop-filter:blur(2px);transition:opacity .35s ease;padding:2rem 2.5rem;border-radius:16px;cursor:pointer;pointer-events:none}
+.pause-overlay.visible{display:flex;pointer-events:auto}
+.pause-overlay.hidden{opacity:0;pointer-events:none}
+.pause-overlay .po-top{position:absolute;top:1.5rem;left:2rem;right:2rem;display:flex;align-items:center;justify-content:space-between}
+.pause-overlay .po-badge{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:.3rem .8rem;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);backdrop-filter:blur(4px)}
+.pause-overlay .po-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);font-size:.8rem;transition:background .2s}
+.pause-overlay .po-close:hover{background:rgba(255,255,255,.2)}
+.pause-overlay .po-play-btn{width:64px;height:64px;border-radius:50%;background:var(--brand,#e50914);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.4rem;margin-bottom:1rem;transition:transform .25s,box-shadow .25s;box-shadow:0 4px 20px rgba(229,9,20,.4)}
+.pause-overlay .po-play-btn:hover{transform:scale(1.1);box-shadow:0 6px 30px rgba(229,9,20,.6)}
+.pause-overlay .po-title{font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:.3rem;text-shadow:0 2px 10px rgba(0,0,0,.5)}
+.pause-overlay .po-meta{font-size:.82rem;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.pause-overlay .po-meta .po-season{color:var(--brand,#e50914);font-weight:700}
+.pause-overlay .po-meta .po-dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.3)}
+.pause-overlay .po-ep-title{font-size:1rem;color:rgba(255,255,255,.85);margin-top:.4rem;font-weight:600}
+.pause-overlay .po-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.1)}
+.pause-overlay .po-progress-fill{height:100%;background:var(--brand,#e50914);border-radius:0 2px 0 0;transition:width .3s}
+html[data-theme="light"] .pause-overlay{background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.15) 70%,transparent 100%)}
+
 /* Player loading overlay */
 .player-loading-overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);transition:opacity .4s ease}
 .player-loading-overlay.hidden{opacity:0;pointer-events:none}
@@ -365,7 +384,25 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
             </div>
             <div style="margin-left:auto;color:#666;font-size:.75rem;"><i class="fas fa-times"></i></div>
         </div>
-        <div class="det-player-box" id="player-container"></div>
+        <div style="position:relative;">
+            <div class="det-player-box" id="player-container"></div>
+            <!-- Netflix-style pause overlay (outside player box so it survives rebuilds) -->
+            <div class="pause-overlay" id="pauseOverlay" onclick="resumeFromOverlay()">
+                <div class="po-top">
+                    <span class="po-badge">{{ series.title }}</span>
+                    <span class="po-close" onclick="event.stopPropagation();resumeFromOverlay()"><i class="fas fa-times"></i></span>
+                </div>
+                <div class="po-play-btn"><i class="fas fa-play" style="margin-left:3px;"></i></div>
+                <div class="po-title">{{ series.title }}</div>
+                <div class="po-ep-title" id="poEpisodeTitle"></div>
+                <div class="po-meta">
+                    <span class="po-season" id="poSeason">Season <span id="poSeasonNum"></span></span>
+                    <span class="po-dot"></span>
+                    <span id="poEpisode">Episode <span id="poEpisodeNum"></span></span>
+                </div>
+                <div class="po-progress"><div class="po-progress-fill" id="poProgressFill" style="width:0%"></div></div>
+            </div>
+        </div>
         <div class="deferred-ad-slot" data-ad-position="below_player" data-ad-positions="below_player"></div>
     </div>
     <div class="det-player-right">
@@ -716,6 +753,100 @@ async function loadEpisodesForSeason(seasonNumber) {
         }
     } catch(e) { console.error('Error loading episodes:', e); }
 }
+
+/* --- Netflix-style pause overlay --- */
+var _pauseOverlay = document.getElementById('pauseOverlay');
+var _poHideTimer = null;
+
+function updatePauseOverlayInfo() {
+    // Update season/episode numbers
+    var sn = document.getElementById('poSeasonNum');
+    var en = document.getElementById('poEpisodeNum');
+    var et = document.getElementById('poEpisodeTitle');
+    if (sn) sn.textContent = currentSeason;
+    if (en) en.textContent = currentEpisode;
+    // Find episode title from current data
+    var ep = currentEpisodesData ? currentEpisodesData.find(function(x) { return x.episode_number === currentEpisode; }) : null;
+    if (et && ep && ep.name) et.textContent = ep.name;
+    else if (et) et.textContent = '';
+}
+
+function showPauseOverlay() {
+    if (!_pauseOverlay) return;
+    updatePauseOverlayInfo();
+    _pauseOverlay.classList.add('visible');
+    _pauseOverlay.classList.remove('hidden');
+    // Auto-hide after 6 seconds if video is still playing
+    clearTimeout(_poHideTimer);
+    _poHideTimer = setTimeout(function() {
+        var v = document.getElementById('mainVideo');
+        if (v && !v.paused) hidePauseOverlay();
+    }, 6000);
+}
+
+function hidePauseOverlay() {
+    if (!_pauseOverlay) return;
+    _pauseOverlay.classList.remove('visible');
+    _pauseOverlay.classList.add('hidden');
+    clearTimeout(_poHideTimer);
+}
+
+function resumeFromOverlay() {
+    hidePauseOverlay();
+    // Try to resume the video
+    var v = document.getElementById('mainVideo');
+    if (v && typeof v.play === 'function') {
+        v.play().catch(function(){});
+    }
+    // Also try iframe postMessage for external players
+    var iframe = document.querySelector('#player-container iframe');
+    if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({method: 'play'}), '*');
+    }
+}
+
+// Hook into video element events (for Server 0 inline player)
+function _hookVideoPauseEvents() {
+    var v = document.getElementById('mainVideo');
+    if (!v || v._poHooked) return;
+    v._poHooked = true;
+    v.addEventListener('pause', function() {
+        // Only show if not ended and not seeking
+        if (!v.ended && !v.seeking && v.currentTime > 1 && v.currentTime < v.duration - 1) {
+            showPauseOverlay();
+        }
+    });
+    v.addEventListener('play', function() {
+        hidePauseOverlay();
+    });
+    v.addEventListener('ended', function() {
+        hidePauseOverlay();
+    });
+}
+
+// Hook into iframe messages for external players
+window.addEventListener('message', function(ev) {
+    if (!ev.data || typeof ev.data !== 'string') return;
+    try {
+        var msg = JSON.parse(ev.data);
+        if (msg.event === 'pause' || msg.method === 'pause') {
+            showPauseOverlay();
+        } else if (msg.event === 'play' || msg.method === 'play') {
+            hidePauseOverlay();
+        }
+    } catch(e) {}
+});
+
+// Periodically hook into video element (it may be created after player loads)
+setInterval(_hookVideoPauseEvents, 2000);
+
+// Also hook when player container changes
+var _poObserver = new MutationObserver(function() {
+    setTimeout(_hookVideoPauseEvents, 500);
+});
+var _pc = document.getElementById('player-container');
+if (_pc) _poObserver.observe(_pc, {childList: true, subtree: true});
+
 
 document.getElementById('seasonSelect').addEventListener('change', function(e) {
     var v = parseInt(e.target.value);
