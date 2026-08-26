@@ -938,9 +938,28 @@ function showEpSplash(ep, epNum) {
     var overview = document.getElementById('epSplashOverview');
     var badge = document.getElementById('epSplashBadge');
     var thumb = document.getElementById('epSplashThumb');
+    // Find series poster as fallback
+    var seriesPoster = document.querySelector('.det-hero-bg');
+    var fallbackSrc = '';
+    if (seriesPoster) {
+        var bg = getComputedStyle(seriesPoster).backgroundImage;
+        if (bg && bg !== 'none') fallbackSrc = bg.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
+    }
+    if (!fallbackSrc) {
+        var posterImg = document.querySelector('.det-poster img');
+        if (posterImg) fallbackSrc = posterImg.src;
+    }
     if (ep) {
-        if (img && ep.still_path) { img.src = 'https://image.tmdb.org/t/p/w780' + ep.still_path; thumb.style.display = ''; }
-        else if (thumb) { thumb.style.display = 'none'; }
+        var imgSrc = ep.still_path ? ('https://image.tmdb.org/t/p/w780' + ep.still_path) : fallbackSrc;
+        if (img) {
+            if (imgSrc) {
+                img.src = imgSrc;
+                img.onerror = function() { thumb.style.display = 'none'; };
+                thumb.style.display = '';
+            } else {
+                thumb.style.display = 'none';
+            }
+        }
         if (title) title.textContent = ep.name || 'Episode ' + epNum;
         if (meta) {
             var html = '<span>S' + currentSeason + ' · E' + epNum + '</span>';
@@ -1036,9 +1055,21 @@ function updatePauseOverlayInfo() {
     else if (et) et.textContent = '';
     if (ov && ep && ep.overview) ov.textContent = ep.overview;
     else if (ov) ov.textContent = '';
-    if (thumb && thumbImg && ep && ep.still_path) {
-        thumbImg.src = 'https://image.tmdb.org/t/p/w300' + ep.still_path;
-        thumb.style.display = '';
+    // Use episode still or series poster as fallback
+    var poFallback = '';
+    var poPoster = document.querySelector('.det-hero-bg');
+    if (poPoster) {
+        var poBg = getComputedStyle(poPoster).backgroundImage;
+        if (poBg && poBg !== 'none') poFallback = poBg.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
+    }
+    if (!poFallback) {
+        var poPI = document.querySelector('.det-poster img');
+        if (poPI) poFallback = poPI.src;
+    }
+    if (thumb && thumbImg && ep) {
+        var src = ep.still_path ? ('https://image.tmdb.org/t/p/w300' + ep.still_path) : poFallback;
+        if (src) { thumbImg.src = src; thumb.style.display = ''; }
+        else { thumb.style.display = 'none'; }
     } else if (thumb) {
         thumb.style.display = 'none';
     }
