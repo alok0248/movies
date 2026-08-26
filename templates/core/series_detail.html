@@ -152,12 +152,6 @@ html[data-theme="light"] .ep-tab.future{opacity:.5;border-style:dashed}
 html[data-theme="light"] .ep-tabs-bar{border-bottom-color:rgba(0,0,0,.06)}
 html[data-theme="light"] .ep-tabs-season select{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.1);color:#333}
 html[data-theme="light"] .ep-tabs-season select option{background:#fff;color:#333}
-html[data-theme="light"] .now-playing{background:linear-gradient(135deg,rgba(229,9,20,.04),rgba(229,9,20,.01));border-color:rgba(229,9,20,.12)}
-html[data-theme="light"] .np-title{color:#1a1a2e}
-html[data-theme="light"] .np-meta{color:rgba(0,0,0,.5)}
-html[data-theme="light"] .np-overview{color:rgba(0,0,0,.45)}
-html[data-theme="light"] .np-btn-info{background:rgba(0,0,0,.05);color:rgba(0,0,0,.6);border-color:rgba(0,0,0,.1)}
-html[data-theme="light"] .np-btn-info:hover{background:rgba(0,0,0,.08)}
 html[data-theme="light"] .ep-list-card{background:rgba(0,0,0,.02);border-color:rgba(0,0,0,.06)}
 html[data-theme="light"] .ep-list-card:hover{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1)}
 html[data-theme="light"] .ep-list-card.active{border-color:var(--brand,#e50914);background:rgba(229,9,20,.06)}
@@ -212,27 +206,6 @@ html[data-theme="light"] .buf-ring{border-color:rgba(0,0,0,.1);border-top-color:
 .ep-tab.active::after{content:'';position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);width:20px;height:2px;background:var(--brand,#e50914);border-radius:2px}
 .ep-tab.future{opacity:.45;border-style:dashed}
 .ep-tab.future::before{content:'📅 ';font-size:.65rem}
-
-/* Now Playing section */
-.now-playing{display:flex;gap:1.2rem;padding:1rem 1.2rem;border-radius:14px;background:linear-gradient(135deg,rgba(229,9,20,.06),rgba(229,9,20,.02));border:1px solid rgba(229,9,20,.15);margin-bottom:1.5rem;transition:all .3s}
-.now-playing:hover{border-color:rgba(229,9,20,.25)}
-.np-thumb{width:200px;min-width:200px;height:112px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.3);flex-shrink:0;position:relative}
-.np-thumb img{width:100%;height:100%;object-fit:cover}
-.np-thumb .np-badge{position:absolute;top:8px;left:8px;padding:3px 8px;border-radius:6px;background:var(--brand,#e50914);color:#fff;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-.np-info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
-.np-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--brand,#e50914);font-weight:700;margin-bottom:.3rem;display:flex;align-items:center;gap:.4rem}
-.np-label .np-dot{width:6px;height:6px;border-radius:50%;background:var(--brand,#e50914);animation:pulse-dot 2s infinite}
-@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
-.np-title{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.np-meta{font-size:.78rem;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
-.np-meta .np-rating{color:#ffc107}
-.np-overview{font-size:.78rem;color:rgba(255,255,255,.4);line-height:1.5;margin-top:.35rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.np-actions{display:flex;gap:.5rem;margin-top:.6rem}
-.np-btn{padding:.4rem 1rem;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;border:none}
-.np-btn-play{background:var(--brand,#e50914);color:#fff}
-.np-btn-play:hover{background:#ff1a2e;transform:scale(1.03)}
-.np-btn-info{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.12)}
-.np-btn-info:hover{background:rgba(255,255,255,.12)}
 
 /* Future episode marker */
 .ep-list-card.future-ep{opacity:.5;border-style:dashed;border-color:rgba(255,255,255,.08)}
@@ -525,32 +498,6 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 <!-- Content Sections -->
 <div class="det-content">
 
-    <!-- Now Playing Card -->
-    <div class="now-playing" id="nowPlaying" style="display:none;">
-        {% for ep in episodes %}
-        {% if ep.episode_number == current_episode and not forloop.first or forloop.first and current_episode == 1 %}
-        <div class="np-thumb" id="npThumb">
-            {% if ep.still_path %}<img src="https://image.tmdb.org/t/p/w400{{ ep.still_path }}" alt="{{ ep.name }}" id="npImg">{% else %}<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:2rem;color:rgba(255,255,255,.15)">🎬</div>{% endif %}
-            <span class="np-badge" id="npBadge">Now Playing</span>
-        </div>
-        <div class="np-info">
-            <div class="np-label"><span class="np-dot"></span> Now Playing</div>
-            <div class="np-title" id="npTitle">{{ ep.name }}</div>
-            <div class="np-meta">
-                <span>S{{ current_season }} · E{{ ep.episode_number }}</span>
-                {% if ep.vote_average %}<span class="np-rating">★ {{ ep.vote_average }}</span>{% endif %}
-                {% if ep.air_date %}<span>{{ ep.air_date }}</span>{% endif %}
-                {% if ep.runtime %}<span>{{ ep.runtime }} min</span>{% endif %}
-            </div>
-            {% if ep.overview %}<div class="np-overview" id="npOverview">{{ ep.overview|truncatewords:25 }}</div>{% endif %}
-            <div class="np-actions">
-                <button class="np-btn np-btn-play" onclick="playEpisode({{ ep.episode_number }})" id="npPlayBtn"><i class="fas fa-play me-1"></i> Play</button>
-            </div>
-        </div>
-        {% endif %}
-        {% endfor %}
-    </div>
-
     <!-- Episode Tabs + Season Selector -->
     <div class="ep-tabs-bar">
         <div class="ep-tabs-season">
@@ -710,12 +657,6 @@ let playerLoaded = false;
 let wikipediaLoaded = false;
 let currentEpisodesData = [];
 let currentPlayerId = 0;
-
-// Show now-playing section on load
-(function() {
-    var np = document.getElementById('nowPlaying');
-    if (np) np.style.display = 'flex';
-})();
 
 function getPlayerUrl(cfg, mediaType, mediaId, season, episode, imdbId) {
     imdbId = imdbId || '';
@@ -887,41 +828,10 @@ function playEpisode(epNum) {
     document.querySelectorAll('.ep-tab').forEach(function(t) {
         t.classList.toggle('active', parseInt(t.getAttribute('data-ep')) === epNum);
     });
-    // Update now-playing section
-    updateNowPlaying(epNum);
     var ep = currentEpisodesData.find(function(x) { return x.episode_number === epNum; });
     if (ep) updateEpisodeDetails(ep);
-    // Start extracting the new episode
     updatePlayerUrl();
-    // Update pause overlay info
     updatePauseOverlayInfo();
-}
-
-function updateNowPlaying(epNum) {
-    var np = document.getElementById('nowPlaying');
-    if (!np) return;
-    var ep = currentEpisodesData ? currentEpisodesData.find(function(x) { return x.episode_number === epNum; }) : null;
-    if (!ep) return;
-    np.style.display = 'flex';
-    var title = document.getElementById('npTitle');
-    var overview = document.getElementById('npOverview');
-    var badge = document.getElementById('npBadge');
-    var img = document.getElementById('npImg');
-    var playBtn = document.getElementById('npPlayBtn');
-    if (title) title.textContent = ep.name || 'Episode ' + epNum;
-    if (overview) overview.textContent = ep.overview || '';
-    if (badge) badge.textContent = 'Now Playing';
-    if (img && ep.still_path) img.src = 'https://image.tmdb.org/t/p/w400' + ep.still_path;
-    if (playBtn) playBtn.onclick = function() { playEpisode(epNum); };
-    // Update meta
-    var metaEl = np.querySelector('.np-meta');
-    if (metaEl) {
-        var metaHtml = '<span>S' + currentSeason + ' \u00b7 E' + epNum + '</span>';
-        if (ep.vote_average) metaHtml += '<span class="np-rating">\u2605 ' + ep.vote_average + '</span>';
-        if (ep.air_date) metaHtml += '<span>' + ep.air_date + '</span>';
-        if (ep.runtime) metaHtml += '<span>' + ep.runtime + ' min</span>';
-        metaEl.innerHTML = metaHtml;
-    }
 }
 
 async function loadEpisodesForSeason(seasonNumber) {
