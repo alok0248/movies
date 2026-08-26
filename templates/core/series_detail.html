@@ -1099,24 +1099,25 @@ function playEpisode(epNum) {
 
 /* Move the NOW badge to the correct episode card */
 function updateNowBadge(epNum) {
-    var nowStyle = 'font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700';
-    var nowBadgeHtml = '<span class="ep-now-badge" style="' + nowStyle + '">\u25b6 NOW</span>';
+    var badgeStyle = 'font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700';
+    var badgeHTML = '<span class="ep-now-badge" style="' + badgeStyle + '">▶ NOW</span>';
+    // Step 1: Remove ALL NOW badges from ALL cards first
     document.querySelectorAll('.ep-list-card').forEach(function(card) {
-        var isNow = parseInt(card.getAttribute('data-ep')) === epNum;
-        // Remove ALL existing NOW badges (with or without class)
-        card.querySelectorAll('.ep-now-badge').forEach(function(b){b.remove()});
-        card.querySelectorAll('[style*="▶ NOW"],[style*="\u25b6 NOW"]').forEach(function(b){b.remove()});
-        // Also remove spans that contain just the NOW text
-        card.querySelectorAll('.ep-meta span').forEach(function(s){
-            if(s.textContent.indexOf('NOW')>-1 && s.textContent.indexOf('▶')>-1) s.remove();
-            if(s.textContent.indexOf('▶')>-1) s.remove();
-        });
-        // Add badge to the correct card
-        if (isNow) {
-            var meta = card.querySelector('.ep-meta');
-            if (meta) meta.insertAdjacentHTML('beforeend', nowBadgeHtml);
+        var meta = card.querySelector('.ep-meta');
+        if (!meta) return;
+        var spans = Array.from(meta.children);
+        for (var i = spans.length - 1; i >= 0; i--) {
+            var t = spans[i].textContent || '';
+            if (t.indexOf('NOW') !== -1) spans[i].remove();
         }
     });
+    document.querySelectorAll('.ep-now-badge').forEach(function(b){b.remove()});
+    // Step 2: Add badge only to the correct card
+    var targetCard = document.querySelector('.ep-list-card[data-ep="' + epNum + '"]');
+    if (targetCard) {
+        var meta = targetCard.querySelector('.ep-meta');
+        if (meta) meta.insertAdjacentHTML('beforeend', badgeHTML);
+    }
 }
 
 /* Update progress bars and played indicators on all episode cards */
