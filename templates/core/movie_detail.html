@@ -735,34 +735,69 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
     } else { ws.style.display = 'none'; btn.innerHTML = '<i class="fas fa-info-circle"></i> Info'; }
 });
 
-/* ===== Play Progress Tracking + Resume ===== */
+/* ===== Play Progress Tracking + Resume (Browser-Side) ===== */
 (function() {
-    var playData = {
-        tmdb_id: {{ movie.id }},
-        media_type: 'movie',
-        title: '{{ movie.title|escapejs }}',
-        poster_path: '{{ movie.poster_path|default:'' }}'
-    };
+    var LS_KEY = 'nm_progress';
+    var MOVIE_ID = {{ movie.id }};
     var totalDuration = {{ movie.runtime|default:0|default:0 }} * 60;
-    var resumed = false;
 
-    function getVideoEl() {
-        return document.getElementById('mainVideo');
+    function getVideoEl() { return document.getElementById('mainVideo'); }
+
+    // --- localStorage helpers ---
+    function _getProgressMap() {
+        try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) { return {}; }
+    }
+    function _saveProgress(key, data) {
+        try {
+            var map = _getProgressMap();
+            map[key] = data;
+            var keys = Object.keys(map);
+            if (keys.length > 200) {
+                keys.sort(function(a,b) { return (map[a].ts||0) - (map[b].ts||0); });
+                for (var i = 0; i < keys.length - 150; i++) delete map[keys[i]];
+            }
+            localStorage.setItem(LS_KEY, JSON.stringify(map));
+        } catch(e) {}
+    }
+    function _getProgress(key) {
+        try { return _getProgressMap()[key] || null; } catch(e) { return null; }
     }
 
+    var _progressKey = 'movie_' + MOVIE_ID;
+    var resumed = false;
+
+    // --- Save progress to localStorage (no server request) ---
     var _lastSave = 0;
     function recordProgress() {
         var v = getVideoEl();
         if (!v || !v.currentTime || v.currentTime < 5) return;
         var now = Date.now();
-        if (now - _lastSave < 8000) return;
+        if (now - _lastSave < 5000) return;
         _lastSave = now;
         var completed = v.duration && (v.currentTime / v.duration) > 0.95;
-        var payload = Object.assign({}, playData, {
+        _saveProgress(_progressKey, {
+            pos: Math.floor(v.currentTime),
+            dur: totalDuration || Math.floor(v.duration || 0),
+            completed: completed,
+            title: '{{ movie.title|escapejs }}',
+            ts: now
+        });
+    }
+
+    // --- Sync to server (only on pause/end/unload) ---
+    function syncToServer() {
+        var v = getVideoEl();
+        if (!v || !v.currentTime || v.currentTime < 5) return;
+        var completed = v.duration && (v.currentTime / v.duration) > 0.95;
+        var payload = {
+            tmdb_id: MOVIE_ID,
+            media_type: 'movie',
+            title: '{{ movie.title|escapejs }}',
+            poster_path: '{{ movie.poster_path|default:'' }}',
             duration_seconds: Math.floor(v.currentTime),
             total_duration_seconds: totalDuration || Math.floor(v.duration || 0),
             completed: completed
-        });
+        };
         try {
             fetch("{% url 'ajax_record_play_progress' %}", {
                 method: 'POST',
@@ -772,46 +807,46 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         } catch(e) {}
     }
 
-    // Fetch resume position on load
-    fetch('{% url "ajax_resume_position" %}?tmdb_id={{ movie.id }}&media_type=movie')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d.success && d.position > 10) {
-                window._resumePosition = d.position;
-                var mins = Math.floor(d.position / 60);
-                var secs = Math.floor(d.position % 60);
-                var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
-                var banner = document.getElementById('resumeBanner');
-                if (banner) {
-                    banner.style.display = 'flex';
-                    banner.querySelector('.resume-time').textContent = 'Resume from ' + timeStr;
-                    if (d.title) banner.querySelector('.resume-title').textContent = d.title;
-                }
+    // --- Resume from localStorage (instant) ---
+    function tryResume() {
+        if (resumed) return;
+        var v = getVideoEl();
+        if (!v) return;
+        var saved = _getProgress(_progressKey);
+        if (saved && saved.pos > 10 && !saved.completed) {
+            resumed = true;
+            v.currentTime = saved.pos;
+            var mins = Math.floor(saved.pos / 60);
+            var secs = Math.floor(saved.pos % 60);
+            var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+            var banner = document.getElementById('resumeBanner');
+            if (banner) {
+                banner.style.display = 'flex';
+                banner.querySelector('.resume-time').textContent = 'Resume from ' + timeStr;
+                if (saved.title) banner.querySelector('.resume-title').textContent = saved.title;
             }
-        })
-        .catch(function() {});
+        }
+    }
 
-    // Start tracking when video plays — works with both iframe and inline player
+    // --- Start tracking on play ---
     var _progressInterval = null;
     function _startTracking() {
         if (_progressInterval) return;
         recordProgress();
-        _progressInterval = setInterval(recordProgress, 10000);
+        _progressInterval = setInterval(recordProgress, 5000);
     }
+
     // Method 1: postMessage from iframe player
     window.addEventListener('message', function(ev) {
         if (ev.data && ev.data.type === 'videoPlaying') {
-            var v = getVideoEl();
-            if (v && window._resumePosition && !resumed) {
-                resumed = true;
-                v.currentTime = window._resumePosition;
-                delete window._resumePosition;
-            }
+            tryResume();
             _startTracking();
         } else if (ev.data && ev.data.type === 'videoPaused') {
             recordProgress();
+            syncToServer();
         }
     });
+
     // Method 2: poll for inline video element (HLS.js player)
     var _pollCount = 0;
     var _pollTimer = setInterval(function() {
@@ -821,22 +856,18 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
         v._playTrackingAttached = true;
         clearInterval(_pollTimer);
         v.addEventListener('playing', function() {
-            if (window._resumePosition && !resumed) {
-                resumed = true;
-                v.currentTime = window._resumePosition;
-                delete window._resumePosition;
-            }
+            tryResume();
             _startTracking();
         });
-        v.addEventListener('pause', function() { recordProgress(); });
-        v.addEventListener('ended', function() { recordProgress(); });
+        v.addEventListener('pause', function() { recordProgress(); syncToServer(); });
+        v.addEventListener('ended', function() { recordProgress(); syncToServer(); });
         v.addEventListener('seeked', function() { recordProgress(); });
-        // If already playing when we find it
         if (!v.paused && v.currentTime > 5) _startTracking();
     }, 500);
 
     window.addEventListener('beforeunload', function() {
         recordProgress();
+        syncToServer();
     });
 })();
 </script>

@@ -653,8 +653,6 @@ function updatePlayerUrl() {
     }
     playerLoaded = true;
     updateServerButtons();
-    var newUrl = window.location.pathname + '?season=' + currentSeason + '&episode=' + currentEpisode;
-    window.history.pushState({ season: currentSeason, episode: currentEpisode }, '', newUrl);
 }
 
 function updateEpisodeDetails(episodeData) {
@@ -713,9 +711,8 @@ async function loadEpisodesForSeason(seasonNumber) {
         var data = await resp.json();
         if (data.episodes) {
             currentSeason = seasonNumber;
-            currentEpisode = 1;
             renderEpisodeList(data.episodes);
-            if (playerLoaded) updatePlayerUrl();
+            // Don't auto-play — wait for user to click an episode
         }
     } catch(e) { console.error('Error loading episodes:', e); }
 }
@@ -725,14 +722,7 @@ document.getElementById('seasonSelect').addEventListener('change', function(e) {
     if (v !== currentSeason) loadEpisodesForSeason(v);
 });
 
-window.addEventListener('popstate', function(e) {
-    if (e.state) {
-        currentSeason = e.state.season;
-        currentEpisode = e.state.episode;
-        document.getElementById('seasonSelect').value = currentSeason;
-        loadEpisodesForSeason(currentSeason);
-    }
-});
+// URL stays constant — no popstate needed
 
 // Server buttons
 document.querySelectorAll('.det-server-pill').forEach(function(btn) {
@@ -836,37 +826,73 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
     } else { ws.style.display = 'none'; btn.innerHTML = '<i class="fas fa-info-circle"></i> Info'; }
 });
 
-/* ===== Play Progress Tracking + Resume ===== */
+/* ===== Play Progress Tracking + Resume (Browser-Side) ===== */
 (function() {
-    var playData = {
-        tmdb_id: SERIES_TMDB_ID,
-        media_type: 'tv',
-        title: seriesTitle,
-        poster_path: '{{ series.poster_path|default:'' }}'
-    };
-    var resumed = false;
+    var LS_KEY = 'nm_progress';
     var currentEpisodeTitle = '';
 
-    function getVideoEl() {
-        return document.getElementById('mainVideo');
+    function getVideoEl() { return document.getElementById('mainVideo'); }
+
+    // --- localStorage helpers ---
+    function _getProgressMap() {
+        try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) { return {}; }
+    }
+    function _saveProgress(key, data) {
+        try {
+            var map = _getProgressMap();
+            map[key] = data;
+            // Keep max 200 entries (trim oldest)
+            var keys = Object.keys(map);
+            if (keys.length > 200) {
+                keys.sort(function(a,b) { return (map[a].ts||0) - (map[b].ts||0); });
+                for (var i = 0; i < keys.length - 150; i++) delete map[keys[i]];
+            }
+            localStorage.setItem(LS_KEY, JSON.stringify(map));
+        } catch(e) {}
+    }
+    function _getProgress(key) {
+        try { return _getProgressMap()[key] || null; } catch(e) { return null; }
     }
 
+    function _progressKey(season, episode) {
+        return 'tv_' + SERIES_TMDB_ID + '_s' + (season||currentSeason) + '_e' + (episode||currentEpisode);
+    }
+
+    // --- Save progress (browser only, no server request) ---
     var _lastSave = 0;
     function recordProgress() {
         var v = getVideoEl();
         if (!v || !v.currentTime || v.currentTime < 5) return;
         var now = Date.now();
-        if (now - _lastSave < 8000) return;
+        if (now - _lastSave < 5000) return; // save every 5s to localStorage
         _lastSave = now;
         var completed = v.duration && (v.currentTime / v.duration) > 0.95;
-        var payload = Object.assign({}, playData, {
+        _saveProgress(_progressKey(), {
+            pos: Math.floor(v.currentTime),
+            dur: Math.floor(v.duration || 0),
+            completed: completed,
+            title: currentEpisodeTitle,
+            ts: now
+        });
+    }
+
+    // --- Sync to server (only on pause/end/unload — not every 10s) ---
+    function syncToServer() {
+        var v = getVideoEl();
+        if (!v || !v.currentTime || v.currentTime < 5) return;
+        var completed = v.duration && (v.currentTime / v.duration) > 0.95;
+        var payload = {
+            tmdb_id: SERIES_TMDB_ID,
+            media_type: 'tv',
+            title: seriesTitle,
+            poster_path: '{{ series.poster_path|default:'' }}',
             season_number: currentSeason,
             episode_number: currentEpisode,
             episode_title: currentEpisodeTitle,
             duration_seconds: Math.floor(v.currentTime),
             total_duration_seconds: Math.floor(v.duration || 0),
             completed: completed
-        });
+        };
         try {
             fetch("{% url 'ajax_record_play_progress' %}", {
                 method: 'POST',
@@ -876,45 +902,47 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
         } catch(e) {}
     }
 
-    // Fetch resume position for current episode
-    fetch('{% url "ajax_resume_position" %}?tmdb_id=' + SERIES_TMDB_ID + '&media_type=tv&season=' + currentSeason + '&episode=' + currentEpisode)
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d.success && d.position > 10) {
-                window._resumePosition = d.position;
-                var mins = Math.floor(d.position / 60);
-                var secs = Math.floor(d.position % 60);
-                var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
-                var banner = document.getElementById('resumeBanner');
-                if (banner) {
-                    banner.style.display = 'flex';
-                    banner.querySelector('.resume-time').textContent = 'Resume from ' + timeStr;
-                    if (d.title) banner.querySelector('.resume-title').textContent = d.title;
-                }
+    // --- Resume from localStorage (instant, no server request) ---
+    var resumed = false;
+    function tryResume() {
+        if (resumed) return;
+        var v = getVideoEl();
+        if (!v) return;
+        var saved = _getProgress(_progressKey());
+        if (saved && saved.pos > 10 && !saved.completed) {
+            resumed = true;
+            v.currentTime = saved.pos;
+            var mins = Math.floor(saved.pos / 60);
+            var secs = Math.floor(saved.pos % 60);
+            var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+            var banner = document.getElementById('resumeBanner');
+            if (banner) {
+                banner.style.display = 'flex';
+                banner.querySelector('.resume-time').textContent = 'Resume from ' + timeStr;
+                if (saved.title) banner.querySelector('.resume-title').textContent = saved.title;
             }
-        })
-        .catch(function() {});
+        }
+    }
 
+    // --- Start tracking on play ---
     var _progressInterval = null;
     function _startTracking() {
         if (_progressInterval) return;
         recordProgress();
-        _progressInterval = setInterval(recordProgress, 10000);
+        _progressInterval = setInterval(recordProgress, 5000);
     }
+
     // Method 1: postMessage from iframe player
     window.addEventListener('message', function(ev) {
         if (ev.data && ev.data.type === 'videoPlaying') {
-            var v = getVideoEl();
-            if (v && window._resumePosition && !resumed) {
-                resumed = true;
-                v.currentTime = window._resumePosition;
-                delete window._resumePosition;
-            }
+            tryResume();
             _startTracking();
         } else if (ev.data && ev.data.type === 'videoPaused') {
             recordProgress();
+            syncToServer();
         }
     });
+
     // Method 2: poll for inline video element (HLS.js player)
     var _pollCount = 0;
     var _pollTimer = setInterval(function() {
@@ -924,21 +952,19 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
         v._playTrackingAttached = true;
         clearInterval(_pollTimer);
         v.addEventListener('playing', function() {
-            if (window._resumePosition && !resumed) {
-                resumed = true;
-                v.currentTime = window._resumePosition;
-                delete window._resumePosition;
-            }
+            tryResume();
             _startTracking();
         });
-        v.addEventListener('pause', function() { recordProgress(); });
-        v.addEventListener('ended', function() { recordProgress(); });
+        v.addEventListener('pause', function() { recordProgress(); syncToServer(); });
+        v.addEventListener('ended', function() { recordProgress(); syncToServer(); });
         v.addEventListener('seeked', function() { recordProgress(); });
         if (!v.paused && v.currentTime > 5) _startTracking();
     }, 500);
 
+    // Save on page leave
     window.addEventListener('beforeunload', function() {
         recordProgress();
+        syncToServer();
     });
 })();
 </script>
