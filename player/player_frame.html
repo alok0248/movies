@@ -207,18 +207,48 @@
       var blobUrl=URL.createObjectURL(blob);
       var h=createHls();hlsSetter(h);
       h.on(Hls.Events.MANIFEST_PARSED,function(e,d){if(onReady)onReady()});
+      var _errorRecoverCount=0;
       h.on(Hls.Events.ERROR,function(e,d){
         if(d.fatal){
           if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
-            setTimeout(function(){if(h)h.startLoad()},1500);
+            _errorRecoverCount++;
+            var delay=Math.min(500*_errorRecoverCount,5000);
+            setTimeout(function(){if(h){try{h.startLoad(video.currentTime||0)}catch(ex){}}},delay);
+            setTimeout(function(){if(h&&h.media)h.media.play().catch(function(){})},delay+500);
           }else if(d.type===Hls.ErrorTypes.MEDIA_ERROR){
-            h.recoverMediaError();
+            try{h.recoverMediaError()}catch(ex){}
+            _errorRecoverCount++;
             setTimeout(function(){if(h&&h.media)h.media.play().catch(function(){})},500);
           }
+          if(_errorRecoverCount>6){_errorRecoverCount=0;try{h.destroy()}catch(ex){};setTimeout(function(){if(url)playUrl(url)},2000)}
+        }else if(d.details==='fragLoadError'||d.details==='fragBufferingError'){
+          // Non-fatal fragment errors: try loading from current position
+          if(h){try{h.startLoad(video.currentTime||0)}catch(ex){}}
         }
       });
       if(enforceMute)h.on(Hls.Events.LEVEL_SWITCHING,function(){el.muted=true;el.volume=0});
       h.loadSource(blobUrl);h.attachMedia(el);
+      // Stall detection: if video is playing but buffer is empty, reload
+      var _stallCheck=null;
+      h.on(Hls.Events.FRAG_BUFFERED,function(e,d){
+        _errorRecoverCount=0;
+        if(!el.paused&&el.currentTime>0){el.play().catch(function(){})}
+      });
+      el.addEventListener("stalled",function(){
+        if(!el.paused){
+          setTimeout(function(){if(!el.paused&&el.buffered.length===0&&h){try{h.startLoad(el.currentTime)}catch(ex){}}},3000);
+        }
+      });
+      el.addEventListener("waiting",function(){
+        clearTimeout(_stallCheck);
+        _stallCheck=setTimeout(function(){
+          if(!el.paused&&el.readyState<3&&h){
+            try{h.startLoad(el.currentTime||0)}catch(ex){}
+            el.play().catch(function(){});
+          }
+        },5000);
+      });
+      el.addEventListener("playing",function(){clearTimeout(_stallCheck)});
       if(enforceMute){el.muted=true;el.volume=0}
     }).catch(function(){});
   }
