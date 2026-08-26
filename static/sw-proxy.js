@@ -14,7 +14,7 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const PREFETCH_CACHE = 'sw-prefetch-v2';
 const MANIFEST_CACHE = 'sw-manifest-v2';
 const MANIFEST_CACHE_TTL = 8000;
-const MAX_CACHE_ENTRIES = 5000;
+const MAX_CACHE_ENTRIES = 10000;
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
@@ -56,8 +56,14 @@ function normalFetch(request, url, pathStart) {
     return cache.match(request).then(function(cached) {
       if (cached) return cached;
 
-      // Not prefetched — fetch directly from CDN
-      return fetchDirect(request, pathStart);
+      // Not cached — fetch directly from CDN, then cache the response
+      return fetchDirect(request, pathStart).then(function(response) {
+        if (response && response.ok) {
+          var toCache = response.clone();
+          cache.put(request, toCache);
+        }
+        return response;
+      });
     });
   });
 }

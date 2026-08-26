@@ -2135,7 +2135,8 @@ def email_settings(request):
             host = request.POST.get('smtp_host', '').strip()
             port = int(request.POST.get('smtp_port', 587))
             username = request.POST.get('smtp_username', '').strip()
-            password = request.POST.get('smtp_password', '').strip()
+            password = request.POST.get('smtp_password', '').strip()
+
             use_tls = request.POST.get('smtp_use_tls') == 'on'
             test_email = request.POST.get('email', '').strip()
             if not host or not test_email:
@@ -5808,6 +5809,27 @@ def ajax_system_resource_dashboard(request):
 # Videasy Player integration
 # ============================================================================
 
+# Persistent HTTP session pool for proxy (reuse connections to CDN)
+_PROXY_SESSION = None
+_PROXY_ADAPTER = None
+
+
+def _get_proxy_session():
+    global _PROXY_SESSION
+    if _PROXY_SESSION is None:
+        import requests as _req_mod
+        _PROXY_SESSION = _req_mod.Session()
+        adapter = _req_mod.adapters.HTTPAdapter(
+            pool_connections=20,
+            pool_maxsize=50,
+            max_retries=2,
+            pool_block=False
+        )
+        _PROXY_SESSION.mount('http://', adapter)
+        _PROXY_SESSION.mount('https://', adapter)
+    return _PROXY_SESSION
+
+
 _VIDEASY_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 _VIDEASY_ORIGIN = "https://player.videasy.to"
 _PROXY_DNS_SERVERS = ['1.1.1.1', '8.8.8.8', '1.0.0.1', '8.8.4.4']
@@ -5865,12 +5887,14 @@ def proxy_view(request, target):
     }
 
     try:
-        resp = _req.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
+        _session = _get_proxy_session()
+        resp = _session.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
         if resp.status_code == 403:
             headers.pop('Origin', None)
             headers.pop('Referer', None)
             resp.close()
-            resp = _req.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
+            _session = _get_proxy_session()
+        resp = _session.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
         if resp.status_code >= 400:
             resp.close()
             return HttpResponse(f"Proxy error: {resp.status_code}", status=resp.status_code)
@@ -5921,12 +5945,13 @@ def proxy_view(request, target):
             body = '\n'.join(rewritten)
             http_resp = HttpResponse(body, content_type='application/vnd.apple.mpegurl')
             http_resp['Access-Control-Allow-Origin'] = '*'
+            http_resp['Cache-Control'] = 'public, max-age=5, stale-while-revalidate=10'
             return http_resp
 
         # Non-m3u8: stream as-is, but fix content type for CDN-obfuscated video segments
         # CDN returns text/html for .html segments that are actually MPEG-TS video data
         real_content_type = content_type
-        first_chunk = resp.iter_content(chunk_size=262144)
+        first_chunk = resp.iter_content(chunk_size=524288)
         try:
             first_data = next(first_chunk)
         except StopIteration:
@@ -5951,7 +5976,9 @@ def proxy_view(request, target):
         http_resp['Accept-Ranges'] = 'bytes'
         if content_length:
             http_resp['Content-Length'] = content_length
-        for hdr in ('Cache-Control', 'ETag', 'Last-Modified', 'Accept-Ranges'):
+        # Force aggressive browser caching for video segments
+        http_resp['Cache-Control'] = 'public, max-age=86400, stale-while-revalidate=604800'
+        for hdr in ('ETag', 'Last-Modified'):
             val = resp.headers.get(hdr)
             if val:
                 http_resp[hdr] = val
