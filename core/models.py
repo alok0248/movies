@@ -987,6 +987,7 @@ class DataSourceUsageLog(models.Model):
 # Add active player references to SiteSettings
 SiteSettings.add_to_class('active_movie_player', models.ForeignKey(PlayerConfiguration, on_delete=models.SET_NULL, null=True, blank=True, related_name='movie_settings'))
 SiteSettings.add_to_class('active_tv_player', models.ForeignKey(PlayerConfiguration, on_delete=models.SET_NULL, null=True, blank=True, related_name='tv_settings'))
+SiteSettings.add_to_class('player_ui_style', models.CharField(max_length=20, default='default', choices=[('default', 'Classic Player'), ('netflix', 'Netflix-Style Player')], help_text='Player UI style for video playback'))
 
 
 class Subscriber(models.Model):
