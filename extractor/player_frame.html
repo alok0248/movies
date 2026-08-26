@@ -323,8 +323,44 @@
       case"ArrowDown":
         ev.preventDefault();var dv=Math.max(video.volume-0.05,0);video.volume=dv;video.muted=(dv===0);userVideoVol=dv;
         showBar(Math.round(dv*100),dv===0?"🔇 Muted":"🔉 Volume "+Math.round(dv*100)+"%");break;
-    }
-  });
+    }    });
+
+  /* Link Keeper: keeps CDN alive by downloading segments ahead in background */
+  var _lk={on:false,url:'',timer:null,mfTimer:null,segs:[],idx:0};
+  function _lkStart(u){
+    if(!u||u.indexOf('.m3u8')<0)return;
+    _lkStop();_lk.url=u;_lk.on=true;_lk.segs=[];_lk.idx=0;
+    _lkFetch();_lk.mfTimer=setInterval(function(){if(_lk.on)_lkFetch();},10000+Math.random()*5000);
+  }
+  function _lkStop(){_lk.on=false;clearTimeout(_lk.timer);clearInterval(_lk.mfTimer);_lk.segs=[];_lk.idx=0;}
+  function _lkFetch(){
+    if(!_lk.url)return;
+    fetch(makeProxy(_lk.url)).then(function(r){return r.text()}).then(function(t){
+      var lines=t.split('\n'),base=_lk.url.substring(0,_lk.url.lastIndexOf('/')+1),s=[],dur=0,tot=0;
+      for(var i=0;i<lines.length;i++){var l=lines[i].trim();
+        if(l.charAt(0)==='#'){var m=l.match(/EXTINF:([\d.]+)/);if(m)dur=parseFloat(m[1]);continue;}
+        if(!l)continue;s.push({u:makeProxy(l.indexOf('http')===0?l:base+l),t:tot});tot+=dur;dur=0;
+      }
+      if(s.length>_lk.segs.length){_lk.segs=s;_lk.idx=0;}
+      _lkDl();
+    }).catch(function(){});
+  }
+  function _lkDl(){
+    if(!_lk.on||!_lk.segs.length)return;
+    if(video.ended||_lk.idx>=_lk.segs.length){_lk.timer=setTimeout(function(){if(_lk.on)_lkFetch();},15000+Math.random()*5000);return;}
+    var seg=_lk.segs[_lk.idx++];
+    fetch(seg.u,{mode:'cors',credentials:'omit'}).then(function(){
+      _lk.timer=setTimeout(_lkDl,600+Math.random()*1400);
+    }).catch(function(){
+      _lk.timer=setTimeout(_lkDl,2000+Math.random()*2000);
+    });
+  }
+  var _origPlayUrl=playUrl;
+  playUrl=function(u){_origPlayUrl(u);if(u&&u.indexOf('.m3u8')>-1)setTimeout(function(){_lkStart(u);},2000);};
+  var _origPlayDual=playDual;
+  playDual=function(v,a){_origPlayDual(v,a);if(v&&v.indexOf('.m3u8')>-1)setTimeout(function(){_lkStart(v);},2000);};
+  video.addEventListener('ended',function(){_lkStop();});
+
 })();
 </script>
 </body>
