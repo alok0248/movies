@@ -874,6 +874,22 @@
         @supports(padding-bottom: env(safe-area-inset-bottom)) {
             .mobile-bottom-nav { padding-bottom: calc(.3rem + env(safe-area-inset-bottom)); }
         }
+
+        /* ═══ DROPDOWN FIX — force theme colors over Bootstrap dark ═══ */
+        .dropdown-menu.dropdown-menu-dark { background-color: var(--bg-2) !important; color: var(--text-2) !important; }
+        .dropdown-menu.dropdown-menu-dark .dropdown-item { color: var(--text-2) !important; background-color: transparent !important; }
+        .dropdown-menu.dropdown-menu-dark .dropdown-item:hover, .dropdown-menu.dropdown-menu-dark .dropdown-item:focus { background-color: var(--surface-hover) !important; color: var(--text) !important; }
+        .dropdown-menu.dropdown-menu-dark .dropdown-item.active { background-color: var(--brand) !important; color: #fff !important; }
+        .dropdown-menu.dropdown-menu-dark .dropdown-item-text { color: var(--text-3) !important; }
+        .dropdown-menu.dropdown-menu-dark .dropdown-header { color: var(--text-3) !important; }
+        .dropdown-menu.dropdown-menu-dark .dropdown-divider { border-color: var(--border) !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark { background-color: #ffffff !important; color: #333 !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-item { color: #333 !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-item:hover, html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-item:focus { background-color: rgba(0,0,0,.06) !important; color: #111 !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-item.active { background-color: var(--brand) !important; color: #fff !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-item-text { color: #666 !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-header { color: #888 !important; }
+        html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-divider { border-color: rgba(0,0,0,.1) !important; }
     </style>
 </head>
 <body>
