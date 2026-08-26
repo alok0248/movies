@@ -1725,7 +1725,7 @@ def series_detail_by_id(request, series_id):
         cache.set(cache_key, (processed_series, seasons, episodes, more_series, watch_providers, tmdb_extra), 3600)
 
     if site_settings.url_format == 'slug':
-        return redirect(f"{redirect('series_detail', series_slug=processed_series['slug']).url}?season={season_number}&episode={episode_number}")
+        return redirect('series_detail', series_slug=processed_series['slug'])
 
     provider_urls = {
         provider.name.lower(): provider.url
@@ -1869,8 +1869,7 @@ def series_detail(request, series_slug):
         # Cache for 1 hour
         cache.set(cache_key, (processed_series, seasons, episodes, more_series, series_id, watch_providers), 3600)
 
-    if site_settings.url_format == 'id' and series_id is not None:
-        return redirect(f"{redirect('series_detail_by_id', series_id=series_id).url}?season={season_number}&episode={episode_number}")
+    # Season and episode are managed client-side, never in the URL
 
     # Client JS fetches cast/crew/trailers lazily via /ajax/tmdb-extra/
     tmdb_extra = {'cast': [], 'crew': [], 'directors': '', 'trailers': [], 'collection': None, 'collection_movies': []}
