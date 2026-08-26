@@ -401,6 +401,8 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
         </div>
         <div style="position:relative;">
             <div class="det-player-box" id="playerContainer"></div>
+            <!-- Transparent click catcher for iframe players -->
+            <div id="playerClickCatcher" style="position:absolute;inset:0;z-index:12;cursor:pointer;"></div>
             <!-- Netflix-style pause overlay -->
             <div class="pause-overlay" id="pauseOverlay" onclick="resumeFromOverlay()">
                 <div class="po-top">
@@ -700,11 +702,14 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
 
 /* Single click = pause, Double click = fullscreen */
 (function() {
+    var catcher = document.getElementById('playerClickCatcher');
     var wrapper = document.querySelector('.det-player-left');
-    if (!wrapper) return;
+    if (!catcher || !wrapper) return;
     var clickTimeout = null;
-    wrapper.addEventListener('click', function(ev) {
-        if (ev.target.closest('button, a, select, .pause-overlay, .deferred-ad-slot, .player-controls-row, .dual-panel, .src-selector')) return;
+
+    catcher.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
         if (clickTimeout) { clearTimeout(clickTimeout); clickTimeout = null; return; }
         clickTimeout = setTimeout(function() {
             clickTimeout = null;
@@ -712,19 +717,20 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
             if (v) {
                 if (v.paused) v.play().catch(function(){});
                 else v.pause();
+            } else {
+                var iframe = wrapper.querySelector('#playerContainer iframe');
+                if (iframe && iframe.contentWindow) {
+                    try { iframe.contentWindow.postMessage(JSON.stringify({method: 'togglePlay'}), '*'); } catch(e) {}
+                }
             }
-            var iframe = wrapper.querySelector('iframe');
-            if (iframe && iframe.contentWindow) {
-                try { iframe.contentWindow.postMessage(JSON.stringify({method: 'togglePlay'}), '*'); } catch(e) {}
-            }
-        }, 300);
+        }, 280);
     });
-    wrapper.addEventListener('dblclick', function(ev) {
-        if (ev.target.closest('button, a, select, .pause-overlay, .deferred-ad-slot, .player-controls-row, .dual-panel, .src-selector')) return;
+
+    catcher.addEventListener('dblclick', function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
         if (clickTimeout) { clearTimeout(clickTimeout); clickTimeout = null; }
-        var playerBox = wrapper.querySelector('.det-player-box');
+        var playerBox = document.getElementById('playerContainer');
         if (!playerBox) return;
         if (document.fullscreenElement || document.webkitFullscreenElement) {
             (document.exitFullscreen || document.webkitExitFullscreen).call(document);
@@ -732,7 +738,19 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
             (playerBox.requestFullscreen || playerBox.webkitRequestFullscreen).call(playerBox);
         }
     });
-    wrapper.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
+
+    catcher.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
+
+    var observer = new MutationObserver(function() {
+        var overlay = document.getElementById('pauseOverlay');
+        if (overlay && overlay.classList.contains('visible')) {
+            catcher.style.pointerEvents = 'none';
+        } else {
+            catcher.style.pointerEvents = 'auto';
+        }
+    });
+    var po = document.getElementById('pauseOverlay');
+    if (po) observer.observe(po, {attributes: true, attributeFilter: ['class']});
 })();
 
 /* Forward arrow keys to player iframe */
