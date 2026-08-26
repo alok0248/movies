@@ -111,24 +111,26 @@ function _tryHlsDirect(url, mediaEl) {
   var h = new window.Hls({
     enableWorker: true,
     lowLatencyMode: false,
-    maxBufferLength: 900,
-    maxMaxBufferLength: 1800,
-    backBufferLength: 60,
-    highBufferWatchdogPeriod: 0.2,
-    nudgeOffset: 0.1,
-    maxSeekHole: 60,
-    fragLoadingTimeOut: 30000,
-    manifestLoadingTimeOut: 15000,
-    levelLoadingTimeOut: 15000,
-    fragLoadingMaxRetry: 8,
-    levelLoadingMaxRetry: 6,
-    manifestLoadingMaxRetry: 6,
+    maxBufferLength: 1800,
+    maxMaxBufferLength: 7200,
+    backBufferLength: 600,
+    highBufferWatchdogPeriod: 0.1,
+    nudgeOffset: 0.05,
+    maxSeekHole: 120,
+    fragLoadingTimeOut: 60000,
+    manifestLoadingTimeOut: 20000,
+    levelLoadingTimeOut: 30000,
+    fragLoadingMaxRetry: 12,
+    levelLoadingMaxRetry: 8,
+    manifestLoadingMaxRetry: 8,
     startLevel: -1,
-    capLevelToPlayerSize: true,
+    capLevelToPlayerSize: false,
     stretchShortVideoTrack: true,
     maxAudioFramesDrift: 4,
     startFragPrefetch: true,
-    maxBufferSize: 209715200,
+    maxBufferSize: 1073741824,
+    maxBufferHole: 1.0,
+    appendErrorMaxRetry: 10,
     debug: false
   });
   h.loadSource(url); h.attachMedia(mediaEl);
@@ -152,6 +154,27 @@ function _tryCurrentSource(mediaEl) {
       mediaEl.play().catch(function(){});
       hidePlayerLoading();
     });
+    h.on(window.Hls.Events.FRAG_BUFFERED, function() {
+      if (!mediaEl.paused && mediaEl.currentTime > 0) mediaEl.play().catch(function(){});
+    });
+    (function() {
+      var _sc = null;
+      mediaEl.addEventListener('waiting', function() {
+        clearTimeout(_sc);
+        _sc = setTimeout(function() {
+          if (!mediaEl.paused && mediaEl.readyState < 3 && h) {
+            try { h.startLoad(mediaEl.currentTime || 0); } catch(ex) {}
+            mediaEl.play().catch(function(){});
+          }
+        }, 5000);
+      });
+      mediaEl.addEventListener('playing', function() { clearTimeout(_sc); });
+      mediaEl.addEventListener('stalled', function() {
+        setTimeout(function() {
+          if (!mediaEl.paused && h) try { h.startLoad(mediaEl.currentTime); } catch(ex) {}
+        }, 3000);
+      });
+    })();
     h.on(window.Hls.Events.ERROR, function(evt, data) {
       if (!data.fatal) return;
       if (proxyFallback) {
@@ -171,6 +194,9 @@ function _tryCurrentSource(mediaEl) {
         console.log('[Player] Proxy fallback OK:', s.server, s.quality);
         mediaEl.play().catch(function(){});
         hidePlayerLoading();
+      });
+      h2.on(window.Hls.Events.FRAG_BUFFERED, function() {
+        if (!mediaEl.paused && mediaEl.currentTime > 0) mediaEl.play().catch(function(){});
       });
       h2.on(window.Hls.Events.ERROR, function(evt2, data2) {
         if (data2.fatal) {
