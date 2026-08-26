@@ -2129,9 +2129,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Register Service Worker for transparent CDN proxy
+            // Register browser-based proxy Service Worker (no server needed)
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/static/js/proxy-sw.js').catch(function(){});
+                navigator.serviceWorker.register('/sw-proxy.js').catch(function(){});
             }
             initThemeToggle();
             initScrollButtons();

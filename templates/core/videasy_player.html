@@ -14,7 +14,7 @@
   .player-root{width:100%;height:100%;display:flex;flex-direction:column;position:relative;overflow:hidden}
   .player-iframe-wrap{flex:1;position:relative;background:#000;min-height:0;overflow:hidden}
   .player-iframe-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:#000}
-  .player-title-overlay{position:absolute;bottom:60px;left:20px;z-index:50;pointer-events:none;opacity:0;transform:translateY(10px);transition:opacity .6s ease,transform .6s ease}
+  .player-title-overlay{position:absolute;top:20px;left:20px;z-index:50;pointer-events:none;opacity:0;transform:translateY(-10px);transition:opacity .6s ease,transform .6s ease}
   .player-title-overlay.show{opacity:1;transform:translateY(0)}
   
   /* Pause overlay */
@@ -101,11 +101,13 @@
   .ep-loading{font-size:.6rem;color:rgba(255,255,255,.3);font-style:italic}
 </style>
 
+</head>
+<script>
     /* Register browser proxy Service Worker */
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/static/sw-proxy.js").catch(function() {});
+      navigator.serviceWorker.register("/sw-proxy.js").catch(function() {});
     }
-  </head>
+</script>
 <body>
 <div class="player-root">
   <!-- Player iframe -->
@@ -252,7 +254,15 @@ const statusEl=document.getElementById("status");
 function log(m,c){statusEl.textContent=m;statusEl.className="status"+(c?" "+c:"")}
 function showToast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
 
-fetch("/api/cookies").then(r=>r.json()).then(d=>{ddosCookies=d.cookies||{}}).catch(()=>{});
+/* Get cookies from Service Worker (fully browser-based, no server needed) */
+(function(){
+  if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+    navigator.serviceWorker.controller.postMessage({type:'get-cookies'});
+  }
+  window.addEventListener('message',function(ev){
+    if(ev.data&&ev.data.type==='cookies'&&ev.data.cookies){ddosCookies=ev.data.cookies||{}}
+  });
+})().catch&&function(){};
 
 /* ===== Menu helpers ===== */
 function toggleMenu(id){

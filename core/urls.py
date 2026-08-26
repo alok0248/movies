@@ -161,6 +161,7 @@ urlpatterns = [
     path('privacy/', TemplateView.as_view(template_name='core/privacy.html'), name='privacy'),
     path('terms/', TemplateView.as_view(template_name='core/terms.html'), name='terms'),
     path('sw.js', views.serve_sw_js, name='serve_sw_js'),
+    path('sw-proxy.js', views.serve_sw_proxy_js, name='serve_sw_proxy_js'),
     path('ads.txt', views.serve_ads_txt, name='serve_ads_txt'),
     path('app-ads.txt', views.serve_app_ads_txt, name='serve_app_ads_txt'),
     path('admin-dashboard/ad-files/', views.admin_ad_files, name='admin_ad_files'),
