@@ -88,8 +88,7 @@
 .pause-overlay .po-badge{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:.3rem .8rem;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);backdrop-filter:blur(4px)}
 .pause-overlay .po-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);font-size:.8rem;transition:background .2s}
 .pause-overlay .po-close:hover{background:rgba(255,255,255,.2)}
-.pause-overlay .po-play-btn{width:64px;height:64px;border-radius:50%;background:var(--brand,#e50914);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.4rem;margin-bottom:1rem;transition:transform .25s,box-shadow .25s;box-shadow:0 4px 20px rgba(229,9,20,.4)}
-.pause-overlay .po-play-btn:hover{transform:scale(1.1);box-shadow:0 6px 30px rgba(229,9,20,.6)}
+.pause-overlay .po-play-btn{display:none}
 .pause-overlay .po-title{font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:.3rem;text-shadow:0 2px 10px rgba(0,0,0,.5)}
 .pause-overlay .po-meta{font-size:.82rem;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
 .pause-overlay .po-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.1)}
@@ -405,7 +404,6 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
                     <span class="po-badge">{{ movie.title }}</span>
                     <span class="po-close" onclick="event.stopPropagation();resumeFromOverlay()"><i class="fas fa-times"></i></span>
                 </div>
-                <div class="po-play-btn"><i class="fas fa-play" style="margin-left:3px;"></i></div>
                 <div class="po-title">{{ movie.title }}</div>
                 <div class="po-meta">
                     {% if movie.year %}<span>{{ movie.year }}</span>{% endif %}
@@ -697,14 +695,16 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
     fetch('/ajax/prefetch-sources/?tmdb_id=' + movieId + '&type=movie', {mode: 'no-cors'}).catch(function(){});
 }
 
-/* Double-click to toggle fullscreen on player */
+/* Single click = pause, Double click = fullscreen */
 (function() {
     var playerBox = document.querySelector('.det-player-box');
     if (!playerBox) return;
     var lastClick = 0;
+    var clickTimer = null;
     playerBox.addEventListener('click', function(ev) {
         var now = Date.now();
         if (now - lastClick < 350) {
+            clearTimeout(clickTimer);
             ev.preventDefault();
             ev.stopPropagation();
             if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -713,8 +713,21 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
                 var el = playerBox.closest('.det-player-left') || playerBox.parentElement;
                 (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
             }
+            lastClick = 0;
+            return;
         }
         lastClick = now;
+        clickTimer = setTimeout(function() {
+            var v = document.getElementById('mainVideo');
+            if (v) {
+                if (v.paused) v.play().catch(function(){});
+                else v.pause();
+            }
+            var iframe = playerBox.querySelector('iframe');
+            if (iframe && iframe.contentWindow) {
+                try { iframe.contentWindow.postMessage(JSON.stringify({method: 'togglePlay'}), '*'); } catch(e) {}
+            }
+        }, 360);
     });
     playerBox.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
 })();
