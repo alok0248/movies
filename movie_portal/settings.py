@@ -181,6 +181,58 @@ else:
 # Trust the proxy (nginx)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# ---------------------------------------------------------------------------
+# Performance Optimizations
+# ---------------------------------------------------------------------------
+
+# SQLite timeout for concurrent access
+DATABASES['default']['OPTIONS'] = {
+    'timeout': 20,
+}
+
+# In-memory cache (single server)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 2000,
+        },
+    }
+}
+
+# Session engine — database-backed, cached
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+
+# Template caching
+TEMPLATES[0]['OPTIONS']['loaders'][0] = (
+    ('django.template.loaders.cached.Loader', TEMPLATES[0]['OPTIONS']['loaders'][0])
+    if isinstance(TEMPLATES[0]['OPTIONS']['loaders'][0], str)
+    else TEMPLATES[0]['OPTIONS']['loaders'][0]
+)
+
+# Static files caching
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Reduce query logging in production
+if ENV == 'prod':
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+            },
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['console'],
+                'level': 'WARNING',
+            },
+        },
+    }
+
 # Load local settings LAST (if exists) for environment-specific config
 try:
     from movie_portal.settings_local import *
