@@ -46,7 +46,10 @@ def _load_external_from_model(config):
 
     try:
         from core.models import DBConnectionConfig, DBRoutingConfig
-        routing = DBRoutingConfig.get_config()
+        try:
+            routing = DBRoutingConfig.get_config()
+        except Exception:
+            return config
         if not routing.use_external_db:
             return config
 
@@ -74,7 +77,12 @@ def _load_external_from_model(config):
         if conn.extra_params:
             db_cfg['OPTIONS'] = conn.extra_params
         elif conn.db_type == 'mysql':
-            db_cfg['OPTIONS'] = {'charset': 'utf8mb4'}
+            db_cfg['OPTIONS'] = {
+                'charset': 'utf8mb4',
+                'connect_timeout': 10,
+                'read_timeout': 30,
+                'write_timeout': 30,
+            }
 
         config['external'] = db_cfg
     except Exception:
