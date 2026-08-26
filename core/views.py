@@ -718,7 +718,92 @@ def is_staff_or_superuser(user):
 @user_passes_test(is_staff_or_superuser)
 def admin_dashboard(request):
     site_settings = SiteSettings.get_settings()
-    return render(request, 'core/admin_dashboard.html', {'site_settings': site_settings})
+    from django.contrib.auth.models import User
+    from .models import PlayHistory, WebsiteVisitor
+    from django.utils import timezone
+    import os
+
+    today = timezone.now().date()
+
+    # Determine which DB to query for user data
+    # Try external first if routing enabled, fall back to default
+    user_db = 'default'
+    try:
+        from .models import DBRoutingConfig
+        cfg = DBRoutingConfig.get_config()
+        if cfg.use_external_db and cfg.external_db_ready:
+            user_db = 'external'
+    except Exception:
+        pass
+
+    # Visitor count today — try user_db first, then default
+    visitors_today = 0
+    for db_alias in ([user_db, 'default'] if user_db != 'default' else ['default']):
+        try:
+            visitors_today = WebsiteVisitor.objects.using(db_alias).filter(
+                last_seen_at__date=today
+            ).count()
+            break
+        except Exception:
+            continue
+
+    # Total users (always on default — auth.User is local)
+    try:
+        user_count = User.objects.count()
+    except Exception:
+        user_count = 0
+    # Also count users from external DB if different
+    if user_db == 'default':
+        try:
+            external_user_count = User.objects.using('external').count()
+            if external_user_count > user_count:
+                user_count = external_user_count
+        except Exception:
+            pass
+
+    # Play sessions today — try user_db first, then default
+    plays_today = 0
+    for db_alias in ([user_db, 'default'] if user_db != 'default' else ['default']):
+        try:
+            plays_today = PlayHistory.objects.using(db_alias).filter(
+                last_played_at__date=today
+            ).count()
+            break
+        except Exception:
+            continue
+
+    # DB size — show both local and external if applicable
+    db_size = '--'
+    try:
+        db_path = os.path.join(settings.BASE_DIR, 'db.sqlite3')
+        if os.path.exists(db_path):
+            size = os.path.getsize(db_path)
+            db_size = f'{size / 1024 / 1024:.0f}MB'
+    except Exception:
+        pass
+
+    # External DB size
+    ext_db_size = '--'
+    if user_db == 'external':
+        try:
+            from django.db import connections
+            cursor = connections['external'].cursor()
+            cursor.execute("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) FROM information_schema.tables WHERE table_schema = DATABASE()")
+            row = cursor.fetchone()
+            if row and row[0]:
+                ext_db_size = f'{row[0]:.0f}MB'
+        except Exception:
+            pass
+
+    return render(request, 'core/admin_dashboard.html', {
+        'site_settings': site_settings,
+        'visitors_today': visitors_today,
+        'user_count': user_count,
+        'plays_today': plays_today,
+        'db_size': db_size,
+        'ext_db_size': ext_db_size,
+        'active_db': user_db,
+    })
 
 
 # Helper functions for ads

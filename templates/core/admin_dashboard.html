@@ -20,7 +20,7 @@
         <div class="row g-0 text-center">
             <div class="col">
                 <div class="stat-counter">
-                    <div class="stat-value" id="statVisitors">--</div>
+                    <div class="stat-value" id="statVisitors">{{ visitors_today|default:"0" }}</div>
                     <div class="stat-label">Today's Visitors</div>
                 </div>
             </div>
@@ -32,13 +32,13 @@
             </div>
             <div class="col" style="border-left:1px solid rgba(255,255,255,.05);">
                 <div class="stat-counter">
-                    <div class="stat-value" id="statPlays">--</div>
+                    <div class="stat-value" id="statPlays">{{ plays_today|default:"0" }}</div>
                     <div class="stat-label">Play Sessions</div>
                 </div>
             </div>
             <div class="col" style="border-left:1px solid rgba(255,255,255,.05);">
                 <div class="stat-counter">
-                    <div class="stat-value" id="statDb">138MB</div>
+                    <div class="stat-value" id="statDb">{% if ext_db_size and ext_db_size != '--' %}{{ ext_db_size }} <small style="font-size:.6em;opacity:.5;">ext</small>{% else %}{{ db_size|default:"--" }}{% endif %}</div>
                     <div class="stat-label">DB Size</div>
                 </div>
             </div>
