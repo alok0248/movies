@@ -7755,3 +7755,259 @@ def _migrate_user_data(direction, routing):
 
     summary = '; '.join(f'{k}: {v}' for k, v in counts.items())
     return summary or 'No data to migrate'
+
+
+# ---------------------------------------------------------------------------
+# Database Dashboard
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def db_dashboard(request):
+    """Database dashboard showing health, size, tables, and stats for all DBs."""
+    import time, os, platform
+    from django.db import connections
+    from django.contrib.auth.models import User
+    from .models import (
+        WatchList, PlayHistory, UserCloudData, SyncedUser, UserSession,
+        DBConnectionConfig, DBRoutingConfig,
+    )
+
+    dbs = {}
+    routing = DBRoutingConfig.get_config()
+
+    # --- DEFAULT DB (Local SQLite) ---
+    local_info = _get_db_stats('default', 'Local Database (SQLite)')
+    dbs['default'] = local_info
+
+    # --- EXTERNAL DB (MySQL/Oracle if configured) ---
+    if routing.use_external_db and routing.external_db_ready:
+        try:
+            ext_info = _get_db_stats('external', 'External Database')
+            dbs['external'] = ext_info
+        except Exception as e:
+            dbs['external'] = {
+                'name': 'External Database',
+                'status': 'error',
+                'error': str(e),
+                'engine': '',
+                'host': '',
+                'tables': [],
+                'total_rows': 0,
+                'total_size': 'N/A',
+                'db_size': 'N/A',
+                'uptime': 'N/A',
+                'version': 'N/A',
+                'connections': 0,
+                'questions': 0,
+            }
+    else:
+        dbs['external'] = {
+            'name': 'External Database',
+            'status': 'disabled',
+            'engine': '',
+            'host': '',
+            'tables': [],
+            'total_rows': 0,
+            'total_size': 'N/A',
+            'db_size': 'N/A',
+            'uptime': 'N/A',
+            'version': 'N/A',
+            'connections': 0,
+            'questions': 0,
+        }
+
+    # Active connection config
+    active_conn = DBConnectionConfig.objects.filter(is_active=True, is_default=True).first()
+
+    # System info
+    try:
+        import psutil
+        disk = psutil.disk_usage('/')
+        system_info = {
+            'disk_total': _format_bytes(disk.total),
+            'disk_used': _format_bytes(disk.used),
+            'disk_free': _format_bytes(disk.free),
+            'disk_percent': disk.percent,
+            'cpu_percent': psutil.cpu_percent(interval=0.5),
+            'memory_total': _format_bytes(psutil.virtual_memory().total),
+            'memory_used': _format_bytes(psutil.virtual_memory().used),
+            'memory_percent': psutil.virtual_memory().percent,
+        }
+    except Exception:
+        system_info = {}
+
+    return render(request, 'core/db_dashboard.html', {
+        'dbs': dbs,
+        'routing': routing,
+        'active_conn': active_conn,
+        'system_info': system_info,
+        'back_url': 'admin_dashboard',
+    })
+
+
+def _get_db_stats(db_alias, display_name):
+    """Collect stats for a given database alias."""
+    from django.db import connections
+    import time
+
+    info = {
+        'name': display_name,
+        'status': 'error',
+        'engine': '',
+        'host': '',
+        'version': '',
+        'uptime': '',
+        'db_size': '',
+        'total_size': '',
+        'connections': 0,
+        'questions': 0,
+        'tables': [],
+        'total_rows': 0,
+    }
+
+    try:
+        conn = connections[db_alias]
+        t0 = time.time()
+        conn.ensure_connection()
+        latency = round((time.time() - t0) * 1000)
+        info['status'] = 'healthy'
+        info['latency_ms'] = latency
+        cursor = conn.cursor()
+
+        engine = conn.settings_dict.get('ENGINE', '')
+        info['engine'] = engine.split('.')[-1] if engine else 'unknown'
+        info['host'] = conn.settings_dict.get('HOST', '')
+
+        if 'mysql' in engine:
+            # MySQL stats
+            cursor.execute('SELECT VERSION()')
+            info['version'] = cursor.fetchone()[0]
+
+            cursor.execute('SHOW STATUS')
+            status = {row[0]: row[1] for row in cursor.fetchall()}
+            info['uptime'] = _format_uptime(int(status.get('Uptime', 0)))
+            info['connections'] = int(status.get('Threads_connected', 0))
+            info['questions'] = int(status.get('Questions', 0))
+            info['slow_queries'] = int(status.get('Slow_queries', 0))
+            info['queries_per_sec'] = round(
+                info['questions'] / max(1, int(status.get('Uptime', 1))), 1
+            )
+            info['bytes_sent'] = _format_bytes(int(status.get('Bytes_sent', 0)))
+            info['bytes_received'] = _format_bytes(int(status.get('Bytes_received', 0)))
+            info['aborted_connects'] = int(status.get('Aborted_connects', 0))
+            info['aborted_clients'] = int(status.get('Aborted_clients', 0))
+            info['max_connections'] = int(status.get('Max_used_connections', 0))
+
+            # DB size
+            db_name = conn.settings_dict.get('NAME', '')
+            if db_name:
+                cursor.execute(
+                    'SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) '
+                    'FROM information_schema.tables WHERE table_schema = %s',
+                    (db_name,)
+                )
+                row = cursor.fetchone()
+                info['db_size'] = f'{row[0]} MB' if row and row[0] else '0 MB'
+
+                # Total disk size
+                cursor.execute(
+                    'SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) '
+                    'FROM information_schema.tables'
+                )
+                row = cursor.fetchone()
+                info['total_size'] = f'{row[0]} MB' if row and row[0] else '0 MB'
+
+            # Table list
+            cursor.execute(
+                'SELECT table_name, table_rows, '
+                'ROUND((data_length + index_length) / 1024, 1) as size_kb '
+                'FROM information_schema.tables '
+                'WHERE table_schema = %s ORDER BY (data_length + index_length) DESC',
+                (db_name,)
+            )
+            tables = []
+            total_rows = 0
+            for row in cursor.fetchall():
+                t_name, t_rows, t_size = row
+                t_rows = t_rows or 0
+                total_rows += t_rows
+                tables.append({
+                    'name': t_name,
+                    'rows': t_rows,
+                    'size': f'{t_size} KB' if t_size else '0 KB',
+                    'size_bytes': (t_size or 0) * 1024,
+                })
+            info['tables'] = tables
+            info['total_rows'] = total_rows
+            info['table_count'] = len(tables)
+
+        elif 'sqlite' in engine:
+            # SQLite stats
+            info['version'] = 'SQLite'
+            db_path = conn.settings_dict.get('NAME', '')
+            if db_path and os.path.exists(db_path):
+                db_size = os.path.getsize(db_path)
+                info['db_size'] = _format_bytes(db_size)
+                info['total_size'] = info['db_size']
+            info['uptime'] = 'N/A'
+            info['latency_ms'] = latency
+
+            # Table list
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            )
+            tables = []
+            total_rows = 0
+            for row in cursor.fetchall():
+                t_name = row[0]
+                try:
+                    cursor.execute(f'SELECT COUNT(*) FROM "{t_name}"')
+                    t_rows = cursor.fetchone()[0]
+                except Exception:
+                    t_rows = 0
+                total_rows += t_rows
+                tables.append({
+                    'name': t_name,
+                    'rows': t_rows,
+                    'size': '',
+                    'size_bytes': 0,
+                })
+            info['tables'] = tables
+            info['total_rows'] = total_rows
+            info['table_count'] = len(tables)
+
+    except Exception as e:
+        info['status'] = 'error'
+        info['error'] = str(e)
+
+    return info
+
+
+def _format_bytes(n):
+    """Format bytes to human readable."""
+    if not n or n == 0:
+        return '0 B'
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    i = 0
+    n = float(n)
+    while n >= 1024 and i < len(units) - 1:
+        n /= 1024
+        i += 1
+    return f'{n:.1f} {units[i]}'
+
+
+def _format_uptime(seconds):
+    """Format seconds to uptime string."""
+    if not seconds:
+        return 'N/A'
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    mins = (seconds % 3600) // 60
+    if days > 0:
+        return f'{days}d {hours}h {mins}m'
+    elif hours > 0:
+        return f'{hours}h {mins}m'
+    return f'{mins}m'
