@@ -2225,7 +2225,7 @@ def email_settings(request):
         'total': EmailSendLog.objects.count(),
         'sent': EmailSendLog.objects.filter(status='sent').count(),
         'failed': EmailSendLog.objects.filter(status='failed').count(),
-        'today': EmailSendLog.objects.filter(created_at__date__gte=django.utils.timezone.now().date()).count(),
+        'today': EmailSendLog.objects.filter(created_at__date__gte=timezone.now().date()).count(),
     }
 
     return render(request, 'core/email_management.html', {
