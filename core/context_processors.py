@@ -1,5 +1,5 @@
 import json
-from .models import SiteSettings, NavbarItem, Ad, AmazonAffiliateProduct
+from .models import SiteSettings, NavbarItem, Ad, AmazonAffiliateProduct, ProviderItem, WatchRegion
 
 
 def site_settings(request):
@@ -68,9 +68,15 @@ def site_settings(request):
             'price': p.price or '',
         })
 
+    # Providers and watch regions for navbar
+    enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
+    watch_regions_nav = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')[:50]
+
     return {
         'site_settings': ss,
         'navbar_items': NavbarItem.objects.filter(is_active=True).order_by('order'),
+        'enabled_providers': enabled_providers,
+        'watch_regions_nav': watch_regions_nav,
         'auto_click_every_clicks': ss.auto_click_every_clicks or 10,
         'deferred_ads_settings_json': json.dumps(deferred_settings),
         'autoclick_ad_urls_json': json.dumps(autoclick_urls),

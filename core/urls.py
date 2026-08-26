@@ -178,4 +178,10 @@ urlpatterns = [
     path('admin-dashboard/settings/db-dashboard/', views.db_dashboard, name='db_dashboard'),
     path('ajax/test-db-connection-new/', views.ajax_test_db_connection, name='ajax_test_db_connection_new'),
     path('ajax/write-db-config/', views.ajax_write_db_config, name='ajax_write_db_config'),
+
+    # Public pages: Providers & Watch Regions
+    path('providers/', views.public_providers, name='public_providers'),
+    path('watch-regions/', views.public_watch_regions, name='public_watch_regions'),
+    path('ajax/toggle-user-providers/', views.ajax_toggle_user_providers, name='ajax_toggle_user_providers'),
+    path('ajax/user-preferred-providers/', views.ajax_user_preferred_providers, name='ajax_user_preferred_providers'),
 ]

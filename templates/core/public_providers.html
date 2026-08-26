@@ -1,0 +1,273 @@
+{% extends 'base.html' %}
+{% block title %}Streaming Providers{% endblock %}
+
+{% block content %}
+<style>
+    .prov-hero {
+        background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(168,85,247,.1));
+        border: 1px solid rgba(99,102,241,.2);
+        border-radius: 20px;
+        padding: 2.5rem 2rem;
+        margin-bottom: 2rem;
+    }
+    .prov-card {
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1rem;
+        transition: all .25s ease;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+    .prov-card:hover {
+        border-color: rgba(99,102,241,.4);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(99,102,241,.15);
+    }
+    .prov-card .prov-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: rgba(255,255,255,.05);
+    }
+    .prov-card .prov-logo-placeholder {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #6366f1, #a855f7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .region-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: .45rem 1rem;
+        border-radius: 10px;
+        font-size: .8rem;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        background: var(--bg-2);
+        color: var(--text-2);
+        transition: all .2s;
+        text-decoration: none;
+    }
+    .region-btn:hover, .region-btn.active {
+        background: rgba(99,102,241,.15);
+        border-color: rgba(99,102,241,.4);
+        color: #818cf8;
+    }
+    .type-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: .4rem .9rem;
+        border-radius: 10px;
+        font-size: .78rem;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        background: var(--bg-2);
+        color: var(--text-2);
+        transition: all .2s;
+        text-decoration: none;
+    }
+    .type-btn:hover, .type-btn.active {
+        background: rgba(56,189,248,.12);
+        border-color: rgba(56,189,248,.35);
+        color: #38bdf8;
+    }
+    .login-blur-overlay {
+        position: relative;
+    }
+    .login-blur-overlay::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to bottom, transparent 30%, var(--bg-1) 100%);
+        backdrop-filter: blur(4px);
+        border-radius: 14px;
+        pointer-events: none;
+    }
+    .login-cta {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        padding: 2rem;
+    }
+    .login-cta .btn-login {
+        background: linear-gradient(135deg, #6366f1, #a855f7);
+        border: none;
+        color: #fff;
+        font-weight: 700;
+        padding: .7rem 2rem;
+        border-radius: 12px;
+        font-size: .9rem;
+        cursor: pointer;
+        transition: all .25s;
+    }
+    .login-cta .btn-login:hover {
+        transform: scale(1.04);
+        box-shadow: 0 6px 25px rgba(99,102,241,.35);
+    }
+    .prov-stat-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: .3rem .8rem;
+        border-radius: 8px;
+        font-size: .75rem;
+        font-weight: 600;
+    }
+</style>
+
+<div class="container" style="padding-top:70px;padding-bottom:2rem;">
+    <!-- Hero -->
+    <div class="prov-hero text-center">
+        <h2 style="font-size:1.8rem;font-weight:800;color:var(--text-1);margin-bottom:.5rem;">
+            <i class="fas fa-play-circle me-2" style="color:#818cf8;"></i>Streaming Providers
+        </h2>
+        <p class="text-secondary" style="font-size:.9rem;max-width:600px;margin:0 auto;">
+            Browse all streaming providers powered by TMDB. Filter by region to find where to watch your favorite movies and shows.
+        </p>
+        <div class="mt-3 d-flex justify-content-center gap-3 flex-wrap">
+            <span class="prov-stat-badge" style="background:rgba(99,102,241,.12);color:#818cf8;">
+                <i class="fas fa-database"></i> {{ total_count }} Providers
+            </span>
+            <span class="prov-stat-badge" style="background:rgba(56,189,248,.12);color:#38bdf8;">
+                <i class="fas fa-globe"></i> {{ active_region }}
+            </span>
+            {% if not is_logged_in %}
+            <span class="prov-stat-badge" style="background:rgba(251,191,36,.12);color:#fbbf24;">
+                <i class="fas fa-lock"></i> Login for {{ hidden_count }} more
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="d-flex flex-wrap gap-3 align-items-center mb-4">
+        <!-- Region Selector -->
+        <div class="d-flex align-items-center gap-2">
+            <i class="fas fa-globe text-secondary" style="font-size:.85rem;"></i>
+            <span class="text-secondary small fw-semibold">Region:</span>
+            <a href="?region={{ active_region }}&type={{ media_type }}" class="region-btn active">{{ active_region }}</a>
+            {% for region in regions|slice:":8" %}
+                {% if region.code != active_region %}
+                <a href="?region={{ region.code }}&type={{ media_type }}" class="region-btn">{{ region.code }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if regions|length > 8 %}
+            <a href="{% url 'public_watch_regions' %}" class="region-btn text-info">All →</a>
+            {% endif %}
+        </div>
+
+        <!-- Media Type Filter -->
+        <div class="d-flex align-items-center gap-2 ms-auto">
+            <span class="text-secondary small fw-semibold">Type:</span>
+            <a href="?region={{ active_region }}&type=both" class="type-btn {% if media_type == 'both' %}active{% endif %}"><i class="fas fa-layer-group"></i> All</a>
+            <a href="?region={{ active_region }}&type=movies" class="type-btn {% if media_type == 'movies' %}active{% endif %}"><i class="fas fa-film"></i> Movies</a>
+            <a href="?region={{ active_region }}&type=tv" class="type-btn {% if media_type == 'tv' %}active{% endif %}"><i class="fas fa-tv"></i> TV</a>
+        </div>
+    </div>
+
+    <!-- Provider Grid -->
+    <div class="row g-3" id="providerGrid">
+        {% for provider in all_providers %}
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+            <a href="{% url 'movie_list' %}?provider={{ provider.slug }}&watch_region={{ active_region }}" class="text-decoration-none">
+                <div class="prov-card h-100 text-center">
+                    {% if provider.logo_path %}
+                    <div class="mx-auto mb-2">
+                        <img src="https://image.tmdb.org/t/p/w92{{ provider.logo_path }}" alt="{{ provider.name }}" class="prov-logo" loading="lazy">
+                    </div>
+                    {% else %}
+                    <div class="mx-auto mb-2 prov-logo-placeholder">
+                        {{ provider.name|truncatechars:2 }}
+                    </div>
+                    {% endif %}
+                    <div class="fw-semibold" style="font-size:.82rem;color:var(--text-1);">{{ provider.name }}</div>
+                    <div class="d-flex justify-content-center gap-1 mt-1">
+                        {% if provider.supports_movies %}<span style="font-size:.65rem;padding:2px 6px;border-radius:6px;background:rgba(56,189,248,.1);color:#38bdf8;">Movies</span>{% endif %}
+                        {% if provider.supports_tv %}<span style="font-size:.65rem;padding:2px 6px;border-radius:6px;background:rgba(168,85,247,.1);color:#a855f7;">TV</span>{% endif %}
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-info-circle text-secondary" style="font-size:2rem;"></i>
+            <p class="text-secondary mt-2">No providers available for this region. Try a different region or sync providers from admin.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Login CTA for non-logged-in users -->
+    {% if not is_logged_in and hidden_count > 0 %}
+    <div class="mt-4 position-relative">
+        <div class="login-blur-overlay" style="height:120px;overflow:hidden;">
+            <div class="row g-3">
+                {% for provider in top_providers %}
+                <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                    <div class="prov-card h-100 text-center">
+                        {% if provider.logo_path %}
+                        <div class="mx-auto mb-2">
+                            <img src="https://image.tmdb.org/t/p/w92{{ provider.logo_path }}" alt="{{ provider.name }}" class="prov-logo">
+                        </div>
+                        {% else %}
+                        <div class="mx-auto mb-2 prov-logo-placeholder">{{ provider.name|truncatechars:2 }}</div>
+                        {% endif %}
+                        <div class="fw-semibold" style="font-size:.82rem;color:var(--text-1);">{{ provider.name }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="login-cta">
+            <div style="margin-bottom:1rem;">
+                <i class="fas fa-lock text-secondary" style="font-size:1.5rem;"></i>
+            </div>
+            <h5 class="text-white fw-bold mb-2">Unlock {{ hidden_count }} More Providers</h5>
+            <p class="text-secondary mb-3" style="font-size:.85rem;">Sign in to access all streaming providers, create your watchlist, and sync your progress across devices.</p>
+            <button class="btn-login" onclick="openLoginModal()">
+                <i class="fas fa-sign-in-alt me-2"></i>Sign In / Register
+            </button>
+            <div class="mt-2">
+                <small class="text-secondary">Free forever • No credit card required</small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TMDB Attribution -->
+    <div class="text-center mt-5 mb-3">
+        <small class="text-secondary" style="opacity:.5;">
+            Provider data powered by <a href="https://www.themoviedb.org/" target="_blank" style="color:#38bdf8;">TMDB</a>.
+            This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </small>
+    </div>
+</div>
+
+<script>
+function openLoginModal() {
+    // Trigger the sign-in modal from base.html
+    if (typeof showLoginPopup === 'function') {
+        showLoginPopup();
+    } else {
+        // Fallback: open the sign-in modal directly
+        var modal = document.getElementById('signInModal');
+        if (modal) {
+            var bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        } else {
+            window.location.href = '/login/';
+        }
+    }
+}
+</script>
+{% endblock %}

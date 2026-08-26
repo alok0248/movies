@@ -3978,6 +3978,143 @@ def search(request):
     })
 
 
+# ---------------------------------------------------------------------------
+# Public Pages: Providers & Watch Regions
+# ---------------------------------------------------------------------------
+
+
+def public_providers(request):
+    """Public page showing all streaming providers linked to TMDB data.
+    Non-logged-in users see only top 3 providers with a login prompt.
+    Logged-in users see all providers.
+    """
+    site_settings_obj = SiteSettings.get_settings()
+    region_code = (request.GET.get('region') or site_settings_obj.watch_region or 'US').upper()
+    media_type = request.GET.get('type', 'both')  # movies, tv, both
+    is_logged_in = request.user.is_authenticated
+
+    # Get enabled regions
+    regions = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')
+
+    # Get providers available in the selected region
+    region_providers_qs = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')
+
+    # Filter by region availability if region is selected
+    available_in_region = []
+    try:
+        region_obj = WatchRegion.objects.filter(code=region_code, is_enabled=True).first()
+        if region_obj:
+            avail_qs = ProviderRegionAvailability.objects.filter(region=region_obj)
+            if media_type == 'movies':
+                avail_qs = avail_qs.filter(media_type='movie')
+            elif media_type == 'tv':
+                avail_qs = avail_qs.filter(media_type='tv')
+            available_in_region_ids = avail_qs.values_list('provider_id', flat=True).distinct()
+            region_providers_qs = region_providers_qs.filter(id__in=available_in_region_ids)
+    except Exception:
+        pass
+
+    all_providers = list(region_providers_qs)
+    total_count = len(all_providers)
+
+    # For non-logged-in: only show top 3
+    top_providers = all_providers[:3]
+    hidden_count = max(0, total_count - 3)
+
+    # For logged-in: show all, but also provide toggle info
+    # Try to get featured/top providers from TMDB
+    tmdb_providers = []
+    try:
+        tmdb_client = TMDBClient()
+        data = tmdb_client.get_available_watch_providers(
+            'movie' if media_type == 'movies' else 'tv' if media_type == 'tv' else 'movie',
+            region_code
+        )
+        tmdb_providers = data.get('results', [])[:50]  # top 50
+    except Exception:
+        pass
+
+    return render(request, 'core/public_providers.html', {
+        'regions': regions,
+        'active_region': region_code,
+        'all_providers': all_providers if is_logged_in else top_providers,
+        'top_providers': top_providers,
+        'total_count': total_count,
+        'hidden_count': hidden_count,
+        'is_logged_in': is_logged_in,
+        'media_type': media_type,
+        'tmdb_providers': tmdb_providers,
+    })
+
+
+def public_watch_regions(request):
+    """Public page showing all available watch regions with provider counts."""
+    site_settings_obj = SiteSettings.get_settings()
+    is_logged_in = request.user.is_authenticated
+
+    regions = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')
+
+    # Annotate each region with provider count
+    regions_data = []
+    for region in regions:
+        movie_count = ProviderRegionAvailability.objects.filter(
+            region=region, media_type='movie'
+        ).count()
+        tv_count = ProviderRegionAvailability.objects.filter(
+            region=region, media_type='tv'
+        ).count()
+        regions_data.append({
+            'region': region,
+            'movie_providers_count': movie_count,
+            'tv_providers_count': tv_count,
+            'total_count': movie_count + tv_count,
+        })
+
+    # For non-logged-in: only show top 3 regions
+    top_regions = regions_data[:3]
+    hidden_count = max(0, len(regions_data) - 3)
+
+    return render(request, 'core/public_watch_regions.html', {
+        'regions_data': regions_data if is_logged_in else top_regions,
+        'all_regions_data': regions_data,
+        'total_regions': len(regions_data),
+        'hidden_count': hidden_count,
+        'is_logged_in': is_logged_in,
+        'default_region': (site_settings_obj.watch_region or 'US').upper(),
+    })
+
+
+def ajax_toggle_user_providers(request):
+    """AJAX: Let logged-in users enable/disable providers from their profile."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Login required'}, status=401)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    import json
+    try:
+        data = json.loads(request.body)
+        provider_ids = data.get('provider_ids', [])
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    # Store user's preferred providers in session
+    request.session['preferred_providers'] = provider_ids
+    request.session.modified = True
+
+    return JsonResponse({'status': 'success', 'count': len(provider_ids)})
+
+
+def ajax_user_preferred_providers(request):
+    """AJAX: Get user's preferred providers."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'providers': []})
+
+    preferred = request.session.get('preferred_providers', [])
+    return JsonResponse({'providers': preferred})
+
+
 def live_tv(request):
     site_settings = SiteSettings.get_settings()
     page = int(request.GET.get('page', 1))
