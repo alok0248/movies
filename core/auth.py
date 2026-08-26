@@ -166,7 +166,7 @@ def send_configured_email(subject, message, recipient_list=None, purpose='notifi
         try:
             from .models import EmailSendLog
             for recipient in recipient_list:
-                EmailSendLog.objects.create(address=addr if 'addr' in dir() else None, recipient=recipient, subject=subject, purpose=purpose, status='failed', error_message=str(e), source=purpose)
+                EmailSendLog.objects.create(recipient=recipient, subject=subject, purpose=purpose, status='failed', error_message=str(e), source=purpose)
         except Exception:
             pass
 
