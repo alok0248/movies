@@ -7451,3 +7451,165 @@ def admin_user_subscription(request, user_id):
 
     messages.success(request, f'Subscription updated for {detail_user.username}')
     return redirect('admin_user_detail', user_id=user_id)
+
+
+# ---------------------------------------------------------------------------
+# Database Connection Management
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def db_connection_settings(request):
+    """Admin page to manage external database connections."""
+    from .models import DBConnectionConfig
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'save':
+            conn_id = request.POST.get('conn_id', '')
+            name = request.POST.get('name', '').strip()
+            db_type = request.POST.get('db_type', 'mysql')
+            host = request.POST.get('host', '127.0.0.1').strip()
+            port = int(request.POST.get('port', 3306) or 3306)
+            database_name = request.POST.get('database_name', '').strip()
+            username = request.POST.get('username', '').strip()
+            password = request.POST.get('password', '').strip()
+            notes = request.POST.get('notes', '').strip()
+            is_default = request.POST.get('is_default') == 'on'
+
+            # If setting as default, unset others
+            if is_default:
+                DBConnectionConfig.objects.filter(is_default=True).update(is_default=False)
+
+            if conn_id:
+                conn = get_object_or_404(DBConnectionConfig, pk=conn_id)
+                # Only update password if provided (don't clear it)
+                if password:
+                    conn.password = password
+                conn.name = name
+                conn.db_type = db_type
+                conn.host = host
+                conn.port = port
+                conn.database_name = database_name
+                conn.username = username
+                conn.notes = notes
+                conn.is_default = is_default
+                conn.is_active = True
+                conn.save()
+            else:
+                if not password:
+                    messages.error(request, 'Password is required for new connections.')
+                    connections = DBConnectionConfig.objects.all()
+                    return render(request, 'core/db_connection_settings.html', {
+                        'connections': connections,
+                        'back_url': 'admin_dashboard',
+                    })
+                conn = DBConnectionConfig.objects.create(
+                    name=name, db_type=db_type, host=host, port=port,
+                    database_name=database_name, username=username,
+                    password=password, notes=notes,
+                    is_default=is_default, is_active=True,
+                )
+            messages.success(request, f'Connection "{name}" saved successfully.')
+            return redirect('db_connection_settings')
+
+        elif action == 'delete':
+            conn_id = request.POST.get('conn_id', '')
+            if conn_id:
+                conn = get_object_or_404(DBConnectionConfig, pk=conn_id)
+                conn.delete()
+                messages.success(request, 'Connection deleted.')
+            return redirect('db_connection_settings')
+
+        elif action == 'toggle_active':
+            conn_id = request.POST.get('conn_id', '')
+            if conn_id:
+                conn = get_object_or_404(DBConnectionConfig, pk=conn_id)
+                conn.is_active = not conn.is_active
+                conn.save()
+                status = 'activated' if conn.is_active else 'deactivated'
+                messages.success(request, f'Connection "{conn.name}" {status}.')
+            return redirect('db_connection_settings')
+
+    connections = DBConnectionConfig.objects.all()
+    return render(request, 'core/db_connection_settings.html', {
+        'connections': connections,
+        'back_url': 'admin_dashboard',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_test_db_connection(request):
+    """AJAX endpoint to test a DB connection by ID or inline params."""
+    from .models import DBConnectionConfig
+    import json
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        data = {}
+
+    conn_id = data.get('conn_id') or request.POST.get('conn_id', '')
+
+    if conn_id:
+        try:
+            conn = DBConnectionConfig.objects.get(pk=conn_id)
+        except DBConnectionConfig.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Connection not found.'})
+    else:
+        # Test with inline params (no save)
+        db_type = data.get('db_type', request.POST.get('db_type', 'mysql'))
+        host = data.get('host', request.POST.get('host', '127.0.0.1'))
+        port = int(data.get('port', request.POST.get('port', 3306)) or 3306)
+        database_name = data.get('database_name', request.POST.get('database_name', ''))
+        username = data.get('username', request.POST.get('username', ''))
+        password = data.get('password', request.POST.get('password', ''))
+        conn = DBConnectionConfig(
+            name='Test', db_type=db_type, host=host, port=port,
+            database_name=database_name, username=username, password=password,
+        )
+
+    success, message = conn.test_connection()
+    return JsonResponse({
+        'success': success,
+        'message': message,
+        'status': conn.last_test_status,
+        'tested_at': conn.last_tested_at.strftime('%Y-%m-%d %H:%M:%S') if conn.last_tested_at else None,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_write_db_config(request):
+    """AJAX endpoint to write server_config.py for the active connection."""
+    from .models import DBConnectionConfig
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+    conn_id = request.POST.get('conn_id', '')
+    if not conn_id:
+        return JsonResponse({'success': False, 'message': 'No connection ID provided.'})
+
+    try:
+        conn = DBConnectionConfig.objects.get(pk=conn_id)
+    except DBConnectionConfig.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Connection not found.'})
+
+    try:
+        path = conn.write_server_config()
+        return JsonResponse({
+            'success': True,
+            'message': f'Server config written to: {path}',
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Failed to write config: {e}',
+        })

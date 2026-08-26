@@ -173,4 +173,7 @@ urlpatterns = [
     path('admin-dashboard/users/<int:user_id>/block/', views.admin_user_block, name='admin_user_block'),
     path('admin-dashboard/users/<int:user_id>/delete/', views.admin_user_delete, name='admin_user_delete'),
     path('admin-dashboard/users/<int:user_id>/subscription/', views.admin_user_subscription, name='admin_user_subscription'),
+    path('admin-dashboard/settings/db-connections/', views.db_connection_settings, name='db_connection_settings'),
+    path('ajax/test-db-connection-new/', views.ajax_test_db_connection, name='ajax_test_db_connection_new'),
+    path('ajax/write-db-config/', views.ajax_write_db_config, name='ajax_write_db_config'),
 ]

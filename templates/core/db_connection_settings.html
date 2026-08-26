@@ -1,0 +1,342 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary me-3">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h1 class="mb-0">
+            <i class="fas fa-plug me-3 text-success"></i>Database Connections
+        </h1>
+    </div>
+
+    <!-- Status Messages -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert" style="background: {% if message.tags == 'success' %}rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#22c55e{% elif message.tags == 'error' %}rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#ef4444{% else %}rgba(56,189,248,.15);border-color:rgba(56,189,248,.3);color:#38bdf8{% endif %};">
+        {{ message }}
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <!-- Left: Connection Form -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-lg" style="background:linear-gradient(135deg,#1a1a2e,#16213e);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-white mb-0">
+                        <i class="fas fa-cog me-2 text-success"></i>Connection Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="dbConnForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save">
+                        <input type="hidden" name="conn_id" id="connId" value="">
+
+                        <div class="row g-3">
+                            <!-- Name -->
+                            <div class="col-12">
+                                <label class="form-label text-white fw-semibold">Connection Name</label>
+                                <input type="text" name="name" id="connName" class="form-control" placeholder="e.g. Main MySQL DB" required style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                            </div>
+
+                            <!-- DB Type + Port -->
+                            <div class="col-md-6">
+                                <label class="form-label text-white fw-semibold">Database Type</label>
+                                <select name="db_type" id="connType" class="form-select" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                                    <option value="mysql">MySQL / MariaDB</option>
+                                    <option value="oracle">Oracle</option>
+                                    <option value="postgresql">PostgreSQL</option>
+                                    <option value="mssql">MS SQL Server</option>
+                                    <option value="sqlite">SQLite</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-white fw-semibold">Port</label>
+                                <input type="number" name="port" id="connPort" class="form-control" value="3306" placeholder="3306" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                            </div>
+
+                            <!-- Host -->
+                            <div class="col-md-8">
+                                <label class="form-label text-white fw-semibold">Host / IP Address</label>
+                                <input type="text" name="host" id="connHost" class="form-control" value="127.0.0.1" placeholder="127.0.0.1 (VM-local)" required style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                            </div>
+
+                            <!-- Database Name -->
+                            <div class="col-md-4">
+                                <label class="form-label text-white fw-semibold">Database Name</label>
+                                <input type="text" name="database_name" id="connDbName" class="form-control" placeholder="e.g. tmdb" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                            </div>
+
+                            <!-- Username -->
+                            <div class="col-md-6">
+                                <label class="form-label text-white fw-semibold">Username</label>
+                                <input type="text" name="username" id="connUser" class="form-control" placeholder="db_user" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                            </div>
+
+                            <!-- Password -->
+                            <div class="col-md-6">
+                                <label class="form-label text-white fw-semibold">Password <small class="text-secondary">(leave blank to keep existing)</small></label>
+                                <div class="input-group">
+                                    <input type="password" name="password" id="connPass" class="form-control" placeholder="password" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePass()" style="border-color:rgba(255,255,255,.15);color:#fff;">
+                                        <i class="fas fa-eye" id="passIcon"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="col-12">
+                                <label class="form-label text-white fw-semibold">Notes</label>
+                                <textarea name="notes" id="connNotes" class="form-control" rows="2" placeholder="Optional admin notes" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#fff;"></textarea>
+                            </div>
+
+                            <!-- Default Toggle -->
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="connDefault" name="is_default">
+                                    <label class="form-check-label text-white" for="connDefault">Set as Default Connection</label>
+                                </div>
+                                <small class="text-secondary">The default connection writes to <code>server_config.py</code> (VM-local only, chmod 600)</small>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-success fw-semibold px-4">
+                                <i class="fas fa-save me-2"></i>Save Connection
+                            </button>
+                            <button type="button" class="btn btn-info fw-semibold px-4" onclick="testCurrentConn()">
+                                <i class="fas fa-plug me-2"></i>Test Connection
+                            </button>
+                            <button type="button" class="btn btn-secondary px-3" onclick="resetForm()">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Test Result -->
+                    <div id="testResult" class="mt-3" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Saved Connections -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-lg" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-white mb-0">
+                        <i class="fas fa-list me-2 text-cyan"></i>Saved Connections
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if connections %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for conn in connections %}
+                        <div class="p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="text-white mb-1">
+                                        {{ conn.name }}
+                                        {% if conn.is_default %}<span class="badge bg-success ms-2" style="font-size:.65rem;">DEFAULT</span>{% endif %}
+                                        {% if conn.is_active %}<span class="badge bg-info ms-1" style="font-size:.65rem;">ACTIVE</span>{% endif %}
+                                    </h6>
+                                    <small class="text-secondary">
+                                        <i class="fas fa-server me-1"></i>{{ conn.get_db_type_display }} @ {{ conn.host }}:{{ conn.port }}
+                                    </small>
+                                </div>
+                                <!-- Test Status Badge -->
+                                <span class="badge {% if conn.last_test_status == 'success' %}bg-success{% elif conn.last_test_status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}" style="font-size:.65rem;">
+                                    {% if conn.last_test_status == 'success' %}OK{% elif conn.last_test_status == 'failed' %}FAIL{% else %}N/A{% endif %}
+                                </span>
+                            </div>
+
+                            <div class="text-secondary small mb-2">
+                                <i class="fas fa-database me-1"></i>{{ conn.database_name|default:'(no db)' }}
+                                &middot;
+                                <i class="fas fa-user me-1"></i>{{ conn.username|default:'(no user)' }}
+                                {% if conn.last_tested_at %}
+                                &middot;
+                                <i class="fas fa-clock me-1"></i>Tested {{ conn.last_tested_at|timesince }} ago
+                                {% endif %}
+                            </div>
+
+                            {% if conn.last_test_message %}
+                            <div class="small mb-2 {% if conn.last_test_status == 'success' %}text-success{% else %}text-danger{% endif %}" style="word-break:break-all;">
+                                {{ conn.last_test_message|truncatewords:15 }}
+                            </div>
+                            {% endif %}
+
+                            <!-- Actions -->
+                            <div class="d-flex gap-1 flex-wrap mt-2">
+                                <button class="btn btn-sm btn-outline-info" onclick="loadConn({{ conn.id }}, '{{ conn.name|escapejs }}', '{{ conn.db_type }}', '{{ conn.host|escapejs }}', {{ conn.port }}, '{{ conn.database_name|escapejs }}', '{{ conn.username|escapejs }}', '{{ conn.notes|escapejs }}', {{ conn.is_default|yesno:'true,false' }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" onclick="testSavedConn({{ conn.id }})">
+                                    <i class="fas fa-plug"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="writeConfig({{ conn.id }})">
+                                    <i class="fas fa-file-export"></i>
+                                </button>
+                                <form method="post" class="d-inline" onsubmit="return confirm('Delete this connection?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="conn_id" value="{{ conn.id }}">
+                                    <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-plug fa-3x text-secondary mb-3" style="opacity:.3;"></i>
+                        <p class="text-secondary mb-0">No connections configured yet.</p>
+                        <small class="text-secondary">Add your first database connection on the left.</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Info Box -->
+            <div class="card border-0 shadow-lg mt-4" style="background:linear-gradient(135deg,#1e3a5f,#0f172a);">
+                <div class="card-body">
+                    <h6 class="text-white mb-2"><i class="fas fa-info-circle me-2 text-blue-400"></i>How It Works</h6>
+                    <ul class="text-secondary small mb-0" style="list-style:none;padding-left:0;">
+                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Enter your database credentials and click <strong>Test Connection</strong></li>
+                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Click <strong>Save Connection</strong> to store it</li>
+                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Set one as <strong>Default</strong> to auto-generate <code>server_config.py</code></li>
+                        <li class="mb-1"><i class="fas fa-check text-success me-2"></i>The config file is written with <code>chmod 600</code> (VM-only access)</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Use <i class="fas fa-file-export"></i> to manually write the config anytime</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control:focus, .form-select:focus {
+        border-color: rgba(34,197,94,.5) !important;
+        box-shadow: 0 0 0 .2rem rgba(34,197,94,.15);
+    }
+    .text-blue-400 { color: #60a5fa; }
+</style>
+
+<script>
+function togglePass() {
+    var inp = document.getElementById('connPass');
+    var icon = document.getElementById('passIcon');
+    if (inp.type === 'password') { inp.type = 'text'; icon.className = 'fas fa-eye-slash'; }
+    else { inp.type = 'password'; icon.className = 'fas fa-eye'; }
+}
+
+function resetForm() {
+    document.getElementById('dbConnForm').reset();
+    document.getElementById('connId').value = '';
+    document.getElementById('connHost').value = '127.0.0.1';
+    document.getElementById('connPort').value = '3306';
+    document.getElementById('testResult').style.display = 'none';
+}
+
+function loadConn(id, name, dbType, host, port, dbName, user, notes, isDefault) {
+    document.getElementById('connId').value = id;
+    document.getElementById('connName').value = name;
+    document.getElementById('connType').value = dbType;
+    document.getElementById('connHost').value = host;
+    document.getElementById('connPort').value = port;
+    document.getElementById('connDbName').value = dbName;
+    document.getElementById('connUser').value = user;
+    document.getElementById('connNotes').value = notes;
+    document.getElementById('connDefault').checked = isDefault;
+    document.getElementById('testResult').style.display = 'none';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function testCurrentConn() {
+    var result = document.getElementById('testResult');
+    result.style.display = 'block';
+    result.innerHTML = '<div class="alert alert-info" style="background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.2);color:#38bdf8;"><i class="fas fa-spinner fa-spin me-2"></i>Testing connection...</div>';
+
+    var payload = {
+        db_type: document.getElementById('connType').value,
+        host: document.getElementById('connHost').value,
+        port: document.getElementById('connPort').value,
+        database_name: document.getElementById('connDbName').value,
+        username: document.getElementById('connUser').value,
+        password: document.getElementById('connPass').value
+    };
+
+    fetch("{% url 'ajax_test_db_connection_new' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            result.innerHTML = '<div class="alert" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e;"><i class="fas fa-check-circle me-2"></i><strong>Success!</strong> ' + data.message + '</div>';
+        } else {
+            result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-times-circle me-2"></i><strong>Failed!</strong> ' + data.message + '</div>';
+        }
+    })
+    .catch(function(err) {
+        result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-exclamation-triangle me-2"></i>Error: ' + err.message + '</div>';
+    });
+}
+
+function testSavedConn(connId) {
+    var result = document.getElementById('testResult');
+    result.style.display = 'block';
+    result.innerHTML = '<div class="alert alert-info" style="background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.2);color:#38bdf8;"><i class="fas fa-spinner fa-spin me-2"></i>Testing saved connection...</div>';
+
+    fetch("{% url 'ajax_test_db_connection_new' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ conn_id: connId })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            result.innerHTML = '<div class="alert" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e;"><i class="fas fa-check-circle me-2"></i><strong>Success!</strong> ' + data.message + '</div>';
+        } else {
+            result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-times-circle me-2"></i><strong>Failed!</strong> ' + data.message + '</div>';
+        }
+    })
+    .catch(function(err) {
+        result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-exclamation-triangle me-2"></i>Error: ' + err.message + '</div>';
+    });
+}
+
+function writeConfig(connId) {
+    if (!confirm('Write this connection to server_config.py? This will overwrite the current config.')) return;
+    var formData = new FormData();
+    formData.append('conn_id', connId);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'ajax_write_db_config' %}", {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var result = document.getElementById('testResult');
+        result.style.display = 'block';
+        if (data.success) {
+            result.innerHTML = '<div class="alert" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e;"><i class="fas fa-check-circle me-2"></i>' + data.message + '</div>';
+        } else {
+            result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-times-circle me-2"></i>' + data.message + '</div>';
+        }
+    });
+}
+</script>
+{% endblock %}
