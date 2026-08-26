@@ -355,6 +355,8 @@ html[data-theme="light"] .player-loading-overlay{background:rgba(245,245,250,.92
 html[data-theme="light"] .player-loading-text{color:rgba(26,26,46,.7)}
 html[data-theme="light"] .player-loading-subtext{color:rgba(26,26,46,.35)}
 html[data-theme="light"] .det-poster-wrap{box-shadow:0 20px 60px rgba(0,0,0,.15)}
+html[data-theme="light"] #movieProgressIndicator{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.06)}
+html[data-theme="light"] #movieProgressLabel{color:rgba(0,0,0,.6)}
 html[data-theme="light"] .det-player-right{background:rgba(0,0,0,.02);border-color:rgba(0,0,0,.06)}
 html[data-theme="light"] .det-sidebar-title{color:#1a1a2e}
 html[data-theme="light"] .det-sidebar-meta{color:rgba(26,26,46,.5)}
@@ -482,6 +484,16 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
             <button id="watchlist-btn" class="det-btn det-btn-ghost" data-tmdb-id="{{ movie.id }}" data-media-type="movie" onclick="toggleWatchlist({{ movie.id }}, 'movie', '{{ movie.title|escapejs }}', '{{ movie.poster_path|default:'' }}')">
                 <i class="fas fa-plus" id="watchlist-icon"></i> <span id="watchlist-text">Add to Watchlist</span>
             </button>
+        </div>
+        <!-- Movie Progress Indicator -->
+        <div id="movieProgressIndicator" style="display:none;margin-top:.8rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span id="movieProgressLabel" style="font-size:.75rem;font-weight:600;color:rgba(255,255,255,.6);"></span>
+                <span id="movieProgressPct" style="font-size:.7rem;font-weight:700;color:var(--brand,#e50914);"></span>
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;">
+                <div id="movieProgressBar" style="height:100%;background:var(--brand,#e50914);border-radius:4px;transition:width .3s ease;width:0"></div>
+            </div>
         </div>
         {% if all_players %}
         <div class="det-servers" style="margin-top:.5rem">
@@ -1102,6 +1114,49 @@ var _wb = document.getElementById('wikipedia-btn'); if (_wb) _wb.addEventListene
     var obs = new MutationObserver(function() { setTimeout(hookVideo, 500); });
     var pc = document.getElementById('playerContainer');
     if (pc) obs.observe(pc, {childList: true, subtree: true});
+})();
+</script>
+<script>
+/* Show movie progress indicator from localStorage */
+(function() {
+    var MOVIE_TMDB_ID = {{ movie.id }};
+    var LS_KEY = 'nm_progress';
+    function updateMovieProgress() {
+        try {
+            var map = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+            var key = 'movie_' + MOVIE_TMDB_ID + '_-1_-1';
+            var saved = map[key];
+            var el = document.getElementById('movieProgressIndicator');
+            if (!el) return;
+            if (!saved || saved.pos < 10) { el.style.display = 'none'; return; }
+            var pct = saved.dur > 0 ? Math.round((saved.pos / saved.dur) * 100) : 0;
+            var label = document.getElementById('movieProgressLabel');
+            var bar = document.getElementById('movieProgressBar');
+            var pctEl = document.getElementById('movieProgressPct');
+            el.style.display = 'block';
+            var playBtn = document.getElementById('play-button');
+            if (saved.completed || pct > 95) {
+                if (label) label.textContent = '\u2713 Watched';
+                if (label) label.style.color = '#46d369';
+                if (pctEl) pctEl.textContent = '100%';
+                if (bar) bar.style.width = '100%';
+            } else {
+                if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i> Continue Watching';
+                var m = Math.floor(saved.pos / 60);
+                var s = Math.floor(saved.pos % 60);
+                var t = Math.floor(saved.dur / 60);
+                var ts = Math.floor(saved.dur % 60);
+                if (label) {
+                    label.textContent = 'Resume from ' + m + ':' + (s<10?'0':'') + s + ' of ' + t + ':' + (ts<10?'0':'') + ts;
+                    label.style.color = '';
+                }
+                if (pctEl) pctEl.textContent = pct + '%';
+                if (bar) bar.style.width = pct + '%';
+            }
+        } catch(e) {}
+    }
+    updateMovieProgress();
+    setInterval(updateMovieProgress, 10000);
 })();
 </script>
 <script src="/static/js/lazy-extras.js"></script>
