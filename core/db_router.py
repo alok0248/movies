@@ -79,16 +79,12 @@ class UserDBRouter:
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         """
-        Control which migrations run on which database.
-        - 'default' (local): all models migrate here
-        - 'external': only user models migrate here when enabled
+        Allow all migrations to run on both databases.
+        The router only controls read/write queries, not migrations.
+        This ensures all tables exist on both DBs so FK constraints work.
         """
         if db == 'external':
-            # Only user models should migrate on external DB
-            return model_name in USER_MODELS if model_name else True
+            return True
         elif db == 'default':
-            # Everything migrates on default
-            if model_name and model_name in USER_MODELS:
-                return False  # User models skip default when external is active
             return True
         return True
