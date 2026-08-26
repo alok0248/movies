@@ -27,11 +27,13 @@
   .osd-bar-fill{height:100%;background:var(--brand,#e50914);border-radius:2px;transition:width .15s}
 </style>
 
+</head>
+<script>
     /* Register browser proxy Service Worker */
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/static/sw-proxy.js").catch(function() {});
+      navigator.serviceWorker.register("/sw-proxy.js").catch(function() {});
     }
-  </head>
+</script>
 <body>
 <video id="vid" controls playsinline></video>
 <div class="audio-vis" id="audioVis">AUDIO SYNC</div>
@@ -156,10 +158,8 @@
 
   // Single play
   function playUrl(url){      if(hls){hls.destroy();hls=null}
-    _stopPrefetch();
     video.removeAttribute("src");video.load();
     if(url.indexOf(".m3u8")>-1){
-      _startPrefetch(url);
       loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8})},url,function(h){hls=h},null);
     }else{video.src=makeProxy(url);video.play().catch(function(){})}
   }
@@ -167,7 +167,6 @@
   // Dual play
   function playDual(videoUrl,audioUrl){
     if(hls){hls.destroy();hls=null}if(hlsAudio){hlsAudio.destroy();hlsAudio=null}
-    _stopPrefetch();
     savedTime=video.currentTime||0;
     video.removeAttribute("src");video.load();
     audioVid.removeAttribute("src");audioVid.load();
@@ -192,7 +191,7 @@
     var hlsConfig={enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8};
     loadHLS(video,function(){return new Hls(hlsConfig)},videoUrl,function(h){hls=h},function(){videoReady=true;checkBoth()},true);
     loadHLS(audioVid,function(){return new Hls(hlsConfig)},audioUrl,function(h){hlsAudio=h},function(){audioReady=true;checkBoth()},false);
-    _startPrefetch(videoUrl);
+
   }
 
   // Generic HLS loader
@@ -241,38 +240,7 @@
     return out.join("\n");
   }
 
-  /* DUAL SESSION PREFETCH ENGINE */
-  var _prefetch={active:false,timer:null,originalUrl:'',segments:[],lastFetched:0,aheadSeconds:240,pollInterval:3000,cache:new Map(),maxCacheEntries:200};
-  function _startPrefetch(u){if(_prefetch.active)_stopPrefetch();_prefetch.originalUrl=u;_prefetch.active=true;_prefetch.segments=[];_prefetch.cache.clear();_prefetch.timer=setInterval(_prefetchTick,_prefetch.pollInterval);_prefetchTick();}
-  function _stopPrefetch(){_prefetch.active=false;if(_prefetch.timer){clearInterval(_prefetch.timer);_prefetch.timer=null;}_prefetch.segments=[];_prefetch.cache.clear();}
-  function _prefetchTick(){if(!_prefetch.active||!_prefetch.originalUrl)return;var pos=video.currentTime||0;var t=pos+_prefetch.aheadSeconds;var now=Date.now();if(now-_prefetch.lastFetched>10000||_prefetch.segments.length===0){_fetchManifestAndPrefetch(t)}else{_prefetchSegmentsAtTime(t)}}
-  function _fetchManifestAndPrefetch(t){var px=makeProxy(_prefetch.originalUrl);fetch(px).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(text){_prefetch.lastFetched=Date.now();var lines=text.split('\n');var base=_prefetch.originalUrl.substring(0,_prefetch.originalUrl.lastIndexOf('/')+1);var segs=[];var dur=0;var tot=0;for(var i=0;i<lines.length;i++){var line=lines[i].trim();if(line.charAt(0)==='#'){var m=line.match(/EXTINF:([\d.]+)/);if(m)dur=parseFloat(m[1]);continue}if(line==='')continue;var full=line.indexOf('http')===0?line:base+line;var px2=makeProxy(full);segs.push({url:px2,time:tot,duration:dur});tot+=dur;dur=0}_prefetch.segments=segs;_prefetchSegmentsAtTime(t)}).catch(function(){})}
-  function _prefetchSegmentsAtTime(t){var segs=_prefetch.segments;if(!segs.length)return;var ws=t-30;var we=t+30;var toFetch=[];for(var i=0;i<segs.length;i++){var s=segs[i];if(s.time>=ws&&s.time<=we){if(!_prefetch.cache.has(s.url))toFetch.push(s.url)}}if(!toFetch.length)return;if(_prefetch.cache.size>_prefetch.maxCacheEntries){var keys=Array.from(_prefetch.cache.keys());for(var j=0;j<keys.length-_prefetch.maxCacheEntries+20;j++)_prefetch.cache.delete(keys[j])}if(navigator.serviceWorker&&navigator.serviceWorker.controller){navigator.serviceWorker.controller.postMessage({type:'prefetch-segments',urls:toFetch})}for(var k=0;k<toFetch.length;k++)_prefetchSegment(toFetch[k])}
-  function _prefetchSegment(url){if(_prefetch.cache.has(url))return;_prefetch.cache.set(url,true);fetch(url,{headers:{'X-SW-Prefetch':'1'},mode:'cors',credentials:'omit'}).then(function(r){if(!r.ok)_prefetch.cache.delete(url)}).catch(function(){_prefetch.cache.delete(url)})}
-
   try{parent.postMessage({type:"frameReady"},"*")}catch(e){}
-  // Background session refresh: ping the proxy URL every 4 min to keep upstream alive
-  var _currentPlayUrl = '';
-  var _sessionRefreshTimer = null;
-  function _startSessionRefresh(url) {
-    _currentPlayUrl = url;
-    if (_sessionRefreshTimer) clearInterval(_sessionRefreshTimer);
-    _sessionRefreshTimer = setInterval(function() {
-      if (!_currentPlayUrl) return;
-      var px = makeProxy(_currentPlayUrl);
-      fetch(px, { method: 'HEAD', mode: 'no-cors' }).catch(function(){});
-    }, 240000); // every 4 minutes
-  }
-  // Hook into playUrl and playDual to track current URL
-  var _origPlayUrl = playUrl;
-  playUrl = function(url) { _startSessionRefresh(url); _origPlayUrl(url); };
-  var _origPlayDual = playDual;
-  playDual = function(videoUrl, audioUrl) { _startSessionRefresh(videoUrl); _origPlayDual(videoUrl, audioUrl); };
-  // Also start on first play message
-  window.addEventListener('message', function(ev) {
-    if (ev.data && ev.data.type === 'play' && ev.data.url) _startSessionRefresh(ev.data.url);
-    if (ev.data && ev.data.type === 'playDual' && ev.data.videoUrl) _startSessionRefresh(ev.data.videoUrl);
-  });
 
 
   video.addEventListener("play",function(){try{parent.postMessage({type:"videoResumed"},"*")}catch(e){}});

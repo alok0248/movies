@@ -6624,6 +6624,22 @@ def serve_sw_js(request):
     from django.http import HttpResponse
     return HttpResponse(content, content_type='application/javascript')
 
+
+def serve_sw_proxy_js(request):
+    """Serve the browser proxy Service Worker from the root path.
+    This ensures the SW scope is '/' so it can intercept /proxy/ requests
+    from any page on the site (not just /static/ pages)."""
+    from django.http import HttpResponse
+    sw_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'sw-proxy.js')
+    try:
+        with open(sw_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except FileNotFoundError:
+        content = '// sw-proxy.js not found'
+    resp = HttpResponse(content, content_type='application/javascript')
+    resp['Service-Worker-Allowed'] = '/'
+    return resp
+
 def serve_ads_txt(request):
     content = _read_ad_file('ads.txt')
     from django.http import HttpResponse
