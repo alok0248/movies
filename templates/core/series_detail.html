@@ -1046,7 +1046,7 @@ function renderEpisodeList(episodeList) {
                 date = '<span style="font-size:.65rem;color:rgba(255,255,255,.3)">' + ep.air_date + '</span>';
             }
         }
-        var nowBadge = ep.episode_number === currentEpisode ? '<span style="font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700">\u25b6 NOW</span>' : '';
+        var nowBadge = '';
         var overview = ep.overview ? '<div class="ep-desc" style="font-size:.72rem;color:rgba(255,255,255,.35);line-height:1.4;margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + ep.overview.substring(0, 120) + '</div>' : '';
         var activeClass = ep.episode_number === currentEpisode ? ' active' : '';
         var futureClass = isFuture ? ' future-ep' : '';
@@ -1099,24 +1099,15 @@ function playEpisode(epNum) {
 
 /* Move the NOW badge to the correct episode card */
 function updateNowBadge(epNum) {
-    var badgeStyle = 'font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700';
-    var badgeHTML = '<span class="ep-now-badge" style="' + badgeStyle + '">▶ NOW</span>';
-    // Step 1: Remove ALL NOW badges from ALL cards first
-    document.querySelectorAll('.ep-list-card').forEach(function(card) {
-        var meta = card.querySelector('.ep-meta');
-        if (!meta) return;
-        var spans = Array.from(meta.children);
-        for (var i = spans.length - 1; i >= 0; i--) {
-            var t = spans[i].textContent || '';
-            if (t.indexOf('NOW') !== -1) spans[i].remove();
-        }
-    });
+    // Remove ALL ep-now-badge elements from entire document
     document.querySelectorAll('.ep-now-badge').forEach(function(b){b.remove()});
-    // Step 2: Add badge only to the correct card
+    // Add badge to the correct card
     var targetCard = document.querySelector('.ep-list-card[data-ep="' + epNum + '"]');
     if (targetCard) {
         var meta = targetCard.querySelector('.ep-meta');
-        if (meta) meta.insertAdjacentHTML('beforeend', badgeHTML);
+        if (meta) {
+            meta.insertAdjacentHTML('beforeend', '<span class="ep-now-badge" style="font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700">▶ NOW</span>');
+        }
     }
 }
 
