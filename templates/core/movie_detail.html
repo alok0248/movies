@@ -769,6 +769,11 @@ if (playBtn) {
 
 updateServerButtons();
 
+/* Auto-load player on page load */
+if (playerConfigs[currentPlayerId]) {
+    loadMoviePlayer();
+}
+
 /* Pre-fetch seed for instant play */
 if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor) {
     fetch('/ajax/prefetch-sources/?tmdb_id=' + movieId + '&type=movie', {mode: 'no-cors'}).catch(function(){});
