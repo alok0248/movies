@@ -5053,7 +5053,7 @@ def _vk_get_seed(api_base, tmdb_id):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json, text/plain, */*',
     }
-    resp = requests.get(seed_url, headers=headers, timeout=10)
+    resp = requests.get(seed_url, headers=headers, timeout=5)
     resp.raise_for_status()
     data = resp.json()
     return data.get('seed', '')
@@ -5085,7 +5085,7 @@ def _vk_fetch_sources_for_server(server_name, server_endpoint, tmdb_id, media_ty
         'Pragma': 'no-cache',
         'Expires': '0',
     }
-    resp = requests.get(url, params=params, headers=headers, timeout=8)
+    resp = requests.get(url, params=params, headers=headers, timeout=5)
     if resp.status_code == 401:
         raise ValueError("seed rejected")
 
@@ -5103,7 +5103,7 @@ def _vk_fetch_tmdb_info(tmdb_id, media_type='movie'):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     }
-    resp = requests.get(url, headers=headers, timeout=10)
+    resp = requests.get(url, headers=headers, timeout=5)
     resp.raise_for_status()
     data = resp.json()
 
@@ -6208,10 +6208,10 @@ def videasy_sources_view(request):
 def player_sources_view(request):
     """
     Server-side source fetch & decrypt for the embedded player.
-    Called by videasy_player.html instead of direct browser API calls
-    (avoids CORS/decryption issues).
+    Uses parallel fetching for maximum speed.
     """
     import time as _time
+    import concurrent.futures
 
     tmdb_id = request.GET.get('tmdb_id', '')
     media_type = request.GET.get('type', 'movie')
@@ -6228,45 +6228,70 @@ def player_sources_view(request):
 
     timestamp = str(int(_time.time() * 1000))
 
-    # Get TMDB info
-    try:
-        tmdb_info = _vk_fetch_tmdb_info(tmdb_id, media_type)
-    except Exception:
-        tmdb_info = {'title': '', 'year': '', 'imdbId': ''}
+    # Fetch TMDB info + seed in parallel (saves ~1-2s)
+    tmdb_info = {'title': '', 'year': '', 'imdbId': ''}
+    seed = ''
+
+    def _fetch_tmdb():
+        try:
+            return _vk_fetch_tmdb_info(tmdb_id, media_type)
+        except Exception:
+            return {'title': '', 'year': '', 'imdbId': ''}
+
+    def _fetch_seed():
+        for attempt in range(2):
+            try:
+                return _vk_get_seed(_VIDKING_API_BASE, tmdb_id)
+            except Exception:
+                if attempt == 0:
+                    _time.sleep(0.2)
+        return ''
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        tmdb_future = pool.submit(_fetch_tmdb)
+        seed_future = pool.submit(_fetch_seed)
+        tmdb_info = tmdb_future.result()
+        seed = seed_future.result()
 
     title = tmdb_info.get('title', '')
     year = tmdb_info.get('year', '')
     imdb_id = tmdb_info.get('imdbId', '')
 
-    # Get seed
-    seed = ''
-    for attempt in range(2):
-        try:
-            seed = _vk_get_seed(_VIDKING_API_BASE, tmdb_id)
-            break
-        except Exception:
-            if attempt == 0:
-                _time.sleep(0.3)
-
     if not seed:
         return JsonResponse({'success': False, 'error': 'Could not fetch seed', 'results': []})
 
-    # Fetch from ALL servers (no limit — the player needs all options)
+    # Fetch from ALL servers in PARALLEL (was sequential — ~8x faster)
     results = []
-    for server_name, endpoint in _VIDKING_SERVERS.items():
+    seen_urls = set()
+
+    def _fetch_one(server_name, endpoint):
         try:
-            result = _vk_fetch_sources_for_server(
+            return _vk_fetch_sources_for_server(
                 server_name, endpoint, tmdb_id, media_type,
                 title=title, year=year, season_id=season,
                 episode_id=episode, imdb_id=imdb_id,
                 seed=seed, timestamp=timestamp,
             )
+        except Exception as e:
+            logger.debug('player_sources: %s failed: %s', server_name, e)
+            return {'sources': []}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+        futures = {
+            pool.submit(_fetch_one, name, ep): name
+            for name, ep in _VIDKING_SERVERS.items()
+        }
+        for future in concurrent.futures.as_completed(futures):
+            server_name = futures[future]
+            try:
+                result = future.result()
+            except Exception:
+                continue
             sources = result.get('sources', [])
-            subtitles = result.get('subtitles', [])
             if isinstance(sources, list) and sources:
-                # Flatten all sources with server info for the player
                 for src in sources:
-                    if isinstance(src, dict) and src.get('url'):
+                    if isinstance(src, dict) and src.get('url') and src['url'] not in seen_urls:
+                        seen_urls.add(src['url'])
                         lang = src.get('language', '') or src.get('audioLanguage', '') or src.get('audio', '') or ''
                         quality = src.get('quality', '?')
                         results.append({
@@ -6276,9 +6301,6 @@ def player_sources_view(request):
                             'server': server_name,
                             'server_name': server_name,
                         })
-        except Exception as e:
-            logger.debug('player_sources: %s failed: %s', server_name, e)
-            continue
 
     return JsonResponse({
         'success': True,

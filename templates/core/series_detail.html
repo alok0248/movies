@@ -902,6 +902,8 @@ const playerConfigs = {
 
 const SERIES_TMDB_ID = {{ series_id }};
 const SERIES_IMDB_ID = "{{ series.imdb_id|default:''|escapejs }}";
+/* Prefetch seed in background so extraction is instant when user clicks play */
+fetch('/ajax/prefetch-sources/?tmdb_id='+SERIES_TMDB_ID).catch(function(){});
 const seriesTitle = "{{ series.title|escapejs }}";
 const SERIES_POSTER_PATH = "{{ series.poster_path|default:""|escapejs }}";
 const isAdminUser = {% if request.user.is_staff or request.user.is_superuser %}true{% else %}false{% endif %};
