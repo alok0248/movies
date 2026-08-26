@@ -7418,6 +7418,247 @@ def ajax_resume_position(request):
 
 
 # ---------------------------------------------------------------------------
+# Page View & Time Tracking AJAX
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["POST"])
+def ajax_track_page_view(request):
+    """Receive page view heartbeats from the browser."""
+    import json
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    action = data.get('action', 'view')  # 'view', 'heartbeat', 'end'
+    path = data.get('path', request.META.get('HTTP_REFERER', '/'))[:500]
+    title = data.get('title', '')[:255]
+    time_spent = int(data.get('time_spent', 0))
+    scroll_depth = float(data.get('scroll_depth', 0))
+    visitor_id = data.get('visitor_id', '')[:100]
+
+    # Detect platform from User-Agent
+    ua = request.META.get('HTTP_USER_AGENT', '')
+    if 'Android' in ua or 'X-Android-App' in request.META.get('HTTP_X_ANDROID_APP', ''):
+        platform = 'android'
+    elif 'iPhone' in ua or 'iPad' in ua:
+        platform = 'ios'
+    else:
+        platform = 'web'
+
+    # Override platform if sent by client
+    if data.get('platform'):
+        platform = data['platform'][:20]
+
+    client_ip = get_client_ip(request)
+    user_obj = request.user if request.user.is_authenticated else None
+
+    try:
+        from .models import UserPageView
+
+        if action == 'view':
+            # Create new page view record
+            pv = UserPageView.objects.create(
+                user=user_obj,
+                visitor_id=visitor_id,
+                path=path,
+                page_title=title,
+                platform=platform,
+                ip_address=client_ip,
+                user_agent=ua[:500],
+                referrer=data.get('referrer', '')[:500],
+                scroll_depth=scroll_depth,
+                is_active=True,
+            )
+            return JsonResponse({'status': 'ok', 'view_id': pv.id})
+
+        elif action == 'heartbeat':
+            # Update existing page view with latest time
+            view_id = data.get('view_id')
+            if view_id:
+                updated = UserPageView.objects.filter(id=view_id, is_active=True).update(
+                    time_spent_seconds=time_spent,
+                    scroll_depth=scroll_depth,
+                )
+                if updated:
+                    return JsonResponse({'status': 'ok'})
+            # Fallback: find most recent active view for this path
+            pv = UserPageView.objects.filter(
+                user=user_obj, path=path, is_active=True
+            ).order_by('-viewed_at').first()
+            if pv:
+                pv.time_spent_seconds = time_spent
+                pv.scroll_depth = scroll_depth
+                pv.save(update_fields=['time_spent_seconds', 'scroll_depth'])
+                return JsonResponse({'status': 'ok', 'view_id': pv.id})
+            return JsonResponse({'status': 'no_active_view'})
+
+        elif action == 'end':
+            view_id = data.get('view_id')
+            if view_id:
+                UserPageView.objects.filter(id=view_id).update(
+                    time_spent_seconds=time_spent,
+                    scroll_depth=scroll_depth,
+                    is_active=False,
+                    ended_at=timezone.now(),
+                )
+            else:
+                UserPageView.objects.filter(
+                    user=user_obj, path=path, is_active=True
+                ).update(
+                    time_spent_seconds=time_spent,
+                    scroll_depth=scroll_depth,
+                    is_active=False,
+                    ended_at=timezone.now(),
+                )
+            return JsonResponse({'status': 'ok'})
+
+    except Exception as e:
+        logger.error('Track page view error: %s', e)
+        return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'status': 'ignored'})
+
+
+# ---------------------------------------------------------------------------
+# Admin Analytics Dashboard
+# ---------------------------------------------------------------------------
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_analytics(request):
+    """Admin page showing user analytics: page views, time spent, platforms."""
+    from .models import UserPageView, UserSession, WebsiteVisitor
+    from django.db.models import Sum, Count, Avg, F, Q
+    from django.utils import timezone
+
+    days = int(request.GET.get('days', 7))
+    since = timezone.now() - timezone.timedelta(days=days)
+
+    # Overview stats
+    total_views = UserPageView.objects.filter(viewed_at__gte=since).count()
+    total_time = UserPageView.objects.filter(viewed_at__gte=since).aggregate(
+        total=Sum('time_spent_seconds'))['total'] or 0
+    avg_time = UserPageView.objects.filter(viewed_at__gte=since).aggregate(
+        avg=Avg('time_spent_seconds'))['avg'] or 0
+    unique_visitors = UserPageView.objects.filter(viewed_at__gte=since).values(
+        'visitor_id').distinct().count()
+    unique_users = UserPageView.objects.filter(
+        viewed_at__gte=since, user__isnull=False).values('user').distinct().count()
+
+    # Platform breakdown
+    platform_data = list(UserPageView.objects.filter(viewed_at__gte=since)
+        .values('platform')
+        .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'))
+        .order_by('-views'))
+
+    # Top pages
+    top_pages = list(UserPageView.objects.filter(viewed_at__gte=since)
+        .values('path', 'page_title')
+        .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'),
+                  avg_time=Avg('time_spent_seconds'))
+        .order_by('-views')[:20])
+
+    # Most active users
+    active_users = list(UserPageView.objects.filter(
+        viewed_at__gte=since, user__isnull=False)
+        .values('user__username', 'user__email')
+        .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'))
+        .order_by('-views')[:15])
+
+    # Active sessions
+    active_sessions = UserSession.objects.filter(is_active=True).select_related('user').order_by('-last_seen_at')[:20]
+
+    # Daily views chart data (last 30 days)
+    chart_days = min(days * 2, 30)
+    daily_views = []
+    for i in range(chart_days):
+        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        count = UserPageView.objects.filter(viewed_at__date=d).count()
+        daily_views.append({'date': d.isoformat(), 'views': count})
+    daily_views.reverse()
+
+    # Hourly heatmap data (today)
+    hourly_views = list(UserPageView.objects.filter(
+        viewed_at__date=timezone.now().date())
+        .extra(select={'hour': 'strftime("%%H", viewed_at)'})
+        .values('hour')
+        .annotate(views=Count('id'))
+        .order_by('hour'))
+
+    return render(request, 'core/admin_analytics.html', {
+        'days': days,
+        'total_views': total_views,
+        'total_time': total_time,
+        'avg_time': avg_time,
+        'unique_visitors': unique_visitors,
+        'unique_users': unique_users,
+        'platform_data': platform_data,
+        'top_pages': top_pages,
+        'active_users': active_users,
+        'active_sessions': active_sessions,
+        'daily_views': daily_views,
+        'hourly_views': hourly_views,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_analytics_detail(request, user_id):
+    """Detailed analytics for a single user."""
+    from .models import UserPageView, UserSession
+    from django.db.models import Sum, Count, Avg
+    from django.utils import timezone
+
+    target_user = get_object_or_404(User, id=user_id)
+    days = int(request.GET.get('days', 30))
+    since = timezone.now() - timezone.timedelta(days=days)
+
+    # User's page views
+    user_views = UserPageView.objects.filter(user=target_user, viewed_at__gte=since)
+    total_views = user_views.count()
+    total_time = user_views.aggregate(total=Sum('time_spent_seconds'))['total'] or 0
+
+    # Top pages for this user
+    top_pages = list(user_views
+        .values('path', 'page_title')
+        .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'))
+        .order_by('-views')[:20])
+
+    # Platform breakdown
+    platform_data = list(user_views
+        .values('platform')
+        .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'))
+        .order_by('-views'))
+
+    # Daily activity
+    daily_views = []
+    for i in range(min(days, 30)):
+        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        count = user_views.filter(viewed_at__date=d).count()
+        daily_views.append({'date': d.isoformat(), 'views': count})
+    daily_views.reverse()
+
+    # Sessions
+    sessions = UserSession.objects.filter(user=target_user).order_by('-logged_in_at')[:20]
+
+    # Recent page views
+    recent_views = user_views.select_related().order_by('-viewed_at')[:50]
+
+    return render(request, 'core/admin_user_analytics_detail.html', {
+        'target_user': target_user,
+        'days': days,
+        'total_views': total_views,
+        'total_time': total_time,
+        'top_pages': top_pages,
+        'platform_data': platform_data,
+        'daily_views': daily_views,
+        'sessions': sessions,
+        'recent_views': recent_views,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Admin User Management (block, add, edit all fields except email)
 # ---------------------------------------------------------------------------
 

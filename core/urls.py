@@ -184,4 +184,11 @@ urlpatterns = [
     path('watch-regions/', views.public_watch_regions, name='public_watch_regions'),
     path('ajax/toggle-user-providers/', views.ajax_toggle_user_providers, name='ajax_toggle_user_providers'),
     path('ajax/user-preferred-providers/', views.ajax_user_preferred_providers, name='ajax_user_preferred_providers'),
+
+    # Page View & Time Tracking
+    path('ajax/track-page-view/', views.ajax_track_page_view, name='ajax_track_page_view'),
+
+    # Admin Analytics
+    path('admin-dashboard/analytics/', views.admin_analytics, name='admin_analytics'),
+    path('admin-dashboard/analytics/user/<int:user_id>/', views.admin_user_analytics_detail, name='admin_user_analytics_detail'),
 ]

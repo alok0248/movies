@@ -1522,6 +1522,86 @@ class UserSession(models.Model):
         return last.source if last else ''
 
 
+class UserPageView(models.Model):
+    """Track individual page views with time spent per user."""
+    PLATFORM_CHOICES = [
+        ('web', 'Web Browser'),
+        ('android', 'Android App'),
+        ('ios', 'iOS App'),
+        ('unknown', 'Unknown'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='page_views', null=True, blank=True)
+    visitor_id = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    path = models.CharField(max_length=500, db_index=True)
+    page_title = models.CharField(max_length=255, blank=True, default='')
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='web')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    referrer = models.CharField(max_length=500, blank=True, default='')
+    time_spent_seconds = models.IntegerField(default=0, help_text='Seconds spent on this page')
+    scroll_depth = models.FloatField(default=0, help_text='Max scroll depth percentage (0-100)')
+    is_active = models.BooleanField(default=True, help_text='Currently viewing')
+    viewed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-viewed_at']
+        indexes = [
+            models.Index(fields=['user', 'viewed_at']),
+            models.Index(fields=['path', 'viewed_at']),
+            models.Index(fields=['platform', 'viewed_at']),
+        ]
+        verbose_name = 'Page View'
+        verbose_name_plural = 'Page Views'
+
+    def __str__(self):
+        user_str = self.user.username if self.user else self.visitor_id[:8]
+        return f"{user_str} → {self.path} ({self.time_spent_seconds}s)"
+
+    @classmethod
+    def today_views(cls, user=None, platform=None):
+        from django.utils import timezone
+        today = timezone.now().date()
+        qs = cls.objects.filter(viewed_at__date=today)
+        if user:
+            qs = qs.filter(user=user)
+        if platform:
+            qs = qs.filter(platform=platform)
+        return qs
+
+    @classmethod
+    def total_time_today(cls, user=None):
+        from django.utils import timezone
+        today = timezone.now().date()
+        from django.db.models import Sum
+        qs = cls.objects.filter(viewed_at__date=today)
+        if user:
+            qs = qs.filter(user=user)
+        result = qs.aggregate(total=Sum('time_spent_seconds'))
+        return result['total'] or 0
+
+    @classmethod
+    def top_pages(cls, days=7, limit=20):
+        from django.utils import timezone
+        from django.db.models import Sum, Count
+        since = timezone.now() - timezone.timedelta(days=days)
+        return (cls.objects.filter(viewed_at__gte=since)
+                .values('path', 'page_title')
+                .annotate(total_views=Count('id'), total_time=Sum('time_spent_seconds'))
+                .order_by('-total_views')[:limit])
+
+    @classmethod
+    def platform_stats(cls, days=7):
+        from django.utils import timezone
+        from django.db.models import Sum, Count
+        since = timezone.now() - timezone.timedelta(days=days)
+        return (cls.objects.filter(viewed_at__gte=since)
+                .values('platform')
+                .annotate(total_views=Count('id'), total_time=Sum('time_spent_seconds'))
+                .order_by('-total_views'))
+
+
 class DBRoutingConfig(models.Model):
     """Controls whether user data goes to local or external database."""
     use_external_db = models.BooleanField(
