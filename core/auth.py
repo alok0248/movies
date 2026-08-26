@@ -152,9 +152,23 @@ def send_configured_email(subject, message, recipient_list=None, purpose='notifi
             email = EmailMessage(subject=subject, body=message, from_email=from_email, to=recipient_list, connection=backend)
             email.send(fail_silently=fail_silently)
             logger.info(f'Email sent via {addr.email} ({purpose}) to {recipient_list}: {subject}')
+            # Log to EmailSendLog
+            try:
+                from .models import EmailSendLog
+                for recipient in recipient_list:
+                    EmailSendLog.objects.create(address=addr, recipient=recipient, subject=subject, purpose=purpose, status='sent', source=purpose)
+            except Exception:
+                pass
             return True
     except Exception as e:
         logger.error(f'EmailAddress send failed: {e}', exc_info=True)
+        # Log failure
+        try:
+            from .models import EmailSendLog
+            for recipient in recipient_list:
+                EmailSendLog.objects.create(address=addr if 'addr' in dir() else None, recipient=recipient, subject=subject, purpose=purpose, status='failed', error_message=str(e), source=purpose)
+        except Exception:
+            pass
 
     # 2. Fallback to SiteSettings SMTP config
     try:

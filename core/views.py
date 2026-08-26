@@ -2117,6 +2117,7 @@ def email_settings(request):
             import smtplib
             from email.mime.text import MIMEText
             from email.mime.multipart import MIMEMultipart
+            from .models import EmailSendLog
             addr_id = request.POST.get('address_id')
             to_email = request.POST.get('to_email', '').strip()
             subject = request.POST.get('subject', 'NewMovies - Test Email').strip()
@@ -2137,12 +2138,13 @@ def email_settings(request):
                 text_part = MIMEText(body, 'plain')
                 msg.attach(text_part)
                 # HTML version
-                html_body = f'<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;"><div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;"><h2 style="color:#fff;margin:0;">🎬 NewMovies</h2><p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Test Email</p></div><div style="padding:24px;background:#fff;border-radius:0 0 12px 12px;"><p style="color:#334155;font-size:15px;line-height:1.6;">{body.replace(chr(10), "<br>")}</p><hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"><p style="color:#94a3b8;font-size:12px;text-align:center;">Sent from NewMovies Admin Panel &bull; {addr_obj.email}</p></div></div>'
+                html_body = f'<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;"><div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;"><h2 style="color:#fff;margin:0;">\ud83c\udfac NewMovies</h2><p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Test Email</p></div><div style="padding:24px;background:#fff;border-radius:0 0 12px 12px;"><p style="color:#334155;font-size:15px;line-height:1.6;">{body.replace(chr(10), "<br>")}</p><hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"><p style="color:#94a3b8;font-size:12px;text-align:center;">Sent from NewMovies Admin Panel \bull; {addr_obj.email}</p></div></div>'
                 html_part = MIMEText(html_body, 'html')
                 msg.attach(html_part)
                 smtp_user = addr_obj.smtp_username or addr_obj.email
                 smtp_pass = addr_obj.smtp_password
                 if not smtp_pass:
+                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message='SMTP password not set', sent_by=request.user, source='test_mail')
                     return JsonResponse({'success': False, 'message': 'SMTP password is not set for this address. Edit and save the password first.'})
                 server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=15)
                 server.ehlo()
@@ -2152,14 +2154,19 @@ def email_settings(request):
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(addr_obj.email, [to_email], msg.as_string())
                 server.quit()
+                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='sent', sent_by=request.user, source='test_mail')
                 return JsonResponse({'success': True, 'message': f'Test email sent successfully to {to_email}! Check inbox.'})
             except smtplib.SMTPAuthenticationError as e:
+                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Authentication failed: {str(e)}', sent_by=request.user, source='test_mail')
                 return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check email and app password.'})
             except smtplib.SMTPConnectError as e:
+                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Connection failed: {str(e)}', sent_by=request.user, source='test_mail')
                 return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
             except smtplib.SMTPException as e:
+                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'SMTP error: {str(e)}', sent_by=request.user, source='test_mail')
                 return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
             except Exception as e:
+                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=str(e), sent_by=request.user, source='test_mail')
                 return JsonResponse({'success': False, 'message': f'Failed to send: {str(e)}'})
 
         return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
@@ -2212,6 +2219,15 @@ def email_settings(request):
                     'templates': tmpls,
                 })
 
+    from .models import EmailSendLog
+    send_logs = EmailSendLog.objects.select_related('address', 'sent_by').all()[:100]
+    log_stats = {
+        'total': EmailSendLog.objects.count(),
+        'sent': EmailSendLog.objects.filter(status='sent').count(),
+        'failed': EmailSendLog.objects.filter(status='failed').count(),
+        'today': EmailSendLog.objects.filter(created_at__date__gte=django.utils.timezone.now().date()).count(),
+    }
+
     return render(request, 'core/email_management.html', {
         'addresses': addresses,
         'email_templates': templates,
@@ -2220,6 +2236,8 @@ def email_settings(request):
         'purposes': purposes,
         'purpose_choices': PURPOSE_CHOICES,
         'back_url': 'admin_dashboard',
+        'send_logs': send_logs,
+        'log_stats': log_stats,
     })
 
 
