@@ -11,9 +11,10 @@
 const PROXY_PREFIX = '/proxy/';
 const VIDEASY_ORIGIN = 'https://videasy.to';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-const PREFETCH_CACHE = 'sw-prefetch-v1';
-const MANIFEST_CACHE = 'sw-manifest-v1';
-const MANIFEST_CACHE_TTL = 3000;
+const PREFETCH_CACHE = 'sw-prefetch-v2';
+const MANIFEST_CACHE = 'sw-manifest-v2';
+const MANIFEST_CACHE_TTL = 8000;
+const MAX_CACHE_ENTRIES = 5000;
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
@@ -158,27 +159,33 @@ function addCorsHeaders(response) {
  */
 self.addEventListener('message', function(event) {
   var data = event.data;
-  if (!data || data.type !== 'prefetch-segments') return;
+  if (!data || data.type !== 'prefetch-segments') return;      var urls = data.urls || [];
+      if (urls.length === 0) return;
 
-  var urls = data.urls || [];
-  if (urls.length === 0) return;
-
-  caches.open(PREFETCH_CACHE).then(function(cache) {
-    var promises = urls.map(function(url) {
-      return cache.match(url).then(function(hit) {
-        if (hit) return; // already cached
-        // Fetch and cache
-        var pathStart = url.indexOf(PROXY_PREFIX);
-        if (pathStart === -1) return;
-        return fetchDirect({ url: url, headers: new Headers(), method: 'GET' }, pathStart)
-          .then(function(resp) {
-            if (resp && resp.ok) {
-              cache.put(url, resp.clone());
+      caches.open(PREFETCH_CACHE).then(function(cache) {
+        // Evict oldest entries if cache is getting full
+        cache.keys().then(function(keys) {
+          if (keys.length > MAX_CACHE_ENTRIES - 100) {
+            for (var i = 0; i < 100 && i < keys.length; i++) {
+              cache.delete(keys[i]);
             }
-          })
-          .catch(function() {});
+          }
+        });
+        var promises = urls.map(function(url) {
+          return cache.match(url).then(function(hit) {
+            if (hit) return; // already cached
+            // Fetch and cache
+            var pathStart = url.indexOf(PROXY_PREFIX);
+            if (pathStart === -1) return;
+            return fetchDirect({ url: url, headers: new Headers(), method: 'GET' }, pathStart)
+              .then(function(resp) {
+                if (resp && resp.ok) {
+                  cache.put(url, resp.clone());
+                }
+              })
+              .catch(function() {});
+          });
+        });
+        Promise.all(promises);
       });
-    });
-    Promise.all(promises);
-  });
 });
