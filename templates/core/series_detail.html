@@ -543,7 +543,7 @@ html[data-theme="light"] .nf-progress-buffered{background:rgba(0,0,0,.15)}
 html[data-theme="light"] .nf-center-play{background:rgba(0,0,0,.5)}
 
 /* Player UI style toggle */
-body.player-classic .nf-controls{display:none!important}
+body.player-classic .nf-controls{display:flex}
 body.player-classic .nf-center-play{display:none!important}
 body.player-classic .nf-skip-indicator{display:none!important}
 body.player-classic .nf-speed-badge{display:none!important}
@@ -1806,7 +1806,7 @@ document.addEventListener('keydown', function(e) {
         var v = getVid();
         if (!v || v._nfHooked) return;
         v._nfHooked = true;
-        v.addEventListener('play', function() { updatePlayIcon(false); showCenterPlay(false); showControls(); });
+        v.addEventListener('play', function() { updatePlayIcon(false); showCenterPlay(false); controls.classList.add('visible'); clearTimeout(hideTimer); hideTimer = setTimeout(hideControls, 3000); });
         v.addEventListener('pause', function() { updatePlayIcon(true); showCenterPlay(true); showControls(); });
         v.addEventListener('timeupdate', function() {
             if (!v.duration) return;
@@ -2133,6 +2133,7 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
 setTimeout(function() {
     if (typeof updateEpisodeProgressIndicators === 'function') updateEpisodeProgressIndicators();
     if (typeof updateNowBadge === 'function') updateNowBadge(currentEpisode);
+    /* Controls auto-show on mousemove */
 }, 100);
 </script>
 <script src="/static/js/lazy-extras-tv.js"></script>
