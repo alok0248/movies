@@ -297,6 +297,14 @@ html[data-theme="light"] .ep-season-option.active{background:rgba(229,9,20,.08);
 .ep-future-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.1);color:#fbbf24;font-size:.65rem;font-weight:600}
 .ep-future-badge i{font-size:.6rem}
 
+/* Episode progress bar */
+.ep-progress-wrap{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.08);border-radius:0 0 10px 10px;overflow:hidden}
+.ep-progress-bar{height:100%;background:var(--brand,#e50914);border-radius:0 0 10px 10px;transition:width .3s ease}
+.ep-played-check{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:var(--brand,#e50914);display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(229,9,20,.4)}
+.ep-partial-badge{position:absolute;top:8px;right:8px;padding:2px 6px;border-radius:4px;background:rgba(56,189,248,.15);color:#38bdf8;font-size:.55rem;font-weight:700}
+html[data-theme="light"] .ep-progress-wrap{background:rgba(0,0,0,.08)}
+html[data-theme="light"] .ep-played-check{box-shadow:0 2px 8px rgba(229,9,20,.3)}
+
 /* Active episode glow */
 .ep-list-card.active{border-color:var(--brand,#e50914);background:rgba(229,9,20,.1);box-shadow:0 0 20px rgba(229,9,20,.1),inset 0 0 0 1px rgba(229,9,20,.15)}
 .ep-list-card.active .ep-num{color:#fff}
@@ -1066,6 +1074,8 @@ function playEpisode(epNum) {
     if (_pauseOverlay) { _pauseOverlay.classList.remove('visible'); _pauseOverlay.classList.add('hidden'); }
 
     currentEpisode = epNum;
+    // Reset resume flag so new episode can resume from saved position
+    if (typeof window.resetResume === 'function') window.resetResume();
     // Update episode list cards
     document.querySelectorAll('.ep-list-card').forEach(function(c) {
         c.classList.toggle('active', parseInt(c.getAttribute('data-ep')) === epNum);
@@ -1076,6 +1086,8 @@ function playEpisode(epNum) {
     });
     // Move the NOW badge to the currently playing episode
     updateNowBadge(epNum);
+    // Update progress indicators on all cards
+    updateEpisodeProgressIndicators();
     var ep = currentEpisodesData.find(function(x) { return x.episode_number === epNum; });
     if (ep) updateEpisodeDetails(ep);
     // Show episode splash while extracting
@@ -1097,6 +1109,36 @@ function updateNowBadge(epNum) {
         if (isNow) {
             var meta = card.querySelector('.ep-meta');
             if (meta) meta.insertAdjacentHTML('beforeend', nowBadgeHtml);
+        }
+    });
+}
+
+/* Update progress bars and played indicators on all episode cards */
+function updateEpisodeProgressIndicators() {
+    var LS_KEY = 'nm_progress';
+    var map = {};
+    try { map = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) {}
+    document.querySelectorAll('.ep-list-card').forEach(function(card) {
+        var epNum = parseInt(card.getAttribute('data-ep'));
+        var key = 'tv_' + SERIES_TMDB_ID + '_s' + currentSeason + '_e' + epNum;
+        var saved = map[key];
+        // Remove old indicators
+        var oldCheck = card.querySelector('.ep-played-check');
+        if (oldCheck) oldCheck.remove();
+        var oldPartial = card.querySelector('.ep-partial-badge');
+        if (oldPartial) oldPartial.remove();
+        var oldBar = card.querySelector('.ep-progress-wrap');
+        if (oldBar) oldBar.remove();
+        if (!saved) return;
+        var pct = saved.dur > 0 ? (saved.pos / saved.dur) : 0;
+        if (saved.completed || pct > 0.95) {
+            // Fully watched — red checkmark
+            card.insertAdjacentHTML('beforeend', '<div class="ep-played-check"><i class="fas fa-check"></i></div>');
+        } else if (pct > 0.05) {
+            // Partially watched — progress bar + percentage badge
+            card.style.position = 'relative';
+            card.insertAdjacentHTML('beforeend', '<div class="ep-partial-badge">' + Math.round(pct * 100) + '%</div>');
+            card.insertAdjacentHTML('beforeend', '<div class="ep-progress-wrap"><div class="ep-progress-bar" style="width:' + Math.round(pct * 100) + '%"></div></div>');
         }
     });
 }
@@ -1979,6 +2021,7 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
 
     // --- Resume from localStorage (instant, no server request) ---
     var resumed = false;
+    window.resetResume = function() { resumed = false; };
     function tryResume() {
         if (resumed) return;
         var v = getVideoEl();
@@ -1996,7 +2039,31 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
                 banner.querySelector('.resume-time').textContent = 'Resume from ' + timeStr;
                 if (saved.title) banner.querySelector('.resume-title').textContent = saved.title;
             }
+            return;
         }
+        // Fallback: try server resume if localStorage is empty
+        tryResumeFromServer();
+    }
+    function tryResumeFromServer() {
+        var url = '/ajax/resume-position/?tmdb_id=' + SERIES_TMDB_ID + '&media_type=tv&season=' + currentSeason + '&episode=' + currentEpisode;
+        fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.position && data.position > 10) {
+                var v2 = getVideoEl();
+                if (v2 && !resumed) {
+                    resumed = true;
+                    v2.currentTime = data.position;
+                    var m2 = Math.floor(data.position / 60);
+                    var s2 = Math.floor(data.position % 60);
+                    var ts2 = m2 + ':' + (s2 < 10 ? '0' : '') + s2;
+                    var banner2 = document.getElementById('resumeBanner');
+                    if (banner2) {
+                        banner2.style.display = 'flex';
+                        banner2.querySelector('.resume-time').textContent = 'Resume from ' + ts2;
+                        if (data.title) banner2.querySelector('.resume-title').textContent = data.title;
+                    }
+                }
+            }
+        }).catch(function() {});
     }
 
     // --- Start tracking on play ---
@@ -2004,7 +2071,16 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
     function _startTracking() {
         if (_progressInterval) return;
         recordProgress();
-        _progressInterval = setInterval(recordProgress, 5000);
+        _progressInterval = setInterval(function() {
+            recordProgress();
+            // Sync to server every 30s (not just on pause/unload)
+            var now = Date.now();
+            if (!window._lastServerSync) window._lastServerSync = 0;
+            if (now - window._lastServerSync > 30000) {
+                window._lastServerSync = now;
+                syncToServer();
+            }
+        }, 5000);
     }
 
     // Method 1: postMessage from iframe player
@@ -2042,6 +2118,13 @@ document.getElementById('wikipedia-btn').addEventListener('click', async functio
         syncToServer();
     });
 })();
+</script>
+<script>
+/* Initialize progress indicators and NOW badge on page load */
+setTimeout(function() {
+    if (typeof updateEpisodeProgressIndicators === 'function') updateEpisodeProgressIndicators();
+    if (typeof updateNowBadge === 'function') updateNowBadge(currentEpisode);
+}, 100);
 </script>
 <script src="/static/js/lazy-extras-tv.js"></script>
 {% endblock %}
