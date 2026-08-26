@@ -751,6 +751,20 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
     });
     var po = document.getElementById('pauseOverlay');
     if (po) observer.observe(po, {attributes: true, attributeFilter: ['class']});
+
+    if (po) {
+        po.addEventListener('dblclick', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var playerBox = document.getElementById('playerContainer');
+            if (!playerBox) return;
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            } else {
+                (playerBox.requestFullscreen || playerBox.webkitRequestFullscreen).call(playerBox);
+            }
+        });
+    }
 })();
 
 /* Forward arrow keys to player iframe */
