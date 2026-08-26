@@ -1,9 +1,9 @@
-{% extends 'base.html' %}
+{% extends 'core/admin_base.html' %}
 {% load static %}
 
 {% block title %}Edit {{ edit_user.username }} - Admin{% endblock %}
 
-{% block content %}
+{% block admin_content %}
 <div class="container py-4" style="max-width: 700px;">
     <a href="{% url 'admin_user_list' %}" class="text-decoration-none" style="color: #60a5fa;">
         <i class="fas fa-arrow-left me-1"></i> Back to User Management

@@ -1,0 +1,296 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    /* ===== ADMIN SIDEBAR ===== */
+    .admin-layout { display: flex; min-height: 100vh; padding-top: 56px; }
+    .admin-sidebar {
+        position: fixed; top: 56px; left: 0; bottom: 0;
+        width: 260px; background: linear-gradient(180deg, #0d0d14 0%, #11111b 100%);
+        border-right: 1px solid rgba(255,255,255,.06);
+        overflow-y: auto; z-index: 900;
+        transition: transform .3s cubic-bezier(.4,0,.2,1), width .3s;
+        scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent;
+        padding-bottom: 2rem;
+    }
+    .admin-sidebar::-webkit-scrollbar { width: 4px; }
+    .admin-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+    .admin-main { flex: 1; margin-left: 260px; padding: 1.5rem 2rem 3rem; min-height: calc(100vh - 56px); }
+    @media(max-width:991px) {
+        .admin-sidebar { transform: translateX(-100%); width: 280px; }
+        .admin-sidebar.open { transform: translateX(0); box-shadow: 0 0 60px rgba(0,0,0,.8); }
+        .admin-main { margin-left: 0; padding: 1rem; }
+        .admin-sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 899; }
+        .admin-sidebar.open ~ .admin-sidebar-overlay { display: block; }
+    }
+
+    /* Sidebar sections */
+    .sb-section { margin: .5rem .75rem; }
+    .sb-section-title {
+        font-size: .62rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .1em; color: rgba(255,255,255,.25);
+        padding: .5rem .75rem .25rem; margin-bottom: .1rem;
+    }
+    .sb-item {
+        display: flex; align-items: center; gap: .65rem;
+        padding: .55rem .75rem; border-radius: 10px;
+        color: rgba(255,255,255,.5); font-size: .82rem; font-weight: 500;
+        text-decoration: none; transition: all .2s;
+        margin-bottom: 1px;
+    }
+    .sb-item:hover { color: rgba(255,255,255,.85); background: rgba(255,255,255,.05); }
+    .sb-item.active {
+        color: #fff; background: linear-gradient(135deg, rgba(99,102,241,.2), rgba(139,92,246,.15));
+        border-left: 3px solid #6366f1; padding-left: calc(.75rem - 3px);
+    }
+    .sb-item i { width: 18px; text-align: center; font-size: .85rem; opacity: .7; }
+    .sb-item.active i { opacity: 1; color: #818cf8; }
+    .sb-divider { height: 1px; background: rgba(255,255,255,.05); margin: .5rem .75rem; }
+
+    /* Mobile toggle */
+    .sb-toggle {
+        display: none; position: fixed; bottom: 80px; left: 16px; z-index: 950;
+        width: 48px; height: 48px; border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        border: none; color: #fff; font-size: 1.2rem;
+        box-shadow: 0 4px 20px rgba(99,102,241,.4);
+        cursor: pointer; align-items: center; justify-content: center;
+    }
+    @media(max-width:991px) { .sb-toggle { display: flex; } }
+
+    /* ===== BREADCRUMBS ===== */
+    .admin-breadcrumb {
+        display: flex; align-items: center; gap: .5rem;
+        margin-bottom: 1.25rem; font-size: .78rem;
+    }
+    .admin-breadcrumb a { color: rgba(255,255,255,.4); text-decoration: none; }
+    .admin-breadcrumb a:hover { color: rgba(255,255,255,.7); }
+    .admin-breadcrumb .bc-sep { color: rgba(255,255,255,.2); }
+    .admin-breadcrumb .bc-current { color: rgba(255,255,255,.7); font-weight: 600; }
+
+    /* ===== TOAST SYSTEM ===== */
+    .toast-container {
+        position: fixed; top: 70px; right: 20px; z-index: 10000;
+        display: flex; flex-direction: column; gap: .5rem;
+    }
+    .toast-msg {
+        padding: .7rem 1.2rem; border-radius: 10px; font-size: .82rem; font-weight: 500;
+        display: flex; align-items: center; gap: .6rem;
+        animation: toastIn .35s cubic-bezier(.4,0,.2,1);
+        backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0,0,0,.3);
+        min-width: 280px; max-width: 420px;
+    }
+    .toast-msg.success { background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3); color: #4ade80; }
+    .toast-msg.error { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3); color: #f87171; }
+    .toast-msg.info { background: rgba(56,189,248,.15); border: 1px solid rgba(56,189,248,.3); color: #38bdf8; }
+    .toast-msg.warning { background: rgba(251,191,36,.15); border: 1px solid rgba(251,191,36,.3); color: #fbbf24; }
+    .toast-close { margin-left: auto; cursor: pointer; opacity: .6; }
+    .toast-close:hover { opacity: 1; }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(40px); } }
+
+    /* ===== GLASS MORPHISM CARDS ===== */
+    .admin-card {
+        background: rgba(255,255,255,.03);
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 16px; transition: all .3s cubic-bezier(.4,0,.2,1);
+    }
+    .admin-card:hover { border-color: rgba(255,255,255,.12); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+    .admin-card-header {
+        padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,.05);
+        display: flex; align-items: center; justify-content: space-between;
+    }
+    .admin-card-body { padding: 1.25rem; }
+
+    /* ===== PILL BUTTONS ===== */
+    .pill-btn {
+        display: inline-flex; align-items: center; gap: .4rem;
+        padding: .5rem 1.1rem; border-radius: 50px;
+        font-size: .78rem; font-weight: 600; border: none;
+        transition: all .2s; cursor: pointer;
+    }
+    .pill-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+    .pill-btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; }
+    .pill-btn-success { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+    .pill-btn-danger { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; }
+    .pill-btn-outline { background: transparent; border: 1px solid rgba(255,255,255,.15); color: rgba(255,255,255,.7); }
+    .pill-btn-outline:hover { background: rgba(255,255,255,.05); color: #fff; border-color: rgba(255,255,255,.3); }
+
+    /* ===== STATUS DOTS ===== */
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: .4rem; }
+    .status-dot.green { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+    .status-dot.amber { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,.5); animation: pulse 2s infinite; }
+    .status-dot.red { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,.5); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* ===== STAT COUNTER ===== */
+    .stat-counter { text-align: center; }
+    .stat-value { font-size: 1.8rem; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .stat-label { font-size: .68rem; color: rgba(255,255,255,.35); text-transform: uppercase; letter-spacing: .08em; margin-top: .2rem; }
+
+    /* ===== GRADIENT TEXT ===== */
+    .gradient-text { background: linear-gradient(135deg, #f0f0f5, rgba(255,255,255,.6)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+    /* ===== ZEBRA TABLE ===== */
+    .admin-table { width: 100%; border-collapse: collapse; }
+    .admin-table th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.35); padding: .6rem .8rem; border-bottom: 1px solid rgba(255,255,255,.06); font-weight: 600; }
+    .admin-table td { padding: .65rem .8rem; border-bottom: 1px solid rgba(255,255,255,.03); font-size: .82rem; color: rgba(255,255,255,.7); }
+    .admin-table tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+    .admin-table tr:hover td { background: rgba(255,255,255,.04); }
+</style>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Mobile sidebar toggle -->
+<button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+<div class="admin-sidebar-overlay" id="sbOverlay" onclick="toggleSidebar()"></div>
+
+<div class="admin-layout">
+    <!-- Sidebar -->
+    <nav class="admin-sidebar" id="adminSidebar">
+        <div class="sb-section">
+            <div class="sb-section-title">Dashboard</div>
+            <a href="{% url 'admin_dashboard' %}" class="sb-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+                <i class="fas fa-home"></i> Overview
+            </a>
+            <a href="{% url 'db_dashboard' %}" class="sb-item {% if 'db-dashboard' in request.path %}active{% endif %}">
+                <i class="fas fa-heartbeat"></i> DB Dashboard
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">Configuration</div>
+            <a href="{% url 'branding_settings' %}" class="sb-item {% if 'branding' in request.path %}active{% endif %}">
+                <i class="fas fa-palette"></i> Branding
+            </a>
+            <a href="{% url 'display_settings' %}" class="sb-item {% if 'display' in request.path %}active{% endif %}">
+                <i class="fas fa-tv"></i> Display
+            </a>
+            <a href="{% url 'footer_settings' %}" class="sb-item {% if 'footer' in request.path %}active{% endif %}">
+                <i class="fas fa-window-maximize"></i> Footer
+            </a>
+            <a href="{% url 'url_blocking_settings' %}" class="sb-item {% if 'url-blocking' in request.path %}active{% endif %}">
+                <i class="fas fa-shield-alt"></i> URL Blocking
+            </a>
+            <a href="{% url 'player_settings' %}" class="sb-item {% if 'player' in request.path %}active{% endif %}">
+                <i class="fas fa-play-circle"></i> Player
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">Content</div>
+            <a href="{% url 'content_row_list' %}" class="sb-item {% if 'content-rows' in request.path %}active{% endif %}">
+                <i class="fas fa-th-large"></i> Content Rows
+            </a>
+            <a href="{% url 'player_list' %}" class="sb-item {% if 'players' in request.path %}active{% endif %}">
+                <i class="fas fa-gamepad"></i> Players
+            </a>
+            <a href="{% url 'provider_item_list' %}" class="sb-item {% if 'providers' in request.path %}active{% endif %}">
+                <i class="fas fa-plug"></i> Providers
+            </a>
+            <a href="{% url 'watch_region_list' %}" class="sb-item {% if 'watch-regions' in request.path %}active{% endif %}">
+                <i class="fas fa-globe"></i> Watch Regions
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">User Management</div>
+            <a href="{% url 'admin_user_list' %}" class="sb-item {% if 'users' in request.path %}active{% endif %}">
+                <i class="fas fa-user-shield"></i> Users
+            </a>
+            <a href="{% url 'synced_users_list' %}" class="sb-item {% if 'synced-users' in request.path %}active{% endif %}">
+                <i class="fas fa-users"></i> Synced Users
+            </a>
+            <a href="{% url 'email_settings' %}" class="sb-item {% if 'email' in request.path %}active{% endif %}">
+                <i class="fas fa-envelope"></i> Email SMTP
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">Android & API</div>
+            <a href="{% url 'android_app_list' %}" class="sb-item {% if 'android-apps' in request.path %}active{% endif %}">
+                <i class="fab fa-android"></i> Android Apps
+            </a>
+            <a href="{% url 'ad_list' %}" class="sb-item {% if 'ads' in request.path %}active{% endif %}">
+                <i class="fas fa-ad"></i> Ads
+            </a>
+            <a href="{% url 'navbar_item_list' %}" class="sb-item {% if 'navbar-items' in request.path %}active{% endif %}">
+                <i class="fas fa-bars"></i> Navbar
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">Database</div>
+            <a href="{% url 'db_connection_settings' %}" class="sb-item {% if 'db-connections' in request.path %}active{% endif %}">
+                <i class="fas fa-plug"></i> Connections
+            </a>
+            <a href="{% url 'db_routing_settings' %}" class="sb-item {% if 'db-routing' in request.path %}active{% endif %}">
+                <i class="fas fa-route"></i> Data Routing
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">Analytics</div>
+            <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
+                <i class="fas fa-chart-line"></i> Web Analytics
+            </a>
+            <a href="{% url 'system_resource_dashboard' %}" class="sb-item {% if 'system-resources' in request.path %}active{% endif %}">
+                <i class="fas fa-server"></i> System
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="admin-main">
+        {% block admin_content %}{% endblock %}
+    </main>
+</div>
+
+<script>
+// Sidebar toggle
+function toggleSidebar() {
+    var sb = document.getElementById('adminSidebar');
+    sb.classList.toggle('open');
+}
+
+// Toast system
+function showToast(message, type) {
+    type = type || 'info';
+    var icons = { success: 'check-circle', error: 'times-circle', info: 'info-circle', warning: 'exclamation-triangle' };
+    var container = document.getElementById('toastContainer');
+    var toast = document.createElement('div');
+    toast.className = 'toast-msg ' + type;
+    toast.innerHTML = '<i class="fas fa-' + icons[type] + '"></i><span>' + message + '</span><span class="toast-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></span>';
+    container.appendChild(toast);
+    setTimeout(function() { toast.style.animation = 'toastOut .3s forwards'; setTimeout(function() { toast.remove(); }, 300); }, 4000);
+}
+
+// Auto-show Django messages as toasts
+document.addEventListener('DOMContentLoaded', function() {
+    var msgs = document.querySelectorAll('.alert-dismissible');
+    msgs.forEach(function(el) {
+        var type = 'info';
+        if (el.classList.contains('alert-success')) type = 'success';
+        else if (el.classList.contains('alert-danger') || el.classList.contains('alert-error')) type = 'error';
+        else if (el.classList.contains('alert-warning')) type = 'warning';
+        var text = el.textContent.trim();
+        el.style.display = 'none';
+        if (text) showToast(text, type);
+    });
+});
+</script>
+{% endblock %}
