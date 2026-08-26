@@ -1046,7 +1046,8 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
 
     catcher.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
 
-    // Hide catcher when pause overlay is visible, show when playing
+    // Always keep catcher active for dblclick fullscreen
+    // Only disable for click (let overlay handle resume)
     var observer = new MutationObserver(function() {
         var overlay = document.getElementById('pauseOverlay');
         if (overlay && overlay.classList.contains('visible')) {
@@ -1057,6 +1058,21 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
     });
     var po = document.getElementById('pauseOverlay');
     if (po) observer.observe(po, {attributes: true, attributeFilter: ['class']});
+
+    // Also handle dblclick on pause overlay to exit fullscreen
+    if (po) {
+        po.addEventListener('dblclick', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var playerBox = document.getElementById('player-container');
+            if (!playerBox) return;
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            } else {
+                (playerBox.requestFullscreen || playerBox.webkitRequestFullscreen).call(playerBox);
+            }
+        });
+    }
 })();
 
 /* Forward arrow keys to player iframe */
