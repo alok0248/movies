@@ -788,7 +788,7 @@ body.player-netflix .dual-panel{display:none!important}
                         <span style="font-size:.65rem;color:rgba(255,255,255,.3)">{{ ep.air_date }}</span>
                         {% endif %}
                     {% endif %}
-                    {% if ep.episode_number == current_episode %}<span style="font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700">▶ NOW</span>{% endif %}
+                    
                 </div>
                 <div style="font-size:.88rem;color:{% if ep.air_date and ep.air_date > today_date %}rgba(255,255,255,.4){% else %}#fff{% endif %};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ep.name }}</div>
                 {% if ep.overview %}<div style="font-size:.72rem;color:rgba(255,255,255,.35);line-height:1.4;margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ep.overview|truncatewords:15 }}</div>{% endif %}
@@ -1103,9 +1103,14 @@ function updateNowBadge(epNum) {
     var nowBadgeHtml = '<span class="ep-now-badge" style="' + nowStyle + '">\u25b6 NOW</span>';
     document.querySelectorAll('.ep-list-card').forEach(function(card) {
         var isNow = parseInt(card.getAttribute('data-ep')) === epNum;
-        // Remove any existing badge first
-        var existing = card.querySelector('.ep-now-badge');
-        if (existing) existing.remove();
+        // Remove ALL existing NOW badges (with or without class)
+        card.querySelectorAll('.ep-now-badge').forEach(function(b){b.remove()});
+        card.querySelectorAll('[style*="▶ NOW"],[style*="\u25b6 NOW"]').forEach(function(b){b.remove()});
+        // Also remove spans that contain just the NOW text
+        card.querySelectorAll('.ep-meta span').forEach(function(s){
+            if(s.textContent.indexOf('NOW')>-1 && s.textContent.indexOf('▶')>-1) s.remove();
+            if(s.textContent.indexOf('▶')>-1) s.remove();
+        });
         // Add badge to the correct card
         if (isNow) {
             var meta = card.querySelector('.ep-meta');
