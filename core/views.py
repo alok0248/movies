@@ -2112,6 +2112,56 @@ def email_settings(request):
             except Exception as e:
                 return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
 
+        # Send test mail to any recipient using a saved SMTP address
+        if action == 'send_test_mail':
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            addr_id = request.POST.get('address_id')
+            to_email = request.POST.get('to_email', '').strip()
+            subject = request.POST.get('subject', 'NewMovies - Test Email').strip()
+            body = request.POST.get('body', '').strip()
+            if not addr_id or not to_email:
+                return JsonResponse({'success': False, 'message': 'Select an SMTP address and enter a recipient email.'})
+            addr_obj = EmailAddress.objects.filter(pk=addr_id).first()
+            if not addr_obj:
+                return JsonResponse({'success': False, 'message': 'SMTP address not found.'})
+            if not addr_obj.smtp_host:
+                return JsonResponse({'success': False, 'message': 'SMTP host is not configured for this address.'})
+            try:
+                msg = MIMEMultipart('alternative')
+                msg['Subject'] = subject
+                msg['From'] = f'{addr_obj.display_name or "NewMovies"} <{addr_obj.email}>'
+                msg['To'] = to_email
+                # Plain text version
+                text_part = MIMEText(body, 'plain')
+                msg.attach(text_part)
+                # HTML version
+                html_body = f'<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;"><div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;"><h2 style="color:#fff;margin:0;">🎬 NewMovies</h2><p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Test Email</p></div><div style="padding:24px;background:#fff;border-radius:0 0 12px 12px;"><p style="color:#334155;font-size:15px;line-height:1.6;">{body.replace(chr(10), "<br>")}</p><hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"><p style="color:#94a3b8;font-size:12px;text-align:center;">Sent from NewMovies Admin Panel &bull; {addr_obj.email}</p></div></div>'
+                html_part = MIMEText(html_body, 'html')
+                msg.attach(html_part)
+                smtp_user = addr_obj.smtp_username or addr_obj.email
+                smtp_pass = addr_obj.smtp_password
+                if not smtp_pass:
+                    return JsonResponse({'success': False, 'message': 'SMTP password is not set for this address. Edit and save the password first.'})
+                server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=15)
+                server.ehlo()
+                if addr_obj.smtp_use_tls:
+                    server.starttls()
+                    server.ehlo()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(addr_obj.email, [to_email], msg.as_string())
+                server.quit()
+                return JsonResponse({'success': True, 'message': f'Test email sent successfully to {to_email}! Check inbox.'})
+            except smtplib.SMTPAuthenticationError as e:
+                return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check email and app password.'})
+            except smtplib.SMTPConnectError as e:
+                return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
+            except smtplib.SMTPException as e:
+                return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': f'Failed to send: {str(e)}'})
+
         return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
 
     # GET — render the page
