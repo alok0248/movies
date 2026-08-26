@@ -806,6 +806,32 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
             }
         });
     }
+
+    var playerBox = document.getElementById('playerContainer');
+    if (playerBox) {
+        playerBox.addEventListener('dblclick', function(ev) {
+            if (ev.target.closest('button, a, select')) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            } else {
+                (playerBox.requestFullscreen || playerBox.webkitRequestFullscreen).call(playerBox);
+            }
+        });
+    }
+
+    var wrapperEl = document.querySelector('.det-player-left');
+    if (wrapperEl) {
+        wrapperEl.addEventListener('dblclick', function(ev) {
+            if (ev.target.closest('button, a, select, .nf-controls, .pause-overlay, .deferred-ad-slot')) return;
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            }
+        });
+    }
 })();
 
 /* Forward arrow keys to player iframe */
