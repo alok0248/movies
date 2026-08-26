@@ -1522,6 +1522,191 @@ class UserSession(models.Model):
         return last.source if last else ''
 
 
+class DBConnectionConfig(models.Model):
+    """External database connection configuration managed by admin.
+    The actual connection file is written to server_config.py (VM-local only)."""
+    DB_TYPE_CHOICES = [
+        ('mysql', 'MySQL / MariaDB'),
+        ('oracle', 'Oracle'),
+        ('postgresql', 'PostgreSQL'),
+        ('mssql', 'MS SQL Server'),
+        ('sqlite', 'SQLite'),
+    ]
+
+    name = models.CharField(max_length=100, help_text='Friendly name for this connection')
+    db_type = models.CharField(max_length=20, choices=DB_TYPE_CHOICES, default='mysql')
+    host = models.CharField(max_length=255, default='127.0.0.1', help_text='IP address or hostname (use 127.0.0.1 for VM-local)')
+    port = models.IntegerField(default=3306, help_text='Database port')
+    database_name = models.CharField(max_length=255, default='', help_text='Database name')
+    username = models.CharField(max_length=255, default='', help_text='Database username')
+    password = models.CharField(max_length=255, default='', help_text='Database password')
+    extra_params = models.JSONField(default=dict, blank=True, help_text='Extra connection params as JSON, e.g. {"charset": "utf8mb4"}')
+    is_active = models.BooleanField(default=True, help_text='Only one connection can be active at a time')
+    is_default = models.BooleanField(default=False, help_text='Use as the default external DB connection')
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    last_test_status = models.CharField(max_length=20, choices=[
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('untested', 'Untested'),
+    ], default='untested')
+    last_test_message = models.TextField(blank=True, default='')
+    notes = models.TextField(blank=True, default='', help_text='Admin notes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_default', '-is_active', 'name']
+        verbose_name = 'DB Connection Config'
+        verbose_name_plural = 'DB Connection Configs'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_db_type_display()} @ {self.host}:{self.port})"
+
+    def get_engine_string(self):
+        engines = {
+            'mysql': 'django.db.backends.mysql',
+            'oracle': 'django.db.backends.oracle',
+            'postgresql': 'django.db.backends.postgresql',
+            'mssql': 'django.db.backends.mssql',
+            'sqlite': 'django.db.backends.sqlite3',
+        }
+        return engines.get(self.db_type, 'django.db.backends.mysql')
+
+    def test_connection(self):
+        """Test the database connection and return (success, message)."""
+        from django.utils import timezone
+        try:
+            if self.db_type == 'mysql':
+                import MySQLdb
+                conn = MySQLdb.connect(
+                    host=self.host,
+                    port=self.port,
+                    user=self.username,
+                    passwd=self.password,
+                    db=self.database_name or None,
+                    connect_timeout=10,
+                    **self.extra_params,
+                )
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1')
+                result = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                self.last_tested_at = timezone.now()
+                self.last_test_status = 'success'
+                self.last_test_message = f'Connected successfully. Query returned: {result[0]}'
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                return True, self.last_test_message
+
+            elif self.db_type == 'oracle':
+                import oracledb
+                dsn = oracledb.makedsn(self.host, self.port, service_name=self.database_name)
+                conn = oracledb.connect(user=self.username, password=self.password, dsn=dsn)
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1 FROM DUAL')
+                result = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                self.last_tested_at = timezone.now()
+                self.last_test_status = 'success'
+                self.last_test_message = f'Connected successfully. Query returned: {result[0]}'
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                return True, self.last_test_message
+
+            elif self.db_type == 'postgresql':
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.host,
+                    port=self.port,
+                    user=self.username,
+                    password=self.password,
+                    dbname=self.database_name or 'postgres',
+                    connect_timeout=10,
+                )
+                conn.close()
+                self.last_tested_at = timezone.now()
+                self.last_test_status = 'success'
+                self.last_test_message = 'Connected successfully.'
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                return True, self.last_test_message
+
+            elif self.db_type == 'sqlite':
+                import sqlite3
+                conn = sqlite3.connect(self.database_name or ':memory:', timeout=10)
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1')
+                result = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                self.last_tested_at = timezone.now()
+                self.last_test_status = 'success'
+                self.last_test_message = f'Connected successfully. Query returned: {result[0]}'
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                return True, self.last_test_message
+
+            else:
+                msg = f'Unsupported database type: {self.db_type}'
+                self.last_tested_at = timezone.now()
+                self.last_test_status = 'failed'
+                self.last_test_message = msg
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                return False, msg
+
+        except ImportError as e:
+            msg = f'Missing driver package: {e}'
+            self.last_tested_at = timezone.now()
+            self.last_test_status = 'failed'
+            self.last_test_message = msg
+            self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+            return False, msg
+        except Exception as e:
+            msg = f'Connection failed: {e}'
+            self.last_tested_at = timezone.now()
+            self.last_test_status = 'failed'
+            self.last_test_message = msg
+            self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+            return False, msg
+
+    def write_server_config(self):
+        """Write connection info to a server_config.py file (VM-local only).
+        This file is only accessible from the server itself."""
+        import os, json
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'server_config.py')
+        config_data = {
+            'ENGINE': self.get_engine_string(),
+            'NAME': self.database_name,
+            'USER': self.username,
+            'PASSWORD': self.password,
+            'HOST': self.host,
+            'PORT': str(self.port),
+        }
+        if self.extra_params:
+            config_data.update(self.extra_params)
+        content = (
+            '# Auto-generated by NewMovies Admin. DO NOT EDIT MANUALLY.\n'
+            '# This file is only accessible from the VM itself.\n'
+            '# Last updated: ' + str(self.updated_at) + '\n\n'
+            'DB_CONFIG = ' + json.dumps(config_data, indent=4) + '\n'
+        )
+        with open(config_path, 'w') as f:
+            f.write(content)
+        os.chmod(config_path, 0o600)  # Owner read/write only
+        return config_path
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            DBConnectionConfig.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        if self.is_active:
+            DBConnectionConfig.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+        # Write server_config.py whenever saved
+        if self.is_active and self.is_default:
+            try:
+                self.write_server_config()
+            except Exception:
+                pass
+
+
 class EmailSendLog(models.Model):
     """Track every email sent from the platform."""
     address = models.ForeignKey('EmailAddress', on_delete=models.SET_NULL, null=True, blank=True, help_text='SMTP address used')
