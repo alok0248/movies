@@ -24,7 +24,13 @@ from datetime import timedelta
 import random
 
 # Determine which database to use
-use_external = os.environ.get('USE_EXTERNAL', '1') == '1'
+# Local: default (SQLite). Server with .env: external (MySQL)
+try:
+    from django.db import connections
+    connections['external'].ensure_connection()
+    use_external = True
+except Exception:
+    use_external = False
 db = 'external' if use_external else 'default'
 
 print(f"\n{'='*60}")
