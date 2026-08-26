@@ -1522,6 +1522,45 @@ class UserSession(models.Model):
         return last.source if last else ''
 
 
+class DBRoutingConfig(models.Model):
+    """Controls whether user data goes to local or external database."""
+    use_external_db = models.BooleanField(
+        default=False,
+        help_text='Route user data (users, watchlist, play history, etc.) to the external database configured in DB Connections'
+    )
+    auto_migrate_on_switch = models.BooleanField(
+        default=True,
+        help_text='Automatically migrate existing user data when switching databases'
+    )
+    last_migrated_at = models.DateTimeField(null=True, blank=True)
+    last_migration_status = models.CharField(max_length=20, choices=[
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('pending', 'Pending'),
+    ], default='pending')
+    last_migration_message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'DB Routing Config'
+        verbose_name_plural = 'DB Routing Config'
+
+    def __str__(self):
+        db = 'External' if self.use_external_db else 'Local'
+        return f"User data storage: {db}"
+
+    @property
+    def external_db_ready(self):
+        """Check if there's an active+default DBConnectionConfig ready."""
+        return DBConnectionConfig.objects.filter(is_active=True, is_default=True).exists()
+
+    @classmethod
+    def get_config(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class DBConnectionConfig(models.Model):
     """External database connection configuration managed by admin.
     The actual connection file is written to server_config.py (VM-local only)."""

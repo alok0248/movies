@@ -81,6 +81,9 @@ WSGI_APPLICATION = 'movie_portal.wsgi.application'
 # https://docs.djangoproject.com/en/stable/ref/settings/#databases
 DATABASES = get_db_config()
 
+# Database Router — routes user data to external DB when enabled
+DATABASE_ROUTERS = ['core.db_router.UserDBRouter']
+
 # Password validation
 # https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [
