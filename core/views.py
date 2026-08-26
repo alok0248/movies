@@ -7458,6 +7458,15 @@ def admin_user_subscription(request, user_id):
 # ---------------------------------------------------------------------------
 
 
+def _get_routing_config():
+    try:
+        from .models import DBRoutingConfig
+        return DBRoutingConfig.get_config()
+    except Exception:
+        from .models import DBRoutingConfig
+        return DBRoutingConfig(use_external_db=False)
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def db_connection_settings(request):
@@ -7502,8 +7511,12 @@ def db_connection_settings(request):
                 if not password:
                     messages.error(request, 'Password is required for new connections.')
                     connections = DBConnectionConfig.objects.all()
+                    routing_cfg = _get_routing_config()
                     return render(request, 'core/db_connection_settings.html', {
                         'connections': connections,
+                        'routing': routing_cfg,
+                        'active_conn': None,
+                        'dbs': {},
                         'back_url': 'admin_dashboard',
                     })
                 conn = DBConnectionConfig.objects.create(
@@ -7534,8 +7547,20 @@ def db_connection_settings(request):
             return redirect('db_connection_settings')
 
     connections = DBConnectionConfig.objects.all()
+    routing = _get_routing_config()
+    active_conn = DBConnectionConfig.objects.filter(is_active=True, is_default=True).first()
+    dbs = {}
+    dbs['default'] = _get_db_stats('default', 'Local Database (SQLite)')
+    if routing.use_external_db and active_conn:
+        try:
+            dbs['external'] = _get_db_stats('external', 'External Database')
+        except Exception:
+            pass
     return render(request, 'core/db_connection_settings.html', {
         'connections': connections,
+        'routing': routing,
+        'active_conn': active_conn,
+        'dbs': dbs,
         'back_url': 'admin_dashboard',
     })
 
