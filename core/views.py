@@ -6292,15 +6292,16 @@ def player_sources_view(request):
                 for src in sources:
                     if isinstance(src, dict) and src.get('url') and src['url'] not in seen_urls:
                         seen_urls.add(src['url'])
-                        lang = src.get('language', '') or src.get('audioLanguage', '') or src.get('audio', '') or ''
+                        lang = src.get('language', '') or src.get('audioLanguage', '') or src.get('audio', '') or src.get('title', '') or ''
                         quality = src.get('quality', '?')
-                        results.append({
-                            'url': src['url'],
-                            'quality': quality,
-                            'language': lang,
-                            'server': server_name,
-                            'server_name': server_name,
-                        })
+                        # Pass through full source object for client-side language detection
+                        entry = dict(src)
+                        entry['url'] = src['url']
+                        entry['quality'] = quality
+                        entry['language'] = lang
+                        entry['server'] = server_name
+                        entry['server_name'] = server_name
+                        results.append(entry)
 
     return JsonResponse({
         'success': True,

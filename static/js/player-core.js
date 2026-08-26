@@ -226,7 +226,25 @@ function _openPopup() {
   var match = _findBestMatch();
   if (match) window.open(match.s.url, '_blank', 'width=1200,height=700,menubar=no,toolbar=no');
 }
-function _addSource(s) { _allSources.push(s); _renderSourceList(); }
+function _addSource(s) {
+  /* Smart language detection — match videasy player's buildSelectors logic */
+  var knownLangs={'hindi':1,'english':1,'tamil':1,'telugu':1,'kannada':1,'bengali':1,'malayalam':1,'marathi':1,'german':1,'spanish':1,'portuguese':1,'french':1,'japanese':1,'korean':1,'chinese':1,'hinglish':1};
+  var lang=s.language||s.audioLanguage||s.audio||s.title||'';
+  var q=s.quality||'';
+  /* If quality is just a resolution like 1080p, language is Original */
+  if(/^\d+p?$/i.test(q)){lang='Original';}
+  /* If quality field is actually a language name (e.g. 'Hindi'), use it */
+  else if(knownLangs[q.toLowerCase()]){lang=q;}
+  /* If language is empty/unknown, scan source JSON for known languages */
+  if(!lang||(!knownLangs[lang.toLowerCase()]&&lang!=='Original'&&lang!=='Vimeos'&&lang!=='Auto')){
+    var txt=JSON.stringify(s).toLowerCase();var found=null;
+    for(var k in knownLangs){if(txt.indexOf(k)>-1){found=k.charAt(0).toUpperCase()+k.slice(1);break;}}
+    lang=found||'Original';
+  }
+  s.language=lang;
+  s.quality=q||'?';
+  _allSources.push(s); _renderSourceList();
+}
 
 var _selQuality = null; var _selLanguage = null; var _selServer = null;
 
