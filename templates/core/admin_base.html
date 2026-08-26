@@ -245,8 +245,11 @@
 
         <div class="sb-section">
             <div class="sb-section-title">Analytics</div>
+            <a href="{% url 'admin_analytics' %}" class="sb-item {% if 'admin-dashboard/analytics' in request.path %}active{% endif %}">
+                <i class="fas fa-chart-line"></i> User Analytics
+            </a>
             <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
-                <i class="fas fa-chart-line"></i> Web Analytics
+                <i class="fas fa-chart-bar"></i> Web Analytics
             </a>
             <a href="{% url 'system_resource_dashboard' %}" class="sb-item {% if 'system-resources' in request.path %}active{% endif %}">
                 <i class="fas fa-server"></i> System

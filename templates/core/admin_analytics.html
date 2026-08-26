@@ -1,0 +1,293 @@
+{% extends 'core/admin_base.html' %}
+{% block admin_content %}
+
+<style>
+    .analytics-hero {
+        background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(168,85,247,.08));
+        border: 1px solid rgba(56,189,248,.2);
+        border-radius: 16px;
+        padding: 1.8rem 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .stat-card {
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.2rem;
+        transition: all .25s;
+    }
+    .stat-card:hover {
+        border-color: rgba(56,189,248,.3);
+        transform: translateY(-2px);
+    }
+    .stat-num {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+    .chart-bar {
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255,255,255,.06);
+        overflow: hidden;
+        margin-top: 4px;
+    }
+    .chart-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width .5s ease;
+    }
+    .platform-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: .25rem .7rem;
+        border-radius: 8px;
+        font-size: .75rem;
+        font-weight: 600;
+    }
+    .table-analytics tbody tr {
+        transition: background .15s;
+    }
+    .table-analytics tbody tr:hover {
+        background: rgba(255,255,255,.03);
+    }
+    .table-analytics td {
+        vertical-align: middle;
+        padding: .7rem .8rem;
+        font-size: .82rem;
+        border-color: rgba(255,255,255,.06);
+    }
+    .table-analytics th {
+        font-size: .75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        opacity: .5;
+        border-color: rgba(255,255,255,.06);
+        padding: .6rem .8rem;
+    }
+    .session-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .session-dot.active { background: #22c55e; animation: pulse-dot 2s infinite; }
+    .session-dot.inactive { background: #6b7280; }
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .4; }
+    }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">
+            <i class="fas fa-chart-line me-2" style="background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>User Analytics
+        </h1>
+        <small class="text-secondary">Last {{ days }} days · Updated: {% now "M d, Y H:i" %}</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="?days=1" class="btn btn-sm {% if days == 1 %}btn-primary{% else %}btn-outline-secondary{% endif %}">Today</a>
+        <a href="?days=7" class="btn btn-sm {% if days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7 Days</a>
+        <a href="?days=30" class="btn btn-sm {% if days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}">30 Days</a>
+    </div>
+</div>
+
+<!-- Overview Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="text-secondary small mb-1"><i class="fas fa-eye me-1"></i>Total Page Views</div>
+            <div class="stat-num" style="color:#38bdf8;">{{ total_views|floatformat:0 }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="text-secondary small mb-1"><i class="fas fa-clock me-1"></i>Total Time Spent</div>
+            <div class="stat-num" style="color:#a855f7;">{% if total_time > 3600 %}{{ total_time|floatformat:0|truncatechars:4 }}h{% elif total_time > 60 %}{{ total_time|floatformat:0|truncatechars:4 }}m{% else %}{{ total_time|floatformat:0 }}s{% endif %}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="text-secondary small mb-1"><i class="fas fa-users me-1"></i>Unique Visitors</div>
+            <div class="stat-num" style="color:#22c55e;">{{ unique_visitors }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="text-secondary small mb-1"><i class="fas fa-user-check me-1"></i>Logged-in Users</div>
+            <div class="stat-num" style="color:#f59e0b;">{{ unique_users }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Platform Breakdown + Daily Views -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card h-100">
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-desktop me-2 text-info"></i>Platform Breakdown</h6>
+            {% for p in platform_data %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="platform-badge {% if p.platform == 'web' %}bg-primary{% elif p.platform == 'android' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                    {% if p.platform == 'web' %}<i class="fas fa-globe"></i> Web
+                    {% elif p.platform == 'android' %}<i class="fab fa-android"></i> Android
+                    {% elif p.platform == 'ios' %}<i class="fab fa-apple"></i> iOS
+                    {% else %}<i class="fas fa-question"></i> {{ p.platform }}{% endif %}
+                </span>
+                <span>
+                    <span class="fw-bold text-white">{{ p.views }}</span>
+                    <small class="text-secondary">views</small>
+                    {% if p.total_time %}<small class="text-secondary"> · {{ p.total_time|floatformat:0 }}s</small>{% endif %}
+                </span>
+            </div>
+            <div class="chart-bar">
+                <div class="chart-bar-fill" style="width:{% widthratio p.views total_views 100 %}%;background:{% if p.platform == 'web' %}#3b82f6{% elif p.platform == 'android' %}#22c55e{% else %}#f59e0b{% endif %};"></div>
+            </div>
+            {% empty %}
+            <div class="text-secondary text-center py-3" style="font-size:.85rem;">No platform data yet</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="stat-card h-100">
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-chart-area me-2 text-info"></i>Daily Views ({{ days }} days)</h6>
+            <div class="d-flex align-items-end gap-1" style="height:120px;">
+                {% for d in daily_views %}
+                <div class="flex-fill text-center" title="{{ d.date }}: {{ d.views }} views" style="min-width:0;">
+                    <div style="height:{% if d.views %}{% widthratio d.views 1 1 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#3b82f6,#818cf8);border-radius:4px 4px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};transition:height .5s;width:100%;"></div>
+                    <small class="text-secondary" style="font-size:.6rem;">{{ d.date|slice:"-5:" }}</small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Pages -->
+<div class="stat-card mb-4">
+    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-file-alt me-2 text-info"></i>Top Pages</h6>
+    <div class="table-responsive">
+        <table class="table table-dark table-analytics mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Page</th>
+                    <th>Views</th>
+                    <th>Total Time</th>
+                    <th>Avg Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in top_pages %}
+                <tr>
+                    <td class="text-secondary">{{ forloop.counter }}</td>
+                    <td>
+                        <a href="{{ p.path }}" target="_blank" class="text-info text-decoration-none">{{ p.page_title|default:p.path|truncatechars:60 }}</a>
+                    </td>
+                    <td class="fw-bold text-white">{{ p.views }}</td>
+                    <td class="text-secondary">{{ p.total_time|default:0 }}s</td>
+                    <td class="text-secondary">{% if p.avg_time %}{{ p.avg_time|floatformat:1 }}s{% else %}—{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-secondary py-3">No page views yet</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Most Active Users + Active Sessions -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="stat-card h-100">
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-trophy me-2 text-warning"></i>Most Active Users</h6>
+            <div class="table-responsive">
+                <table class="table table-dark table-analytics mb-0">
+                    <thead><tr><th>User</th><th>Views</th><th>Time</th><th></th></tr></thead>
+                    <tbody>
+                        {% for u in active_users %}
+                        <tr>
+                            <td class="text-white">{{ u.user__username|default:"Anonymous" }}</td>
+                            <td>{{ u.views }}</td>
+                            <td class="text-secondary">{{ u.total_time|default:0 }}s</td>
+                            <td><a href="{% url 'admin_user_analytics_detail' user_id=0 %}" class="text-info" style="font-size:.75rem;" onclick="event.preventDefault();">Detail</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-secondary py-3">No active users</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="stat-card h-100">
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-signal me-2 text-success"></i>Active Sessions</h6>
+            <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+                <table class="table table-dark table-analytics mb-0">
+                    <thead><tr><th>User</th><th>Source</th><th>IP</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for s in active_sessions %}
+                        <tr>
+                            <td class="text-white">{{ s.user.username }}</td>
+                            <td>
+                                <span class="platform-badge {% if s.source == 'web' %}bg-primary{% elif s.source == 'android' %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
+                                </span>
+                            </td>
+                            <td class="text-secondary" style="font-size:.78rem;">{{ s.ip_address|default:"—" }}</td>
+                            <td><span class="session-dot {% if s.is_active %}active{% else %}inactive{% endif %}"></span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-secondary py-3">No active sessions</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connection Details -->
+<div class="stat-card mb-4">
+    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-plug me-2 text-info"></i>Connection Summary (Web vs Android)</h6>
+    <div class="row g-3">
+        {% for p in platform_data %}
+        <div class="col-md-4">
+            <div class="p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid var(--border);">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    {% if p.platform == 'web' %}
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
+                    {% elif p.platform == 'android' %}
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
+                    {% else %}
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(168,85,247,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-apple" style="color:#a855f7;"></i></div>
+                    {% endif %}
+                    <div>
+                        <div class="fw-bold text-white text-capitalize">{{ p.platform }}</div>
+                        <small class="text-secondary">{{ p.views }} views</small>
+                    </div>
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-6">
+                        <div class="text-secondary">Total Time</div>
+                        <div class="text-white fw-bold">{% widthratio p.total_time 1 1 %}s</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary">Avg/View</div>
+                        <div class="text-white fw-bold">{% if p.views %}{% widthratio p.total_time p.views 1 %}{% else %}0{% endif %}s</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center text-secondary py-3">No connection data yet</div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

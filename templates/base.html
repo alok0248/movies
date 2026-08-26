@@ -2128,6 +2128,131 @@
             initLazyImageLoading();
             loadProgressBars();
             initScrollProgressAndBackToTop();
+
+            // Page View Tracking
+            (function() {
+                var _pvViewId = null;
+                var _pvStartTime = Date.now();
+                var _pvScrollMax = 0;
+                var _pvPath = window.location.pathname + window.location.search;
+                var _pvTitle = document.title || '';
+                var _pvVisitorId = '';
+
+                // Get or generate visitor ID
+                var vidCookie = document.cookie.match(/website_visitor_id=([^;]+)/);
+                if (vidCookie) _pvVisitorId = vidCookie[1];
+                else {
+                    _pvVisitorId = 'v_' + Math.random().toString(36).substr(2, 12);
+                }
+
+                // Detect platform
+                var _pvPlatform = 'web';
+                if (/Android/i.test(navigator.userAgent)) _pvPlatform = 'android';
+                else if (/iPhone|iPad/i.test(navigator.userAgent)) _pvPlatform = 'ios';
+
+                // Skip tracking for admin/static/api paths
+                if (_pvPath.indexOf('/admin') === 0 || _pvPath.indexOf('/api/') === 0 || _pvPath.indexOf('/static/') === 0) return;
+
+                function _pvCsrf() {
+                    var m = document.cookie.match(/csrftoken=([^;]+)/);
+                    return m ? m[1] : '';
+                }
+
+                function _pvSend(payload) {
+                    try {
+                        var blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+                        if (navigator.sendBeacon) {
+                            navigator.sendBeacon('/ajax/track-page-view/', blob);
+                        } else {
+                            fetch('/ajax/track-page-view/', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json', 'X-CSRFToken': _pvCsrf()},
+                                body: JSON.stringify(payload),
+                                keepalive: true
+                            }).catch(function(){});
+                        }
+                    } catch(e) {}
+                }
+
+                // Track scroll depth
+                window.addEventListener('scroll', function() {
+                    var h = document.documentElement;
+                    var pct = Math.round((h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100);
+                    if (pct > _pvScrollMax) _pvScrollMax = pct;
+                }, {passive: true});
+
+                // Initial page view
+                fetch('/ajax/track-page-view/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': _pvCsrf()},
+                    body: JSON.stringify({
+                        action: 'view',
+                        path: _pvPath,
+                        title: _pvTitle,
+                        visitor_id: _pvVisitorId,
+                        platform: _pvPlatform,
+                        scroll_depth: 0,
+                        referrer: document.referrer || ''
+                    })
+                }).then(function(r) { return r.json(); })
+                .then(function(d) { _pvViewId = d.view_id || null; })
+                .catch(function(){});
+
+                // Heartbeat every 15 seconds
+                setInterval(function() {
+                    var elapsed = Math.round((Date.now() - _pvStartTime) / 1000);
+                    fetch('/ajax/track-page-view/', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': _pvCsrf()},
+                        body: JSON.stringify({
+                            action: 'heartbeat',
+                            view_id: _pvViewId,
+                            path: _pvPath,
+                            title: _pvTitle,
+                            time_spent: elapsed,
+                            scroll_depth: _pvScrollMax,
+                            visitor_id: _pvVisitorId,
+                            platform: _pvPlatform
+                        })
+                    }).then(function(r) { return r.json(); })
+                    .then(function(d) { if (d.view_id && !_pvViewId) _pvViewId = d.view_id; })
+                    .catch(function(){});
+                }, 15000);
+
+                // End tracking on page unload
+                window.addEventListener('beforeunload', function() {
+                    var elapsed = Math.round((Date.now() - _pvStartTime) / 1000);
+                    _pvSend({
+                        action: 'end',
+                        view_id: _pvViewId,
+                        path: _pvPath,
+                        title: _pvTitle,
+                        time_spent: elapsed,
+                        scroll_depth: _pvScrollMax,
+                        visitor_id: _pvVisitorId,
+                        platform: _pvPlatform
+                    });
+                });
+                document.addEventListener('visibilitychange', function() {
+                    if (document.hidden) {
+                        var elapsed = Math.round((Date.now() - _pvStartTime) / 1000);
+                        _pvSend({
+                            action: 'end',
+                            view_id: _pvViewId,
+                            path: _pvPath,
+                            title: _pvTitle,
+                            time_spent: elapsed,
+                            scroll_depth: _pvScrollMax,
+                            visitor_id: _pvVisitorId,
+                            platform: _pvPlatform
+                        });
+                    } else {
+                        // Reset start time when coming back
+                        _pvStartTime = Date.now();
+                        _pvScrollMax = 0;
+                    }
+                });
+            })();
         });
 
         let currentCalendarDate = new Date();

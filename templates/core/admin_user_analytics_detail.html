@@ -1,0 +1,185 @@
+{% extends 'core/admin_base.html' %}
+{% block admin_content %}
+
+<style>
+    .uad-hero {
+        background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(168,85,247,.08));
+        border: 1px solid rgba(99,102,241,.2);
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .uad-stat {
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.2rem;
+        text-align: center;
+    }
+    .uad-num {
+        font-size: 1.8rem;
+        font-weight: 800;
+    }
+    .table-analytics td {
+        padding: .6rem .8rem;
+        font-size: .82rem;
+        border-color: rgba(255,255,255,.06);
+    }
+    .table-analytics th {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        opacity: .5;
+        border-color: rgba(255,255,255,.06);
+        padding: .5rem .8rem;
+    }
+    .session-dot {
+        width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .session-dot.active { background: #22c55e; }
+    .session-dot.inactive { background: #6b7280; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <a href="{% url 'admin_analytics' %}?days=30" class="text-info text-decoration-none small"><i class="fas fa-arrow-left me-1"></i>Back to Analytics</a>
+        <h2 class="gradient-text mb-0" style="font-size:1.4rem;font-weight:800;">
+            {{ target_user.username }} Analytics
+        </h2>
+        <small class="text-secondary">{{ target_user.email }} · {{ days }} days</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="?days=7" class="btn btn-sm {% if days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7D</a>
+        <a href="?days=30" class="btn btn-sm {% if days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}">30D</a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-4">
+        <div class="uad-stat">
+            <div class="text-secondary small">Page Views</div>
+            <div class="uad-num" style="color:#38bdf8;">{{ total_views }}</div>
+        </div>
+    </div>
+    <div class="col-4">
+        <div class="uad-stat">
+            <div class="text-secondary small">Time Spent</div>
+            <div class="uad-num" style="color:#a855f7;">{% if total_time > 3600 %}{{ total_time|floatformat:0|truncatechars:4 }}h{% elif total_time > 60 %}{{ total_time|floatformat:0|truncatechars:4 }}m{% else %}{{ total_time }}s{% endif %}</div>
+        </div>
+    </div>
+    <div class="col-4">
+        <div class="uad-stat">
+            <div class="text-secondary small">Avg/Page</div>
+            <div class="uad-num" style="color:#22c55e;">{% if total_views %}{% widthratio total_time total_views 1 %}{% else %}0{% endif %}s</div>
+        </div>
+    </div>
+</div>
+
+<!-- Platform + Daily Chart -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="uad-stat h-100">
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-desktop me-2 text-info"></i>Platform</h6>
+            {% for p in platform_data %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="badge {% if p.platform == 'web' %}bg-primary{% elif p.platform == 'android' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                    {% if p.platform == 'web' %}🌐 Web{% elif p.platform == 'android' %}🤖 Android{% else %}📱 {{ p.platform }}{% endif %}
+                </span>
+                <span class="text-white fw-bold">{{ p.views }} views</span>
+            </div>
+            {% empty %}
+            <div class="text-secondary text-center">No data</div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="uad-stat h-100">
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-chart-bar me-2 text-info"></i>Daily Activity</h6>
+            <div class="d-flex align-items-end gap-1" style="height:80px;">
+                {% for d in daily_views %}
+                <div class="flex-fill text-center" title="{{ d.date }}: {{ d.views }}" style="min-width:0;">
+                    <div style="height:{% if d.views %}{% widthratio d.views 1 1 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#818cf8,#a855f7);border-radius:3px 3px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};"></div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Pages -->
+<div class="uad-stat mb-4">
+    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-file-alt me-2 text-info"></i>Top Pages Visited</h6>
+    <div class="table-responsive">
+        <table class="table table-dark table-analytics mb-0">
+            <thead><tr><th>#</th><th>Page</th><th>Views</th><th>Total Time</th></tr></thead>
+            <tbody>
+                {% for p in top_pages %}
+                <tr>
+                    <td class="text-secondary">{{ forloop.counter }}</td>
+                    <td class="text-info">{{ p.page_title|default:p.path|truncatechars:60 }}</td>
+                    <td class="fw-bold text-white">{{ p.views }}</td>
+                    <td class="text-secondary">{{ p.total_time|default:0 }}s</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-secondary py-3">No pages visited</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Sessions -->
+<div class="uad-stat mb-4">
+    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-plug me-2 text-success"></i>Login Sessions</h6>
+    <div class="table-responsive">
+        <table class="table table-dark table-analytics mb-0">
+            <thead><tr><th>Source</th><th>IP</th><th>Device</th><th>Login Time</th><th>Last Seen</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td>
+                        <span class="badge {% if s.source == 'web' %}bg-primary{% elif s.source == 'android' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
+                        </span>
+                    </td>
+                    <td class="text-secondary">{{ s.ip_address|default:"—" }}</td>
+                    <td class="text-secondary">{{ s.device_model|default:"—" }}</td>
+                    <td class="text-secondary">{{ s.logged_in_at|date:"M d, H:i" }}</td>
+                    <td class="text-secondary">{{ s.last_seen_at|date:"M d, H:i" }}</td>
+                    <td><span class="session-dot {% if s.is_active %}active{% else %}inactive{% endif %}"></span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-secondary py-3">No sessions</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Page Views -->
+<div class="uad-stat">
+    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-history me-2 text-info"></i>Recent Page Views</h6>
+    <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+        <table class="table table-dark table-analytics mb-0">
+            <thead><tr><th>Time</th><th>Page</th><th>Platform</th><th>Time Spent</th><th>Scroll</th></tr></thead>
+            <tbody>
+                {% for v in recent_views %}
+                <tr>
+                    <td class="text-secondary">{{ v.viewed_at|date:"M d H:i:s" }}</td>
+                    <td class="text-info" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ v.page_title|default:v.path }}</td>
+                    <td>
+                        <span class="badge {% if v.platform == 'web' %}bg-primary{% elif v.platform == 'android' %}bg-success{% else %}bg-secondary{% endif %}" style="font-size:.65rem;">{{ v.platform }}</span>
+                    </td>
+                    <td class="text-secondary">{{ v.time_spent_seconds }}s</td>
+                    <td class="text-secondary">{{ v.scroll_depth|floatformat:0 }}%</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-secondary py-3">No page views recorded</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
