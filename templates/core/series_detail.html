@@ -1054,6 +1054,30 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
     fetch('/ajax/prefetch-sources/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv', {mode: 'no-cors'}).catch(function(){});
 }
 
+/* Double-click to toggle fullscreen on player */
+(function() {
+    var playerBox = document.querySelector('.det-player-box');
+    if (!playerBox) return;
+    var lastClick = 0;
+    playerBox.addEventListener('click', function(ev) {
+        var now = Date.now();
+        if (now - lastClick < 350) {
+            // Double click detected — toggle fullscreen
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            } else {
+                var el = playerBox.closest('.det-player-left') || playerBox.parentElement;
+                (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+            }
+        }
+        lastClick = now;
+    });
+    // Prevent text selection on double click
+    playerBox.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
+})();
+
 /* Forward arrow keys to player iframe */
 document.addEventListener('keydown', function(ev) {
     var iframe = document.querySelector('#player-container iframe');
