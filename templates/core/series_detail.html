@@ -1074,12 +1074,31 @@ function playEpisode(epNum) {
     document.querySelectorAll('.ep-tab').forEach(function(t) {
         t.classList.toggle('active', parseInt(t.getAttribute('data-ep')) === epNum);
     });
+    // Move the NOW badge to the currently playing episode
+    updateNowBadge(epNum);
     var ep = currentEpisodesData.find(function(x) { return x.episode_number === epNum; });
     if (ep) updateEpisodeDetails(ep);
     // Show episode splash while extracting
     showEpSplash(ep, epNum);
     updatePlayerUrl();
     updatePauseOverlayInfo();
+}
+
+/* Move the NOW badge to the correct episode card */
+function updateNowBadge(epNum) {
+    var nowStyle = 'font-size:.6rem;padding:2px 6px;border-radius:4px;background:rgba(229,9,20,.2);color:var(--brand,#e50914);font-weight:700';
+    var nowBadgeHtml = '<span class="ep-now-badge" style="' + nowStyle + '">\u25b6 NOW</span>';
+    document.querySelectorAll('.ep-list-card').forEach(function(card) {
+        var isNow = parseInt(card.getAttribute('data-ep')) === epNum;
+        // Remove any existing badge first
+        var existing = card.querySelector('.ep-now-badge');
+        if (existing) existing.remove();
+        // Add badge to the correct card
+        if (isNow) {
+            var meta = card.querySelector('.ep-meta');
+            if (meta) meta.insertAdjacentHTML('beforeend', nowBadgeHtml);
+        }
+    });
 }
 
 /* Episode splash — shows while extracting */
