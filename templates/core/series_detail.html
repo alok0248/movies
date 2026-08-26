@@ -519,10 +519,14 @@ html[data-theme="light"] .nf-progress-track{background:rgba(0,0,0,.2)}
 html[data-theme="light"] .nf-progress-buffered{background:rgba(0,0,0,.15)}
 html[data-theme="light"] .nf-center-play{background:rgba(0,0,0,.5)}
 
-/* Hide old player controls — replaced by Netflix controls */
-.player-controls-row{display:none!important}
-.src-selector{display:none!important}
-.dual-panel{display:none!important}
+/* Player UI style toggle */
+body.player-classic .nf-controls{display:none!important}
+body.player-classic .nf-center-play{display:none!important}
+body.player-classic .nf-skip-indicator{display:none!important}
+body.player-classic .nf-speed-badge{display:none!important}
+body.player-netflix .player-controls-row{display:none!important}
+body.player-netflix .src-selector{display:none!important}
+body.player-netflix .dual-panel{display:none!important}
 
 /* Fullscreen styles */
 .det-player-left:fullscreen{background:#000;display:flex;flex-direction:column;justify-content:center}
@@ -838,6 +842,13 @@ html[data-theme="light"] .nf-center-play{background:rgba(0,0,0,.5)}
 <script src="/static/js/client-extract.js?v=1787592396"></script>
 <script src="/static/js/player-core.js?v=1787592396"></script>
 <script>
+// ===== Player UI Style =====
+(function() {
+    var style = '{{ site_settings.player_ui_style|default:"default" }}';
+    if (style === 'netflix') document.body.classList.add('player-netflix');
+    else document.body.classList.add('player-classic');
+})();
+
 // ===== Player configurations =====
 const playerConfigs = {
     0: { name: 'Extractor', isExtractor: true },

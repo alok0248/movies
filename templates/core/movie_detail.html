@@ -574,6 +574,13 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 <script src="/static/js/client-extract.js?v=1787592396"></script>
 <script src="/static/js/player-core.js?v=1787592396"></script>
 <script>
+// ===== Player UI Style =====
+(function() {
+    var style = '{{ site_settings.player_ui_style|default:"default" }}';
+    if (style === 'netflix') document.body.classList.add('player-netflix');
+    else document.body.classList.add('player-classic');
+})();
+
 // ===== Player configurations =====
 const playerConfigs = {
     0: { name: 'Extractor', isExtractor: true },

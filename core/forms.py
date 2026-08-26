@@ -204,10 +204,11 @@ class TMDBDBSettingsForm(forms.ModelForm):
 class PlayerSettingsForm(forms.ModelForm):
     class Meta:
         model = SiteSettings
-        fields = ['active_movie_player', 'active_tv_player']
+        fields = ['active_movie_player', 'active_tv_player', 'player_ui_style']
         widgets = {
             'active_movie_player': forms.Select(attrs={'class': 'form-select'}),
             'active_tv_player': forms.Select(attrs={'class': 'form-select'}),
+            'player_ui_style': forms.Select(attrs={'class': 'form-select'}),
         }
 
 
