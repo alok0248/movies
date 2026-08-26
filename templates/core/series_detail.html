@@ -264,9 +264,24 @@ html[data-theme="light"] .po-title, html[data-theme="light"] .po-ep-title, html[
 /* Episode tabs (horizontal scrollable pills under player) */
 .ep-tabs-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;padding:.8rem 0;border-bottom:1px solid rgba(255,255,255,.06)}
 .ep-tabs-season{flex-shrink:0}
-.ep-season-select{padding:6px 30px 6px 10px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8);font-size:.8rem;font-weight:600;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888' d='M5 7L0 2h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;font-family:inherit;}
-html[data-theme="light"] .ep-season-select{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.1);color:#333;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23333' d='M5 7L0 2h10z'/%3E%3C/svg%3E");}
-html[data-theme="light"] .ep-season-select option{background:#fff;color:#333;}
+.ep-season-wrap{position:relative;min-width:160px;}
+.ep-season-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 28px 6px 10px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .2s;user-select:none;}
+.ep-season-trigger:hover{background:rgba(255,255,255,.12);}
+.ep-season-trigger::after{content:'';position:absolute;right:10px;top:50%;transform:translateY(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor;pointer-events:none;transition:transform .2s;}
+.ep-season-wrap.open .ep-season-trigger::after{transform:translateY(-20%) rotate(180deg);}
+.ep-season-wrap.open .ep-season-trigger{border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.12);}
+.ep-season-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;background:#1a1a2e;border:1px solid rgba(255,255,255,.12);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:100;overflow:hidden;opacity:0;transform:translateY(-6px) scale(.96);pointer-events:none;transition:all .18s ease;}
+.ep-season-wrap.open .ep-season-dropdown{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+.ep-season-option{padding:8px 12px;color:#d0d0d8;font-size:.8rem;font-weight:500;cursor:pointer;transition:all .15s;border-left:3px solid transparent;}
+.ep-season-option:hover{background:rgba(255,255,255,.08);color:#fff;}
+.ep-season-option.active{background:rgba(229,9,20,.12);color:#fff;border-left-color:var(--brand,#e50914);font-weight:700;}
+html[data-theme="light"] .ep-season-trigger{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#222;}
+html[data-theme="light"] .ep-season-trigger:hover{background:rgba(0,0,0,.08);}
+html[data-theme="light"] .ep-season-wrap.open .ep-season-trigger{border-color:rgba(0,0,0,.2);background:rgba(0,0,0,.08);}
+html[data-theme="light"] .ep-season-dropdown{background:#fff;border-color:rgba(0,0,0,.1);box-shadow:0 12px 40px rgba(0,0,0,.15);}
+html[data-theme="light"] .ep-season-option{color:#333;}
+html[data-theme="light"] .ep-season-option:hover{background:rgba(0,0,0,.05);color:#111;}
+html[data-theme="light"] .ep-season-option.active{background:rgba(229,9,20,.08);color:#111;border-left-color:var(--brand,#e50914);}
 .ep-tabs-scroll{display:flex;gap:.4rem;overflow-x:auto;scrollbar-width:none;flex:1;padding:.2rem 0}
 .ep-tabs-scroll::-webkit-scrollbar{display:none}
 .ep-tab{flex-shrink:0;padding:.4rem 1rem;border-radius:8px;font-size:.75rem;font-weight:600;background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:all .2s;white-space:nowrap;position:relative}
@@ -720,11 +735,16 @@ body.player-netflix .dual-panel{display:none!important}
     <!-- Episode Tabs + Season Selector -->
     <div class="ep-tabs-bar">
         <div class="ep-tabs-season">
-            <select id="seasonSelect" class="ep-season-select">
-                {% for season in seasons %}
-                <option value="{{ season.season_number }}" {% if season.season_number == current_season %}selected{% endif %}>{{ season.name }}</option>
-                {% endfor %}
-            </select>
+            <div class="ep-season-wrap" id="seasonDropdown">
+                <div class="ep-season-trigger" id="seasonTrigger">
+                    {% for season in seasons %}{% if season.season_number == current_season %}{{ season.name }}{% endif %}{% endfor %}
+                </div>
+                <div class="ep-season-dropdown" id="seasonDropdownMenu">
+                    {% for season in seasons %}
+                    <div class="ep-season-option{% if season.season_number == current_season %} active{% endif %}" data-season="{{ season.season_number }}">{{ season.name }}</div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
         <div class="ep-tabs-scroll" id="episodeTabs">
             {% now "Y-m-d" as today_date %}
@@ -1286,10 +1306,35 @@ var _pc = document.getElementById('player-container');
 if (_pc) _poObserver.observe(_pc, {childList: true, subtree: true});
 
 
-document.getElementById('seasonSelect').addEventListener('change', function(e) {
-    var v = parseInt(e.target.value);
-    if (v !== currentSeason) loadEpisodesForSeason(v);
-});
+/* ── Custom Season Dropdown ── */
+(function() {
+    var wrap = document.getElementById('seasonDropdown');
+    var trigger = document.getElementById('seasonTrigger');
+    var menu = document.getElementById('seasonDropdownMenu');
+    if (!wrap || !trigger || !menu) return;
+
+    trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        wrap.classList.toggle('open');
+    });
+
+    menu.addEventListener('click', function(e) {
+        var opt = e.target.closest('.ep-season-option');
+        if (!opt) return;
+        var sn = parseInt(opt.getAttribute('data-season'));
+        // Update active
+        menu.querySelectorAll('.ep-season-option').forEach(function(o) { o.classList.remove('active'); });
+        opt.classList.add('active');
+        // Update trigger text
+        trigger.textContent = opt.textContent;
+        // Close dropdown
+        wrap.classList.remove('open');
+        // Load episodes
+        if (sn !== currentSeason) loadEpisodesForSeason(sn);
+    });
+
+    document.addEventListener('click', function() { wrap.classList.remove('open'); });
+})();
 
 // URL stays constant — no popstate needed
 
