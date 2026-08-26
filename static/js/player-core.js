@@ -247,74 +247,62 @@ function _addSource(s) {
 }
 
 var _selQuality = null; var _selLanguage = null; var _selServer = null;
+var _activeSrcIdx = 0;
 
 function _renderSourceList(){
   var box=document.getElementById('sourceSelector');
   if(!box||!_allSources.length)return;
+  /* Deduplicate by URL */
   var seen={};var unique=[];
-  _allSources.forEach(function(s,i){var k=(s.quality||'?')+'|'+(s.language||'')+'|'+(s.server||'');if(!seen[k]){seen[k]=1;unique.push({s:s,idx:i});}});
-  var qMap={};unique.forEach(function(u){var q=u.s.quality||'?';if(!qMap[q])qMap[q]=[];qMap[q].push(u);});
-  var lMap={};unique.forEach(function(u){var l=u.s.language||'Original';if(!lMap[l])lMap[l]=[];lMap[l].push(u);});
-  var qualities=Object.keys(qMap).sort(function(a,b){var o={'2160p':0,'2160':0,'1080p':1,'1080':1,'720p':2,'720':2,'480p':3,'480':3,'360p':4,'360':4,'Auto':99,'Vimeos':98};return(o[a]||50)-(o[b]||50);});
-  var languages=Object.keys(lMap).sort();
-  if(!_selQuality&&qualities.length)_selQuality=qualities[0];
-  if(!_selLanguage&&languages.length)_selLanguage=languages[0];
-  var qh='<div class="src-dd" id="qDD"><span class="src-dd-label">Resolution</span>';
-  qh+='<div class="src-dd-btn" data-toggle="qDD">'+(_selQuality||'Quality')+' <span class="dd-icon">&#9660;</span></div>';
-  qh+='<div class="src-dd-menu">';
-  qualities.forEach(function(q){var cls=q===_selQuality?' chosen':'';qh+='<div class="src-dd-opt'+cls+'" data-action="pickQ" data-value="'+q+'">'+q+'<span class="opt-count">'+qMap[q].length+'</span></div>';});
-  qh+='</div></div>';
-  var lh='<div class="src-dd" id="lDD"><span class="src-dd-label">Language</span>';
-  lh+='<div class="src-dd-btn" data-toggle="lDD">'+(_selLanguage||'Language')+' <span class="dd-icon">&#9660;</span></div>';
-  lh+='<div class="src-dd-menu">';
-  languages.forEach(function(l){var cls=l===_selLanguage?' chosen':'';lh+='<div class="src-dd-opt'+cls+'" data-action="pickL" data-value="'+l+'">'+l+'<span class="opt-count">'+lMap[l].length+'</span></div>';});
-  lh+='</div></div>';
+  _allSources.forEach(function(s,i){if(!seen[s.url]){seen[s.url]=1;unique.push({s:s,idx:i});}});
+  /* Sort: group by language then quality */
+  var qo={'2160p':0,'2160':0,'4k':0,'1080p':1,'1080':1,'720p':2,'720':2,'480p':3,'480':3,'360p':4,'360':4};
+  unique.sort(function(a,b){
+    var la=(a.s.language||'Original').toLowerCase();var lb=(b.s.language||'Original').toLowerCase();
+    if(la!==lb)return la.localeCompare(lb);
+    var qa=(a.s.quality||'?').toLowerCase();var qb=(b.s.quality||'?').toLowerCase();
+    return (qo[qa]||50)-(qo[qb]||50);
+  });
+  /* Build flat list of all streams */
+  var html='';
+  unique.forEach(function(u,i){
+    var s=u.s;
+    var lang=s.language||'Original';
+    var q=s.quality||'?';
+    var server=s.server||s.server_name||'?';
+    var active=(i===_activeSrcIdx)?' active':'';
+    html+='<div class="src-item'+active+'" data-src-idx="'+i+'" onclick="_pickStream('+i+')">';
+    html+='<span class="src-lang">'+lang+'</span>';
+    html+='<span class="src-q">'+q+'</span>';
+    html+='<span class="src-server">'+server+'</span>';
+    html+='</div>';
+  });
   var popBtn='<div class="ctrl-pop-btn" id="popBtn" onclick="_openPopup()" title="Open in popup player">&#9654; Pop</div>';
-  box.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>'+qh+lh+popBtn+'<span class="src-active-info" id="srcInfo"></span>';
+  var info='<span class="src-active-info" id="srcInfo">'+unique.length+' streams</span>';
+  box.innerHTML='<div class="ctrl-toggle" id="dualToggle" onclick="toggleDualMode()">Dual Stream</div>'+
+    '<div class="src-list">'+html+'</div>'+popBtn+info;
   box.classList.add('open');
+  _uniqueSources=unique;
   _updateSrcInfo();
 }
+var _uniqueSources=[];
 
-document.addEventListener('click',function(e){
-  var btn=e.target.closest('[data-toggle]');
-  if(btn){var id=btn.getAttribute('data-toggle');var dd=document.getElementById(id);if(!dd)return;var wasOpen=dd.classList.contains('open');document.querySelectorAll('.src-dd').forEach(function(d){if(d!==dd)d.classList.remove('open');});if(!wasOpen)dd.classList.add('open');else dd.classList.remove('open');_resetAutoFold();return;}
-  var opt=e.target.closest('[data-action]');
-  if(opt){var action=opt.getAttribute('data-action');var val=opt.getAttribute('data-value');document.querySelectorAll('.src-dd').forEach(function(d){d.classList.remove('open');});if(action==='pickQ'){_selQuality=val;_playSelected();_renderSourceList();}else if(action==='pickL'){_selLanguage=val;_playSelected();_renderSourceList();}_resetAutoFold();return;}
-  /* Don't close dropdowns on outside click — only auto-fold timer closes them */
-});
-
-function _playSelected() {
-  var match = _findBestMatch();
-  if (match) {
-    var v = document.getElementById('mainVideo');
-    if (v) _playHls(match.s.url, v);
-  }
+function _pickStream(idx){
+  if(!_uniqueSources[idx])return;
+  _activeSrcIdx=idx;
+  var s=_uniqueSources[idx].s;
+  _selQuality=s.quality||null;
+  _selLanguage=s.language||'Original';
+  var v=document.getElementById('mainVideo');
+  if(v)_playHls(s.url,v);
+  _renderSourceList();
 }
 
+function _playSelected(){_pickStream(_activeSrcIdx);}
+
 function _findBestMatch() {
-  var seen = {}; var unique = [];
-  _allSources.forEach(function(s, i) {
-    var k = (s.quality||'?') + '|' + (s.language||'') + '|' + (s.server||'');
-    if (!seen[k]) { seen[k]=1; unique.push({s:s,idx:i}); }
-  });
-
-  /* Find sources matching both quality and language */
-  var matches = unique.filter(function(u) {
-    var qMatch = !_selQuality || u.s.quality === _selQuality;
-    var l = u.s.language || 'Original';
-    var lMatch = !_selLanguage || l === _selLanguage;
-    return qMatch && lMatch;
-  });
-
-  /* Fallback: match quality only */
-  if (!matches.length) {
-    matches = unique.filter(function(u) {
-      return !_selQuality || u.s.quality === _selQuality;
-    });
-  }
-
-  /* Fallback: first source */
-  return matches[0] || unique[0] || null;
+  if(_uniqueSources[_activeSrcIdx])return _uniqueSources[_activeSrcIdx];
+  return _uniqueSources[0]||null;
 }
 
 function _updateSrcInfo() {

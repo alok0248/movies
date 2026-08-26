@@ -245,6 +245,28 @@ html[data-theme="light"] .po-title, html[data-theme="light"] .po-ep-title, html[
 .det-sel-group select:focus{outline:none;border-color:var(--brand,#e50914)}
 .det-sel-group select option{background:#1a1a2e;color:rgba(255,255,255,.85)}
 
+/* Stream list (all playable links) */
+.src-list{display:flex;flex-direction:column;gap:2px;max-height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent;flex:1}
+.src-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;transition:all .15s;font-size:.73rem;color:rgba(255,255,255,.65);border:1px solid transparent}
+.src-item:hover{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.1)}
+.src-item.active{background:rgba(229,9,20,.15);color:#fff;border-color:rgba(229,9,20,.4)}
+.src-lang{padding:2px 6px;border-radius:4px;background:rgba(230,126,34,.15);color:#e67e22;font-weight:600;font-size:.65rem;white-space:nowrap}
+.src-item.active .src-lang{background:rgba(229,9,20,.2);color:#e50914}
+.src-q{padding:2px 6px;border-radius:4px;background:rgba(108,92,231,.15);color:#a78bfa;font-weight:600;font-size:.65rem;white-space:nowrap}
+.src-server{color:rgba(255,255,255,.35);font-size:.65rem;margin-left:auto;white-space:nowrap}
+.src-active-info{color:rgba(255,255,255,.3);font-size:.65rem;white-space:nowrap}
+.src-selector .ctrl-toggle{padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);font-size:.7rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.src-selector .ctrl-toggle:hover{background:rgba(255,255,255,.12);color:#fff}
+.src-selector .ctrl-toggle.active{background:rgba(70,211,105,.15);color:#46d369;border-color:rgba(70,211,105,.3)}
+html[data-theme="light"] .src-item{color:rgba(26,26,46,.65)}
+html[data-theme="light"] .src-item:hover{background:rgba(0,0,0,.06);color:#1a1a2e}
+html[data-theme="light"] .src-item.active{background:rgba(229,9,20,.1);color:#1a1a2e}
+html[data-theme="light"] .src-lang{color:#e67e22}
+html[data-theme="light"] .src-q{color:#6c5ce7}
+html[data-theme="light"] .src-server{color:rgba(26,26,46,.35)}
+html[data-theme="light"] .src-active-info{color:rgba(26,26,46,.5)}
+html[data-theme="light"] .ctrl-toggle{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08);color:rgba(26,26,46,.6)}
+
 /* Episode card */
 .det-ep-card{border-radius:16px;overflow:hidden;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);margin-bottom:1.5rem}
 .det-ep-card img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
