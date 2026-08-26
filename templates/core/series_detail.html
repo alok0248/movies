@@ -1004,44 +1004,41 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
 
 /* Single click = pause, Double click = fullscreen */
 (function() {
-    var playerBox = document.querySelector('.det-player-box');
-    if (!playerBox) return;
-    var lastClick = 0;
-    var clickTimer = null;
-    playerBox.addEventListener('click', function(ev) {
-        var now = Date.now();
-        if (now - lastClick < 350) {
-            // Double click — toggle fullscreen
-            clearTimeout(clickTimer);
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (document.fullscreenElement || document.webkitFullscreenElement) {
-                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-            } else {
-                var el = playerBox.closest('.det-player-left') || playerBox.parentElement;
-                (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-            }
-            lastClick = 0;
-            return;
-        }
-        lastClick = now;
-        // Single click — pause/play (delayed to check for double click)
-        clickTimer = setTimeout(function() {
+    var wrapper = document.querySelector('.det-player-left');
+    if (!wrapper) return;
+    var clickTimeout = null;
+    wrapper.addEventListener('click', function(ev) {
+        // Ignore clicks on buttons, links, selects, overlays
+        if (ev.target.closest('button, a, select, .pause-overlay, .deferred-ad-slot, .player-controls-row, .dual-panel, .src-selector')) return;
+        // Debounce: if another click comes within 300ms, it's a double click — skip single action
+        if (clickTimeout) { clearTimeout(clickTimeout); clickTimeout = null; return; }
+        clickTimeout = setTimeout(function() {
+            clickTimeout = null;
             var v = document.getElementById('mainVideo');
             if (v) {
                 if (v.paused) v.play().catch(function(){});
                 else v.pause();
             }
-            // Also try iframe postMessage
-            var iframe = playerBox.querySelector('iframe');
+            var iframe = wrapper.querySelector('iframe');
             if (iframe && iframe.contentWindow) {
-                try {
-                    iframe.contentWindow.postMessage(JSON.stringify({method: 'togglePlay'}), '*');
-                } catch(e) {}
+                try { iframe.contentWindow.postMessage(JSON.stringify({method: 'togglePlay'}), '*'); } catch(e) {}
             }
-        }, 360);
+        }, 300);
     });
-    playerBox.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
+    wrapper.addEventListener('dblclick', function(ev) {
+        if (ev.target.closest('button, a, select, .pause-overlay, .deferred-ad-slot, .player-controls-row, .dual-panel, .src-selector')) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (clickTimeout) { clearTimeout(clickTimeout); clickTimeout = null; }
+        var playerBox = wrapper.querySelector('.det-player-box');
+        if (!playerBox) return;
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        } else {
+            (playerBox.requestFullscreen || playerBox.webkitRequestFullscreen).call(playerBox);
+        }
+    });
+    wrapper.addEventListener('mousedown', function(ev) { if (ev.detail > 1) ev.preventDefault(); });
 })();
 
 /* Forward arrow keys to player iframe */
