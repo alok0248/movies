@@ -49,3 +49,10 @@ node_modules/
 # player/       # INCLUDED - player test files
 .git.corrupt/
 server_config.py
+
+# Temp standalone player
+tmp/
+
+# Sensitive credentials
+cred/
+.freebuff/

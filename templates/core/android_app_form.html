@@ -75,12 +75,18 @@
                         {% if form.json_payload_input.errors %}<div class="text-danger small mt-1">{{ form.json_payload_input.errors|join:', ' }}</div>{% endif %}
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-md-6">
                         <div class="form-check form-switch">
                             {{ form.is_active }}
                             <label class="form-check-label text-white" for="{{ form.is_active.id_for_label }}">Active endpoint</label>
                         </div>
                         {% if form.is_active.errors %}<div class="text-danger small mt-1">{{ form.is_active.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.data_retention_days.label }}</label>
+                        {{ form.data_retention_days }}
+                        <div class="form-text text-secondary">Days to keep analytics logs. Older data is auto-deleted.</div>
+                        {% if form.data_retention_days.errors %}<div class="text-danger small mt-1">{{ form.data_retention_days.errors|join:', ' }}</div>{% endif %}
                     </div>
                 </div>
 

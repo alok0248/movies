@@ -2818,6 +2818,16 @@ def android_app_edit(request, app_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def android_app_delete(request, app_id):
+    android_app = get_object_or_404(AndroidApp, id=app_id)
+    if request.method == 'POST':
+        android_app.delete()
+        return redirect('android_app_list')
+    return render(request, 'core/android_app_delete.html', {'android_app': android_app})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def android_app_dashboard(request, app_id=None):
     apps = AndroidApp.objects.all().order_by('name')
     selected_app = None

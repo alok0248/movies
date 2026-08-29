@@ -340,21 +340,22 @@ class PlayerConfigurationForm(forms.ModelForm):
 class AndroidAppForm(forms.ModelForm):
     json_payload_input = forms.CharField(
         label='JSON Data',
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 12, 'placeholder': '{\n  "key": "value"\n}'}),
-        help_text='Paste valid JSON that should be returned by this Android app endpoint.'
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 12, 'placeholder': '{\n  "key": "value"\n}', 'style': 'font-family: monospace; font-size: 0.9rem;'}),
+        help_text='Paste valid JSON that should be returned by this Android app endpoint. Leave empty for an empty payload.'
     )
 
     class Meta:
         model = AndroidApp
         fields = ['name', 'slug', 'allowed_endpoint', 'allowed_build_id', 'apk_file', 'access_username', 'access_password', 'is_active', 'data_retention_days']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Android app name'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., My Movie App'}),
             'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'auto-generated-if-empty'}),
-            'allowed_endpoint': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'com.example.app or package/build endpoint'}),
-            'allowed_build_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '1.0.0, 102, build-2026-07'}),
+            'allowed_endpoint': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., com.example.app or #225, #226, #225-#250'}),
+            'allowed_build_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., 1.0.0, 102, build-2026-07'}),
             'apk_file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
-            'access_username': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint username'}),
-            'access_password': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint password'}),
+            'access_username': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint username for Basic Auth'}),
+            'access_password': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint password for Basic Auth'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'data_retention_days': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 3650, 'placeholder': '30'}),
         }
@@ -363,9 +364,15 @@ class AndroidAppForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
             self.fields['json_payload_input'].initial = json.dumps(self.instance.json_payload, indent=2)
+        else:
+            self.fields['json_payload_input'].initial = '{\n}'
 
     def clean_json_payload_input(self):
-        value = self.cleaned_data['json_payload_input']
+        value = self.cleaned_data.get('json_payload_input', '')
+        value = (value or '').strip()
+        if not value:
+            self.cleaned_data['parsed_json_payload'] = {}
+            return '{}'
         try:
             parsed = json.loads(value)
         except json.JSONDecodeError as exc:

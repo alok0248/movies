@@ -61,6 +61,7 @@ urlpatterns = [
     path('admin-dashboard/android-apps/create/', views.android_app_create, name='android_app_create'),
     path('admin-dashboard/android-apps/<int:app_id>/toggle/', views.toggle_android_app, name='toggle_android_app'),
     path('admin-dashboard/android-apps/<int:app_id>/edit/', views.android_app_edit, name='android_app_edit'),
+    path('admin-dashboard/android-apps/<int:app_id>/delete/', views.android_app_delete, name='android_app_delete'),
     path('admin-dashboard/android-apps/analytics/', views.android_app_dashboard, name='android_app_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/', views.android_app_dashboard, name='android_app_dashboard_detail'),
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
