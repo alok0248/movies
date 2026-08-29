@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit, AmazonAffiliateProduct
+from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, AmazonAffiliateProduct
 
 
 @admin.register(AndroidApp)
@@ -56,6 +56,14 @@ class AndroidAppDeviceVisitAdmin(admin.ModelAdmin):
     list_filter = ('android_app', 'visited_at', 'os_version')
     search_fields = ('device__user_id', 'android_app__name', 'build_identifier', 'device_model', 'ip_address')
     readonly_fields = ('visited_at',)
+
+
+@admin.register(AndroidAppLog)
+class AndroidAppLogAdmin(admin.ModelAdmin):
+    list_display = ('android_app', 'level', 'tag', 'user_id', 'build_identifier', 'timestamp')
+    list_filter = ('android_app', 'level', 'timestamp')
+    search_fields = ('user_id', 'tag', 'message', 'build_identifier')
+    readonly_fields = ('timestamp',)
 
 
 @admin.register(ContentRow)

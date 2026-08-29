@@ -908,9 +908,43 @@ class AndroidAppDeviceVisit(models.Model):
         ordering = ['-visited_at']
         verbose_name = 'Android App Device Visit'
         verbose_name_plural = 'Android App Device Visits'
-    
+
     def __str__(self):
         return f"{self.device.user_id} - {self.visited_at}"
+
+
+class AndroidAppLog(models.Model):
+    LOG_LEVEL_CHOICES = [
+        ('debug', 'Debug'),
+        ('info', 'Info'),
+        ('warn', 'Warning'),
+        ('error', 'Error'),
+        ('fatal', 'Fatal'),
+    ]
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE, related_name='app_logs')
+    device = models.ForeignKey(AndroidAppDevice, on_delete=models.SET_NULL, null=True, blank=True, related_name='app_logs')
+    user_id = models.CharField(max_length=255, blank=True, default='')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    level = models.CharField(max_length=20, choices=LOG_LEVEL_CHOICES, default='info')
+    tag = models.CharField(max_length=255, blank=True, default='', help_text='Log tag / category')
+    message = models.TextField(blank=True, default='')
+    data = models.TextField(blank=True, default='', help_text='JSON payload for extra context')
+    build_identifier = models.CharField(max_length=255, blank=True, default='')
+    device_model = models.CharField(max_length=255, blank=True, default='')
+    os_version = models.CharField(max_length=50, blank=True, default='')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Android App Log'
+        verbose_name_plural = 'Android App Logs'
+        indexes = [
+            models.Index(fields=['android_app', '-timestamp']),
+            models.Index(fields=['level']),
+        ]
+
+    def __str__(self):
+        return f"[{self.level.upper()}] {self.android_app.name} - {self.tag} - {self.timestamp}"
 
 
 class WebsiteVisitor(models.Model):

@@ -152,6 +152,7 @@
                     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
                         <h5 class="text-white mb-0">Endpoint Configuration</h5>
                         <div class="d-flex gap-2">
+                            <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-scroll me-1"></i>Logs</a>
                             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code me-1"></i>Connection Helper</button>
                             <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">Synced Users</a>
                         </div>
