@@ -155,6 +155,7 @@
                             <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-scroll me-1"></i>Logs</a>
                             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code me-1"></i>Connection Helper</button>
                             <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">Synced Users</a>
+                            <a href="{% url 'android_app_clear_data' selected_app.id 'all_analytics' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('DELETE ALL analytics data for this app?\n\nThis includes: logs, failed attempts, devices, visits, access logs, build logs, daily visitors.\n\nThis cannot be undone!');"><i class="fas fa-skull-crossbones me-1"></i>Nuke All</a>
                         </div>
                     </div>
                     <div class="row g-3 small">
@@ -174,7 +175,10 @@
                             <h5 class="text-white mb-1">Failed Connection Attempts</h5>
                             <div class="text-secondary small">Recent failed attempts to connect to this endpoint (last 5).</div>
                         </div>
-                        <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="btn btn-sm btn-outline-danger">View All</a>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'android_app_clear_data' selected_app.id 'failed_attempts' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete ALL failed attempt records?');"><i class="fas fa-trash me-1"></i>Clear</a>
+                            <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="btn btn-sm btn-outline-danger">View All</a>
+                        </div>
                     </div>
                     {% if failed_attempts %}
                     <div class="table-responsive">
@@ -216,6 +220,7 @@
                             <h5 class="text-white mb-1">Recent Devices</h5>
                             <div class="text-secondary small">Last 10 unique devices</div>
                         </div>
+                        <a href="{% url 'android_app_clear_data' selected_app.id 'devices' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete ALL device records? This cannot be undone.');"><i class="fas fa-trash me-1"></i>Clear</a>
                     </div>
                     {% if recent_devices %}
                     <div class="table-responsive">
@@ -261,6 +266,7 @@
                             <h5 class="text-white mb-1">Recent Visits</h5>
                             <div class="text-secondary small">Last 20 device visits</div>
                         </div>
+                        <a href="{% url 'android_app_clear_data' selected_app.id 'device_visits' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete ALL device visit records? This cannot be undone.');"><i class="fas fa-trash me-1"></i>Clear</a>
                     </div>
                     {% if recent_visits %}
                     <div class="table-responsive">

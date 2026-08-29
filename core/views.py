@@ -3164,6 +3164,81 @@ def android_app_logs_page(request, app_id):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_log_delete(request, app_id, log_id):
+    """Delete a single log entry."""
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+    log = get_object_or_404(AndroidAppLog, id=log_id, android_app=selected_app)
+    log.delete()
+    messages.success(request, 'Log entry deleted.')
+    return redirect('android_app_logs_page', app_id=app_id)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_logs_clear(request, app_id):
+    """Delete all logs for an Android app."""
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+    count = selected_app.app_logs.count()
+    selected_app.app_logs.all().delete()
+    messages.success(request, f'Deleted {count} log entries.')
+    return redirect('android_app_logs_page', app_id=app_id)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_clear_data(request, app_id, data_type):
+    """Clear analytics data for an Android app."""
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+    if data_type == 'failed_attempts':
+        count = selected_app.failed_attempts.count()
+        selected_app.failed_attempts.all().delete()
+        messages.success(request, f'Deleted {count} failed attempt records.')
+    elif data_type == 'device_visits':
+        count = selected_app.device_visits.count()
+        selected_app.device_visits.all().delete()
+        messages.success(request, f'Deleted {count} device visit records.')
+    elif data_type == 'devices':
+        count = selected_app.devices.count()
+        selected_app.devices.all().delete()
+        messages.success(request, f'Deleted {count} device records.')
+    elif data_type == 'access_logs':
+        count = selected_app.access_logs.count()
+        selected_app.access_logs.all().delete()
+        messages.success(request, f'Deleted {count} access log records.')
+    elif data_type == 'build_logs':
+        count = selected_app.build_logs.count()
+        selected_app.build_logs.all().delete()
+        messages.success(request, f'Deleted {count} build log records.')
+    elif data_type == 'daily_unique':
+        count = selected_app.daily_unique_visitors.count()
+        selected_app.daily_unique_visitors.all().delete()
+        messages.success(request, f'Deleted {count} daily visitor records.')
+    elif data_type == 'all_analytics':
+        counts = {
+            'logs': selected_app.app_logs.count(),
+            'failed_attempts': selected_app.failed_attempts.count(),
+            'device_visits': selected_app.device_visits.count(),
+            'devices': selected_app.devices.count(),
+            'access_logs': selected_app.access_logs.count(),
+            'build_logs': selected_app.build_logs.count(),
+            'daily_unique': selected_app.daily_unique_visitors.count(),
+        }
+        selected_app.app_logs.all().delete()
+        selected_app.failed_attempts.all().delete()
+        selected_app.device_visits.all().delete()
+        selected_app.devices.all().delete()
+        selected_app.access_logs.all().delete()
+        selected_app.build_logs.all().delete()
+        selected_app.daily_unique_visitors.all().delete()
+        total = sum(counts.values())
+        messages.success(request, f'Deleted all analytics data ({total} total records).')
+    else:
+        messages.error(request, 'Unknown data type.')
+    return redirect('android_app_dashboard_detail', app_id=app_id)
+
+
 @csrf_exempt
 @require_http_methods(['GET'])
 def android_app_endpoint(request, app_slug):
