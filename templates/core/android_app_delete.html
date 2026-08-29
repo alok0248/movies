@@ -1,0 +1,29 @@
+{% extends 'core/admin_base.html' %}
+{% block admin_content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card bg-dark border-danger shadow-lg">
+                <div class="card-body p-4">
+                    <h2 class="text-white mb-1"><i class="fas fa-exclamation-triangle text-danger me-2"></i>Delete Android App</h2>
+                    <p class="text-secondary mb-4">This action cannot be undone. All associated data (logs, devices, build records, failed attempts) will be permanently removed.</p>
+
+                    <div class="p-3 rounded mb-4" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);">
+                        <div class="text-secondary small mb-1">You are about to delete:</div>
+                        <div class="fw-bold text-white fs-5">{{ android_app.name }}</div>
+                        <div class="text-secondary small"><code>{{ android_app.slug }}</code></div>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="submit" class="btn btn-danger"><i class="fas fa-trash me-1"></i> Yes, Delete Endpoint</button>
+                            <a href="{% url 'android_app_dashboard_detail' android_app.id %}" class="btn btn-outline-light"><i class="fas fa-arrow-left me-1"></i> Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -19,12 +19,15 @@
                 <div class="card-header border-secondary text-white fw-semibold">Saved Endpoints</div>
                 <div class="list-group list-group-flush rounded-bottom">
                     {% for app in apps %}
-                    <a href="{% url 'android_app_dashboard_detail' app.id %}" class="list-group-item list-group-item-action bg-dark text-white border-secondary {% if selected_app and selected_app.id == app.id %}active{% endif %}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="fw-semibold">{{ app.name }}</div>
-                            {% if app.is_active %}<span class="badge bg-success" style="font-size:.65rem;">Active</span>{% else %}<span class="badge bg-secondary" style="font-size:.65rem;">Disabled</span>{% endif %}
+                    <a href="{% url 'android_app_dashboard_detail' app.id %}" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex justify-content-between align-items-start {% if selected_app and selected_app.id == app.id %}active{% endif %}" style="gap:8px;">
+                        <div class="flex-grow-1 min-width-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="fw-semibold">{{ app.name }}</div>
+                                {% if app.is_active %}<span class="badge bg-success" style="font-size:.65rem;">Active</span>{% else %}<span class="badge bg-secondary" style="font-size:.65rem;">Disabled</span>{% endif %}
+                            </div>
+                            <div class="small opacity-75">{{ app.slug }}</div>
                         </div>
-                        <div class="small opacity-75">{{ app.slug }}</div>
+                        <a href="{% url 'android_app_delete' app.id %}" class="btn btn-sm btn-outline-danger flex-shrink-0 mt-1" title="Delete endpoint" onclick="event.stopPropagation();" style="font-size:.7rem;padding:2px 6px;"><i class="fas fa-trash"></i></a>
                     </a>
                     {% empty %}
                     <div class="list-group-item bg-dark text-secondary border-secondary">No apps saved.</div>
@@ -122,6 +125,7 @@
                             <div class="text-secondary small">Daily endpoint connections</div>
                         </div>
                         <a href="{% url 'android_app_edit' selected_app.id %}" class="btn btn-sm btn-outline-warning">Edit App</a>
+                        <a href="{% url 'android_app_delete' selected_app.id %}" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash me-1"></i>Delete Endpoint</a>
                     </div>
                     <div style="height: 300px;"><canvas id="dailyConnectionsChart"></canvas></div>
                 </div>
