@@ -240,14 +240,7 @@
                                     <td>{{ device.last_seen_at }}</td>
                                     <td>{{ device.first_seen_at }}</td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-info" onclick="toggleDeviceLogs(this, '{{ device.user_id }}')" title="Show request logs"><i class="fas fa-terminal"></i></button>
-                                    </td>
-                                </tr>
-                                <tr id="device-logs-{{ device.user_id }}" style="display:none;">
-                                    <td colspan="7" class="p-0" style="background:rgba(0,0,0,0.2);">
-                                        <div class="p-3" id="device-logs-content-{{ device.user_id }}">
-                                            <div class="text-secondary small">Loading logs...</div>
-                                        </div>
+                                        <a href="{% url 'android_device_logs' selected_app.id device.user_id %}" class="btn btn-sm btn-outline-info" title="View all request logs"><i class="fas fa-terminal me-1"></i>Logs</a>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -455,7 +448,7 @@ function updateDashboard(data) {
                 <td>${device.total_visits}</td>
                 <td data-datetime="${device.last_seen_at}">${new Date(device.last_seen_at).toLocaleString()}</td>
                 <td data-datetime="${device.first_seen_at}">${new Date(device.first_seen_at).toLocaleString()}</td>
-                <td><button class="btn btn-sm btn-outline-info" onclick="toggleDeviceLogs(this, '${device.user_id}')" title="Show request logs"><i class="fas fa-terminal"></i></button></td>
+                <td><a class="btn btn-sm btn-outline-info" href="/admin-dashboard/android-apps/${appId}/analytics/device/${encodeURIComponent(device.user_id)}/logs/" title="View all request logs"><i class="fas fa-terminal me-1"></i>Logs</a></td>
             </tr>`;
         });
         devicesTbody.innerHTML = deviceHtml;
@@ -513,6 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start polling if selected app exists
     {% if selected_app %}
     const pollUrl = "{% url 'ajax_android_app_dashboard' selected_app.id %}";
+    const appId = '{{ selected_app.id }}';
     const POLL_INTERVAL_MS = 5000;   // minimum time between polls (was setInterval 5s)
     (function () {
         var lastPollAt = 0;
@@ -680,82 +674,5 @@ function copyCode(id) {
         setTimeout(function() { btn.innerHTML = original; }, 1500);
     });
 }
-
-function toggleDeviceLogs(btn, userId) {
-    var row = document.getElementById('device-logs-' + userId);
-    if (!row) return;
-    if (row.style.display === 'none') {
-        row.style.display = '';
-        btn.innerHTML = '<i class="fas fa-times"></i>';
-        btn.classList.remove('btn-outline-info');
-        btn.classList.add('btn-outline-danger');
-        var content = document.getElementById('device-logs-content-' + userId);
-        if (content && content.querySelector('.text-secondary')) {
-            fetchDeviceLogs(userId, content);
-        }
-    } else {
-        row.style.display = 'none';
-        btn.innerHTML = '<i class="fas fa-terminal"></i>';
-        btn.classList.remove('btn-outline-danger');
-        btn.classList.add('btn-outline-info');
-    }
-}
-
-function fetchDeviceLogs(userId, container) {
-    var appId = '{{ selected_app.id }}';
-    var url = '/admin-dashboard/android-apps/' + appId + '/analytics/device/' + encodeURIComponent(userId) + '/logs/';
-    fetch(url)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (!data.logs || !data.logs.length) {
-                container.innerHTML = '<div class="text-secondary small p-2">No request logs recorded for this device yet. New connections will be logged from now on.</div>';
-                return;
-            }
-            var html = '<div class="d-flex flex-column gap-2">';
-            data.logs.forEach(function(log) {
-                var pretty = '';
-                if (log.full_request) {
-                    try { pretty = JSON.stringify(JSON.parse(log.full_request), null, 2); } catch(e) { pretty = log.full_request; }
-                }
-                var logId = 'log-detail-' + Math.random().toString(36).substr(2, 9);
-                html += '<div class="border border-secondary rounded">';
-                html += '<div class="d-flex align-items-center gap-2 py-2 px-3" style="background:rgba(56,189,248,0.05);">';
-                html += '<span class="text-secondary small">' + new Date(log.visited_at).toLocaleString() + '</span>';
-                html += '<span class="text-info small">' + (log.build_identifier || '-') + '</span>';
-                if (log.ip_address) html += '<span class="text-white small">' + log.ip_address + '</span>';
-                if (log.request_identity) html += '<span class="text-secondary small">' + log.request_identity + '</span>';
-                html += '<button class="btn btn-sm btn-outline-info ms-auto" onclick="var d=document.getElementById(\'' + logId + '\');d.style.display=d.style.display===\'none\'?\'block\':\'none\';">Expand</button>';
-                html += '</div>';
-                if (pretty) {
-                    html += '<div id="' + logId + '" style="display:none;padding:12px;background:rgba(0,0,0,0.3);">';
-                    html += '<div class="d-flex justify-content-between align-items-center mb-2">';
-                    html += '<span class="text-secondary small fw-semibold">Full Request Details</span>';
-                    html += '<button class="btn btn-sm btn-outline-secondary copy-log-btn" data-target="' + logId + '-pre">Copy</button>';
-                    html += '</div>';
-                    html += '<pre id="' + logId + '-pre" class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">' + pretty + '</pre>';
-                    html += '</div>';
-                }
-                html += '</div>';
-            });
-            html += '</div>';
-            container.innerHTML = html;
-        })
-        .catch(function() {
-            container.innerHTML = '<div class="text-danger small p-2">Failed to load logs.</div>';
-        });
-}
-
-document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('copy-log-btn')) {
-        var targetId = e.target.getAttribute('data-target');
-        var pre = document.getElementById(targetId);
-        if (pre) {
-            navigator.clipboard.writeText(pre.textContent).then(function() {
-                e.target.textContent = 'Copied!';
-                setTimeout(function() { e.target.textContent = 'Copy'; }, 1500);
-            });
-        }
-    }
-});
 </script>
 {% endblock %}

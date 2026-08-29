@@ -3017,35 +3017,30 @@ def ajax_android_app_dashboard(request, app_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
-def ajax_android_app_device_logs(request, app_id, user_id):
-    """Return request logs for a specific device (user_id) on an Android app."""
+def android_device_logs(request, app_id, user_id):
+    """Full page showing all request logs for a specific device."""
     selected_app = get_object_or_404(AndroidApp, id=app_id)
     device = get_object_or_404(AndroidAppDevice, android_app=selected_app, user_id=user_id)
-    visits = device.visits.order_by('-visited_at')[:50].values(
-        'visited_at', 'build_identifier', 'request_identity', 'ip_address',
-        'device_model', 'os_version', 'full_request'
-    )
-    logs = []
+    visits = device.visits.select_related('android_app').order_by('-visited_at')
+    
+    # Format full_request for each visit
+    visit_list = []
     for v in visits:
-        v['visited_at'] = v['visited_at'].isoformat()
-        # Format full_request for display
-        raw = v.get('full_request', '')
-        if raw:
+        full_request = v.full_request or ''
+        if full_request:
             try:
-                v['full_request'] = json.dumps(json.loads(raw), indent=2, default=str)
+                full_request = json.dumps(json.loads(full_request), indent=2, default=str)
             except (json.JSONDecodeError, TypeError):
-                v['full_request'] = raw
-        logs.append(v)
-    return JsonResponse({
-        'device': {
-            'user_id': device.user_id,
-            'device_model': device.device_model,
-            'os_version': device.os_version,
-            'total_visits': device.total_visits,
-            'last_seen_at': device.last_seen_at.isoformat(),
-            'first_seen_at': device.first_seen_at.isoformat(),
-        },
-        'logs': logs,
+                pass
+        visit_list.append({
+            'visit': v,
+            'full_request': full_request,
+        })
+    
+    return render(request, 'core/android_device_logs.html', {
+        'selected_app': selected_app,
+        'device': device,
+        'visit_list': visit_list,
     })
 
 
