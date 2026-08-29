@@ -85,6 +85,7 @@ urlpatterns = [
     path('admin-dashboard/synced-users/<int:user_id>/delete/', views.synced_user_delete, name='synced_user_delete'),
     path('admin-dashboard/user-dashboard/', views.user_dashboard, name='user_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/json/', views.ajax_android_app_dashboard, name='ajax_android_app_dashboard'),
+    path('admin-dashboard/android-apps/<int:app_id>/analytics/device/<str:user_id>/logs/', views.ajax_android_app_device_logs, name='ajax_android_app_device_logs'),
     path('admin-dashboard/web-management/', views.web_management_dashboard, name='web_management_dashboard'),
     path('admin-dashboard/web-management/data/', views.ajax_web_management_dashboard, name='ajax_web_management_dashboard'),
     path('admin-dashboard/system-resources/', views.system_resource_dashboard, name='system_resource_dashboard'),

@@ -3015,6 +3015,40 @@ def ajax_android_app_dashboard(request, app_id):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_android_app_device_logs(request, app_id, user_id):
+    """Return request logs for a specific device (user_id) on an Android app."""
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+    device = get_object_or_404(AndroidAppDevice, android_app=selected_app, user_id=user_id)
+    visits = device.visits.order_by('-visited_at')[:50].values(
+        'visited_at', 'build_identifier', 'request_identity', 'ip_address',
+        'device_model', 'os_version', 'full_request'
+    )
+    logs = []
+    for v in visits:
+        v['visited_at'] = v['visited_at'].isoformat()
+        # Format full_request for display
+        raw = v.get('full_request', '')
+        if raw:
+            try:
+                v['full_request'] = json.dumps(json.loads(raw), indent=2, default=str)
+            except (json.JSONDecodeError, TypeError):
+                v['full_request'] = raw
+        logs.append(v)
+    return JsonResponse({
+        'device': {
+            'user_id': device.user_id,
+            'device_model': device.device_model,
+            'os_version': device.os_version,
+            'total_visits': device.total_visits,
+            'last_seen_at': device.last_seen_at.isoformat(),
+            'first_seen_at': device.first_seen_at.isoformat(),
+        },
+        'logs': logs,
+    })
+
+
 @csrf_exempt
 @require_http_methods(['GET'])
 def android_app_endpoint(request, app_slug):
