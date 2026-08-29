@@ -33,7 +33,7 @@ from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
 import platform
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
