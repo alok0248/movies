@@ -902,6 +902,7 @@ class AndroidAppDeviceVisit(models.Model):
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     device_model = models.CharField(max_length=255, blank=True, default='')
     os_version = models.CharField(max_length=50, blank=True, default='')
+    full_request = models.TextField(blank=True, default='', help_text='Full request details (headers, params, etc.) for debugging')
     
     class Meta:
         ordering = ['-visited_at']

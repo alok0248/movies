@@ -2990,7 +2990,7 @@ def ajax_android_app_dashboard(request, app_id):
         device['first_seen_at'] = device['first_seen_at'].isoformat()
 
     recent_visits = list(selected_app.device_visits.select_related('device').all()[:20].values(
-        'visited_at', 'device__user_id', 'device_model', 'os_version', 'build_identifier', 'ip_address'
+        'visited_at', 'device__user_id', 'device_model', 'os_version', 'build_identifier', 'ip_address', 'full_request'
     ))
     for visit in recent_visits:
         visit['visited_at'] = visit['visited_at'].isoformat()
@@ -3198,6 +3198,25 @@ def android_app_endpoint(request, app_slug):
         device.total_visits += 1
         device.save(update_fields=['total_visits', 'last_seen_at'])
         
+        # Build full request details for debugging
+        full_request_data = {
+            'method': request.method,
+            'url': request.build_absolute_uri(),
+            'path': request.path,
+            'query_params': dict(request.GET),
+            'headers': {
+                k: v for k, v in request.headers.items()
+                if not k.lower().startswith('cookie')
+            },
+            'user_id': user_id,
+            'device_model': device_model,
+            'os_version': os_version,
+            'build_identifier': build_identifier,
+            'request_identity': request_identity,
+            'ip_address': ip_address,
+            'timestamp': timezone.now().isoformat(),
+        }
+        
         # Record individual visit
         AndroidAppDeviceVisit.objects.create(
             device=device,
@@ -3206,7 +3225,8 @@ def android_app_endpoint(request, app_slug):
             request_identity=request_identity,
             ip_address=ip_address,
             device_model=device_model,
-            os_version=os_version
+            os_version=os_version,
+            full_request=json.dumps(full_request_data, indent=2, default=str)
         )
         
         # Check if this is a new unique visitor for today
