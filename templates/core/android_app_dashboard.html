@@ -227,17 +227,28 @@
                                     <th>Total Visits</th>
                                     <th>Last Seen</th>
                                     <th>First Seen</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for device in recent_devices %}
-                                <tr>
+                                <tr id="device-row-{{ forloop.counter }}">
                                     <td><code class="text-info">{{ device.user_id }}</code></td>
                                     <td>{{ device.device_model|default:"-" }}</td>
                                     <td>{{ device.os_version|default:"-" }}</td>
                                     <td>{{ device.total_visits }}</td>
                                     <td>{{ device.last_seen_at }}</td>
                                     <td>{{ device.first_seen_at }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-info" onclick="toggleDeviceLogs(this, '{{ device.user_id }}')" title="Show request logs"><i class="fas fa-terminal"></i></button>
+                                    </td>
+                                </tr>
+                                <tr id="device-logs-{{ device.user_id }}" style="display:none;">
+                                    <td colspan="7" class="p-0" style="background:rgba(0,0,0,0.2);">
+                                        <div class="p-3" id="device-logs-content-{{ device.user_id }}">
+                                            <div class="text-secondary small">Loading logs...</div>
+                                        </div>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -246,46 +257,6 @@
                     {% else %}
                     <div class="text-center py-4 text-secondary">No devices recorded yet.</div>
                     {% endif %}
-                </div>
-            </div>
-            
-            <div class="card bg-dark border-secondary shadow-sm mt-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-                        <div>
-                            <h5 class="text-white mb-1">Recent Devices – Full Requests</h5>
-                            <div class="text-secondary small">Last 5 device visits with full request details for debugging</div>
-                        </div>
-                    </div>
-                    <div id="fullRequestsList">
-                    {% if recent_visits %}
-                    <div class="d-flex flex-column gap-2">
-                        {% for visit in recent_visits %}
-                        {% if visit.full_request %}
-                        <div class="border border-secondary rounded">
-                            <button class="btn btn-sm w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.toggle-icon').textContent = this.nextElementSibling.style.display === 'none' ? '▶' : '▼';">
-                                <span>
-                                    <code class="text-info">{{ visit.device.user_id|default:visit.device__user_id }}</code>
-                                    <span class="text-secondary mx-2">|</span>
-                                    <span class="text-white">{{ visit.device_model|default:"-" }}</span>
-                                    <span class="text-secondary mx-2">|</span>
-                                    <span class="text-secondary">{{ visit.build_identifier|default:"-" }}</span>
-                                    <span class="text-secondary mx-2">|</span>
-                                    <span class="text-secondary">{{ visit.visited_at }}</span>
-                                </span>
-                                <span class="toggle-icon text-info" style="font-size:0.6rem;">▶</span>
-                            </button>
-                            <div style="display:none;padding:12px;background:rgba(0,0,0,0.3);">
-                                <pre class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">{{ visit.full_request }}</pre>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="text-center py-4 text-secondary">No recent visits yet.</div>
-                    {% endif %}
-                    </div>
                 </div>
             </div>
             
@@ -475,16 +446,19 @@ function updateDashboard(data) {
     // Update recent devices table
     const devicesTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[1];
     if (devicesTbody && data.recent_devices.length) {
-        devicesTbody.innerHTML = data.recent_devices.map(device => `
-            <tr>
+        var deviceHtml = '';
+        data.recent_devices.forEach(function(device) {
+            deviceHtml += `<tr id="device-row-${device.user_id}">
                 <td><code class="text-info">${device.user_id}</code></td>
                 <td>${device.device_model || '-'}</td>
                 <td>${device.os_version || '-'}</td>
                 <td>${device.total_visits}</td>
                 <td data-datetime="${device.last_seen_at}">${new Date(device.last_seen_at).toLocaleString()}</td>
                 <td data-datetime="${device.first_seen_at}">${new Date(device.first_seen_at).toLocaleString()}</td>
-            </tr>
-        `).join('');
+                <td><button class="btn btn-sm btn-outline-info" onclick="toggleDeviceLogs(this, '${device.user_id}')" title="Show request logs"><i class="fas fa-terminal"></i></button></td>
+            </tr>`;
+        });
+        devicesTbody.innerHTML = deviceHtml;
     }
 
     // Update recent visits table
@@ -705,6 +679,79 @@ function copyCode(id) {
         btn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
         setTimeout(function() { btn.innerHTML = original; }, 1500);
     });
+}
+
+function toggleDeviceLogs(btn, userId) {
+    var row = document.getElementById('device-logs-' + userId);
+    if (!row) return;
+    if (row.style.display === 'none') {
+        row.style.display = '';
+        btn.innerHTML = '<i class="fas fa-times"></i>';
+        btn.classList.remove('btn-outline-info');
+        btn.classList.add('btn-outline-danger');
+        // Fetch logs if not already loaded
+        var content = document.getElementById('device-logs-content-' + userId);
+        if (content && content.querySelector('.text-secondary')) {
+            fetchDeviceLogs(userId, content);
+        }
+    } else {
+        row.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-terminal"></i>';
+        btn.classList.remove('btn-outline-danger');
+        btn.classList.add('btn-outline-info');
+    }
+}
+
+function fetchDeviceLogs(userId, container) {
+    var appId = '{{ selected_app.id }}';
+    var url = '/admin-dashboard/android-apps/' + appId + '/analytics/device/' + encodeURIComponent(userId) + '/logs/';
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.logs || !data.logs.length) {
+                container.innerHTML = '<div class="text-secondary small p-2">No request logs recorded for this device yet.</div>';
+                return;
+            }
+            var html = '<div class="d-flex flex-column gap-2">';
+            data.logs.forEach(function(log, idx) {
+                var pretty = '';
+                if (log.full_request) {
+                    try { pretty = JSON.stringify(JSON.parse(log.full_request), null, 2); } catch(e) { pretty = log.full_request; }
+                }
+                html += '<div class="border border-secondary rounded">';
+                html += '<button class="btn btn-sm w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="var p=this.nextElementSibling; p.style.display=p.style.display===\'none\'?\'block\':\'none\'; this.querySelector(\'.ti\').textContent=p.style.display===\'none\'?\'▶\':\'▼\';">';
+                html += '<span>';
+                html += '<span class="text-secondary">' + new Date(log.visited_at).toLocaleString() + '</span>';
+                html += '<span class="text-white mx-2">|</span>';
+                html += '<span class="text-info">' + (log.build_identifier || '-') + '</span>';
+                if (log.ip_address) {
+                    html += '<span class="text-white mx-2">|</span>';
+                    html += '<span class="text-secondary">' + log.ip_address + '</span>';
+                }
+                if (log.request_identity) {
+                    html += '<span class="text-white mx-2">|</span>';
+                    html += '<span class="text-secondary">' + log.request_identity + '</span>';
+                }
+                html += '</span>';
+                html += '<span class="ti text-info" style="font-size:0.6rem;">▶</span>';
+                html += '</button>';
+                if (pretty) {
+                    html += '<div style="display:none;padding:12px;background:rgba(0,0,0,0.3);">';
+                    html += '<div class="d-flex justify-content-between align-items-center mb-2">';
+                    html += '<span class="text-secondary small fw-semibold">Full Request Details</span>';
+                    html += '<button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText(this.closest(\'div\\').nextElementSibling.textContent).then(function(){var b=arguments[0]; b.innerHTML=\'\\u2713 Copied!\'; setTimeout(function(){b.innerHTML=\'Copy\';},1500);}.bind(null, this));">Copy</button>';
+                    html += '</div>';
+                    html += '<pre class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">' + pretty + '</pre>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(function() {
+            container.innerHTML = '<div class="text-danger small p-2">Failed to load logs.</div>';
+        });
 }
 </script>
 {% endblock %}
