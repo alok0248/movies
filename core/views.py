@@ -3045,6 +3045,126 @@ def android_device_logs(request, app_id, user_id):
 
 
 @csrf_exempt
+@require_http_methods(['POST'])
+def android_app_log_endpoint(request, app_slug):
+    """
+    POST endpoint for Android apps to send logs.
+    Auth: Basic auth with the app's access_username / access_password.
+    Body: JSON with at minimum { "message": "..." }
+    Optional: level, tag, data (JSON object), user_id, build_identifier,
+              device_model, os_version
+    """
+    try:
+        android_app = AndroidApp.objects.get(slug=app_slug, is_active=True)
+    except AndroidApp.DoesNotExist:
+        try:
+            inactive_app = AndroidApp.objects.get(slug=app_slug)
+            return JsonResponse({'error': 'App is inactive'}, status=403)
+        except AndroidApp.DoesNotExist:
+            return JsonResponse({'error': 'App not found'}, status=404)
+
+    # Basic auth
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Basic '):
+        return JsonResponse({'error': 'Authentication required'}, status=403,
+                            headers={'WWW-Authenticate': 'Basic realm="Android Log API"'})
+    try:
+        decoded = base64.b64decode(auth_header.split(' ', 1)[1]).decode('utf-8')
+        username, password = decoded.split(':', 1)
+    except Exception:
+        return JsonResponse({'error': 'Invalid credentials format'}, status=403)
+    if username != android_app.access_username or password != android_app.access_password:
+        return JsonResponse({'error': 'Invalid credentials'}, status=403)
+
+    # Parse body
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+    message = payload.get('message', '')
+    if not message:
+        return JsonResponse({'error': 'message is required'}, status=400)
+
+    level = payload.get('level', 'info')
+    tag = payload.get('tag', '')
+    log_data = payload.get('data', '')
+    if isinstance(log_data, (dict, list)):
+        log_data = json.dumps(log_data, default=str)
+    user_id = (payload.get('user_id') or request.headers.get('X-Android-User-ID', '')).strip()
+    build_identifier = (payload.get('build_identifier') or request.headers.get('X-Android-Build', '')).strip()
+    device_model = (payload.get('device_model') or request.headers.get('X-Android-Device', '')).strip()
+    os_version = (payload.get('os_version') or request.headers.get('X-Android-OS-Version', '')).strip()
+    ip_address = request.META.get('REMOTE_ADDR', None)
+
+    # Resolve device
+    device_obj = None
+    if user_id:
+        device_obj, _ = AndroidAppDevice.objects.get_or_create(
+            android_app=android_app, user_id=user_id,
+            defaults={'device_model': device_model, 'os_version': os_version}
+        )
+
+    AndroidAppLog.objects.create(
+        android_app=android_app,
+        device=device_obj,
+        user_id=user_id,
+        level=level,
+        tag=tag,
+        message=message,
+        data=log_data,
+        build_identifier=build_identifier,
+        device_model=device_model,
+        os_version=os_version,
+        ip_address=ip_address,
+    )
+    return JsonResponse({'ok': True}, status=201)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_logs_page(request, app_id):
+    """Admin page to view all logs for an Android app."""
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+
+    # Filters
+    level_filter = request.GET.get('level', '')
+    tag_filter = request.GET.get('tag', '').strip()
+    search = request.GET.get('q', '').strip()
+    user_filter = request.GET.get('user_id', '').strip()
+
+    logs = selected_app.app_logs.all()
+    if level_filter:
+        logs = logs.filter(level=level_filter)
+    if tag_filter:
+        logs = logs.filter(tag__icontains=tag_filter)
+    if search:
+        logs = logs.filter(models.Q(message__icontains=search) | models.Q(data__icontains=search))
+    if user_filter:
+        logs = logs.filter(user_id=user_filter)
+
+    # Get unique tags for the filter dropdown
+    all_tags = (selected_app.app_logs
+                .values_list('tag', flat=True)
+                .distinct()
+                .order_by('tag'))
+
+    # Format full_request for each log
+    log_list = logs[:200]  # limit for performance
+
+    return render(request, 'core/android_app_logs.html', {
+        'selected_app': selected_app,
+        'logs': log_list,
+        'all_tags': [t for t in all_tags if t],
+        'level_filter': level_filter,
+        'tag_filter': tag_filter,
+        'search': search,
+        'user_filter': user_filter,
+        'total_count': logs.count(),
+    })
+
+
+@csrf_exempt
 @require_http_methods(['GET'])
 def android_app_endpoint(request, app_slug):
     # Helper function to parse allowed values (supports comma-separated lists and ranges like 225-250)
