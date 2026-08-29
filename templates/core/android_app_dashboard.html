@@ -689,7 +689,6 @@ function toggleDeviceLogs(btn, userId) {
         btn.innerHTML = '<i class="fas fa-times"></i>';
         btn.classList.remove('btn-outline-info');
         btn.classList.add('btn-outline-danger');
-        // Fetch logs if not already loaded
         var content = document.getElementById('device-logs-content-' + userId);
         if (content && content.querySelector('.text-secondary')) {
             fetchDeviceLogs(userId, content);
@@ -709,39 +708,31 @@ function fetchDeviceLogs(userId, container) {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data.logs || !data.logs.length) {
-                container.innerHTML = '<div class="text-secondary small p-2">No request logs recorded for this device yet.</div>';
+                container.innerHTML = '<div class="text-secondary small p-2">No request logs recorded for this device yet. New connections will be logged from now on.</div>';
                 return;
             }
             var html = '<div class="d-flex flex-column gap-2">';
-            data.logs.forEach(function(log, idx) {
+            data.logs.forEach(function(log) {
                 var pretty = '';
                 if (log.full_request) {
                     try { pretty = JSON.stringify(JSON.parse(log.full_request), null, 2); } catch(e) { pretty = log.full_request; }
                 }
+                var logId = 'log-detail-' + Math.random().toString(36).substr(2, 9);
                 html += '<div class="border border-secondary rounded">';
-                html += '<button class="btn btn-sm w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="var p=this.nextElementSibling; p.style.display=p.style.display===\'none\'?\'block\':\'none\'; this.querySelector(\'.ti\').textContent=p.style.display===\'none\'?\'▶\':\'▼\';">';
-                html += '<span>';
-                html += '<span class="text-secondary">' + new Date(log.visited_at).toLocaleString() + '</span>';
-                html += '<span class="text-white mx-2">|</span>';
-                html += '<span class="text-info">' + (log.build_identifier || '-') + '</span>';
-                if (log.ip_address) {
-                    html += '<span class="text-white mx-2">|</span>';
-                    html += '<span class="text-secondary">' + log.ip_address + '</span>';
-                }
-                if (log.request_identity) {
-                    html += '<span class="text-white mx-2">|</span>';
-                    html += '<span class="text-secondary">' + log.request_identity + '</span>';
-                }
-                html += '</span>';
-                html += '<span class="ti text-info" style="font-size:0.6rem;">▶</span>';
-                html += '</button>';
+                html += '<div class="d-flex align-items-center gap-2 py-2 px-3" style="background:rgba(56,189,248,0.05);">';
+                html += '<span class="text-secondary small">' + new Date(log.visited_at).toLocaleString() + '</span>';
+                html += '<span class="text-info small">' + (log.build_identifier || '-') + '</span>';
+                if (log.ip_address) html += '<span class="text-white small">' + log.ip_address + '</span>';
+                if (log.request_identity) html += '<span class="text-secondary small">' + log.request_identity + '</span>';
+                html += '<button class="btn btn-sm btn-outline-info ms-auto" onclick="var d=document.getElementById(\'' + logId + '\');d.style.display=d.style.display===\'none\'?\'block\':\'none\';">Expand</button>';
+                html += '</div>';
                 if (pretty) {
-                    html += '<div style="display:none;padding:12px;background:rgba(0,0,0,0.3);">';
+                    html += '<div id="' + logId + '" style="display:none;padding:12px;background:rgba(0,0,0,0.3);">';
                     html += '<div class="d-flex justify-content-between align-items-center mb-2">';
                     html += '<span class="text-secondary small fw-semibold">Full Request Details</span>';
-                    html += '<button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText(this.closest(\'div\\').nextElementSibling.textContent).then(function(){var b=arguments[0]; b.innerHTML=\'\\u2713 Copied!\'; setTimeout(function(){b.innerHTML=\'Copy\';},1500);}.bind(null, this));">Copy</button>';
+                    html += '<button class="btn btn-sm btn-outline-secondary copy-log-btn" data-target="' + logId + '-pre">Copy</button>';
                     html += '</div>';
-                    html += '<pre class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">' + pretty + '</pre>';
+                    html += '<pre id="' + logId + '-pre" class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">' + pretty + '</pre>';
                     html += '</div>';
                 }
                 html += '</div>';
@@ -753,5 +744,18 @@ function fetchDeviceLogs(userId, container) {
             container.innerHTML = '<div class="text-danger small p-2">Failed to load logs.</div>';
         });
 }
+
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('copy-log-btn')) {
+        var targetId = e.target.getAttribute('data-target');
+        var pre = document.getElementById(targetId);
+        if (pre) {
+            navigator.clipboard.writeText(pre.textContent).then(function() {
+                e.target.textContent = 'Copied!';
+                setTimeout(function() { e.target.textContent = 'Copy'; }, 1500);
+            });
+        }
+    }
+});
 </script>
 {% endblock %}
