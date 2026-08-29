@@ -151,7 +151,10 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
                         <h5 class="text-white mb-0">Endpoint Configuration</h5>
-                        <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">Synced Users</a>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code me-1"></i>Connection Helper</button>
+                            <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">Synced Users</a>
+                        </div>
                     </div>
                     <div class="row g-3 small">
                         <div class="col-md-6"><div class="text-secondary">API URL</div><code class="text-info text-break">{{ app_endpoint }}</code></div>
@@ -597,5 +600,111 @@ document.addEventListener('DOMContentLoaded', () => {
     })();
     {% endif %}
 });
+</script>
+
+<!-- Connection Helper Modal -->
+<div class="modal fade" id="connectionHelperModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-dark border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-white"><i class="fas fa-code me-2 text-info"></i>Connection Helper</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary small mb-3">Copy these examples to test the connection to this endpoint from a device or server.</p>
+                
+                <!-- cURL Tab -->
+                <ul class="nav nav-tabs mb-3" id="connHelperTabs">
+                    <li class="nav-item"><button class="nav-link active text-white" style="background:rgba(56,189,248,0.1);border-color:rgba(56,189,248,0.3);" data-bs-toggle="tab" data-bs-target="#tab-curl">cURL</button></li>
+                    <li class="nav-item"><button class="nav-link text-white" style="background:rgba(56,189,248,0.05);border-color:transparent;" data-bs-toggle="tab" data-bs-target="#tab-python">Python (requests)</button></li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tab-curl">
+                        <div class="position-relative">
+                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyCode('curlCode')"><i class="fas fa-copy me-1"></i>Copy</button>
+                            <pre class="text-info small mb-0 p-3 rounded" id="curlCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">curl -X GET "{{ app_endpoint }}" \
+  -u "{{ selected_app.access_username }}:{{ selected_app.access_password }}" \
+  -H "X-Android-App: {{ selected_app.allowed_endpoint|default:'com.example.app' }}" \
+  -H "X-Android-Build: {{ selected_app.allowed_build_id|default:'1' }}" \
+  -H "X-Android-User-ID: device-user-id-here" \
+  -H "X-Android-Device: Pixel 7 Pro" \
+  -H "X-Android-OS-Version: 14"</pre>
+                        </div>
+                        <div class="text-secondary small mt-2"><i class="fas fa-info-circle me-1"></i>This is a GET request. The endpoint returns the JSON payload with player servers and ads config.</div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-python">
+                        <div class="position-relative">
+                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyCode('pythonCode')"><i class="fas fa-copy me-1"></i>Copy</button>
+                            <pre class="text-info small mb-0 p-3 rounded" id="pythonCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">import requests
+
+url = "{{ app_endpoint }}"
+headers = {
+    "X-Android-App": "{{ selected_app.allowed_endpoint|default:'com.example.app' }}",
+    "X-Android-Build": "{{ selected_app.allowed_build_id|default:'1' }}",
+    "X-Android-User-ID": "device-user-id-here",
+    "X-Android-Device": "Pixel 7 Pro",
+    "X-Android-OS-Version": "14",
+}
+
+response = requests.get(
+    url,
+    headers=headers,
+    auth=("{{ selected_app.access_username }}", "{{ selected_app.access_password }}"),
+)
+
+print(f"Status: {response.status_code}")
+print(response.json())</pre>
+                        </div>
+                        <div class="text-secondary small mt-2"><i class="fas fa-info-circle me-1"></i>Install with: <code>pip install requests</code>. Replace the placeholder values with actual device info.</div>
+                    </div>
+                </div>
+
+                <!-- Required Headers Reference -->
+                <div class="mt-4">
+                    <h6 class="text-white mb-2"><i class="fas fa-list me-1 text-warning"></i>Required Headers Reference</h6>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0 align-middle small">
+                            <thead><tr><th>Header</th><th>Description</th><th>Example</th></tr></thead>
+                            <tbody>
+                                <tr><td><code class="text-info">Authorization</code></td><td class="text-secondary">Basic auth (Base64 encoded <code>user:pass</code>)</td><td><code class="text-white">Basic {{ selected_app.access_username }}:****</code></td></tr>
+                                <tr><td><code class="text-info">X-Android-App</code></td><td class="text-secondary">Package name / app identity (or <code>X-Android-Package</code>)</td><td><code class="text-white">{{ selected_app.allowed_endpoint|default:'com.example.app' }}</code></td></tr>
+                                <tr><td><code class="text-info">X-Android-Build</code></td><td class="text-secondary">Build version identifier (or <code>?build=</code> param)</td><td><code class="text-white">{{ selected_app.allowed_build_id|default:'1' }}</code></td></tr>
+                                <tr><td><code class="text-info">X-Android-User-ID</code></td><td class="text-secondary">Unique device ID (Android ID or UUID)</td><td><code class="text-white">a1b2c3d4...</code></td></tr>
+                                <tr><td><code class="text-info">X-Android-Device</code></td><td class="text-secondary">Device model name</td><td><code class="text-white">Pixel 7 Pro</code></td></tr>
+                                <tr><td><code class="text-info">X-Android-OS-Version</code></td><td class="text-secondary">Android OS version</td><td><code class="text-white">14</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+n                <!-- Possible Responses -->
+                <div class="mt-4">
+                    <h6 class="text-white mb-2"><i class="fas fa-exchange-alt me-1 text-warning"></i>Possible Responses</h6>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0 align-middle small">
+                            <thead><tr><th>Status</th><th>Meaning</th><th>Action</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="badge bg-success">200</span></td><td>Success</td><td class="text-secondary">Parse JSON payload</td></tr>
+                                <tr><td><span class="badge bg-danger">403</span></td><td>Authentication / identity error</td><td class="text-secondary">Check credentials, headers, and allowed endpoint</td></tr>
+                                <tr><td><span class="badge bg-warning text-dark">426</span></td><td>Update required</td><td class="text-secondary">App build is outdated; download new APK</td></tr>
+                                <tr><td><span class="badge bg-secondary">404</span></td><td>App not found</td><td class="text-secondary">Check the slug in the URL</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyCode(id) {
+    var code = document.getElementById(id).innerText;
+    navigator.clipboard.writeText(code).then(function() {
+        var btn = document.getElementById(id).previousElementSibling;
+        var original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
+        setTimeout(function() { btn.innerHTML = original; }, 1500);
+    });
+}
 </script>
 {% endblock %}
