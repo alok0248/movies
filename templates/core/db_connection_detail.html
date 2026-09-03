@@ -1,0 +1,288 @@
+{% extends 'core/admin_base.html' %}
+
+{% block admin_content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'db_connection_settings' %}" class="btn btn-outline-secondary me-3"><i class="fas fa-arrow-left"></i></a>
+        <h1 class="mb-0"><i class="fas fa-database me-3 text-success"></i>Database Details</h1>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert" style="background: {% if message.tags == 'success' %}rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#22c55e{% elif message.tags == 'error' %}rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#ef4444{% else %}rgba(56,189,248,.15);border-color:rgba(56,189,248,.3);color:#38bdf8{% endif %};">
+        {{ message }}
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Connection header -->
+    <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <h4 class="text-white mb-2">
+                        <i class="fas fa-server me-2 text-success"></i>{{ conn.name }}
+                        {% if conn.is_default %}<span class="badge bg-success ms-2" style="font-size:.7rem;">DEFAULT</span>{% endif %}
+                        {% if conn.is_active %}<span class="badge bg-info ms-1" style="font-size:.7rem;">ACTIVE</span>{% endif %}
+                        <span class="badge ms-1 {% if conn.last_test_status == 'success' %}bg-success{% elif conn.last_test_status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}" style="font-size:.7rem;">
+                            {% if conn.last_test_status == 'success' %}OK{% elif conn.last_test_status == 'failed' %}FAIL{% else %}N/A{% endif %}
+                        </span>
+                    </h4>
+                    <div class="text-secondary small">
+                        <i class="fas fa-cube me-1"></i>{{ conn.get_db_type_display }}
+                        &middot; <i class="fas fa-network-wired me-1"></i>{{ conn.host }}:{{ conn.port }}
+                        &middot; <i class="fas fa-database me-1"></i>{{ conn.database_name|default:'(no database)' }}
+                        {% if conn.last_tested_at %}&middot; <i class="far fa-clock me-1"></i>Last tested: {{ conn.last_tested_at|date:'Y-m-d H:i' }}{% endif %}
+                    </div>
+                    {% if conn.last_test_message %}
+                    <div class="small mt-1 {% if conn.last_test_status == 'success' %}text-success{% else %}text-danger{% endif %}" style="word-break:break-all;">
+                        <i class="fas fa-info-circle me-1"></i>{{ conn.last_test_message|truncatechars:160 }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="test">
+                        <button class="btn btn-success btn-sm px-3"><i class="fas fa-plug me-1"></i>Test Connection</button>
+                    </form>
+                    <a href="{% url 'db_connection_settings' %}" class="btn btn-outline-info btn-sm px-3"><i class="fas fa-edit me-1"></i>Edit</a>
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="toggle_active">
+                        <button class="btn btn-sm px-3 {% if conn.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                            {% if conn.is_active %}<i class="fas fa-pause me-1"></i>Deactivate{% else %}<i class="fas fa-play me-1"></i>Activate{% endif %}
+                        </button>
+                    </form>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Delete this connection?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <button class="btn btn-outline-danger btn-sm px-3"><i class="fas fa-trash me-1"></i>Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Configuration -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-lg h-100" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-white mb-0"><i class="fas fa-cog me-2 text-cyan"></i>Connection Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2 p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Database Type</span>
+                        <span class="text-white small">{{ conn.get_db_type_display }}</span>
+                    </div>
+                    <div class="mb-2 p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Host / Port</span>
+                        <span class="text-white small">{{ conn.host }}:{{ conn.port }}</span>
+                    </div>
+                    <div class="mb-2 p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Database Name</span>
+                        <span class="text-white small">{{ conn.database_name|default:'&mdash;' }}</span>
+                    </div>
+                    <div class="mb-2 p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Username</span>
+                        <span class="text-white small">{{ conn.username|default:'&mdash;' }}</span>
+                    </div>
+                    <div class="mb-2 p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Password</span>
+                        <span class="text-white small">{% if conn.password %}<i class="fas fa-lock me-1 text-warning"></i>Stored (hidden){% else %}<span class="text-danger">Not set</span>{% endif %}</span>
+                    </div>
+                    {% if conn.extra_params %}
+                    <div class="mb-2 p-2 rounded" style="background:rgba(255,255,255,.03);">
+                        <div class="text-secondary small mb-1">Extra Params</div>
+                        <code class="text-info small" style="word-break:break-all;">{{ conn.extra_params }}</code>
+                    </div>
+                    {% endif %}
+                    {% if conn.notes %}
+                    <div class="mb-2 p-2 rounded" style="background:rgba(255,255,255,.03);">
+                        <div class="text-secondary small mb-1">Notes</div>
+                        <div class="text-white small">{{ conn.notes|linebreaksbr }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Created</span>
+                        <span class="text-white small">{{ conn.created_at|date:'Y-m-d H:i' }}</span>
+                    </div>
+                    <div class="p-2 rounded d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.03);">
+                        <span class="text-secondary small">Updated</span>
+                        <span class="text-white small">{{ conn.updated_at|date:'Y-m-d H:i' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live stats -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-lg h-100" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
+                <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+                    <h5 class="text-white mb-0"><i class="fas fa-heartbeat me-2 text-cyan"></i>Live Server Stats</h5>
+                </div>
+                <div class="card-body">
+                    {% if is_live_external %}
+                    <div class="alert py-2 mb-3" style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:#22c55e;">
+                        <i class="fas fa-route me-2"></i>This is the active external database &mdash; user data is routed here.
+                        <a href="{% url 'db_routing_settings' %}" class="text-info ms-1">Data Routing</a>
+                    </div>
+                    {% else %}
+                    <div class="alert py-2 mb-3" style="background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.2);color:#38bdf8;">
+                        <i class="fas fa-info-circle me-2"></i>Not the currently routed external DB &mdash; routing uses the connection marked active + default.
+                        <a href="{% url 'db_routing_settings' %}" class="text-info ms-1">Data Routing</a>
+                    </div>
+                    {% endif %}
+
+                    {% if stats.status == 'healthy' %}
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="badge bg-success me-2" style="font-size:.75rem;"><i class="fas fa-check-circle me-1"></i>CONNECTED</span>
+                        {% if stats.version %}<span class="text-secondary small">{{ stats.version|truncatechars:60 }}</span>{% endif %}
+                        {% if stats.latency_ms %}<span class="ms-auto text-success small"><i class="fas fa-bolt me-1"></i>{{ stats.latency_ms }} ms</span>{% endif %}
+                    </div>
+                    <div class="row g-2">
+                        {% if stats.db_size %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Database Size</span><span class="text-white small">{{ stats.db_size }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.uptime %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Uptime</span><span class="text-white small">{{ stats.uptime }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.table_count %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Tables</span><span class="text-white small">{{ stats.table_count }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.total_rows %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Total Rows</span><span class="text-white small">{{ stats.total_rows }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.connections is not None %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Current Connections</span><span class="text-white small">{{ stats.connections }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.questions is not None %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Total Queries</span><span class="text-white small">{{ stats.questions }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.queries_per_sec is not None %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Queries / Sec</span><span class="text-white small">{{ stats.queries_per_sec }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.slow_queries is not None %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Slow Queries</span><span class="text-white small">{{ stats.slow_queries }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.bytes_sent %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Bytes Sent</span><span class="text-white small">{{ stats.bytes_sent }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.bytes_received %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Bytes Received</span><span class="text-white small">{{ stats.bytes_received }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.aborted_connects is not None %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Aborted Connects</span><span class="text-white small">{{ stats.aborted_connects }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.max_used_connections is not None %}
+                        <div class="col-md-6">
+                            <div class="p-2 rounded d-flex justify-content-between" style="background:rgba(255,255,255,.03);">
+                                <span class="text-secondary small">Max Used Connections</span><span class="text-white small">{{ stats.max_used_connections }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert py-2 mb-0" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Live stats unavailable: {{ stats.error|default:'Unknown error' }}
+                    </div>
+                    <div class="text-secondary small mt-2">Use the <strong>Test Connection</strong> button for a detailed error.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tables -->
+    <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
+        <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
+            <h5 class="text-white mb-0"><i class="fas fa-table me-2 text-cyan"></i>Tables in {{ conn.database_name|default:conn.host }}</h5>
+        </div>
+        <div class="card-body">
+            {% if stats.status == 'healthy' and stats.tables %}
+            <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+                <table class="table table-sm mb-0 align-middle" style="color:#cbd5e1;">
+                    <thead class="small" style="position:sticky;top:0;background:#1e293b;">
+                        <tr>
+                            <th class="text-secondary">#</th>
+                            <th class="text-secondary">Table</th>
+                            <th class="text-secondary text-end">Rows</th>
+                            <th class="text-secondary text-end">Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in stats.tables %}
+                        <tr style="border-color:rgba(255,255,255,.06);">
+                            <td class="text-secondary">{{ forloop.counter }}</td>
+                            <td class="text-white">{{ t.name }}</td>
+                            <td class="text-end text-white">{{ t.rows }}</td>
+                            <td class="text-end text-secondary">{{ t.size }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-secondary mt-2">
+                <i class="fas fa-info-circle me-1"></i>{{ stats.table_count }} table{% if stats.table_count != 1 %}s{% endif %}, ~{{ stats.total_rows }} rows total. MySQL row counts are approximate estimates.
+            </div>
+            {% elif stats.status == 'healthy' %}
+            <div class="text-center py-4">
+                <i class="fas fa-table fa-2x text-secondary mb-2" style="opacity:.4;"></i>
+                <p class="text-secondary mb-0">Connected, but no tables found{% if not conn.database_name %} &mdash; specify a database name{% endif %}.</p>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-plug fa-2x text-secondary mb-2" style="opacity:.4;"></i>
+                <p class="text-secondary mb-0">Cannot list tables while the database is unreachable.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
