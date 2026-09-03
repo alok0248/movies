@@ -68,6 +68,16 @@ def activate_external_db():
         'PASSWORD': conn.password,
         'HOST': conn.host,
         'PORT': str(conn.port),
+        # Django fills these defaults for every alias present at startup.
+        # This alias is registered later (AppConfig.ready), so Django's
+        # configure_settings() never saw it — provide the same defaults
+        # here or request handlers (ATOMIC_REQUESTS etc.) break.
+        'ATOMIC_REQUESTS': False,
+        'AUTOCOMMIT': True,
+        'CONN_MAX_AGE': 0,
+        'CONN_HEALTH_CHECKS': False,
+        'TIME_ZONE': None,
+        'TEST': {},
     }
     if conn.extra_params:
         db_cfg['OPTIONS'] = conn.extra_params
