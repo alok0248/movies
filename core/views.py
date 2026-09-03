@@ -8631,6 +8631,154 @@ def db_connection_settings(request):
     })
 
 
+def _get_db_conn_stats(conn):
+    """Live stats for a saved connection, fetched directly with its own credentials."""
+    import time
+    info = {
+        'status': 'error', 'engine': conn.get_db_type_display(),
+        'host': conn.host, 'port': conn.port, 'database': conn.database_name,
+        'version': '', 'latency_ms': 0, 'db_size': '', 'uptime': '',
+        'tables': [], 'table_count': 0, 'total_rows': 0,
+    }
+    try:
+        if conn.db_type == 'mysql':
+            import MySQLdb
+            t0 = time.time()
+            db = MySQLdb.connect(host=conn.host, port=conn.port, user=conn.username,
+                                 passwd=conn.password, db=conn.database_name or None,
+                                 connect_timeout=8, **conn.extra_params)
+            info['latency_ms'] = round((time.time() - t0) * 1000)
+            cur = db.cursor()
+            cur.execute('SELECT VERSION()')
+            info['version'] = cur.fetchone()[0]
+            cur.execute('SHOW STATUS')
+            status = {r[0]: r[1] for r in cur.fetchall()}
+            info['uptime'] = _format_uptime(int(status.get('Uptime', 0)))
+            info['connections'] = int(status.get('Threads_connected', 0))
+            info['questions'] = int(status.get('Questions', 0))
+            info['slow_queries'] = int(status.get('Slow_queries', 0))
+            info['queries_per_sec'] = round(info['questions'] / max(1, int(status.get('Uptime', 1))), 1)
+            info['bytes_sent'] = _format_bytes(int(status.get('Bytes_sent', 0)))
+            info['bytes_received'] = _format_bytes(int(status.get('Bytes_received', 0)))
+            info['aborted_connects'] = int(status.get('Aborted_connects', 0))
+            info['max_used_connections'] = int(status.get('Max_used_connections', 0))
+            dbname = conn.database_name or ''
+            if dbname:
+                cur.execute('SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) '
+                            'FROM information_schema.tables WHERE table_schema = %s', (dbname,))
+                row = cur.fetchone()
+                info['db_size'] = f'{row[0]} MB' if row and row[0] else '0 MB'
+                cur.execute('SELECT table_name, table_rows, '
+                            'ROUND((data_length + index_length) / 1024, 1) AS size_kb '
+                            'FROM information_schema.tables WHERE table_schema = %s '
+                            'ORDER BY (data_length + index_length) DESC', (dbname,))
+                for t_name, t_rows, t_size in cur.fetchall():
+                    t_rows = t_rows or 0
+                    info['total_rows'] += t_rows
+                    info['tables'].append({
+                        'name': t_name,
+                        'rows': t_rows,
+                        'size': f'{t_size} KB' if t_size else '0 KB',
+                        'size_bytes': (t_size or 0) * 1024,
+                    })
+                info['table_count'] = len(info['tables'])
+            cur.close()
+            db.close()
+            info['status'] = 'healthy'
+        elif conn.db_type == 'postgresql':
+            import psycopg2
+            t0 = time.time()
+            db = psycopg2.connect(host=conn.host, port=conn.port, user=conn.username,
+                                  password=conn.password, dbname=conn.database_name or 'postgres',
+                                  connect_timeout=8)
+            info['latency_ms'] = round((time.time() - t0) * 1000)
+            cur = db.cursor()
+            cur.execute('SELECT version()')
+            info['version'] = cur.fetchone()[0]
+            cur.execute("SELECT table_name FROM information_schema.tables "
+                        "WHERE table_schema = 'public' ORDER BY table_name")
+            for (t_name,) in cur.fetchall():
+                try:
+                    cur.execute(f'SELECT COUNT(*) FROM "{t_name}"')
+                    t_rows = cur.fetchone()[0]
+                except Exception:
+                    t_rows = 0
+                info['total_rows'] += t_rows
+                info['tables'].append({'name': t_name, 'rows': t_rows, 'size': '', 'size_bytes': 0})
+            info['table_count'] = len(info['tables'])
+            cur.close()
+            db.close()
+            info['status'] = 'healthy'
+        elif conn.db_type == 'sqlite':
+            import sqlite3
+            t0 = time.time()
+            db = sqlite3.connect(conn.database_name or ':memory:', timeout=8)
+            info['latency_ms'] = round((time.time() - t0) * 1000)
+            info['version'] = 'SQLite'
+            cur = db.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                        "AND name NOT LIKE 'sqlite_%' ORDER BY name")
+            for (t_name,) in cur.fetchall():
+                try:
+                    cur.execute(f'SELECT COUNT(*) FROM "{t_name}"')
+                    t_rows = cur.fetchone()[0]
+                except Exception:
+                    t_rows = 0
+                info['total_rows'] += t_rows
+                info['tables'].append({'name': t_name, 'rows': t_rows, 'size': '', 'size_bytes': 0})
+            info['table_count'] = len(info['tables'])
+            cur.close()
+            db.close()
+            info['status'] = 'healthy'
+        else:
+            info['error'] = 'Live stats are not supported for this database type.'
+    except Exception as e:
+        info['status'] = 'error'
+        info['error'] = str(e)
+    return info
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def db_connection_detail(request, pk):
+    """Admin page with full details and live stats for one saved DB connection."""
+    from .models import DBConnectionConfig
+
+    conn = get_object_or_404(DBConnectionConfig, pk=pk)
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+        if action == 'delete':
+            name = conn.name
+            conn.delete()
+            messages.success(request, f'Connection "{name}" deleted.')
+            return redirect('db_connection_settings')
+        if action == 'toggle_active':
+            conn.is_active = not conn.is_active
+            conn.save()
+            state = 'activated' if conn.is_active else 'deactivated'
+            messages.success(request, f'Connection "{conn.name}" {state}.')
+            return redirect('db_connection_detail', pk=conn.pk)
+        if action == 'test':
+            success, message = conn.test_connection()
+            if success:
+                messages.success(request, f'Connection test successful: {message}')
+            else:
+                messages.error(request, f'Connection test failed: {message}')
+            return redirect('db_connection_detail', pk=conn.pk)
+
+    routing = _get_routing_config()
+    stats = _get_db_conn_stats(conn)
+    is_live_external = bool(routing.use_external_db and conn.is_active and conn.is_default)
+    return render(request, 'core/db_connection_detail.html', {
+        'conn': conn,
+        'routing': routing,
+        'stats': stats,
+        'is_live_external': is_live_external,
+    })
+
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def ajax_test_db_connection(request):

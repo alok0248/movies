@@ -186,6 +186,7 @@ urlpatterns = [
     path('admin-dashboard/users/<int:user_id>/delete/', views.admin_user_delete, name='admin_user_delete'),
     path('admin-dashboard/users/<int:user_id>/subscription/', views.admin_user_subscription, name='admin_user_subscription'),
     path('admin-dashboard/settings/db-connections/', views.db_connection_settings, name='db_connection_settings'),
+    path('admin-dashboard/settings/db-connections/<int:pk>/', views.db_connection_detail, name='db_connection_detail'),
     path('admin-dashboard/settings/db-routing/', views.db_routing_settings, name='db_routing_settings'),
     path('admin-dashboard/settings/db-dashboard/', views.db_dashboard, name='db_dashboard'),
     path('ajax/test-db-connection-new/', views.ajax_test_db_connection, name='ajax_test_db_connection_new'),
