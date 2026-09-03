@@ -1762,7 +1762,8 @@ class DBConnectionConfig(models.Model):
                 self.last_tested_at = timezone.now()
                 self.last_test_status = 'success'
                 self.last_test_message = f'Connected successfully. Query returned: {result[0]}'
-                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                if self.pk:
+                    self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
                 return True, self.last_test_message
 
             elif self.db_type == 'oracle':
@@ -1777,7 +1778,8 @@ class DBConnectionConfig(models.Model):
                 self.last_tested_at = timezone.now()
                 self.last_test_status = 'success'
                 self.last_test_message = f'Connected successfully. Query returned: {result[0]}'
-                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                if self.pk:
+                    self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
                 return True, self.last_test_message
 
             elif self.db_type == 'postgresql':
@@ -1794,7 +1796,8 @@ class DBConnectionConfig(models.Model):
                 self.last_tested_at = timezone.now()
                 self.last_test_status = 'success'
                 self.last_test_message = 'Connected successfully.'
-                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                if self.pk:
+                    self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
                 return True, self.last_test_message
 
             elif self.db_type == 'sqlite':
@@ -1808,7 +1811,8 @@ class DBConnectionConfig(models.Model):
                 self.last_tested_at = timezone.now()
                 self.last_test_status = 'success'
                 self.last_test_message = f'Connected successfully. Query returned: {result[0]}'
-                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                if self.pk:
+                    self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
                 return True, self.last_test_message
 
             else:
@@ -1816,7 +1820,8 @@ class DBConnectionConfig(models.Model):
                 self.last_tested_at = timezone.now()
                 self.last_test_status = 'failed'
                 self.last_test_message = msg
-                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+                if self.pk:
+                    self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
                 return False, msg
 
         except ImportError as e:
@@ -1824,14 +1829,16 @@ class DBConnectionConfig(models.Model):
             self.last_tested_at = timezone.now()
             self.last_test_status = 'failed'
             self.last_test_message = msg
-            self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+            if self.pk:
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
             return False, msg
         except Exception as e:
             msg = f'Connection failed: {e}'
             self.last_tested_at = timezone.now()
             self.last_test_status = 'failed'
             self.last_test_message = msg
-            self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
+            if self.pk:
+                self.save(update_fields=['last_tested_at', 'last_test_status', 'last_test_message'])
             return False, msg
 
     def write_server_config(self):
