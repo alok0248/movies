@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
 
+{% block title %}TV Series – {{ site_settings.brand_name }}{% endblock %}
+
 {% block content %}
 <div class="catalog-shell">
     <div class="catalog-layout">
@@ -46,9 +48,14 @@
                             {% elif s.vote_average and s.vote_average > 0 %}
                             <div class="card-rating-badge">{{ s.vote_average }}</div>
                             {% endif %}
-                            <div class="card-overlay">
-                                <div class="card-overlay-title">{{ s.title }}</div>
-                                {% if s.year %}<div class="card-overlay-year">{{ s.year }}</div>{% endif %}
+                            <div class="card-hover-overlay"></div>
+                            <div class="card-hover-preview">
+                                <div class="preview-title">{{ s.title }}</div>
+                                <div class="preview-meta">
+                                    {% if s.vote_average and s.vote_average > 0 %}<b>{{ s.vote_average|floatformat:1 }}</b>{% endif %}
+                                    {% if s.year %}<span>{{ s.year }}</span>{% endif %}
+                                </div>
+                                {% if s.overview %}<p class="hover-description" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ s.overview|truncatechars:170 }}</p>{% endif %}
                             </div>
                         </div>
                     </a>

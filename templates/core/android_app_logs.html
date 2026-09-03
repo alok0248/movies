@@ -12,6 +12,16 @@
         </div>
     </div>
 
+    {% if not selected_app.log_collection_enabled %}
+    <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+            <strong>Log collection is disabled</strong> for this app. The app's <code>/log/</code> endpoint will reject incoming logs.
+            <a href="{% url 'android_app_dashboard_detail' selected_app.id %}" class="text-warning fw-semibold">Enable it in Log Settings</a>.
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Filters -->
     <div class="card bg-dark border-secondary shadow-sm mb-4">
         <div class="card-body py-3">
@@ -270,7 +280,7 @@ sendLog("API key failed to load", level = "error", tag = "Auth", data = JSONObje
                             <tbody>
                                 <tr><td><span class="badge bg-success">201</span></td><td class="text-secondary">Log saved successfully</td></tr>
                                 <tr><td><span class="badge bg-danger">400</span></td><td class="text-secondary">Invalid JSON or missing message field</td></tr>
-                                <tr><td><span class="badge bg-danger">403</span></td><td class="text-secondary">Invalid credentials</td></tr>
+                                <tr><td><span class="badge bg-danger">403</span></td><td class="text-secondary">Invalid credentials or log collection disabled</td></tr>
                                 <tr><td><span class="badge bg-secondary">404</span></td><td class="text-secondary">App slug not found</td></tr>
                             </tbody>
                         </table>

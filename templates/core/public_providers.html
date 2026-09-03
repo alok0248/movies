@@ -180,24 +180,26 @@
     <div class="row g-3" id="providerGrid">
         {% for provider in all_providers %}
         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-            <a href="{% url 'movie_list' %}?provider={{ provider.slug }}&watch_region={{ active_region }}" class="text-decoration-none">
-                <div class="prov-card h-100 text-center">
-                    {% if provider.logo_path %}
-                    <div class="mx-auto mb-2">
-                        <img src="https://image.tmdb.org/t/p/w92{{ provider.logo_path }}" alt="{{ provider.name }}" class="prov-logo" loading="lazy">
-                    </div>
-                    {% else %}
-                    <div class="mx-auto mb-2 prov-logo-placeholder">
-                        {{ provider.name|truncatechars:2 }}
-                    </div>
-                    {% endif %}
-                    <div class="fw-semibold" style="font-size:.82rem;color:var(--text-1);">{{ provider.name }}</div>
-                    <div class="d-flex justify-content-center gap-1 mt-1">
-                        {% if provider.supports_movies %}<span style="font-size:.65rem;padding:2px 6px;border-radius:6px;background:rgba(56,189,248,.1);color:#38bdf8;">Movies</span>{% endif %}
-                        {% if provider.supports_tv %}<span style="font-size:.65rem;padding:2px 6px;border-radius:6px;background:rgba(168,85,247,.1);color:#a855f7;">TV</span>{% endif %}
-                    </div>
+            <div class="prov-card h-100 text-center" onclick="openProviderModal('{{ provider.slug }}', '{{ provider.name }}', '{{ provider.logo_path|default:'' }}', {{ provider.supports_movies|yesno:'true,false' }}, {{ provider.supports_tv|yesno:'true,false' }}, '{{ active_region }}')">
+                {% if provider.logo_path %}
+                <div class="mx-auto mb-2">
+                    <img src="https://image.tmdb.org/t/p/w92{{ provider.logo_path }}" alt="{{ provider.name }}" class="prov-logo" loading="lazy">
                 </div>
-            </a>
+                {% else %}
+                <div class="mx-auto mb-2 prov-logo-placeholder">
+                    {{ provider.name|truncatechars:2 }}
+                </div>
+                {% endif %}
+                <div class="fw-semibold" style="font-size:.82rem;color:var(--text-1);">{{ provider.name }}</div>
+                <div class="d-flex justify-content-center gap-1 mt-2">
+                    {% if provider.supports_movies %}
+                    <span style="font-size:.65rem;padding:3px 8px;border-radius:6px;background:rgba(56,189,248,.15);color:#38bdf8;font-weight:600;"><i class="fas fa-film me-1"></i>Movies</span>
+                    {% endif %}
+                    {% if provider.supports_tv %}
+                    <span style="font-size:.65rem;padding:3px 8px;border-radius:6px;background:rgba(168,85,247,.15);color:#a855f7;font-weight:600;"><i class="fas fa-tv me-1"></i>TV Shows</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
         {% empty %}
         <div class="col-12 text-center py-5">
@@ -253,13 +255,100 @@
     </div>
 </div>
 
+<!-- Provider Selection Modal -->
+<div class="modal fade" id="providerModal" tabindex="1" aria-labelledby="providerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:var(--bg-2);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+            <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(168,85,247,.08));">
+                <div class="d-flex align-items-center gap-3 py-3">
+                    <div id="modalProvLogo" style="width:56px;height:56px;border-radius:12px;overflow:hidden;"></div>
+                    <div>
+                        <h6 class="fw-bold mb-0" id="modalProvName" style="color:var(--text-1);font-size:1rem;"></h6>
+                        <small class="text-secondary" style="font-size:.75rem;">Choose what to watch</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4 py-4">
+                <div class="d-flex gap-3" id="modalBtns">
+                    <button class="flex-fill prov-select-btn" id="modalMoviesBtn" onclick="navigateProvider('movies')" style="background:rgba(56,189,248,.1);border:2px solid rgba(56,189,248,.25);border-radius:14px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .25s;">
+                        <i class="fas fa-film" style="font-size:1.8rem;color:#38bdf8;margin-bottom:.6rem;"></i>
+                        <div class="fw-bold" style="color:#38bdf8;font-size:1rem;">Movies</div>
+                        <div class="text-secondary" style="font-size:.72rem;margin-top:.3rem;">Browse movies from this provider</div>
+                    </button>
+                    <button class="flex-fill prov-select-btn" id="modalTVBtn" onclick="navigateProvider('tv')" style="background:rgba(168,85,247,.1);border:2px solid rgba(168,85,247,.25);border-radius:14px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .25s;">
+                        <i class="fas fa-tv" style="font-size:1.8rem;color:#a855f7;margin-bottom:.6rem;"></i>
+                        <div class="fw-bold" style="color:#a855f7;font-size:1rem;">TV Shows</div>
+                        <div class="text-secondary" style="font-size:.72rem;margin-top:.3rem;">Browse TV shows from this provider</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.prov-select-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(99,102,241,.2);
+}
+.prov-select-btn#modalMoviesBtn:hover {
+    background: rgba(56,189,248,.18) !important;
+    border-color: rgba(56,189,248,.5) !important;
+}
+.prov-select-btn#modalTVBtn:hover {
+    background: rgba(168,85,247,.18) !important;
+    border-color: rgba(168,85,247,.5) !important;
+}
+</style>
+
 <script>
+var _provModal = null;
+var _provSlug = '', _provRegion = '';
+
+function openProviderModal(slug, name, logoPath, supportsMovies, supportsTV, region) {
+    _provSlug = slug;
+    _provRegion = region;
+    document.getElementById('modalProvName').textContent = name;
+    var logoEl = document.getElementById('modalProvLogo');
+    if (logoPath) {
+        logoEl.innerHTML = '<img src="https://image.tmdb.org/t/p/w92' + logoPath + '" alt="' + name + '" style="width:100%;height:100%;object-fit:cover;">';
+    } else {
+        logoEl.innerHTML = '<div style="width:100%;height:100%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.2rem;">' + name.substring(0,2) + '</div>';
+    }
+    var moviesBtn = document.getElementById('modalMoviesBtn');
+    var tvBtn = document.getElementById('modalTVBtn');
+    moviesBtn.style.display = supportsMovies ? '' : 'none';
+    tvBtn.style.display = supportsTV ? '' : 'none';
+    // If only one option, navigate directly
+    if (supportsMovies && !supportsTV) {
+        navigateProvider('movies');
+        return;
+    }
+    if (!supportsMovies && supportsTV) {
+        navigateProvider('tv');
+        return;
+    }
+    if (!_provModal) {
+        _provModal = new bootstrap.Modal(document.getElementById('providerModal'));
+    }
+    _provModal.show();
+}
+
+function navigateProvider(type) {
+    var url;
+    if (type === 'movies') {
+        url = '/movies/?provider=' + _provSlug + '&region=' + _provRegion;
+    } else {
+        url = '/series/?provider=' + _provSlug + '&region=' + _provRegion;
+    }
+    window.location.href = url;
+}
+
 function openLoginModal() {
-    // Trigger the sign-in modal from base.html
     if (typeof showLoginPopup === 'function') {
         showLoginPopup();
     } else {
-        // Fallback: open the sign-in modal directly
         var modal = document.getElementById('signInModal');
         if (modal) {
             var bsModal = new bootstrap.Modal(modal);

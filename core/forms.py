@@ -347,7 +347,7 @@ class AndroidAppForm(forms.ModelForm):
 
     class Meta:
         model = AndroidApp
-        fields = ['name', 'slug', 'allowed_endpoint', 'allowed_build_id', 'apk_file', 'access_username', 'access_password', 'is_active', 'data_retention_days']
+        fields = ['name', 'slug', 'allowed_endpoint', 'allowed_build_id', 'apk_file', 'access_username', 'access_password', 'is_active', 'data_retention_days', 'log_collection_enabled', 'log_retention_days']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., My Movie App'}),
             'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'auto-generated-if-empty'}),
@@ -358,6 +358,8 @@ class AndroidAppForm(forms.ModelForm):
             'access_password': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Endpoint password for Basic Auth'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'data_retention_days': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 3650, 'placeholder': '30'}),
+            'log_collection_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'log_retention_days': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 3650, 'placeholder': '30'}),
         }
 
     def __init__(self, *args, **kwargs):

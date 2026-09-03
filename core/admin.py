@@ -4,8 +4,8 @@ from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDB
 
 @admin.register(AndroidApp)
 class AndroidAppAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'is_active', 'total_connections', 'data_retention_days', 'last_accessed_at', 'created_at')
-    list_filter = ('is_active', 'created_at')
+    list_display = ('name', 'slug', 'is_active', 'total_connections', 'data_retention_days', 'log_collection_enabled', 'log_retention_days', 'last_accessed_at', 'created_at')
+    list_filter = ('is_active', 'log_collection_enabled', 'created_at')
     search_fields = ('name', 'slug', 'access_username')
     readonly_fields = ('total_connections', 'last_accessed_at', 'created_at', 'updated_at')
 
