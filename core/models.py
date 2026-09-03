@@ -746,6 +746,14 @@ class AndroidApp(models.Model):
         default=30,
         help_text="Number of days to retain analytics logs. Older data is automatically deleted."
     )
+    log_collection_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable or disable log collection from this app. When disabled, the app's /log/ endpoint will reject incoming logs."
+    )
+    log_retention_days = models.PositiveIntegerField(
+        default=30,
+        help_text="Number of days to retain AndroidAppLog entries. Older logs are automatically deleted by the clean_analytics command."
+    )
     last_accessed_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -770,24 +778,28 @@ class AndroidApp(models.Model):
         super().save(*args, **kwargs)
 
     def clean_old_analytics_data(self):
-        """Delete analytics logs older than data_retention_days."""
+        """Delete analytics logs older than their respective retention settings."""
         from datetime import date, timedelta
-        cutoff = date.today() - timedelta(days=self.data_retention_days)
+        analytics_cutoff = date.today() - timedelta(days=self.data_retention_days)
+        log_cutoff = date.today() - timedelta(days=self.log_retention_days)
         deleted_counts = {
             'access_logs': AndroidAppAccessLog.objects.filter(
-                android_app=self, access_date__lt=cutoff
+                android_app=self, access_date__lt=analytics_cutoff
             ).delete()[0],
             'build_logs': AndroidAppBuildLog.objects.filter(
-                android_app=self, access_date__lt=cutoff
+                android_app=self, access_date__lt=analytics_cutoff
             ).delete()[0],
             'daily_unique_visitors': AndroidAppDailyUniqueVisitor.objects.filter(
-                android_app=self, access_date__lt=cutoff
+                android_app=self, access_date__lt=analytics_cutoff
             ).delete()[0],
             'device_visits': AndroidAppDeviceVisit.objects.filter(
-                android_app=self, visited_at__date__lt=cutoff
+                android_app=self, visited_at__date__lt=analytics_cutoff
             ).delete()[0],
             'failed_attempts': AndroidAppFailedAttempt.objects.filter(
-                android_app=self, attempted_at__date__lt=cutoff
+                android_app=self, attempted_at__date__lt=analytics_cutoff
+            ).delete()[0],
+            'app_logs': AndroidAppLog.objects.filter(
+                android_app=self, timestamp__date__lt=log_cutoff
             ).delete()[0],
         }
         return deleted_counts
@@ -1248,7 +1260,7 @@ class UserCloudData(models.Model):
                     entry['lastUpdated'] = entry.pop('updatedAt')
                 self.playback_progress[key] = entry
 
-        # Settings — app data wins
+        # Settings — app data wins
         app_settings = incoming.get('settings', {})
         if app_settings:
             self.app_settings = app_settings

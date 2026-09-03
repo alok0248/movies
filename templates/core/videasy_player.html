@@ -47,6 +47,7 @@
   .sel-opt:hover{background:rgba(255,255,255,.08);color:#fff}
   .sel-opt.chosen{color:#e67e22;font-weight:600}
   .sel-opt.chosen-q{color:#a78bfa;font-weight:600}
+  .sel-btn.active-sub{border-color:#27ae60;color:#27ae60}
   
   /* ===== Volume sliders ===== */
   .vol-group{display:flex;align-items:center;gap:6px;padding:0 6px}
@@ -154,6 +155,13 @@
         <span class="sel-label">Q</span>
         <button class="sel-btn" id="qBtn" onclick="toggleMenu('qMenu')">Quality</button>
         <div class="sel-menu" id="qMenu"></div>
+      </div>
+
+      <!-- Subtitle selector -->
+      <div class="sel" id="subSel">
+        <span class="sel-label">Sub</span>
+        <button class="sel-btn" id="subBtn" onclick="toggleMenu('subMenu')">Subtitles Off</button>
+        <div class="sel-menu" id="subMenu"></div>
       </div>
 
       <!-- Dual stream toggle -->
@@ -341,23 +349,118 @@ function renderQuality(sources,lang){
 }
 
 var _subtitleTracks=[];
+var _allSubtitleTracks=[];
+var _selectedSubLang='off';
+
 function fetchSubtitles(){
   var mediaType=_playerType==='tv'?'tv':'movie';
-  var url='/ajax/videasy-sources/?tmdb_id='+encodeURIComponent(_playerTmdbId)+'&media_type='+mediaType;
-  if(_playerType==='tv'){url+='&season_id='+_playerSeason+'&episode_id='+_playerEpisode;}
-  fetch(url).then(function(r){return r.json()}).then(function(d){
-    var allSubs=[];
-    (d.servers||[]).forEach(function(s){(s.subtitles||[]).forEach(function(sub){
-      if(sub.url)allSubs.push({url:sub.url,lang:sub.lang||'en',lang_name:sub.language||sub.lang||'en',label:(sub.language||sub.lang||'en')+' subtitle'});
-    })});
-    var seen={};allSubs=allSubs.filter(function(s){if(seen[s.lang])return false;seen[s.lang]=1;return true;});
-    if(allSubs.length>0){
-      _subtitleTracks=allSubs;
-      var frame=document.getElementById("playerFrame");
-      frame.contentWindow.postMessage({type:"setSubtitles",subtitles:allSubs},"*");
-      log('Loaded '+allSubs.length+' subtitle(s).','success');
+  var allSubs=[];
+  var fetchCount=0;
+  var totalSources=2; // videasy sources + stremio
+
+  function checkDone(){
+    fetchCount++;
+    if(fetchCount>=totalSources){
+      // Deduplicate by lang code, prefer stremio (direct VTT)
+      var seen={};
+      var merged=[];
+      for(var i=0;i<allSubs.length;i++){
+        var s=allSubs[i];
+        if(!seen[s.lang]){
+          seen[s.lang]=1;
+          merged.push(s);
+        }
+      }
+      _allSubtitleTracks=merged;
+      _subtitleTracks=merged;
+      buildSubtitleSelector();
+      if(merged.length>0){
+        var frame=document.getElementById("playerFrame");
+        frame.contentWindow.postMessage({type:"setSubtitles",subtitles:merged},"*");
+        log('Loaded '+merged.length+' subtitle(s).','success');
+      }
+      // Send subtitles to parent detail page
+      try{parent.postMessage({type:'setSubtitles',subtitles:merged},'*');}catch(e){}
     }
-  }).catch(function(){})
+  }
+
+  // Source 1: Existing videasy/subdl subtitles
+  var url1='/ajax/videasy-sources/?tmdb_id='+encodeURIComponent(_playerTmdbId)+'&media_type='+mediaType;
+  if(_playerType==='tv'){url1+='&season_id='+_playerSeason+'&episode_id='+_playerEpisode;}
+  fetch(url1).then(function(r){return r.json()}).then(function(d){
+    (d.servers||[]).forEach(function(s){(s.subtitles||[]).forEach(function(sub){
+      if(sub.url)allSubs.push({url:sub.url,lang:(sub.lang||'en').substring(0,2),lang_name:sub.language||sub.lang||'en',label:(sub.language||sub.lang||'en')+' subtitle',source:'stream'});
+    })});
+  }).catch(function(){}).then(function(){checkDone()});
+
+  // Source 2: Stremio OpenSubtitles
+  var url2='/ajax/stremio-subtitles/?tmdb_id='+encodeURIComponent(_playerTmdbId)+'&type='+mediaType+'&lang=all';
+  if(_playerType==='tv'){url2+='&season='+_playerSeason+'&episode='+_playerEpisode;}
+  fetch(url2).then(function(r){return r.json()}).then(function(d){
+    (d.subtitles||[]).forEach(function(sub){
+      if(sub.url)allSubs.push({url:sub.url,lang:(sub.lang||'en').substring(0,2),lang_name:sub.lang_name||sub.lang||'en',label:sub.label||sub.lang_name||'subtitle',source:'stremio'});
+    });
+  }).catch(function(){}).then(function(){checkDone()});
+}
+
+function buildSubtitleSelector(){
+  var btn=document.getElementById("subBtn");
+  var menu=document.getElementById("subMenu");
+  if(!btn||!menu)return;
+  menu.innerHTML="";
+  if(!_allSubtitleTracks.length){
+    btn.textContent="Subtitles Off";
+    btn.style.display="none";
+    return;
+  }
+  btn.style.display="";
+
+  // Off option
+  var offOpt=document.createElement("div");
+  offOpt.className="sel-opt"+( _selectedSubLang==='off'?' chosen':'');
+  offOpt.textContent="Off";
+  offOpt.onclick=function(e){e.stopPropagation();closeAllMenus();selectSubtitle('off');};
+  menu.appendChild(offOpt);
+
+  // Group by lang name
+  var langMap={};
+  for(var i=0;i<_allSubtitleTracks.length;i++){
+    var s=_allSubtitleTracks[i];
+    if(!langMap[s.lang_name])langMap[s.lang_name]=[];
+    langMap[s.lang_name].push(s);
+  }
+  var langs=Object.keys(langMap).sort();
+  for(var j=0;j<langs.length;j++){
+    var langName=langs[j];
+    var subs=langMap[langName];
+    var opt=document.createElement("div");
+    opt.className="sel-opt"+(subs[0].lang===_selectedSubLang?' chosen':'');
+    var srcTag=subs[0].source==='stremio'?' ★':'';
+    opt.textContent=langName+' ('+subs.length+')'+srcTag;
+    opt.setAttribute('data-lang',subs[0].lang);
+    opt.onclick=(function(lang,tracks){
+      return function(e){e.stopPropagation();closeAllMenus();selectSubtitle(lang);};
+    })(subs[0].lang,subs);
+    menu.appendChild(opt);
+  }
+  btn.textContent=_selectedSubLang==='off'?'Subtitles Off':_selectedSubLang;
+}
+
+function selectSubtitle(lang){
+  _selectedSubLang=lang;
+  var btn=document.getElementById("subBtn");
+  var frame=document.getElementById("playerFrame");
+  if(lang==='off'){
+    frame.contentWindow.postMessage({type:"setSubtitles",subtitles:[]},"*");
+    if(btn)btn.classList.remove("active-sub");
+    log('Subtitles off');
+  }else{
+    var filtered=_allSubtitleTracks.filter(function(s){return s.lang===lang;});
+    frame.contentWindow.postMessage({type:"setSubtitles",subtitles:filtered},"*");
+    if(btn)btn.classList.add("active-sub");
+    log('Subtitles: '+lang,'success');
+  }
+  buildSubtitleSelector();
 }
 
 function loadSource(src,quality,lang){
@@ -475,6 +578,15 @@ async function fetchAndPlay(type, id, extra) {
   buildSelectors();
   log('Loaded! Select language and quality.','success');
   showTitleOverlay();
+  // Send flat source list to parent detail page for stream list panel
+  try{
+    var flatSources=[];
+    for(var si=0;si<allFlatSrcs.length;si++){
+      var fs=allFlatSrcs[si];
+      if(fs.src&&fs.src.url)flatSources.push({url:fs.src.url,quality:fs.quality,language:fs.lang,server_name:fs.server,server:fs.server});
+    }
+    if(flatSources.length>0)parent.postMessage({type:'streamList',sources:flatSources},'*');
+  }catch(e){}
 }
 
 /* ===== Title overlay ===== */

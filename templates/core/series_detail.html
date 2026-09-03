@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
 
+{% block title %}{{ series.title }} – {{ site_settings.brand_name }}{% endblock %}
+
 {% block content %}
 <style>
 /* ===== Modern Series Detail ===== */
@@ -79,6 +81,15 @@
 .det-sidebar-ep-meta{font-size:.72rem;color:rgba(255,255,255,.4)}
 .det-sidebar-ep-desc{font-size:.75rem;color:rgba(255,255,255,.45);line-height:1.5;margin-top:.3rem}
 @media(max-width:1024px){.det-player-layout{flex-direction:column}.det-player-right{width:100%;max-height:none;position:static}}
+/* Phone landscape: player + info side by side for a proper view */
+@media(min-width:640px) and (max-width:1024px) and (orientation:landscape) and (max-height:540px){
+    .det-player-layout{flex-direction:row !important;align-items:flex-start;gap:1rem}
+    .det-player-left{width:auto !important;flex:1 1 58%;min-width:0}
+    .det-player-right{width:auto !important;flex:0 1 42%;position:sticky !important;top:70px;max-height:calc(100vh - 120px) !important;overflow-y:auto;padding:.8rem}
+    .det-player-box{max-width:none !important;border-radius:16px !important}
+    .det-player-section{padding:1rem 2vw 1.5rem !important}
+    .det-actions{justify-content:flex-start}
+}
 .det-player-box{position:relative;width:100%;aspect-ratio:16/9;min-height:200px;border-radius:16px;overflow:visible;background:#000;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .det-player-box iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 
@@ -314,7 +325,7 @@ html[data-theme="light"] .ep-season-option.active{background:rgba(229,9,20,.08);
 .ep-tab.active{background:rgba(229,9,20,.15);color:#fff;border-color:rgba(229,9,20,.4)}
 .ep-tab.active::after{content:'';position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);width:20px;height:2px;background:var(--brand,#e50914);border-radius:2px}
 .ep-tab.future{opacity:.45;border-style:dashed}
-.ep-tab.future::before{content:'📅 ';font-size:.65rem}
+.ep-tab.future::before{content:'\f073 ';font-family:'Font Awesome 5 Free';font-weight:900;font-size:.65rem}
 
 /* Future episode marker */
 .ep-list-card.future-ep{opacity:.5;border-style:dashed;border-color:rgba(255,255,255,.08)}
@@ -612,6 +623,7 @@ body.player-netflix .dual-panel{display:none!important}
 .ctrl-toggle{padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
 .ctrl-toggle:hover{background:rgba(255,255,255,.1);color:#fff}
 .ctrl-toggle.active{background:rgba(70,211,105,.2);color:#46d369;border-color:rgba(70,211,105,.3)}
+#streamListBody.collapsed{max-height:0!important;overflow:hidden;}
 </style>
 
 <div class="det-page">
@@ -719,7 +731,7 @@ body.player-netflix .dual-panel{display:none!important}
         {% if series.tagline %}<div style="font-size:.75rem;color:rgba(255,255,255,.35);font-style:italic;margin-bottom:.5rem">"{{ series.tagline }}"</div>{% endif %}
         <div class="det-sidebar-meta">
             {% if series.first_air_date %}<span class="highlight">{{ series.first_air_date|slice:":4" }}</span>{% endif %}
-            {% if series.vote_average and series.vote_average > 0 %}<span style="color:#ffc107">★ {{ series.vote_average }}</span>{% endif %}
+            {% if series.vote_average and series.vote_average > 0 %}<span style="color:#ffc107">★ {{ series.vote_average|floatformat:1 }}</span>{% endif %}
             {% if series.number_of_seasons %}<span>{{ series.number_of_seasons }} Season{{ series.number_of_seasons|pluralize }}</span>{% endif %}
             {% if series.original_language %}<span>{{ series.original_language|upper }}</span>{% endif %}
         </div>
@@ -730,7 +742,7 @@ body.player-netflix .dual-panel{display:none!important}
         <div class="det-sidebar-overview">{{ series.overview|truncatewords:35 }}</div>
         {% endif %}
         {% if series.directors %}
-        <div style="font-size:.78rem;color:rgba(255,255,255,.45);margin-bottom:.5rem">🎬 Created by: {{ series.directors }}</div>
+        <div style="font-size:.78rem;color:rgba(255,255,255,.45);margin-bottom:.5rem"><i class="fas fa-video me-1"></i>Created by: {{ series.directors }}</div>
         {% endif %}
 
 
@@ -743,23 +755,158 @@ body.player-netflix .dual-panel{display:none!important}
                 <i class="fas fa-plus" id="watchlist-icon"></i> <span id="watchlist-text">Add to Watchlist</span>
             </button>
         </div>
-        {% if all_players %}
-        <div class="det-servers" style="margin-top:.5rem">
-            <span class="det-servers-label">Servers</span>
-            <button type="button" class="det-server-pill" data-player-id="0" style="font-weight:800">0</button>
-            {% for player in all_players %}
-            <button type="button" class="det-server-pill"
-                data-player-id="{{ player.id }}"
-                {% if request.user.is_staff or request.user.is_superuser %}data-player-edit-url="{% url 'player_edit' player.id %}"{% endif %}>
-                {{ forloop.counter }}
-            </button>
-            {% endfor %}
-        </div>
-        {% endif %}
+
     </div>
 </div>
 </div>
 {% endif %}
+
+<!-- Stream List + Subtitle Panel (for Extractor mode) -->
+<div id="streamListPanel" style="display:none;max-width:800px;margin:0 auto 1rem;background:var(--bg-2,#1a1a2e);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:14px;overflow:hidden;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06);">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:.85rem;font-weight:700;color:var(--text-1,#f0f0f5);">
+        <i class="fas fa-list-ul me-1" style="color:#818cf8;"></i>Streams
+      </div>
+      <span id="streamCount" style="font-size:.7rem;padding:2px 8px;border-radius:8px;background:rgba(99,102,241,.15);color:#818cf8;font-weight:600;">0</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <!-- Subtitle Selector -->
+      <div class="sel" id="detailSubSel" style="display:none;">
+        <button class="sel-btn" id="detailSubBtn" onclick="toggleDetailSubs()" style="font-size:.72rem;padding:4px 10px;">Subtitles Off</button>
+        <div class="sel-menu" id="detailSubMenu" style="bottom:auto;top:calc(100% + 4px);"></div>
+      </div>
+      <button onclick="document.getElementById('streamListBody').classList.toggle('collapsed')" style="background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;font-size:.75rem;">
+        <i class="fas fa-chevron-up" id="streamListToggle"></i>
+      </button>
+    </div>
+  </div>
+  <div id="streamListBody" style="max-height:320px;overflow-y:auto;transition:max-height .3s ease;">
+  </div>
+</div>
+
+<script>
+var _detailStreams=[];
+var _detailSubs=[];
+var _detailSelectedSub='off';
+
+function toggleDetailSubs(){
+  var menu=document.getElementById('detailSubMenu');
+  if(!menu)return;
+  menu.classList.toggle('open');
+}
+
+function toggleDetailSubs(){
+  var menu=document.getElementById('detailSubMenu');
+  if(!menu)return;
+  menu.classList.toggle('open');
+}
+
+function buildDetailSubSelector(){
+  var btn=document.getElementById('detailSubBtn');
+  var menu=document.getElementById('detailSubMenu');
+  var sel=document.getElementById('detailSubSel');
+  if(!btn||!menu||!sel)return;
+  if(!_detailSubs.length){sel.style.display='none';return;}
+  sel.style.display='';
+  menu.innerHTML='';
+  var offOpt=document.createElement('div');
+  offOpt.className='sel-opt'+(_detailSelectedSub==='off'?' chosen':'');
+  offOpt.textContent='Off';
+  offOpt.onclick=function(e){e.stopPropagation();menu.classList.remove('open');selectDetailSub('off');};
+  menu.appendChild(offOpt);
+  var langMap={};
+  for(var i=0;i<_detailSubs.length;i++){
+    var s=_detailSubs[i];
+    if(!langMap[s.lang_name])langMap[s.lang_name]=[];
+    langMap[s.lang_name].push(s);
+  }
+  var langs=Object.keys(langMap).sort();
+  for(var j=0;j<langs.length;j++){
+    var name=langs[j];
+    var tracks=langMap[name];
+    var opt=document.createElement('div');
+    opt.className='sel-opt'+(tracks[0].lang===_detailSelectedSub?' chosen':'');
+    opt.textContent=name;
+    opt.onclick=(function(lang){return function(e){e.stopPropagation();menu.classList.remove('open');selectDetailSub(lang);};})(tracks[0].lang);
+    menu.appendChild(opt);
+  }
+  btn.textContent=_detailSelectedSub==='off'?'Subtitles Off':_detailSelectedSub;
+}
+
+function selectDetailSub(lang){
+  _detailSelectedSub=lang;
+  var btn=document.getElementById('detailSubBtn');
+  if(lang==='off'){
+    if(btn){btn.classList.remove('active-sub');btn.style.borderColor='';btn.style.color='';}
+  }else{
+    if(btn){btn.classList.add('active-sub');btn.style.borderColor='#27ae60';btn.style.color='#27ae60';}
+  }
+  var frame=document.querySelector('#player-container iframe');
+  if(!frame)frame=document.querySelector('#playerContainer iframe');
+  if(frame&&frame.contentWindow){
+    var filtered=lang==='off'?[]:_detailSubs.filter(function(s){return s.lang===lang;});
+    frame.contentWindow.postMessage({type:'setSubtitles',subtitles:filtered},'*');
+  }
+  buildDetailSubSelector();
+}
+
+function renderStreamList(sources){
+  if(!sources||!sources.length)return;
+  _detailStreams=sources;
+  var panel=document.getElementById('streamListPanel');
+  var body=document.getElementById('streamListBody');
+  var count=document.getElementById('streamCount');
+  if(!panel||!body)return;
+  panel.style.display='';
+  count.textContent=sources.length;
+  body.innerHTML='';
+  sources.forEach(function(src,i){
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s;'+(i===0?'background:rgba(99,102,241,.08);':'');
+    row.onmouseenter=function(){this.style.background='rgba(255,255,255,.04)';};
+    row.onmouseleave=function(){if(i!==_detailActiveStream)this.style.background='';};
+    row.onclick=function(){selectDetailStream(i);};
+    var lang=src.language||src.audioLanguage||src.audio||'Original';
+    var quality=src.quality||'?';
+    var server=src.server_name||src.server||'';
+    var isActive=i===0;
+    row.innerHTML='<span style="font-size:.7rem;padding:3px 8px;border-radius:6px;'+(lang==='Original'?'background:rgba(99,102,241,.15);color:#818cf8;':'background:rgba(230,126,34,.12);color:#e67e22;')+'font-weight:600;min-width:60px;text-align:center;">'+lang+'</span>'+
+      '<span style="font-size:.7rem;padding:3px 8px;border-radius:6px;background:rgba(168,85,247,.12);color:#a855f7;font-weight:600;min-width:55px;text-align:center;">'+quality+'</span>'+
+      '<span style="font-size:.72rem;color:rgba(255,255,255,.5);flex:1;">'+server+'</span>'+
+      (isActive?'<i class="fas fa-circle" style="font-size:.4rem;color:#27ae60;"></i>':'');
+    body.appendChild(row);
+  });
+}
+
+var _detailActiveStream=0;
+function selectDetailStream(idx){
+  _detailActiveStream=idx;
+  var body=document.getElementById('streamListBody');
+  var rows=body.children;
+  for(var i=0;i<rows.length;i++){
+    rows[i].style.background=i===idx?'rgba(99,102,241,.08)':'';
+  }
+  var src=_detailStreams[idx];
+  if(src&&src.url){
+    var frame=document.querySelector('#playerContainer iframe');
+    if(frame&&frame.contentWindow){
+      frame.contentWindow.postMessage({type:'play',url:src.url},'*');
+    }
+  }
+}
+
+window.addEventListener('message',function(ev){
+  if(!ev.data)return;
+  if(ev.data.type==='streamList'&&ev.data.sources){
+    renderStreamList(ev.data.sources);
+  }
+  if(ev.data.type==='setSubtitles'&&ev.data.subtitles){
+    _detailSubs=ev.data.subtitles;
+    buildDetailSubSelector();
+  }
+});
+</script>
 
 
 <!-- Content Sections -->
@@ -805,7 +952,7 @@ body.player-netflix .dual-panel{display:none!important}
             <div class="ep-text" style="flex:1;min-width:0">
                 <div class="ep-meta" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem;flex-wrap:wrap">
                     <span class="ep-num" style="font-size:.6rem;color:var(--brand,#e50914);font-weight:700;text-transform:uppercase">Ep {{ ep.episode_number }}</span>
-                    {% if ep.vote_average %}<span style="font-size:.65rem;color:#ffc107">★ {{ ep.vote_average }}</span>{% endif %}
+                    {% if ep.vote_average %}<span style="font-size:.65rem;color:#ffc107">★ {{ ep.vote_average|floatformat:1 }}</span>{% endif %}
                     {% if ep.air_date %}
                         {% if ep.air_date > today_date %}
                         <span class="ep-future-badge"><i class="fas fa-calendar-alt"></i> {{ ep.air_date }}</span>
@@ -849,10 +996,10 @@ body.player-netflix .dual-panel{display:none!important}
         <div class="det-info-card"><div class="ic-label">Episode Runtime</div><div class="ic-value">{{ series.episode_run_time|first }} min</div></div>
         {% endif %}
         {% if series.vote_average %}
-        <div class="det-info-card"><div class="ic-label">Rating</div><div class="ic-value"><i class="fas fa-star" style="color:#f5c518;margin-right:4px"></i>{{ series.vote_average }} / 10</div></div>
+        <div class="det-info-card"><div class="ic-label">Rating</div><div class="ic-value"><i class="fas fa-star" style="color:#f5c518;margin-right:4px"></i>{{ series.vote_average|floatformat:1 }} / 10</div></div>
         {% endif %}
         {% if series.vote_count %}
-        <div class="det-info-card"><div class="ic-label">Votes</div><div class="ic-value">{{ series.vote_count|floatformat:0 }}</div></div>
+        <div class="det-info-card"><div class="ic-label">Votes</div><div class="ic-value">{{ series.vote_count|intcomma }}</div></div>
         {% endif %}
         {% if series.networks %}
         <div class="det-info-card"><div class="ic-label">Network</div><div class="ic-value">{% for n in series.networks %}{% if not forloop.first %}, {% endif %}{{ n.name }}{% endfor %}</div></div>
@@ -1017,7 +1164,7 @@ function updatePlayerUrl() {
     /* Server 0 (Extractor): fetch sources and play with source selection */
     if (cfg.isExtractor) {
         var apiUrl = '/ajax/player-sources/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv&season=' + currentSeason + '&episode=' + currentEpisode;
-        _buildVideasyPlayer(container, apiUrl);
+        _buildVideasyPlayer(container, apiUrl, updatePlayerUrl);
     } else {
         var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
         if (content.type === 'html') {
@@ -1064,7 +1211,7 @@ function renderEpisodeList(episodeList) {
         var stillSrc = ep.still_path ? 'https://image.tmdb.org/t/p/w200' + ep.still_path : '';
         var stillHtml = stillSrc ? '<img class="ep-thumb" src="' + stillSrc + '" alt="' + (ep.name||'') + '" style="width:120px;height:68px;border-radius:8px;flex-shrink:0;object-fit:cover">' : '<div class="ep-thumb" style="width:120px;height:68px;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:rgba(255,255,255,.2)">🎬</div>';
         var isFuture = ep.air_date && ep.air_date > today;
-        var rating = ep.vote_average ? '<span style="font-size:.65rem;color:#ffc107">\u2605 ' + ep.vote_average + '</span>' : '';
+        var rating = ep.vote_average ? '<span style="font-size:.65rem;color:#ffc107">\u2605 ' + Number(ep.vote_average).toFixed(1) + '</span>' : '';
         var date = '';
         if (ep.air_date) {
             if (isFuture) {
@@ -1223,7 +1370,7 @@ function showEpSplash(ep, epNum) {
         if (title) title.textContent = ep.name || 'Episode ' + epNum;
         if (meta) {
             var html = '<span>S' + currentSeason + ' · E' + epNum + '</span>';
-            if (ep.vote_average) html += '<span class="ep-splash-rating">★ ' + ep.vote_average + '</span>';
+            if (ep.vote_average) html += '<span class="ep-splash-rating">★ ' + Number(ep.vote_average).toFixed(1) + '</span>';
             if (ep.air_date) html += '<span>' + ep.air_date + '</span>';
             if (ep.runtime) html += '<span>' + ep.runtime + ' min</span>';
             meta.innerHTML = html;
@@ -1233,6 +1380,9 @@ function showEpSplash(ep, epNum) {
     }
     splash.classList.add('visible');
     splash.classList.remove('hidden');
+    /* Clear any forced-hide left by the player's error state */
+    splash.style.opacity = '';
+    splash.style.pointerEvents = '';
 }
 
 function hideEpSplash() {

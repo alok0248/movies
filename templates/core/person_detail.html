@@ -142,7 +142,7 @@
         {% if person.profile_path %}
         <img class="person-photo" src="https://image.tmdb.org/t/p/w342{{ person.profile_path }}" alt="{{ person.name }}">
         {% else %}
-        <div class="person-photo" style="background:var(--bg-3);display:flex;align-items:center;justify-content:center;font-size:3rem;color:var(--text-3);">👤</div>
+        <div class="person-photo" style="background:var(--bg-3);display:flex;align-items:center;justify-content:center;font-size:3rem;color:var(--text-3);"><i class="fas fa-user"></i></div>
         {% endif %}
         <div class="person-info">
             <h1>{{ person.name }}</h1>
@@ -184,7 +184,7 @@
                 <img src="https://image.tmdb.org/t/p/w342{{ m.poster_path }}" alt="{{ m.title }}" loading="lazy">
                 {% endif %}
                 {% if m.release_date|is_future_date %}
-                <div class="person-card-badge" style="background:rgba(39,174,96,.85);color:#fff">🎬 Coming Soon</div>
+                <div class="person-card-badge" style="background:rgba(39,174,96,.85);color:#fff"><i class="fas fa-film me-1"></i>Coming Soon</div>
                 {% elif m.vote_average and m.vote_average > 0 %}
                 <div class="person-card-badge">{{ m.vote_average }}</div>
                 {% endif %}
@@ -206,7 +206,7 @@
                 <img src="https://image.tmdb.org/t/p/w342{{ s.poster_path }}" alt="{{ s.title }}" loading="lazy">
                 {% endif %}
                 {% if s.first_air_date|is_future_date %}
-                <div class="person-card-badge" style="background:rgba(39,174,96,.85);color:#fff">🎬 Coming Soon</div>
+                <div class="person-card-badge" style="background:rgba(39,174,96,.85);color:#fff"><i class="fas fa-film me-1"></i>Coming Soon</div>
                 {% elif s.vote_average and s.vote_average > 0 %}
                 <div class="person-card-badge">{{ s.vote_average }}</div>
                 {% endif %}

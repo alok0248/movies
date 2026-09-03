@@ -85,6 +85,42 @@
                     </div>
                 </div>
                 <div class="col-lg-6">
+                    <div class="card bg-dark border-info shadow-sm h-100">
+                        <div class="card-body p-0">
+                            <div class="p-3" style="background:rgba(56,189,248,0.06);border-bottom:1px solid rgba(56,189,248,0.15);">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <i class="fas fa-scroll text-info"></i>
+                                    <h5 class="text-white mb-0">Log Settings</h5>
+                                </div>
+                                <div class="text-secondary small">Control log collection and automatic log cleanup for this app.</div>
+                            </div>
+                            <div class="p-3">
+                                <form id="logSettingsForm" class="d-flex flex-column gap-3">
+                                    {% csrf_token %}
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="form-check form-switch">
+                                            <input type="checkbox" id="logCollectionEnabled" class="form-check-input" {% if selected_app.log_collection_enabled %}checked{% endif %}>
+                                            <label class="form-check-label text-white small fw-semibold" for="logCollectionEnabled">Log Collection Enabled</label>
+                                        </div>
+                                        <span id="logCollectionBadge" class="badge {% if selected_app.log_collection_enabled %}bg-success{% else %}bg-secondary{% endif %}" style="font-size:.65rem;">
+                                            {% if selected_app.log_collection_enabled %}ON{% else %}OFF{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <label class="text-white small fw-semibold">Delete logs after</label>
+                                            <input type="number" id="logRetentionDays" class="form-control form-control-sm bg-dark text-white border-secondary" style="width:90px" min="1" max="3650" value="{{ selected_app.log_retention_days }}">
+                                            <label class="text-white small fw-semibold">days</label>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-info" onclick="updateLogSettings()"><i class="fas fa-save me-1"></i>Save</button>
+                                        <div id="logSettingsStatus" class="small"></div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
                     <a href="{% url 'synced_users_list' %}" class="card bg-dark border-success shadow-sm h-100 text-decoration-none" style="transition:border-color .2s;" onmouseover="this.style.borderColor='#16a34a'" onmouseout="this.style.borderColor='#22c55e'">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -263,6 +299,46 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
                         <div>
+                            <h5 class="text-white mb-1"><i class="fas fa-bug me-2 text-warning"></i>Full Request Debug</h5>
+                            <div class="text-secondary small">Full HTTP request details from recent device connections — expand to inspect headers, auth, device info, etc.</div>
+                        </div>
+                    </div>
+                    <div id="fullRequestsList">
+                        {% with visits_with_req=recent_visits %}
+                        {% if visits_with_req %}
+                        {% for visit in visits_with_req %}
+                        {% if visit.full_request %}
+                        <div class="border border-secondary rounded mb-2">
+                            <button class="btn btn-sm w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.toggle-icon').textContent = this.nextElementSibling.style.display === 'none' ? '▶' : '▼';">
+                                <span>
+                                    <code class="text-info">{{ visit.device.user_id|default:'-' }}</code>
+                                    <span class="text-secondary mx-2">|</span>
+                                    <span class="text-white">{{ visit.device_model|default:'-' }}</span>
+                                    <span class="text-secondary mx-2">|</span>
+                                    <span class="text-secondary">{{ visit.build_identifier|default:'-' }}</span>
+                                    <span class="text-secondary mx-2">|</span>
+                                    <span class="text-secondary">{{ visit.visited_at }}</span>
+                                </span>
+                                <span class="toggle-icon text-info" style="font-size:0.6rem;">▶</span>
+                            </button>
+                            <div style="display:none;padding:12px;background:rgba(0,0,0,0.3);">
+                                <pre class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">{{ visit.full_request }}</pre>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-center py-4 text-secondary">No request data captured yet.</div>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
                             <h5 class="text-white mb-1">Recent Visits</h5>
                             <div class="text-secondary small">Last 20 device visits</div>
                         </div>
@@ -349,10 +425,45 @@ function updateRetention() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
-            var msg = 'Retention set to ' + data.retention_days + ' days.';
+            var msg = 'Retention set to ' + data.data_retention_days + ' days.';
             if (data.deleted && Object.values(data.deleted).some(function(v){return v>0;})) {
                 var total = Object.values(data.deleted).reduce(function(a,b){return a+b;}, 0);
                 msg += ' Deleted ' + total + ' old records.';
+            }
+            statusEl.innerHTML = '<span class="text-success">' + msg + '</span>';
+        } else {
+            statusEl.innerHTML = '<span class="text-danger">Error: ' + (data.error || 'Unknown') + '</span>';
+        }
+    })
+    .catch(function(e) {
+        statusEl.innerHTML = '<span class="text-danger">Request failed</span>';
+    });
+}
+
+function updateLogSettings() {
+    var enabled = document.getElementById('logCollectionEnabled').checked;
+    var logDays = parseInt(document.getElementById('logRetentionDays').value);
+    if (!logDays || logDays < 1) { logDays = 30; }
+    var statusEl = document.getElementById('logSettingsStatus');
+    var badge = document.getElementById('logCollectionBadge');
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    statusEl.innerHTML = '<span class="text-info">Saving...</span>';
+    fetch('/admin-dashboard/android-apps/{{ selected_app.id }}/analytics/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'log_collection_enabled=' + (enabled ? 'on' : 'off') + '&log_retention_days=' + logDays
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            badge.textContent = data.log_collection_enabled ? 'ON' : 'OFF';
+            badge.className = 'badge ' + (data.log_collection_enabled ? 'bg-success' : 'bg-secondary');
+            var msg = 'Log collection: ' + (data.log_collection_enabled ? 'enabled' : 'disabled') + ', retention: ' + data.log_retention_days + ' days.';
+            if (data.deleted && data.deleted.app_logs > 0) {
+                msg += ' Cleaned ' + data.deleted.app_logs + ' old logs.';
             }
             statusEl.innerHTML = '<span class="text-success">' + msg + '</span>';
         } else {

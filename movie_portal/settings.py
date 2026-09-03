@@ -2,6 +2,12 @@ import os
 import json
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env file from project root (before anything else reads env vars)
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
+
 # Install PyMySQL as MySQLdb for Oracle Cloud MySQL compatibility
 try:
     import pymysql
@@ -10,9 +16,6 @@ except ImportError:
     pass
 
 from db_config import get_db_config
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Environment (default to 'dev' if not set)
 ENV = os.environ.get('DJANGO_ENV', 'dev')
@@ -186,7 +189,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Performance Optimizations
 # ---------------------------------------------------------------------------
 
-# SQLite timeout for concurrent access
+# SQLite timeout for concurrent access + WAL mode for better concurrency
 DATABASES['default']['OPTIONS'] = {
     'timeout': 20,
 }
@@ -210,7 +213,8 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 # (skip if loaders not configured as expected)
 
 # Static files caching
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+# Static files caching — ManifestStaticFilesStorage adds content-hash for cache busting
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
 # Reduce query logging in production
 if ENV == 'prod':

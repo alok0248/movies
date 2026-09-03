@@ -58,9 +58,35 @@
 @media(max-width:992px) { .search-grid { grid-template-columns: repeat(4, 1fr); } }
 @media(max-width:768px) { .search-grid { grid-template-columns: repeat(3, 1fr); gap: .7rem .5rem; } }
 @media(max-width:480px) { .search-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; } }
+.search-box input.search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: .95rem;
+    padding: .55rem .9rem;
+    border-radius: 50px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.05);
+    color: var(--text);
+}
+.search-box input.search-input:focus {
+    outline: none;
+    border-color: var(--brand, #e50914);
+    box-shadow: 0 0 0 3px rgba(229,9,20,.15);
+}
+.search-box .btn { border-radius: 50px; flex: 0 0 auto; }
+@media(max-width:480px) {
+    .search-box { max-width: 100% !important; }
+}
 </style>
 
 <div class="catalog-shell">
+    <form method="get" action="{% url 'search' %}" class="search-box d-flex gap-2 mb-4" style="max-width:640px;" role="search">
+        <input id="pageSearchInput" class="form-control search-input" type="search" name="q" value="{{ search_query|default:'' }}" placeholder="Search movies &amp; TV series..." aria-label="Search" autocomplete="off" enterkeyhint="search">
+        <button class="btn btn-primary px-4" type="submit" aria-label="Submit search">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
+        </button>
+    </form>
+
     <div class="catalog-heading">
         Search{% if search_query %}: "<span>{{ search_query }}</span>"{% endif %}
     </div>
@@ -111,7 +137,7 @@
 
     {% if not movies and not series and search_query %}
     <div class="text-center mt-5" style="color:var(--text-3);">
-        <div style="font-size:3rem;margin-bottom:1rem;">🔍</div>
+        <div style="font-size:3rem;margin-bottom:1rem;"><i class="fas fa-search"></i></div>
         <p style="font-size:1.1rem;">No results found for "<strong style="color:var(--text);">{{ search_query }}</strong>"</p>
         <p style="font-size:.85rem;margin-top:.5rem;">Try different keywords or check the spelling.</p>
     </div>
@@ -124,4 +150,22 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+/* On phones: focus the search box when landing on an empty search page so the keyboard opens immediately */
+(function () {
+    var input = document.getElementById('pageSearchInput');
+    if (!input) return;
+    // Only when the box is empty (no query) and we're on a small screen / touch device
+    var isSmallScreen = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+    if (!input.value && isSmallScreen && isTouch) {
+        try {
+            input.focus({ preventScroll: true });
+        } catch (e) {
+            input.focus();
+        }
+    }
+})();
+</script>
 {% endblock %}

@@ -79,7 +79,21 @@ function _tryHlsDirect(url, mediaEl) {
 }
 
 function _tryCurrentSource(mediaEl) {
-  if (_srcIdx >= _sourceQueue.length) { console.error('All sources exhausted'); hidePlayerLoading(); return; }
+  if (_srcIdx >= _sourceQueue.length) {
+    console.error('All sources exhausted');
+    hidePlayerLoading();
+    var wrap = mediaEl && mediaEl.closest ? mediaEl.closest('.player-video-wrap') : null;
+    var container = wrap && wrap.parentNode ? wrap.parentNode : null;
+    if (container) {
+      _showPlayerMsg(container, {
+        icon: 'fa-ban',
+        title: 'All streams failed to play',
+        detail: 'None of the returned sources could start. Try again, or try a different server / official embed.',
+        retry: true
+      });
+    }
+    return;
+  }
   var s = _sourceQueue[_srcIdx];
   if (_triedUrls[s.url]) { _srcIdx++; _tryCurrentSource(mediaEl); return; }
   _triedUrls[s.url] = 1; console.log('PLAY: ' + s.server + ' ' + s.quality + ' ' + s.url.substring(0, 80));
@@ -334,8 +348,9 @@ function toggleDualMode() {
 }
 
 /* ===== Main Player Builder ===== */
-function _buildVideasyPlayer(container, apiUrl) {
+function _buildVideasyPlayer(container, apiUrl, retryFn) {
   _allSources = []; _playerPlaying = false;
+  _retryFn = typeof retryFn === 'function' ? retryFn : null;
   var vw = document.createElement('div'); vw.className = 'player-video-wrap'; vw.style.cssText = 'position:relative;width:100%;';
   var vid = document.createElement('video'); vid.id = 'mainVideo'; vid.controls = true; vid.autoplay = true; vid.playsInline = true;
   vid.style.cssText = 'width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;object-fit:contain;';
@@ -385,29 +400,114 @@ function _buildVideasyPlayer(container, apiUrl) {
   var params = {};
   (apiUrl.split('?')[1] || '').split('&').forEach(function(p) { var kv = p.split('='); params[kv[0]] = decodeURIComponent(kv[1] || ''); });
   var tmdbId = params.tmdb_id || (typeof movieId !== 'undefined' ? movieId : '');
-  if (!tmdbId) { container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">Missing TMDB ID</div>'; hidePlayerLoading(); return; }
+  if (!tmdbId) {
+    _showPlayerMsg(container, {
+      icon: 'fa-exclamation-triangle',
+      title: 'Missing TMDB ID',
+      detail: 'This title has no media ID, so no stream lookup can run.',
+      retry: false
+    });
+    return;
+  }
   _fetchFromServer(container, apiUrl, vid);
   vid.addEventListener('playing', function() { hidePlayerLoading(); }, {once:true});
+  vid.addEventListener('canplay', function() { hidePlayerLoading(); }, {once:true});
   vid.addEventListener('error', function() { hidePlayerLoading(); }, {once:true});
-  setTimeout(function() { hidePlayerLoading(); }, 20000);
+}
+
+var _retryFn = null;
+
+/* ===== Honest player states: clear message instead of an endless spinner ===== */
+function _showPlayerMsg(container, opts) {
+  opts = opts || {};
+  hidePlayerLoading();
+  /* Make sure the series 'extracting' splash never lingers over an error state */
+  try {
+    var splash = document.getElementById('epSplash');
+    if (splash) {
+      splash.classList.remove('visible');
+      splash.classList.add('hidden');
+      splash.style.opacity = '0';
+      splash.style.pointerEvents = 'none';
+    }
+  } catch(e) {}
+  var wrap = container.querySelector('.player-video-wrap');
+  var target = wrap || container;
+  var old = target.querySelector('.player-msg-panel');
+  if (old) old.remove();
+  var panel = document.createElement('div');
+  panel.className = 'player-msg-panel';
+  panel.style.cssText = 'position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;background:rgba(8,9,13,.88);backdrop-filter:blur(4px);' +
+    '-webkit-backdrop-filter:blur(4px);border-radius:16px;box-sizing:border-box;';
+  var icon = opts.icon || 'fa-circle-info';
+  var title = opts.title || 'Something went wrong';
+  var detail = opts.detail || '';
+  var html = '<i class="fas ' + icon + '" style="font-size:1.6rem;color:rgba(255,255,255,.45);"></i>';
+  html += '<div style="font-size:.95rem;font-weight:700;color:rgba(255,255,255,.92);">' + title + '</div>';
+  if (detail) html += '<div style="font-size:.78rem;color:rgba(255,255,255,.5);line-height:1.5;max-width:520px;">' + detail + '</div>';
+  var showRetry = opts.retry !== false && _retryFn;
+  if (showRetry) {
+    html += '<button type="button" class="player-msg-retry" style="margin-top:6px;padding:9px 22px;border:none;border-radius:999px;background:linear-gradient(135deg,#e50914,#ff4d4d);color:#fff;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 6px 20px rgba(229,9,20,.35);">' +
+      '<i class="fas fa-redo-alt" style="margin-right:6px;"></i>Try Again</button>';
+  }
+  panel.innerHTML = html;
+  target.appendChild(panel);
+  var btn = panel.querySelector('.player-msg-retry');
+  if (btn) btn.addEventListener('click', function() {
+    panel.remove();
+    if (_retryFn) _retryFn();
+  });
+  return panel;
 }
 
 function _fetchFromServer(container, apiUrl, vid) {
   console.log('[Player] Fetching sources from:', apiUrl);
-  fetch(apiUrl).then(function(r) { return r.json(); }).then(function(d) {
+  var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = null;
+  if (controller) {
+    timer = setTimeout(function() { try { controller.abort(); } catch(e) {} }, 30000);
+  }
+  var fetchOpts = { credentials: 'same-origin' };
+  if (controller) fetchOpts.signal = controller.signal;
+
+  fetch(apiUrl, fetchOpts).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(d) {
+    clearTimeout(timer);
     console.log('[Player] Results:', d.results ? d.results.length : 0, 'success:', d.success);
     if (d.success && d.results && d.results.length) {
       d.results.forEach(function(s) { _addSource(s); });
       _playerPlaying = true;
       _playHls(d.results[0].url, vid);
       hidePlayerLoading();
+    } else if (d.success === false) {
+      var errText = d.error || 'The source API could not provide streams.';
+      _showPlayerMsg(container, {
+        icon: 'fa-server',
+        title: 'Stream lookup failed',
+        detail: 'The source lookup reported: ' + errText + ' If you configured another player (server buttons) or an official/YouTube embed under Players in the admin, try it instead.',
+        retry: true
+      });
     } else {
-      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">No streams found</div>';
-      hidePlayerLoading();
+      _showPlayerMsg(container, {
+        icon: 'fa-film',
+        title: 'No streams found for this title',
+        detail: 'The source servers returned nothing for this movie' + (apiUrl.indexOf('type=tv') !== -1 ? ' / episode' : '') + '. You can try again, or add an official/YouTube embed under Players in the admin dashboard.',
+        retry: true
+      });
     }
   }).catch(function(err) {
-    console.error('[Player] Fetch failed:', err);
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:.9rem">Failed to load streams</div>';
-    hidePlayerLoading();
+    clearTimeout(timer);
+    console.error('[Player] Fetch failed:', err && err.message ? err.message : err);
+    var isTimeout = !!(err && err.name === 'AbortError');
+    _showPlayerMsg(container, {
+      icon: isTimeout ? 'fa-hourglass-half' : 'fa-unlink',
+      title: isTimeout ? 'Stream search timed out' : 'Could not reach the source service',
+      detail: isTimeout
+        ? 'The lookup took too long and was stopped so you are not stuck on a spinner. Check your server connection and try again.'
+        : 'The request failed (' + (err && err.message ? err.message : 'network error') + '). Try again in a moment.',
+      retry: true
+    });
   });
 }

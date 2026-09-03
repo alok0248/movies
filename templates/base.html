@@ -1,20 +1,26 @@
 
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-brand="classic">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token }}">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0a0a0f">
+    <link rel="icon" type="image/svg+xml" href="/static/theme/classic.svg" id="faviconLink">
     <meta name="apple-mobile-web-app-title" content="{{ site_settings.brand_name }}">
     {% if site_settings.adsense_verification_meta %}
     <meta name="google-adsense-account" content="{{ site_settings.adsense_verification_meta }}">
     {% endif %}
-    <title>{{ site_settings.brand_name }}</title>
+    <title>{% block title %}{{ site_settings.brand_name }}{% endblock %}</title>
+    {% if site_settings.brand_tagline %}<meta name="description" content="{{ site_settings.brand_tagline }}">{% endif %}
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://image.tmdb.org">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" rel="stylesheet">
     <script>
         /* Block right-click */
         document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; });
@@ -25,38 +31,15 @@
                 return false;
             }
         });
-        /* DevTools detection — show error page if DevTools is open */
-        (function() {
-            var devtoolsOpen = false;
-            var threshold = 160;
-            function _blockPage(type) {
-                document.open();
-                document.write('<!DOCTYPE html><html><head><title>Access Denied - 403</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0f;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}.err-box{text-align:center;max-width:500px;padding:2rem}.err-code{font-size:6rem;font-weight:800;color:#e50914;line-height:1;text-shadow:0 0 40px rgba(229,9,20,.3)}.err-title{font-size:1.5rem;margin:1rem 0 .5rem;color:#fff}.err-msg{color:#888;font-size:.9rem;line-height:1.6;margin-bottom:2rem}.err-icon{font-size:3rem;margin-bottom:1rem;filter:grayscale(.2)}.err-line{width:80px;height:3px;background:#e50914;margin:1.5rem auto;border-radius:2px}.blocked-list{text-align:left;margin:1rem auto;max-width:300px;color:#666;font-size:.8rem;line-height:2}.blocked-list span{color:#e50914;margin-right:.5rem}</style></head><body><div class="err-box"><div class="err-icon">🚫</div><div class="err-code">403</div><div class="err-title">Access Denied</div><div class="err-line"></div><div class="err-msg">Your access to this page has been blocked because developer tools were detected on this browser.<br><br>This action violates our terms of service.</div><div class="blocked-list"><span>✖</span> Right-click disabled<br><span>✖</span> DevTools disabled<br><span>✖</span> View-source disabled<br><span>✖</span> Debugger blocked</div><div class="err-msg" style="color:#555;font-size:.75rem;margin-top:2rem">If you believe this is an error, please contact support.</div></div></body></html>');
-                document.close();
-            }
-            setInterval(function() {
-                var w = window.outerWidth - window.innerWidth > threshold;
-                var h = window.outerHeight - window.innerHeight > threshold;
-                if (w || h) {
-                    if (!devtoolsOpen) { devtoolsOpen = true; _blockPage('devtools'); }
-                } else {
-                    if (devtoolsOpen) { devtoolsOpen = false; location.reload(); }
-                }
-            }, 1000);
-            setInterval(function() {
-                var start = performance.now();
-                debugger;
-                if (performance.now() - start > 100) {
-                    if (!devtoolsOpen) { devtoolsOpen = true; _blockPage('debugger'); }
-                }
-            }, 2000);
-        })();
+        /* DevTools detection — disabled in dev mode */
     </script>
     <script>
         /* Apply saved theme before paint to prevent flash */
         (function() {
             var t = localStorage.getItem('site-theme') || localStorage.getItem('theme_mode') || 'dark';
+            var b = localStorage.getItem('site-brand') || 'classic';
             document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.setAttribute('data-brand', b);
         })();
     </script>
     <style>
@@ -105,6 +88,71 @@
             --glass-bg: rgba(245,245,250,.85);
             --glass-border: rgba(0,0,0,.06);
         }
+
+        /* ===== PRESET SITE THEMES (universal) ===== */
+        html[data-brand="netflix"] { --brand: #e50914; --brand-glow: rgba(229,9,20,.4); }
+        html[data-brand="netflix"][data-theme="dark"] {
+            --bg: #000; --bg-2: #141414; --bg-3: #1e1e1e; --card-bg: #181818;
+            --nav-bg: rgba(0,0,0,.94); --border: rgba(255,255,255,.10);
+            --surface-hover: rgba(255,255,255,.09); --input-bg: rgba(255,255,255,.07);
+        }
+        html[data-brand="amazon"] { --brand: #ff9900; --brand-glow: rgba(255,153,0,.38); }
+        html[data-brand="amazon"][data-theme="dark"] {
+            --bg: #0f1115; --bg-2: #161b22; --bg-3: #1e2630; --card-bg: #171c24;
+            --nav-bg: rgba(19,25,33,.97); --border: rgba(255,255,255,.09);
+            --surface-hover: rgba(255,255,255,.07); --input-bg: rgba(255,255,255,.07);
+        }
+
+        /* Theme picker (navbar) */
+        .theme-picker-menu { min-width: 210px; }
+        .theme-dd-menu { min-width: 238px; }
+        .theme-mode-opt .mode-ico { width: 14px; text-align: center; }
+
+        .theme-opt { display: flex !important; align-items: center; gap: .6rem; }
+        .theme-opt .swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; display: inline-block; }
+        .theme-opt .opt-check { margin-left: auto; color: var(--brand); opacity: 0; transition: opacity .15s; }
+        .theme-opt.active .opt-check { opacity: 1; }
+
+        /* ===== PRESET LOOK TUNING (hero / poster / rows) ===== */
+        @media(min-width:769px) {
+            /* --- Netflix: cinematic black, tight rows, small poster radius --- */
+            html[data-brand="netflix"][data-theme="dark"] .hero-section { height: 80vh; }
+            html[data-brand="netflix"][data-theme="dark"] .hero-title {
+                font-size: 3rem; font-weight: 900; letter-spacing: -.02em;
+                text-shadow: 0 4px 30px rgba(0,0,0,.65);
+            }
+            html[data-brand="netflix"][data-theme="dark"] .hero-content { max-width: 620px; }
+            html[data-brand="netflix"][data-theme="dark"] .hero-btn-primary,
+            html[data-brand="netflix"][data-theme="dark"] .hero-btn-secondary { border-radius: 6px; font-weight: 700; }
+            html[data-brand="netflix"][data-theme="dark"] .card-image-container,
+            html[data-brand="netflix"][data-theme="dark"] .catalog-grid .card-image-container { border-radius: 4px; }
+            html[data-brand="netflix"][data-theme="dark"] .card-wrapper:hover { transform: translateY(-4px); }
+            html[data-brand="netflix"][data-theme="dark"] .card-wrapper:hover .card-image-container { box-shadow: 0 12px 30px rgba(0,0,0,.55); }
+            html[data-brand="netflix"][data-theme="dark"] .scroll-container { gap: .35rem; }
+            html[data-brand="netflix"][data-theme="dark"] .section-title { font-size: 1.2rem; font-weight: 900; margin-top: 1.7rem; }
+
+            /* --- Amazon: softer cards, roomier rows, soft poster shadows --- */
+            html[data-brand="amazon"][data-theme="dark"] .hero-section { height: 68vh; }
+            html[data-brand="amazon"][data-theme="dark"] .hero-title { font-size: 2.4rem; font-weight: 700; letter-spacing: -.01em; }
+            html[data-brand="amazon"][data-theme="dark"] .hero-description { color: #9fb3c8; }
+            html[data-brand="amazon"][data-theme="dark"] .hero-btn-primary,
+            html[data-brand="amazon"][data-theme="dark"] .hero-btn-secondary { border-radius: 10px; font-weight: 700; }
+            html[data-brand="amazon"][data-theme="dark"] .hero-btn-secondary { background: #232f3e; border-color: #37475a; color: #fff; }
+            html[data-brand="amazon"][data-theme="dark"] .card-image-container,
+            html[data-brand="amazon"][data-theme="dark"] .catalog-grid .card-image-container {
+                border-radius: 12px; box-shadow: 0 8px 22px rgba(0,0,0,.4);
+                transition: box-shadow .25s, transform .25s;
+            }
+            html[data-brand="amazon"][data-theme="dark"] .card-wrapper:hover { transform: translateY(-6px) scale(1.02); }
+            html[data-brand="amazon"][data-theme="dark"] .card-wrapper:hover .card-image-container {
+                box-shadow: 0 0 0 2px var(--brand), 0 16px 34px rgba(0,0,0,.5);
+            }
+            html[data-brand="amazon"][data-theme="dark"] .scroll-container { gap: .85rem; }
+            html[data-brand="amazon"][data-theme="dark"] .section-title { font-size: 1.08rem; font-weight: 800; margin-top: 1.9rem; }
+            html[data-brand="amazon"][data-theme="dark"] .card-info { padding: .65rem .1rem .8rem; }
+            html[data-brand="amazon"][data-theme="dark"] .card-title { font-size: .8rem; font-weight: 700; }
+        }
+
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
         body {
@@ -283,6 +331,100 @@
         }
         html[data-theme="light"] .btn-outline-light { color: var(--text); border-color: var(--border); }
         .btn-outline-light:hover { background: var(--surface-hover); color: var(--text); border-color: var(--brand); }
+        /* ===== TOP NAVBAR (desktop polish) ===== */
+        .navbar-nav { align-items: center; }
+        .navbar-nav .nav-link {
+            font-size: .85rem; font-weight: 600; letter-spacing: .01em;
+            padding: .5rem .85rem !important; white-space: nowrap;
+        }
+        .navbar-nav .nav-link i {
+            margin-right: .35rem; width: 15px; text-align: center;
+            font-size: .82em; opacity: .9;
+        }
+        .navbar-nav .nav-link.active { color: var(--text) !important; background: transparent; position: relative; }
+        .navbar-nav .nav-link.active::after {
+            content: ''; position: absolute; left: .85rem; right: .85rem; bottom: .15rem;
+            height: 2px; border-radius: 2px; background: var(--brand);
+        }
+        .nav-controls { display: flex; align-items: center; gap: .55rem; }
+        .nav-search { position: relative; display: flex; align-items: center; }
+        .nav-search .search-input {
+            width: 190px; border-radius: 999px !important;
+            padding: .42rem 2.4rem .42rem 1rem !important;
+            font-size: .8rem !important; transition: width .25s ease, border-color .2s, box-shadow .2s;
+        }
+        .nav-search:focus-within .search-input { width: 255px; }
+        .nav-search-btn {
+            position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+            width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+            color: #fff; background: linear-gradient(135deg, var(--brand) 0%, #ff4d5e 100%);
+            display: flex; align-items: center; justify-content: center; font-size: .7rem;
+            transition: transform .15s ease, box-shadow .2s;
+        }
+        .nav-search-btn:hover { transform: translateY(-50%) scale(1.08); box-shadow: 0 0 0 4px var(--brand-glow); }
+        .nav-icon-btn {
+            width: 36px; height: 36px; border-radius: 50%; flex: none;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            background: rgba(255,255,255,.06); border: 1px solid var(--border);
+            color: var(--text-2); font-size: .85rem; transition: all .2s; padding: 0;
+        }
+        .nav-icon-btn:hover { color: var(--text); background: var(--surface-hover); border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-glow); }
+        .nav-user-chip {
+            display: flex; align-items: center; gap: .55rem; max-width: 210px;
+            background: rgba(255,255,255,.06); border: 1px solid var(--border);
+            color: var(--text-2) !important; border-radius: 999px;
+            padding: .22rem .95rem .22rem .3rem; font-size: .82rem; font-weight: 600;
+            transition: all .2s;
+        }
+        .nav-user-chip:hover { color: var(--text) !important; border-color: var(--brand); background: var(--surface-hover); }
+        .nav-user-chip.dropdown-toggle::after { display: none !important; }
+        .nav-avatar {
+            width: 27px; height: 27px; border-radius: 50%; flex: none;
+            background: linear-gradient(135deg, var(--brand) 0%, #ff6b6b 100%);
+            color: #fff !important; display: flex; align-items: center; justify-content: center;
+            font-size: .72rem; font-weight: 800;
+        }
+        .nav-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .nav-user-chip .nav-caret { font-size: .6rem; opacity: .65; margin-left: .1rem; }
+        .nav-signin {
+            display: inline-flex; align-items: center; gap: .4rem;
+            padding: .44rem 1.2rem; border-radius: 999px; border: none; cursor: pointer;
+            background: var(--brand); color: #fff; font-size: .82rem; font-weight: 700;
+            transition: all .2s; letter-spacing: .01em; white-space: nowrap;
+        }
+        .nav-signin:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 4px 14px var(--brand-glow); }
+        html[data-theme="light"] .nav-icon-btn,
+        html[data-theme="light"] .nav-user-chip { background: rgba(0,0,0,.05); }
+        @media(min-width:1150px) and (max-width:1339px) {
+            .navbar { padding: .6rem 1.1rem; }
+            .navbar-nav .nav-link { font-size: .8rem; padding: .5rem .55rem !important; }
+            .navbar-nav .nav-link i { margin-right: .3rem; width: 14px; }
+            .nav-search .search-input { width: 150px; }
+            .nav-search:focus-within .search-input { width: 210px; }
+            .nav-controls { gap: .4rem; }
+            .nav-signin { padding: .44rem .95rem; font-size: .8rem; }
+            .nav-user-name { display: none; }
+            .nav-user-chip { padding-right: .7rem; }
+        }
+        @media(min-width:992px) and (max-width:1149px) {
+            .navbar { padding: .55rem .9rem; }
+            .navbar-nav .nav-link { font-size: .78rem; padding: .5rem .45rem !important; }
+            .navbar-nav .nav-link i { display: none; }
+            .nav-search .search-input { width: 125px; }
+            .nav-search:focus-within .search-input { width: 180px; }
+            .nav-controls { gap: .35rem; }
+            .nav-signin { padding: .4rem .85rem; font-size: .78rem; }
+            .nav-user-name { display: none; }
+            .nav-user-chip { padding-right: .6rem; }
+        }
+        @media(max-width:991px) {
+            .navbar-nav .nav-link { padding: .7rem .5rem !important; }
+            .nav-search { width: 100%; margin: .25rem 0 .6rem; }
+            .nav-search .search-input,
+            .nav-search:focus-within .search-input { width: 100%; }
+            .nav-controls { justify-content: space-between; margin-bottom: .35rem; }
+        }
+
 
         /* Cards */
         .card-wrapper {
@@ -535,21 +677,31 @@
         .site-footer-disclaimer { font-size: .68rem; color: var(--text-3); opacity: .6; }
         .site-footer-subscribe-text { font-size: .78rem; color: var(--text-3); margin-top: .3rem; }
 
-        /* Floating Theme Toggle */
-        .theme-toggle {
-            position: fixed; left: 16px; bottom: 24px; z-index: 5000;
+        /* Floating Theme Control (Mode + Site Look dropdown) */
+        .theme-float-drop { position: fixed; left: 16px; bottom: 24px; z-index: 5000; }
+        .theme-float-drop .theme-toggle {
+            position: relative; left: auto; right: auto; bottom: auto;
             width: 44px; height: 44px;
             border-radius: 50%; border: 1px solid var(--glass-border);
             background: var(--glass-bg); backdrop-filter: var(--glass-blur);
             -webkit-backdrop-filter: var(--glass-blur);
             box-shadow: 0 4px 20px rgba(0,0,0,.3);
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; font-size: 1.1rem;
+            cursor: pointer; font-size: 1.05rem;
             transition: transform .3s, box-shadow .3s;
         }
-        .theme-toggle:hover { transform: scale(1.1) rotate(15deg); box-shadow: 0 6px 28px rgba(0,0,0,.4); }
+        .theme-float-drop .theme-toggle:hover { transform: scale(1.1) rotate(15deg); box-shadow: 0 6px 28px rgba(0,0,0,.4); }
+        .theme-float-drop .theme-toggle i { color: var(--text-2); }
+        .theme-float-drop .theme-toggle:hover i { color: var(--text); }
+        .theme-float-drop .dropdown-menu {
+            min-width: 238px; margin-bottom: .65rem;
+            background: rgba(15,17,21,.97);
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border: 1px solid var(--border); border-radius: 14px;
+        }
         @media(max-width:768px) {
-            .theme-toggle { bottom: 5.5rem; left: 12px; width: 40px; height: 40px; font-size: 1rem; }
+            .theme-float-drop { bottom: 5.5rem; left: 12px; }
+            .theme-float-drop .theme-toggle { width: 40px; height: 40px; font-size: 1rem; }
         }
 
         /* Catalog */
@@ -726,8 +878,8 @@
             .mobile-bottom-nav { display: block; }
             .navbar { padding: .4rem .8rem; background: rgba(10,10,15,.88) !important; backdrop-filter: blur(16px) !important; }
             .navbar-brand { font-size: 1.15rem; font-weight: 900; }
-            .content-wrapper { padding-bottom: 3.8rem; }
-            .site-footer { padding-bottom: 5rem; }
+            .content-wrapper { padding-bottom: 5.2rem; }
+            .site-footer { padding-bottom: 6.2rem; }
 
             /* App-like cards */
             .movie-grid, .series-grid { grid-template-columns: repeat(3, 1fr); gap: .4rem; padding: 0 .5rem; }
@@ -803,8 +955,9 @@
             .movie-card, .person-card { transition: transform .15s; }
             .movie-card:active, .person-card:active { transform: scale(.97); }
 
-            /* Theme toggle - smaller on mobile */
-            .theme-toggle { width: 36px; height: 36px; font-size: .85rem; bottom: 4.5rem; right: .8rem; }
+            /* Theme control - right side, above the back-to-top button on mobile */
+            .theme-float-drop { bottom: 4.5rem; right: .8rem; left: auto; }
+            .theme-float-drop .theme-toggle { width: 36px; height: 36px; font-size: .85rem; }
         }
 
         /* Tablet (769px - 1024px) */
@@ -817,6 +970,34 @@
 
         @media(min-width:1441px) {
             .catalog-grid.movie-grid, .catalog-grid.series-grid { grid-template-columns: repeat(7, 1fr); }
+        }
+
+        /* Phones (portrait): exactly 3 tiles per row on movie/TV grids (overrides earlier 2-col rule) */
+        @media(max-width:480px) {
+            .movie-grid, .series-grid,
+            .catalog-grid.movie-grid, .catalog-grid.series-grid {
+                grid-template-columns: repeat(3, 1fr) !important;
+                gap: .4rem;
+            }
+            .movie-grid .card-wrapper, .series-grid .card-wrapper,
+            .catalog-grid .card-wrapper {
+                width: auto !important;
+                max-width: none;
+            }
+        }
+
+        /* Phones (landscape): wider viewport -> more tiles per row for a proper view */
+        @media(orientation: landscape) and (max-width:1024px) and (max-height:500px) {
+            .movie-grid, .series-grid,
+            .catalog-grid.movie-grid, .catalog-grid.series-grid {
+                grid-template-columns: repeat(5, 1fr) !important;
+                gap: .6rem;
+            }
+            .movie-grid .card-wrapper, .series-grid .card-wrapper,
+            .catalog-grid .card-wrapper {
+                width: auto !important;
+                max-width: none;
+            }
         }
 
         /* Animations */
@@ -875,6 +1056,67 @@
             .mobile-bottom-nav { padding-bottom: calc(.3rem + env(safe-area-inset-bottom)); }
         }
 
+        /* Mobile bottom-nav theme shortcuts */
+        .mb-theme-row {
+            display: none; align-items: center; justify-content: center; gap: .4rem;
+            padding: .3rem .5rem 0;
+        }
+        .mb-theme-ico { font-size: .6rem; color: var(--text-3); margin-right: .1rem; }
+        .mb-theme-btn {
+            display: inline-flex; align-items: center; gap: .28rem;
+            background: rgba(255,255,255,.05); border: 1px solid var(--border);
+            color: var(--text-2); font-size: .56rem; font-weight: 600;
+            padding: .22rem .55rem; border-radius: 999px; cursor: pointer;
+            -webkit-tap-highlight-color: transparent; transition: all .15s;
+        }
+        .mb-theme-btn .swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .mb-theme-btn:active { transform: scale(.94); }
+        .mb-theme-btn.active { color: var(--text); border-color: var(--brand); background: rgba(255,255,255,.1); }
+        html[data-theme="light"] .mb-theme-btn { background: rgba(0,0,0,.04); }
+        html[data-theme="light"] .mb-theme-btn.active { background: rgba(0,0,0,.08); }
+
+        /* Mobile Settings sheet (opens above the bottom nav) */
+        .mb-settings-panel {
+            position: absolute;
+            left: 50%; bottom: calc(100% + 8px);
+            transform: translateX(-50%) translateY(10px);
+            width: min(92vw, 360px); max-height: 62vh; overflow-y: auto;
+            background: var(--bg-2, #141414);
+            border: 1px solid var(--border); border-radius: 16px;
+            padding: .8rem .9rem .95rem;
+            box-shadow: 0 -12px 44px rgba(0,0,0,.5);
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transition: opacity .22s ease, transform .22s ease, visibility .22s;
+            z-index: 8000;
+        }
+        .mb-settings-panel.open { opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+        html[data-theme="light"] .mb-settings-panel { box-shadow: 0 -12px 44px rgba(20,20,40,.14); }
+        .mb-settings-panel .mb-set-head {
+            display: flex; align-items: center; gap: .45rem;
+            font-size: .85rem; font-weight: 800; color: var(--text); margin-bottom: .4rem;
+        }
+        .mb-settings-panel .mb-set-head i { color: var(--brand); }
+        .mb-set-link {
+            display: flex; align-items: center; gap: .6rem; width: 100%;
+            padding: .5rem .6rem; margin: 1px 0; border: none; background: transparent;
+            color: var(--text-2); font-size: .8rem; font-weight: 600; text-align: left;
+            border-radius: 9px; cursor: pointer; text-decoration: none;
+            -webkit-tap-highlight-color: transparent; transition: background .15s, color .15s;
+        }
+        .mb-set-link i { width: 15px; text-align: center; color: var(--text-3); font-size: .78rem; }
+        .mb-set-link:hover, .mb-set-link:active { background: var(--surface-hover); color: var(--text); }
+        .mb-set-link.mb-set-logout i { color: #ff6b6b; }
+        .mb-set-theme-label {
+            display: flex; align-items: center; gap: .35rem;
+            margin: .6rem 0 .25rem; padding-top: .55rem; border-top: 1px solid var(--border);
+            font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--text-3);
+        }
+        .mb-set-theme-label i { color: var(--text-3); font-size: .62rem; }
+        .mb-settings-panel .mb-theme-row { display: flex; justify-content: flex-start; padding: .05rem 0 0; }
+        .mb-settings-panel .mb-theme-btn { padding: .3rem .62rem; font-size: .6rem; }
+        @media(max-width:768px) { .mb-theme-row { display: flex; } }
+
         /* ═══ DROPDOWN FIX — force theme colors over Bootstrap dark ═══ */
         .dropdown-menu.dropdown-menu-dark { background-color: var(--bg-2) !important; color: var(--text-2) !important; }
         .dropdown-menu.dropdown-menu-dark .dropdown-item { color: var(--text-2) !important; background-color: transparent !important; }
@@ -890,9 +1132,14 @@
         html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-item-text { color: #666 !important; }
         html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-header { color: #888 !important; }
         html[data-theme="light"] .dropdown-menu.dropdown-menu-dark .dropdown-divider { border-color: rgba(0,0,0,.1) !important; }
+
+        /* Admin pages: drop consumer chrome (mobile bottom nav & floating controls) */
+        body.admin-page .mobile-bottom-nav { display: none !important; }
+        body.admin-page .theme-float-drop { bottom: 1rem !important; }
+        body.admin-page .content-wrapper { padding-bottom: .5rem !important; }
     </style>
 </head>
-<body>
+<body class="{% if '/admin-dashboard/' in request.path %}admin-page{% endif %}">
     <div id="scrollProgress"></div>
     <button id="backToTop" type="button" title="Back to top" aria-label="Back to top">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
@@ -923,9 +1170,19 @@
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="movieDropdown">
-                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular">Popular</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated">Top Rated</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming">Upcoming</a></li>
+                                    <li><h6 class="dropdown-header">Browse</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}"><i class="fas fa-th-large me-2"></i>All Movies</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Categories</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular"><i class="fas fa-fire me-2" style="color:#ef4444;"></i>Popular</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated"><i class="fas fa-star me-2" style="color:#f59e0b;"></i>Top Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming"><i class="fas fa-calendar me-2" style="color:#3b82f6;"></i>Upcoming</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Sort By</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=rating&order=desc">Highest Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=year&order=desc">Newest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=year&order=asc">Oldest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=title&order=asc">A–Z</a></li>
                                 </ul>
                             </li>
                         {% elif item.built_in_id == 'tv_shows' %}
@@ -939,10 +1196,20 @@
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="seriesDropdown">
-                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular">Popular TV Shows</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today">Airing Today</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air">On The Air</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated">Top Rated TV Shows</a></li>
+                                    <li><h6 class="dropdown-header">Browse</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}"><i class="fas fa-th-large me-2"></i>All TV Shows</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Categories</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular"><i class="fas fa-fire me-2" style="color:#ef4444;"></i>Popular</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated"><i class="fas fa-star me-2" style="color:#f59e0b;"></i>Top Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today"><i class="fas fa-calendar-day me-2" style="color:#22c55e;"></i>Airing Today</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air"><i class="fas fa-broadcast-tower me-2" style="color:#3b82f6;"></i>On The Air</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Sort By</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=rating&order=desc">Highest Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=year&order=desc">Newest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=year&order=asc">Oldest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=title&order=asc">A–Z</a></li>
                                 </ul>
                             </li>
                         {% elif item.built_in_id == 'live_tv' and not site_settings.hide_live_tv %}
@@ -1055,34 +1322,15 @@
                             </li>
                         {% elif item.built_in_id == 'calendar' %}
                             <li class="nav-item">
-                                <button class="nav-link" style="background: transparent; border: none; cursor: pointer;" id="navCalendarBtn" onclick="openCalendarModal()">
+                                <a class="nav-link" href="/calendar/">
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
-                                </button>
+                                </a>
                             </li>
                         {% elif item.built_in_id == 'upcoming' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'upcoming' %}">
                                     {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
                                 </a>
-                            </li>
-                        {% elif item.built_in_id == 'watch_regions' %}
-                            <li class="nav-item dropdown d-none d-lg-block">
-                                <a class="nav-link dropdown-toggle" href="{% url 'public_watch_regions' %}" id="regionDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-globe"></i> {{ item.name }}
-                                </a>
-                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="regionDropdown">
-                                    <li><a class="dropdown-item" href="{% url 'public_watch_regions' %}"><i class="fas fa-th-list me-2"></i>All Regions</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    {% for region in watch_regions_nav|slice:":12" %}
-                                    <li><a class="dropdown-item" href="{% url 'public_providers' %}?region={{ region.code }}">{{ region.code }} — {{ region.name }}</a></li>
-                                    {% endfor %}
-                                    {% if watch_regions_nav|length > 12 %}
-                                    <li><a class="dropdown-item text-info" href="{% url 'public_watch_regions' %}">View All {{ watch_regions_nav|length }} Regions →</a></li>
-                                    {% endif %}
-                                </ul>
-                            </li>
-                            <li class="nav-item d-lg-none">
-                                <a class="nav-link" href="{% url 'public_watch_regions' %}"><i class="fas fa-globe"></i> {{ item.name }}</a>
                             </li>
                         {% elif item.built_in_id == 'providers' %}
                             <li class="nav-item dropdown d-none d-lg-block">
@@ -1102,6 +1350,15 @@
                                     {% if enabled_providers|length > 10 %}
                                     <li><a class="dropdown-item text-info" href="{% url 'public_providers' %}">View All {{ enabled_providers|length }} Providers →</a></li>
                                     {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header"><i class="fas fa-globe me-1"></i>Watch Regions</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'public_watch_regions' %}"><i class="fas fa-th-list me-2"></i>All Regions</a></li>
+                                    {% for region in watch_regions_nav|slice:":8" %}
+                                    <li><a class="dropdown-item" href="{% url 'public_providers' %}?region={{ region.code }}" title="{{ region.name }}">{{ region.code }} — {{ region.name }}</a></li>
+                                    {% endfor %}
+                                    {% if watch_regions_nav|length > 8 %}
+                                    <li><a class="dropdown-item text-info" href="{% url 'public_watch_regions' %}">View All {{ watch_regions_nav|length }} Regions →</a></li>
+                                    {% endif %}
                                 </ul>
                             </li>
                             <li class="nav-item d-lg-none">
@@ -1117,43 +1374,41 @@
                     {% endfor %}
                 </ul>
 
-                <form class="d-flex gap-2 me-3" method="GET" action="{% url 'search' %}">
-                    <input class="form-control search-input" type="search" name="q" placeholder="Search..." aria-label="Search">
-                    <button class="btn btn-primary" type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg></button>
-                </form>
+                <form class="nav-search" method="GET" action="{% url 'search' %}">
+                        <input class="form-control search-input" type="search" name="q" placeholder="Search movies &amp; shows" aria-label="Search">
+                        <button class="nav-search-btn" type="submit" aria-label="Search"><i class="fas fa-search"></i></button>
+                    </form>
 
-                <div class="d-flex gap-2 align-items-center">
-                    <button class="btn btn-sm" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode" style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 10px;font-size:.85rem;cursor:pointer;transition:all .2s">
-                        <i class="fas fa-moon" id="themeIcon"></i>
-                    </button>
-                    {% if user.is_authenticated %}
-                        <div class="dropdown">
-                            <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                Hi, {{ user.username }}!
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" aria-labelledby="userDropdown">
-                                <li><a class="dropdown-item" href="{% url 'watchlist' %}">📋 My Watch List</a></li>
-                        <li><a class="dropdown-item" href="{% url 'user_play_history' %}">🕐 Play History</a></li>
-                                {% if user.is_staff or user.is_superuser %}
+                <div class="nav-controls">
+                        {% if user.is_authenticated %}
+                            <div class="dropdown">
+                                <button class="nav-user-chip dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="nav-avatar">{{ user.username|slice:":1"|upper }}</span>
+                                    <span class="nav-user-name">Hi, {{ user.username }}</span>
+                                    <i class="fas fa-chevron-down nav-caret"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" aria-labelledby="userDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'watchlist' %}"><i class="fas fa-bookmark me-2"></i>My Watch List</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'user_play_history' %}"><i class="fas fa-clock me-2"></i>Play History</a></li>
+                                    {% if user.is_staff or user.is_superuser %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}"><i class="fas fa-tachometer-alt me-2"></i>Admin Dashboard</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'admin_subscribers' %}"><i class="fas fa-envelope me-2"></i>Subscribers</a></li>
+                                    {% endif %}
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}">📊 Admin Dashboard</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'admin_subscribers' %}">📧 Subscribers</a></li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <form method="post" action="{% url 'ajax_logout' %}" style="display:inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="dropdown-item" style="background:none;border:none;width:100%;text-align:left;cursor:pointer;">🚪 Logout</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
-                    {% else %}
-                        <button class="btn btn-outline-light btn-sm" onclick="openAuthModal('login')">Sign In</button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+                                    <li>
+                                        <form method="post" action="{% url 'ajax_logout' %}" style="display:inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item" style="background:none;border:none;width:100%;text-align:left;cursor:pointer;"><i class="fas fa-sign-out-alt me-2"></i>Logout</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        {% else %}
+                            <button class="nav-signin" onclick="openAuthModal('login')"><i class="fas fa-user"></i>Sign In</button>
+                        {% endif %}
+                        
+                    </div>
     </nav>
 
     <div id="navWatchlistWarning" class="text-center py-2" style="background: #dc3545; display: none;">
@@ -1276,25 +1531,54 @@
 
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-bottom-nav">
+        <div id="mbSettingsPanel" class="mb-settings-panel" role="menu">
+            <div class="mb-set-head"><i class="fas fa-cog"></i> Settings</div>
+            <div class="mb-set-body">
+                {% if user.is_authenticated %}
+                    <a class="mb-set-link" href="{% url 'watchlist' %}"><i class="fas fa-bookmark"></i> My Watch List</a>
+                    <a class="mb-set-link" href="{% url 'user_play_history' %}"><i class="fas fa-clock"></i> Play History</a>
+                    {% if user.is_staff or user.is_superuser %}
+                        <a class="mb-set-link" href="{% url 'admin_dashboard' %}"><i class="fas fa-tachometer-alt"></i> Admin Dashboard</a>
+                    {% endif %}
+                    <form method="post" action="{% url 'ajax_logout' %}" style="margin:0">{% csrf_token %}<button type="submit" class="mb-set-link mb-set-logout"><i class="fas fa-sign-out-alt"></i> Logout</button></form>
+                {% else %}
+                    <button type="button" class="mb-set-link" onclick="mbCloseSettings();openAuthModal('login');"><i class="fas fa-user"></i> Sign In</button>
+                {% endif %}
+                <div class="mb-set-theme-label"><i class="fas fa-palette"></i> Theme</div>
+                <div class="mb-theme-row">
+                    <button type="button" class="mb-theme-btn active" data-brand="classic"><span class="swatch" style="background:#e50914;"></span>Classic</button>
+                    <button type="button" class="mb-theme-btn" data-brand="netflix"><span class="swatch" style="background:#e50914;box-shadow:0 0 0 1px rgba(229,9,20,.4);"></span>Netflix</button>
+                    <button type="button" class="mb-theme-btn" data-brand="amazon"><span class="swatch" style="background:#ff9900;"></span>Amazon</button>
+                </div>
+            </div>
+        </div>
         <ul class="nav-items">
-            <li class="nav-item"><a href="{% url 'index' %}" class="active"><span class="nav-icon">🏠</span><span>Home</span></a></li>
-            <li class="nav-item"><a href="{% url 'movie_list' %}"><span class="nav-icon">🎬</span><span>Movies</span></a></li>
-            <li class="nav-item"><a href="{% url 'series_list' %}"><span class="nav-icon">📺</span><span>Series</span></a></li>
-            <li class="nav-item"><a href="{% url 'search' %}"><span class="nav-icon">🔍</span><span>Search</span></a></li>
-            {% if user.is_authenticated %}
-            <li class="nav-item"><a href="{% url 'watchlist' %}"><span class="nav-icon">🔖</span><span>My List</span></a></li>
-            {% else %}
-            <li class="nav-item"><a href="#" onclick="openAuthModal('login');return false;"><span class="nav-icon">👤</span><span>Sign In</span></a></li>
-            {% endif %}
+            <li class="nav-item"><a href="{% url 'index' %}" class="active"><span class="nav-icon"><i class="fas fa-home"></i></span><span>Home</span></a></li>
+            <li class="nav-item"><a href="{% url 'movie_list' %}"><span class="nav-icon"><i class="fas fa-film"></i></span><span>Movies</span></a></li>
+            <li class="nav-item"><a href="{% url 'series_list' %}"><span class="nav-icon"><i class="fas fa-tv"></i></span><span>Series</span></a></li>
+            <li class="nav-item"><a href="{% url 'search' %}"><span class="nav-icon"><i class="fas fa-search"></i></span><span>Search</span></a></li>
+            <li class="nav-item"><a href="#" id="mbSettingsBtn" onclick="return mbToggleSettings();"><span class="nav-icon"><i class="fas fa-cog"></i></span><span>Settings</span></a></li>
         </ul>
     </nav>
 
     <div id="modalBackdrop" class="modal-backdrop"></div>
 
-    <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" id="floatingThemeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
-        <span id="themeIcon">🌙</span>
-    </button>
+    <!-- Floating Theme Control (Mode + Site Look) -->
+    <div class="dropdown dropup theme-dd theme-float-drop">
+        <button class="theme-toggle" id="floatingThemeToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Theme: mode &amp; look" aria-label="Theme: mode and look">
+            <i class="fas fa-moon" id="floatingThemeIcon"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-dark theme-dd-menu" aria-labelledby="floatingThemeToggle">
+            <li><h6 class="dropdown-header">Mode</h6></li>
+            <li><button type="button" class="dropdown-item theme-mode-opt active" data-mode="dark"><i class="fas fa-moon me-2 mode-ico"></i>Dark <i class="fas fa-check opt-check"></i></button></li>
+            <li><button type="button" class="dropdown-item theme-mode-opt" data-mode="light"><i class="fas fa-sun me-2 mode-ico"></i>Light <i class="fas fa-check opt-check"></i></button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">Site Look</h6></li>
+            <li><button type="button" class="dropdown-item theme-opt" data-brand="classic"><span class="swatch" style="background:#e50914;"></span>Classic <i class="fas fa-check opt-check"></i></button></li>
+            <li><button type="button" class="dropdown-item theme-opt" data-brand="netflix"><span class="swatch" style="background:#e50914;box-shadow:0 0 0 2px rgba(229,9,20,.3);"></span>Netflix <i class="fas fa-check opt-check"></i></button></li>
+            <li><button type="button" class="dropdown-item theme-opt" data-brand="amazon"><span class="swatch" style="background:#ff9900;"></span>Amazon <i class="fas fa-check opt-check"></i></button></li>
+        </ul>
+    </div>
     <div id="detailModal" class="detail-modal">
         <button class="modal-close" onclick="closeModal()">&times;</button>
         <div id="modalHero" class="modal-hero">
@@ -1302,7 +1586,7 @@
                 <h1 id="modalTitle" class="modal-title"></h1>
                 <div id="modalMeta" class="modal-meta"></div>
                 <div class="modal-buttons">
-                    <button class="modal-btn play" id="modalPlayBtn">▶ Play</button>
+                    <button class="modal-btn play" id="modalPlayBtn"><i class="fas fa-play"></i> Play</button>
                     <button class="modal-btn more">+ My List</button>
                 </div>
             </div>
@@ -1316,7 +1600,7 @@
     <div id="calendarModalBackdrop" class="auth-modal-backdrop" onclick="closeCalendarModal(event)">
         <div id="calendarModal" class="auth-modal" onclick="event.stopPropagation()" style="max-width: 450px; width: 90%;">
             <button class="auth-modal-close" onclick="closeCalendarModal()">&times;</button>
-            <h2 class="auth-form-title mb-3" style="font-size: 1.25rem;">📅 Release Calendar</h2>
+            <h2 class="auth-form-title mb-3" style="font-size: 1.25rem;"><i class="fas fa-calendar-alt me-1"></i> Release Calendar</h2>
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button class="btn btn-outline-light btn-sm" onclick="navigateMonth(-1)">
                     <i class="fas fa-chevron-left"></i>
@@ -2076,14 +2360,113 @@
             document.documentElement.setAttribute('data-theme', savedTheme);
             localStorage.setItem('site-theme', savedTheme);
             localStorage.setItem('theme_mode', savedTheme);
-            /* Sync all icon elements */
-            var iconText = savedTheme === 'light' ? '\u2600\uFE0F' : '\uD83C\uDF19';
-            document.querySelectorAll('#themeIcon, #floatingThemeToggle #themeIcon, #themeToggleIcon').forEach(function(el) {
-                el.textContent = iconText;
-            });
+            /* Sync the floating control icon */
+            var fic = document.getElementById('floatingThemeIcon');
+            if (fic) fic.className = savedTheme === 'light' ? 'fas fa-sun' : 'fas fa-moon';
             var floatingBtn = document.getElementById('floatingThemeToggle');
             if (floatingBtn) floatingBtn.title = savedTheme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+            syncBrandPicker();
         }
+
+        /* ===== Universal preset themes (Classic / Netflix / Amazon) ===== */
+        var BRAND_CHROME = {
+            classic: { dark: '#0a0a0f', light: '#f5f5fa' },
+            netflix: { dark: '#000000', light: '#f5f5fa' },
+            amazon: { dark: '#131921', light: '#f5f5fa' }
+        };
+        function applyBrowserChrome() {
+            var b = currentBrand();
+            var mode = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            var c = (BRAND_CHROME[b] || BRAND_CHROME.classic)[mode];
+            var mt = document.querySelector('meta[name="theme-color"]');
+            if (mt) mt.setAttribute('content', c);
+            var fl = document.getElementById('faviconLink');
+            if (fl) fl.href = '/static/theme/' + b + '.svg';
+        }
+        function currentBrand() { return document.documentElement.getAttribute('data-brand') || 'classic'; }
+        function setSiteBrand(b) {
+            document.documentElement.setAttribute('data-brand', b);
+            try { localStorage.setItem('site-brand', b); } catch (e) {}
+            syncBrandPicker();
+        }
+        function applyThemeMode(mode) {
+            mode = mode === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', mode);
+            try { localStorage.setItem('theme_mode', mode); localStorage.setItem('site-theme', mode); } catch (e) {}
+            var ic = document.getElementById('floatingThemeIcon');
+            if (ic) ic.className = mode === 'light' ? 'fas fa-sun' : 'fas fa-moon';
+            syncModeOpts();
+            applyBrowserChrome();
+        }
+        function syncModeOpts() {
+            var cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            var opts = document.querySelectorAll('.theme-mode-opt');
+            for (var i = 0; i < opts.length; i++) {
+                opts[i].classList.toggle('active', opts[i].getAttribute('data-mode') === cur);
+            }
+        }
+        function closeThemeMenu(el) {
+            var dd = el ? el.closest('.theme-dd') : null;
+            if (!dd) return;
+            var menu = dd.querySelector('.dropdown-menu');
+            var trig = dd.querySelector('[data-bs-toggle="dropdown"]');
+            if (menu) menu.classList.remove('show');
+            if (trig) trig.setAttribute('aria-expanded', 'false');
+        }
+        /* Mobile Settings sheet (Sign In + theme shortcuts) */
+        function mbToggleSettings() {
+            var p = document.getElementById('mbSettingsPanel');
+            if (!p) return false;
+            var btn = document.getElementById('mbSettingsBtn');
+            var open = !p.classList.contains('open');
+            p.classList.toggle('open', open);
+            if (btn) btn.classList.toggle('active', open);
+            return false;
+        }
+        function mbCloseSettings() {
+            var p = document.getElementById('mbSettingsPanel');
+            if (!p) return;
+            p.classList.remove('open');
+            var btn = document.getElementById('mbSettingsBtn');
+            if (btn) btn.classList.remove('active');
+        }
+        document.addEventListener('click', function (e) {
+            var p = document.getElementById('mbSettingsPanel');
+            if (!p || !p.classList.contains('open')) return;
+            if (e.target.closest('#mbSettingsPanel') || e.target.closest('#mbSettingsBtn')) return;
+            mbCloseSettings();
+        });
+        function syncBrandPicker() {
+            var cur = currentBrand();
+            var opts = document.querySelectorAll('.theme-opt, .mb-theme-btn');
+            for (var i = 0; i < opts.length; i++) {
+                opts[i].classList.toggle('active', opts[i].getAttribute('data-brand') === cur);
+            }
+            var ic = document.getElementById('brandPickerIcon');
+            if (ic) ic.className = cur === 'netflix' ? 'fas fa-film' : cur === 'amazon' ? 'fab fa-amazon' : 'fas fa-palette';
+            var btn = document.getElementById('brandPickerBtn');
+            if (btn) btn.title = 'Theme: ' + (cur === 'netflix' ? 'Netflix' : cur === 'amazon' ? 'Amazon' : 'Classic');
+            document.documentElement.style.setProperty('--brand-picker-cur', cur);
+            applyBrowserChrome();
+        }
+        (function initBrandPicker() {
+            var opts = document.querySelectorAll('.theme-opt, .mb-theme-btn');
+            for (var i = 0; i < opts.length; i++) {
+                opts[i].addEventListener('click', function () {
+                    setSiteBrand(this.getAttribute('data-brand'));
+                    closeThemeMenu(this);
+                });
+            }
+            var modes = document.querySelectorAll('.theme-mode-opt');
+            for (var j = 0; j < modes.length; j++) {
+                modes[j].addEventListener('click', function () {
+                    applyThemeMode(this.getAttribute('data-mode'));
+                    closeThemeMenu(this);
+                });
+            }
+            syncBrandPicker();
+            syncModeOpts();
+        })();
 
         window.addEventListener('scroll', () => {
             const navbar = document.querySelector('.navbar');
@@ -2145,9 +2528,23 @@
                     a.classList.remove('active');
                     var href = a.getAttribute('href') || '';
                     if (href === '/' && (path === '/' || path === '')) a.classList.add('active');
-                    else if (href === '/movies/' && path.indexOf('/movies') === 0 && path.indexOf('/movies/id') === -1 && path.indexOf('/movie') === -1) a.classList.add('active');
-                    else if (href === '/series/' && path.indexOf('/series') === 0 && path.indexOf('/series/id') === -1) a.classList.add('active');
+                    else if (href === '/movies/' && (path === '/movies/' || path.indexOf('/movies/') === 0)) a.classList.add('active');
+                    else if (href === '/series/' && (path === '/series/' || path.indexOf('/series/') === 0)) a.classList.add('active');
                     else if (href === '/search/' && path.indexOf('/search') === 0) a.classList.add('active');
+                    else if (href === '/watchlist/' && path.indexOf('/watchlist') === 0) a.classList.add('active');
+                });
+            }
+
+            /* Auto-detect active page for desktop top navbar */
+            var topNav = document.querySelector('.navbar .navbar-nav');
+            if (topNav) {
+                topNav.querySelectorAll('a.nav-link').forEach(function(a) {
+                    a.classList.remove('active');
+                    var href = a.getAttribute('href') || '';
+                    if (href === '/' && (path === '/' || path === '')) a.classList.add('active');
+                    else if (href === '/movies/' && path.indexOf('/movies/') === 0) a.classList.add('active');
+                    else if (href === '/series/' && path.indexOf('/series/') === 0) a.classList.add('active');
+                    else if (href === '/calendar/' && path.indexOf('/calendar/') === 0) a.classList.add('active');
                     else if (href === '/watchlist/' && path.indexOf('/watchlist') === 0) a.classList.add('active');
                 });
             }
@@ -2730,7 +3127,7 @@
                 const data = await response.json();
                 if (data.success) {
                     if (data.requires_verification) {
-                        showMessage('registerMessage', '✅ ' + data.message, 'success');
+                        showMessage('registerMessage', '✓ ' + data.message, 'success');
                         // Show the email sent hint and switch to login tab
                         setTimeout(() => { switchAuthForm('login'); }, 3000);
                     } else {
@@ -3503,7 +3900,7 @@
     (function() {
         var saved = localStorage.getItem('theme_mode');
         if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
-        var icon = document.getElementById('themeIcon');
+        var icon = document.getElementById('floatingThemeIcon');
         if (icon) {
             if (document.documentElement.getAttribute('data-theme') === 'light') {
                 icon.className = 'fas fa-sun';
@@ -3519,12 +3916,11 @@
         html.setAttribute('data-theme', next);
         localStorage.setItem('theme_mode', next);
         localStorage.setItem('site-theme', next);
-        /* Update all theme icons */
-        var icons = document.querySelectorAll('#themeIcon, #floatingThemeToggle #themeIcon, #themeToggleIcon');
-        icons.forEach(function(el) { el.textContent = next === 'light' ? '☀️' : '🌙'; });
-        /* Also update the navbar toggle button */
-        var navbarBtn = document.getElementById('themeToggle');
-        if (navbarBtn) navbarBtn.style.background = next === 'light' ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.08)';
+        /* Update the floating control icon */
+        var fic = document.getElementById('floatingThemeIcon');
+        if (fic) fic.className = next === 'light' ? 'fas fa-sun' : 'fas fa-moon';
+        applyBrowserChrome();
+        syncModeOpts();
     }
     </script>
     <script>

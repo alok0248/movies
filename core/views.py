@@ -153,14 +153,8 @@ def _store_calendar_month_data(year, month, calendar_data):
 
 
 def _seed_calendar_month_window():
-    today = datetime.date.today()
-    base_month = today.year * 12 + today.month - 1
-    for offset in range(-2, 3):
-        target = base_month + offset
-        year = target // 12
-        month = (target % 12) + 1
-        if not CalendarMonthCache.objects.filter(year=year, month=month).exists():
-            get_calendar_month_data(year, month)
+    """Non-blocking: skip seeding on page load. Use management command instead."""
+    pass  # Calendar loads on-demand from frontend via calendar-db endpoint
 
 
 def get_calendar_month_data(year, month):
@@ -171,12 +165,8 @@ def get_calendar_month_data(year, month):
         return cached_data
 
     client = get_data_client()
-    if hasattr(client, 'get_calendar_month_data'):
-        calendar_data = client.get_calendar_month_data(year, month)
-        if calendar_data:
-            cache.set(cache_key, calendar_data, 86400)
-            _store_calendar_month_data(year, month, calendar_data)
-            return calendar_data
+    fallback_client = TMDBClient()
+    tmdb = TMDBClient()
     
     # Calculate date range for the month
     first_day = datetime.date(year, month, 1)
@@ -185,31 +175,90 @@ def get_calendar_month_data(year, month):
     else:
         last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
     
-    # Fetch movies released in this month
+    # Fetch movies — multiple pages, sort by popularity for better dates
     movies = []
     try:
         movie_params = {
             'primary_release_date.gte': first_day.strftime('%Y-%m-%d'),
             'primary_release_date.lte': last_day.strftime('%Y-%m-%d'),
-            'sort_by': 'primary_release_date.desc'
+            'sort_by': 'popularity.desc'
         }
-        movie_data = client.discover_movies(movie_params)
-        for item in movie_data.get('results', []):
-            movies.append(normalize_movie_item(item))
+        for page in range(1, 4):
+            movie_params['page'] = page
+            try:
+                movie_data = client.discover_movies(movie_params)
+            except Exception:
+                movie_data = fallback_client.discover_movies(movie_params)
+            results = movie_data.get('results', [])
+            if not results:
+                break
+            for item in results:
+                movies.append(normalize_movie_item(item))
+            if page >= movie_data.get('total_pages', 1):
+                break
     except Exception as e:
         logger.error("fetching calendar movies: %s", e)
     
-    # Fetch series with episodes airing in this month
+    # Fetch series — new premieres this month + ongoing shows with episodes
     series = []
+    seen_series = set()
+    month_prefix = f'{year}-{month:02d}'
     try:
-        series_params = {
-            'air_date.gte': first_day.strftime('%Y-%m-%d'),
-            'air_date.lte': last_day.strftime('%Y-%m-%d'),
-            'sort_by': 'first_air_date.desc'
+        # 1) New premieres this month (first_air_date in range)
+        premieres_params = {
+            'first_air_date.gte': first_day.strftime('%Y-%m-%d'),
+            'first_air_date.lte': last_day.strftime('%Y-%m-%d'),
+            'sort_by': 'popularity.desc'
         }
-        series_data = client.discover_series(series_params)
-        for item in series_data.get('results', []):
-            series.append(normalize_series_item(item))
+        for page in range(1, 3):
+            premieres_params['page'] = page
+            try:
+                prem_data = client.discover_series(premieres_params)
+            except Exception:
+                prem_data = fallback_client.discover_series(premieres_params)
+            results = prem_data.get('results', [])
+            if not results:
+                break
+            for item in results:
+                s = normalize_series_item(item)
+                s['air_date'] = s.get('first_air_date', '')
+                if s['id'] not in seen_series:
+                    seen_series.add(s['id'])
+                    series.append(s)
+            if page >= prem_data.get('total_pages', 1):
+                break
+
+        # 2) Ongoing popular shows — fetch their episode air dates
+        ongoing_params = {
+            'sort_by': 'popularity.desc',
+            'with_status': 'Returning Series'
+        }
+        try:
+            ongoing_data = client.discover_series(ongoing_params)
+        except Exception:
+            ongoing_data = fallback_client.discover_series(ongoing_params)
+        ongoing_results = ongoing_data.get('results', [])[:10]
+        for show_item in ongoing_results:
+            s = normalize_series_item(show_item)
+            if s['id'] in seen_series:
+                continue
+            try:
+                season_num = s.get('number_of_seasons', 1)
+                ep_resp = tmdb._make_request(f'/tv/{s["id"]}/season/{season_num}', {})
+                episodes = ep_resp.get('episodes', []) if ep_resp else []
+                for ep in episodes:
+                    ep_date = ep.get('air_date', '')
+                    if ep_date and ep_date.startswith(month_prefix):
+                        ep_show = dict(s)
+                        ep_show['air_date'] = ep_date
+                        ep_show['episode_number'] = ep.get('episode_number')
+                        ep_show['season_number'] = ep.get('season_number', season_num)
+                        ep_show['episode_title'] = ep.get('name', '')
+                        if s['id'] not in seen_series:
+                            seen_series.add(s['id'])
+                        series.append(ep_show)
+            except Exception:
+                pass
     except Exception as e:
         logger.error("fetching calendar series: %s", e)
     
@@ -307,6 +356,67 @@ def get_content_row_items(row, page=1):
     result = (items, data.get('total_pages', 1))
     cache.set(cache_key, result, 3600)
     return result
+
+
+def calendar_page(request):
+    """Full-page release calendar"""
+    # Seed calendar data for current window on first load
+    _seed_calendar_month_window()
+    return render(request, 'core/calendar.html')
+
+
+@csrf_exempt
+def calendar_db(request):
+    """
+    Fast calendar endpoint served from local DB (CalendarMonthCache).
+    Returns movies and series for a specific month.
+    GET /ajax/calendar-db/?year=2026&month=9
+    POST /ajax/calendar-db/ — save data for a month
+    """
+    if request.method == 'POST':
+        # Save fetched data to DB
+        try:
+            import json as _json
+            body = _json.loads(request.body)
+            year = body.get('year')
+            month = body.get('month')
+            movies = body.get('movies', [])
+            series = body.get('series', [])
+            if year and month:
+                CalendarMonthCache.objects.update_or_create(
+                    year=year, month=month,
+                    defaults={
+                        'month_name': calendar.month_name[month],
+                        'first_day': f'{year}-{month:02d}-01',
+                        'last_day': f'{year}-{month:02d}-{calendar.monthrange(year, month)[1]}',
+                        'movies': movies,
+                        'series': series,
+                    }
+                )
+                return JsonResponse({'success': True, 'saved': len(movies) + len(series)})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    # GET — return cached data
+    year = int(request.GET.get('year', datetime.date.today().year))
+    month = int(request.GET.get('month', datetime.date.today().month))
+
+    try:
+        cached = CalendarMonthCache.objects.get(year=year, month=month)
+        return JsonResponse({
+            'success': True,
+            'source': 'db',
+            'year': cached.year,
+            'month': cached.month,
+            'month_name': cached.month_name,
+            'first_day': cached.first_day,
+            'last_day': cached.last_day,
+            'movies': cached.movies or [],
+            'series': cached.series or [],
+            'last_synced': cached.last_synced_at.isoformat() if cached.last_synced_at else None,
+        })
+    except CalendarMonthCache.DoesNotExist:
+        return JsonResponse({'success': False, 'movies': [], 'series': []})
 
 
 def calendar_month_data(request):
@@ -615,8 +725,11 @@ def _render_top_cards(items):
 def home_initial_data(request):
     """Return just the shell (stats bar + row IDs). Content rows loaded progressively by JS."""
     cached = cache.get('home_page_shell')
-    if cached:
+    # Safety: if cache has empty row_ids but DB has content, bust stale cache
+    if cached and cached.get('row_ids'):
         return JsonResponse(cached)
+    if cached:
+        cache.delete('home_page_shell')
     try:
         row_ids = list(ContentRow.objects.filter(is_active=True).order_by('order').values_list('id', flat=True))
         stats_html = (
@@ -1102,8 +1215,34 @@ def _is_future_date(date_str):
         return False
 
 
+def _hover_preview_html(rating, year, overview, title_html=''):
+    """Netflix-style hover details block for card grids (title, rating pill, year, plot)."""
+    import html
+    meta = []
+    if rating:
+        try:
+            meta.append('<b>{:.1f}</b>'.format(float(rating)))
+        except (TypeError, ValueError):
+            meta.append('<b>{}</b>'.format(html.escape(str(rating))))
+    if year:
+        meta.append('<span>{}</span>'.format(html.escape(str(year))))
+    parts = ['<div class="card-hover-overlay"></div>', '<div class="card-hover-preview">']
+    if title_html:
+        parts.append('<div class="preview-title">' + title_html + '</div>')
+    if meta:
+        parts.append('<div class="preview-meta">' + ''.join(meta) + '</div>')
+    if overview:
+        ov = html.escape(str(overview).strip()[:170])
+        if len(str(overview).strip()) > 170:
+            ov += '&hellip;'
+        parts.append('<p class="hover-description" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">' + ov + '</p>')
+    parts.append('</div>')
+    return ''.join(parts)
+
+
 def _render_movie_cards(movies):
     """Render movie cards HTML for AJAX load-more and catalog grids."""
+    import html as _html
     parts = []
     for m in movies:
         rd = m.get('release_date', '') or m.get('year', '')
@@ -1111,19 +1250,20 @@ def _render_movie_cards(movies):
             badge = '<div class="card-rating-badge" style="background:rgba(39,174,96,.85);color:#fff">Coming Soon</div>'
         else:
             badge = '<div class="card-rating-badge">{rating}</div>'.format(rating=m.get('vote_average', ''))
+        title_esc = _html.escape(str(m.get('title', '')))
+        preview = _hover_preview_html(m.get('vote_average'), m.get('year'), m.get('overview'), title_html=title_esc)
         parts.append(
             '<div class="card-wrapper"><a href="/movies/{slug}/" class="movie-card" title="{title}">'
             '<div class="card-image-container">'
             '<img class="card-image" src="{img}" alt="{title}" loading="lazy">'
             '{badge}'
-            '<div class="card-overlay"><div class="card-overlay-title">{title}</div>'
-            '<div class="card-overlay-year">{year}</div></div>'
+            '{preview}'
             '</div></a></div>'.format(
                 slug=m.get('slug', ''),
-                title=m.get('title', ''),
+                title=title_esc,
                 img=m.get('cover_url', ''),
                 badge=badge,
-                year=m.get('year', ''),
+                preview=preview,
             )
         )
     return ''.join(parts)
@@ -1131,6 +1271,7 @@ def _render_movie_cards(movies):
 
 def _render_series_cards(series_list):
     """Render series cards HTML for AJAX load-more and catalog grids."""
+    import html as _html
     parts = []
     for s in series_list:
         fad = s.get('first_air_date', '') or s.get('year', '')
@@ -1138,19 +1279,20 @@ def _render_series_cards(series_list):
             badge = '<div class="card-rating-badge" style="background:rgba(39,174,96,.85);color:#fff">Coming Soon</div>'
         else:
             badge = '<div class="card-rating-badge">{rating}</div>'.format(rating=s.get('vote_average', ''))
+        title_esc = _html.escape(str(s.get('title', '')))
+        preview = _hover_preview_html(s.get('vote_average'), s.get('year'), s.get('overview'), title_html=title_esc)
         parts.append(
             '<div class="card-wrapper"><a href="/series/id/{sid}/" class="movie-card" title="{title}">'
             '<div class="card-image-container">'
             '<img class="card-image" src="{img}" alt="{title}" loading="lazy">'
             '{badge}'
-            '<div class="card-overlay"><div class="card-overlay-title">{title}</div>'
-            '<div class="card-overlay-year">{year}</div></div>'
+            '{preview}'
             '</div></a></div>'.format(
                 sid=s.get('id', ''),
-                title=s.get('title', ''),
+                title=title_esc,
                 img=s.get('cover_url', ''),
                 badge=badge,
-                year=s.get('year', ''),
+                preview=preview,
             )
         )
     return ''.join(parts)
@@ -2832,18 +2974,39 @@ def android_app_dashboard(request, app_id=None):
     apps = AndroidApp.objects.all().order_by('name')
     selected_app = None
 
-    # Handle POST to update data retention setting
+    # Handle POST to update settings (data retention, log collection, log retention)
     if request.method == 'POST' and app_id:
         selected_app = get_object_or_404(AndroidApp, id=app_id)
         try:
-            retention_days = int(request.POST.get('retention_days', 30))
-            retention_days = max(1, min(3650, retention_days))
-            selected_app.data_retention_days = retention_days
-            selected_app.save(update_fields=['data_retention_days', 'updated_at'])
+            update_fields = ['updated_at']
+
+            # Data retention
+            retention_days = request.POST.get('retention_days')
+            if retention_days is not None:
+                retention_days = max(1, min(3650, int(retention_days)))
+                selected_app.data_retention_days = retention_days
+                update_fields.append('data_retention_days')
+
+            # Log collection enabled toggle
+            log_collection_enabled = request.POST.get('log_collection_enabled')
+            if log_collection_enabled is not None:
+                selected_app.log_collection_enabled = log_collection_enabled == 'true' or log_collection_enabled == 'on'
+                update_fields.append('log_collection_enabled')
+
+            # Log retention days
+            log_retention_days = request.POST.get('log_retention_days')
+            if log_retention_days is not None:
+                log_retention_days = max(1, min(3650, int(log_retention_days)))
+                selected_app.log_retention_days = log_retention_days
+                update_fields.append('log_retention_days')
+
+            selected_app.save(update_fields=update_fields)
             deleted = selected_app.clean_old_analytics_data()
             return JsonResponse({
                 'success': True,
-                'retention_days': selected_app.data_retention_days,
+                'data_retention_days': selected_app.data_retention_days,
+                'log_collection_enabled': selected_app.log_collection_enabled,
+                'log_retention_days': selected_app.log_retention_days,
                 'deleted': deleted,
             })
         except Exception as e:
@@ -2888,26 +3051,24 @@ def android_app_dashboard(request, app_id=None):
         unique_chart_values = [log.unique_visitor_count for log in unique_logs]
         
         # Get recent devices and visits
-        recent_devices = selected_app.devices.all()[:10]
+        recent_devices = selected_app.devices.select_related().all()[:10]
         recent_visits = selected_app.device_visits.select_related('device').all()[:20]
         
         # Calculate total unique visitors
         total_unique_visitors = selected_app.devices.count()
 
-    summary_rows = []
-    for app in apps:
-        total_connections = app.access_logs.aggregate(total=models.Sum('connection_count'))['total'] or 0
-        summary_rows.append({
-            'app': app,
-            'total_connections': total_connections,
-            'last_accessed_at': app.last_accessed_at,
-        })
+    # Use denormalized total_connections field instead of N+1 aggregate query
+    summary_rows = [
+        {'app': app, 'total_connections': app.total_connections, 'last_accessed_at': app.last_accessed_at}
+        for app in apps
+    ]
 
-    # Synced users
+    # Synced users (single query with annotate instead of 3 separate queries)
     from .models import SyncedUser
-    synced_users = SyncedUser.objects.all().order_by('-last_synced_at')[:5]
-    synced_total = SyncedUser.objects.count()
-    synced_subscribed = SyncedUser.objects.filter(is_subscribed=True).count()
+    synced_qs = SyncedUser.objects.all()
+    synced_users = synced_qs.order_by('-last_synced_at')[:5]
+    synced_total = synced_qs.count()
+    synced_subscribed = synced_qs.filter(is_subscribed=True).count()
     synced_free = synced_total - synced_subscribed
 
     return render(request, 'core/android_app_dashboard.html', {
@@ -2962,8 +3123,8 @@ def android_user_sync_reference(request):
 @user_passes_test(is_staff_or_superuser)
 def ajax_android_app_dashboard(request, app_id):
     selected_app = get_object_or_404(AndroidApp, id=app_id)
-    # Auto-clean old analytics data based on retention setting
-    selected_app.clean_old_analytics_data()
+    # Skip auto-clean on AJAX polls — only run on full page loads to avoid heavy delete on every 5s poll
+    # selected_app.clean_old_analytics_data()
     logs = selected_app.access_logs.order_by('access_date')
     chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in logs]
     chart_values = [log.connection_count for log in logs]
@@ -3062,6 +3223,10 @@ def android_app_log_endpoint(request, app_slug):
             return JsonResponse({'error': 'App is inactive'}, status=403)
         except AndroidApp.DoesNotExist:
             return JsonResponse({'error': 'App not found'}, status=404)
+
+    # Check if log collection is enabled for this app
+    if not android_app.log_collection_enabled:
+        return JsonResponse({'error': 'Log collection is disabled for this app'}, status=403)
 
     # Basic auth
     auth_header = request.META.get('HTTP_AUTHORIZATION', '')
@@ -3470,7 +3635,13 @@ def android_app_endpoint(request, app_slug):
             unique_visitor_log.unique_visitor_count += 1
             unique_visitor_log.save(update_fields=['unique_visitor_count', 'updated_at'])
 
-    # Build movie_servers and series_servers from PlayerConfiguration
+    # Build movie_servers and series_servers from PlayerConfiguration (cached for 5 min)
+    cache_key = f'android_endpoint_payload_{android_app.slug}'
+    cached_payload = cache.get(cache_key)
+    if cached_payload:
+        # Still track device visit but serve cached config
+        return JsonResponse(cached_payload, safe=isinstance(cached_payload, dict))
+    
     android_players = PlayerConfiguration.objects.filter(use_for_android=True, is_active=True).order_by('order', 'name')
     movie_servers = []
     series_servers = []
@@ -3525,6 +3696,8 @@ def android_app_endpoint(request, app_slug):
         response_payload['movie_servers'] = movie_servers
         response_payload['series_servers'] = series_servers
         response_payload['ads'] = ads_list
+    # Cache the response payload for 5 minutes
+    cache.set(cache_key, response_payload, 300)
     return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
 
 
@@ -6696,6 +6869,115 @@ def player_subtitles_view(request):
     return JsonResponse({'success': True, 'subtitles': subs})
 
 
+@require_GET
+def stremio_subtitles_view(request):
+    """
+    Fetch subtitles from Stremio OpenSubtitles addon.
+    GET /ajax/stremio-subtitles/?type=movie&id=tt1375666&lang=eng
+    GET /ajax/stremio-subtitles/?type=movie&tmdb_id=550&lang=eng
+    GET /ajax/stremio-subtitles/?type=tv&id=tt0903747&season=1&episode=1&lang=eng
+    """
+    media_type = request.GET.get('type', 'movie')  # 'movie' or 'tv'
+    imdb_id = request.GET.get('id', '')  # e.g. tt1375666
+    tmdb_id = request.GET.get('tmdb_id', '')  # alternative: resolve via TMDB
+    lang = request.GET.get('lang', 'eng')  # ISO 639-2 language code
+    season = request.GET.get('season', '')
+    episode = request.GET.get('episode', '')
+
+    # If no imdb_id but tmdb_id provided, resolve via TMDB API
+    if not imdb_id and tmdb_id:
+        try:
+            client = get_data_client()
+            if media_type == 'tv':
+                details = client.get_series_details(tmdb_id)
+            else:
+                details = client.get_movie_details(tmdb_id)
+            imdb_id = details.get('imdb_id', '') if details else ''
+        except Exception as e:
+            logger.debug('TMDB→IMDB resolution failed: %s', e)
+
+    if not imdb_id:
+        return JsonResponse({'success': False, 'error': 'id (imdb_id) or tmdb_id is required', 'subtitles': []})
+
+    # Ensure imdb_id has tt prefix
+    if not imdb_id.startswith('tt'):
+        imdb_id = 'tt' + imdb_id
+
+    # Build Stremio API URL
+    stremio_type = 'tv' if media_type == 'tv' else 'movie'
+    stremio_id = imdb_id
+    if media_type == 'tv' and season and episode:
+        stremio_id = f"{imdb_id}:s{season}e{episode}"
+
+    url = f'https://opensubtitles-v3.strem.io/subtitles/{stremio_type}/{stremio_id}.json'
+
+    subs = []
+    try:
+        resp = requests.get(url, timeout=10, headers={
+            'User-Agent': 'Mozilla/5.0'
+        })
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_subs = data.get('subtitles', [])
+
+            # Stremio returns: { id, url, subtitle_manifest_url, lang, lang_code }
+            # We want direct VTT/SRT URLs
+            for sub in raw_subs:
+                sub_lang = sub.get('lang_code', sub.get('lang', ''))
+                sub_lang_name = sub.get('lang', sub_lang)
+                sub_url = sub.get('url', '')
+                sub_id = sub.get('id', '')
+
+                if not sub_url:
+                    continue
+
+                # Filter by requested language if specified
+                if lang and lang != 'all':
+                    if sub_lang and lang.lower() not in [sub_lang.lower(), sub_lang_name.lower()]:
+                        # Also try matching first 3 chars (eng matches en)
+                        if not sub_lang.lower().startswith(lang.lower()[:2]):
+                            continue
+
+                subs.append({
+                    'id': sub_id,
+                    'url': sub_url,
+                    'lang': sub_lang,
+                    'lang_name': sub_lang_name,
+                    'label': f"{sub_lang_name} ({sub_lang})",
+                    'format': 'vtt',  # Stremio serves WebVTT by default
+                })
+
+            # Deduplicate by lang_code, keep first (best quality)
+            seen = set()
+            unique_subs = []
+            for sub in subs:
+                key = sub['lang']
+                if key not in seen:
+                    seen.add(key)
+                    unique_subs.append(sub)
+            subs = unique_subs
+
+    except requests.Timeout:
+        logger.debug('Stremio subtitles timeout for %s', stremio_id)
+    except requests.RequestException as e:
+        logger.debug('Stremio subtitles request failed: %s', e)
+    except (ValueError, KeyError) as e:
+        logger.debug('Stremio subtitles parse error: %s', e)
+
+    return JsonResponse({
+        'success': True,
+        'subtitles': subs,
+        'source': 'stremio',
+        'query': {
+            'type': media_type,
+            'id': imdb_id,
+            'season': season,
+            'episode': episode,
+            'lang': lang,
+        }
+    })
+
+
 # ===== Subscriber System =====
 from django.contrib.auth.decorators import login_required
 from core.models import Subscriber, EmailMessage, EmailDelivery
@@ -7741,6 +8023,7 @@ def ajax_resume_position(request):
 # Page View & Time Tracking AJAX
 # ---------------------------------------------------------------------------
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def ajax_track_page_view(request):
     """Receive page view heartbeats from the browser."""

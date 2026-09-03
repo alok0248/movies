@@ -19,6 +19,20 @@ def tojson(value):
     return json.dumps(value)
 
 
+@register.filter(name='intcomma')
+def intcomma(value):
+    """Format a number with thousands separators, e.g. 150000000 -> 150,000,000."""
+    if value is None or value == '':
+        return ''
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return value
+    if num == int(num):
+        return '{:,}'.format(int(num))
+    return '{:,}'.format(num)
+
+
 @register.filter(name='is_future_date')
 def is_future_date(value):
     """Return True if the date is in the future."""

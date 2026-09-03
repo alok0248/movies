@@ -1,0 +1,396 @@
+{% extends 'base.html' %}
+{% block title %}Release Calendar{% endblock %}
+
+{% block content %}
+<style>
+    .cal-page{padding:70px 1.5rem 1rem;max-width:1500px;margin:0 auto}
+    .cal-nav{display:flex;align-items:center;justify-content:center;gap:1.2rem;margin-bottom:1rem}
+    .cal-nav-arrow{width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-size:.85rem}
+    .cal-nav-arrow:hover{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.4);color:#818cf8}
+    .cal-nav-center{text-align:center;min-width:180px}
+    .cal-nav-year{font-size:.65rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:1px}
+    .cal-nav-month{font-size:1.4rem;font-weight:800;color:#fff}
+    .cal-main{display:flex;gap:1rem;align-items:flex-start}
+    .cal-left{flex:1;min-width:0}
+    .cal-side{width:280px;flex-shrink:0;max-height:calc(100vh - 110px);overflow-y:auto;position:sticky;top:80px}
+    .cal-side::-webkit-scrollbar{width:4px}
+    .cal-side::-webkit-scrollbar-track{background:transparent}
+    .cal-side::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+    .cal-side-date{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);margin-bottom:6px;transition:all .2s}
+    .cal-side-date:hover{background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.2)}
+    .cal-side-date-header{font-size:.78rem;font-weight:700;color:#fff;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between}
+    .cal-side-date-header .day-name{color:rgba(255,255,255,.35);font-size:.62rem;font-weight:500}
+    .cal-side-item{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;border-radius:6px;transition:background .12s}
+    .cal-side-item:hover{background:rgba(255,255,255,.04)}
+    .cal-side-item img{width:28px;height:42px;border-radius:4px;object-fit:cover;flex-shrink:0;background:rgba(255,255,255,.05);transition:transform .2s}
+    .cal-side-item:hover img{transform:scale(1.05)}
+    .cal-side-item-info{flex:1;min-width:0}
+    .cal-side-item-title{font-size:.75rem;font-weight:600;color:rgba(255,255,255,.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cal-side-item-ep{font-size:.62rem;color:rgba(255,255,255,.35);font-weight:500}
+    .cal-side-empty{font-size:.78rem;color:rgba(255,255,255,.2);text-align:center;padding:2rem 0}
+    .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:0}
+    .cal-weekday{font-size:.68rem;font-weight:600;color:rgba(255,255,255,.3);text-transform:capitalize;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0}
+    .cal-day{min-height:88px;border:1px solid rgba(255,255,255,.04);padding:6px 8px;cursor:pointer;transition:background .2s;position:relative;display:flex;flex-direction:column}
+    .cal-day:hover{background:rgba(255,255,255,.02)}
+    .cal-day.today{background:rgba(99,102,241,.06)}
+    .cal-day.selected{background:rgba(99,102,241,.12)}
+    .cal-day.empty{background:transparent;cursor:default}
+    .cal-day.empty:hover{background:transparent}
+    .cal-day-num{font-size:.78rem;font-weight:600;color:rgba(255,255,255,.5)}
+    .cal-day.today .cal-day-num{color:#818cf8;font-weight:700}
+    .cal-day-counts{display:flex;flex-direction:column;gap:3px;margin-top:auto;padding-top:4px}
+    .cal-count-line{display:flex;align-items:center;gap:5px;min-height:19px;padding:2px 6px;border-radius:6px;font-size:.68rem;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cal-count-line i{font-size:.6rem;width:12px;text-align:center;flex:none}
+    .cal-count-line .n{font-weight:800;font-size:.8rem}
+    .cal-count-line.mv{background:rgba(229,9,20,.13);color:#ff8a92}
+    .cal-count-line.mv .n{color:#ff5a66}
+    .cal-count-line.tv{background:rgba(34,197,94,.13);color:#6ee7a0}
+    .cal-count-line.tv .n{color:#2ee06e}
+    .cal-spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.1);border-top-color:#818cf8;border-radius:50%;animation:calSpin .6s linear infinite;display:inline-block}
+
+    /* Detail popup */
+    .cal-popup-overlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .3s ease}
+    .cal-popup-overlay.active{opacity:1;pointer-events:auto}
+    .cal-popup{position:fixed;z-index:9999;top:50%;left:50%;transform:translate(-50%,-50%) scale(.85);background:var(--bg-2,#1a1a2e);border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;max-width:700px;width:90vw;max-height:85vh;overflow-y:auto;opacity:0;transition:all .35s cubic-bezier(.4,0,.2,1);pointer-events:none;box-shadow:0 25px 80px rgba(0,0,0,.6)}
+    .cal-popup.active{transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:auto}
+    .cal-popup-backdrop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
+    .cal-popup-backdrop img{width:100%;height:100%;object-fit:cover}
+    .cal-popup-backdrop .gradient{position:absolute;bottom:0;left:0;right:0;height:60%;background:linear-gradient(transparent,var(--bg-2,#1a1a2e))}
+    .cal-popup-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;z-index:10;transition:all .2s}
+    .cal-popup-close:hover{background:rgba(255,255,255,.2);transform:rotate(90deg)}
+    .cal-popup-body{padding:0 24px 24px;margin-top:-40px;position:relative;z-index:2}
+    .cal-popup-title{font-size:1.4rem;font-weight:800;color:#fff;margin-bottom:6px;line-height:1.2}
+    .cal-popup-meta{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+    .cal-popup-meta span{font-size:.78rem;color:rgba(255,255,255,.5)}
+    .cal-popup-meta .rating{color:#ffc107;font-weight:600}
+    .cal-popup-overview{font-size:.85rem;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:16px}
+    .cal-popup-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .cal-popup-btn{padding:10px 20px;border-radius:10px;border:none;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;text-decoration:none}
+    .cal-popup-btn:hover{transform:translateY(-2px)}
+    .cal-popup-btn.play{background:var(--brand,#e50914);color:#fff}
+    .cal-popup-btn.play:hover{box-shadow:0 6px 20px rgba(229,9,20,.4)}
+    .cal-popup-btn.trailer{background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.12)}
+    .cal-popup-loading{display:flex;align-items:center;justify-content:center;padding:3rem;color:rgba(255,255,255,.3)}
+    .cal-mc{color:#e50914;font-size:.6rem;font-weight:600}
+    .cal-sc{color:#22c55e;font-size:.6rem;font-weight:600}
+    .cal-sep{opacity:.4;font-size:.6rem;margin:0 4px}
+
+    @media(max-width:900px){
+        .cal-main{flex-direction:column}
+        .cal-side{width:100%;position:static;max-height:250px}
+        .cal-day{min-height:66px}
+        .cal-count-line{font-size:.64rem;padding:1px 5px;min-height:17px}
+        .cal-count-line .n{font-size:.74rem}
+        .cal-day-counts{gap:2px;padding-top:2px}
+    }
+
+    /* ===== Light theme overrides (page colors are dark-first by design) ===== */
+    html[data-theme="light"] .cal-page{}
+    html[data-theme="light"] .cal-nav-arrow{border-color:rgba(0,0,0,.12);color:rgba(20,20,40,.55)}
+    html[data-theme="light"] .cal-nav-arrow:hover{background:rgba(99,102,241,.08);border-color:rgba(99,102,241,.4);color:#4f46e5}
+    html[data-theme="light"] .cal-nav-year{color:rgba(20,20,40,.45)}
+    html[data-theme="light"] .cal-nav-month{color:#1a1a2e}
+    html[data-theme="light"] .cal-weekday{color:rgba(20,20,40,.55);border-bottom-color:rgba(0,0,0,.08)}
+    html[data-theme="light"] .cal-day{border-color:rgba(0,0,0,.08)}
+    html[data-theme="light"] .cal-day:hover{background:rgba(0,0,0,.03)}
+    html[data-theme="light"] .cal-day.today{background:rgba(99,102,241,.07)}
+    html[data-theme="light"] .cal-day.selected{background:rgba(99,102,241,.13)}
+    html[data-theme="light"] .cal-day-num{color:rgba(20,20,40,.55)}
+    html[data-theme="light"] .cal-day.today .cal-day-num{color:#4f46e5}
+    html[data-theme="light"] .cal-count-line.mv{background:rgba(229,9,20,.1);color:#b91c1c}
+    html[data-theme="light"] .cal-count-line.mv .n{color:#dc2626}
+    html[data-theme="light"] .cal-count-line.tv{background:rgba(22,163,74,.12);color:#166534}
+    html[data-theme="light"] .cal-count-line.tv .n{color:#15803d}
+    html[data-theme="light"] .cal-spinner{border-color:rgba(0,0,0,.12);border-top-color:#4f46e5}
+    html[data-theme="light"] .cal-side-date{border-color:rgba(0,0,0,.07);background:rgba(255,255,255,.65)}
+    html[data-theme="light"] .cal-side-date:hover{background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.35)}
+    html[data-theme="light"] .cal-side-date-header{color:#1a1a2e;border-bottom-color:rgba(0,0,0,.08)}
+    html[data-theme="light"] .cal-side-date-header .day-name{color:rgba(20,20,40,.45)}
+    html[data-theme="light"] .cal-side-item:hover{background:rgba(0,0,0,.04)}
+    html[data-theme="light"] .cal-side-item img{background:rgba(0,0,0,.05)}
+    html[data-theme="light"] .cal-side-item-title{color:rgba(20,20,40,.85)}
+    html[data-theme="light"] .cal-side-item-ep{color:rgba(20,20,40,.45)}
+    html[data-theme="light"] .cal-side-empty{color:rgba(20,20,40,.35)}
+    html[data-theme="light"] .cal-side::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
+    html[data-theme="light"] .cal-popup{background:var(--bg-2,#fff);border-color:rgba(0,0,0,.12);box-shadow:0 25px 80px rgba(20,20,40,.25)}
+    html[data-theme="light"] .cal-popup-backdrop .gradient{background:linear-gradient(transparent,var(--bg-2,#fff))}
+    html[data-theme="light"] .cal-popup-title{color:#1a1a2e}
+    .cal-popup-eps{font-size:.7rem;color:rgba(255,255,255,.4);font-weight:400}
+    html[data-theme="light"] .cal-popup-eps{color:rgba(20,20,40,.5)}
+    .cal-cast-head{font-size:.7rem;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+    html[data-theme="light"] .cal-cast-head{color:rgba(20,20,40,.5)}
+    .cal-cast-name{font-size:.52rem;color:rgba(255,255,255,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    html[data-theme="light"] .cal-cast-name{color:rgba(20,20,40,.6)}
+    html[data-theme="light"] .cal-popup-meta span{color:rgba(20,20,40,.6)}
+    html[data-theme="light"] .cal-popup-overview{color:rgba(20,20,40,.72)}
+    html[data-theme="light"] .cal-popup-btn.trailer{background:rgba(0,0,0,.05);color:rgba(20,20,40,.8);border-color:rgba(0,0,0,.12)}
+    html[data-theme="light"] .cal-popup-loading{color:rgba(20,20,40,.4)}
+    html[data-theme="light"] .cal-mc{color:#dc2626}
+    html[data-theme="light"] .cal-sc{color:#15803d}
+    html[data-theme="light"] .cal-popup-meta .rating{color:#b45309}
+</style>
+
+<div class="cal-page">
+    <div class="cal-nav">
+        <button class="cal-nav-arrow" onclick="calNavigate(-1)"><i class="fas fa-chevron-left"></i></button>
+        <div class="cal-nav-center">
+            <span class="cal-nav-year" id="calYearLabel"></span>
+            <span class="cal-nav-month" id="calMonthLabel"></span>
+        </div>
+        <button class="cal-nav-arrow" onclick="calNavigate(1)"><i class="fas fa-chevron-right"></i></button>
+    </div>
+    <div class="cal-main">
+        <div class="cal-left">
+            <div class="cal-weekdays">
+                <div class="cal-weekday">Monday</div><div class="cal-weekday">Tuesday</div><div class="cal-weekday">Wednesday</div>
+                <div class="cal-weekday">Thursday</div><div class="cal-weekday">Friday</div><div class="cal-weekday">Saturday</div><div class="cal-weekday">Sunday</div>
+            </div>
+            <div class="cal-grid" id="calGrid"></div>
+        </div>
+        <div class="cal-side" id="calSide"></div>
+    </div>
+</div>
+
+<!-- Detail popup -->
+<div class="cal-popup-overlay" id="calPopupOverlay" onclick="calClosePopup()"></div>
+<div class="cal-popup" id="calPopup">
+    <div class="cal-popup-backdrop">
+        <img id="calPopupBg" src="" alt="">
+        <div class="gradient"></div>
+        <button class="cal-popup-close" onclick="calClosePopup()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="cal-popup-body" id="calPopupBody">
+        <div class="cal-popup-loading"><div class="cal-spinner" style="width:30px;height:30px"></div></div>
+    </div>
+</div>
+
+<script>
+var calDate = new Date();
+var calMovies = {};
+var calSeries = {};
+var calFetched = {};
+var calLoading = {};
+var _calPopupOpen = false;
+var _calPopupItem = null;
+var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function calKey(y, m) { return y + '-' + (m + 1); }
+
+/* Fetch one month from DB */
+async function calFetchRange(startStr, endStr) {
+    var rangeKey = startStr + '_' + endStr;
+    if (calFetched[rangeKey] || calLoading[rangeKey]) return;
+    calLoading[rangeKey] = true;
+
+    try {
+        var startMonth = parseInt(startStr.split('-')[1]);
+        var startYear = parseInt(startStr.split('-')[0]);
+        var monthKey = calKey(startYear, startMonth - 1);
+
+        if (!calFetched['db_' + monthKey]) {
+            var dbResp = await fetch('/ajax/calendar-db/?year=' + startYear + '&month=' + startMonth);
+            var dbData = await dbResp.json();
+            if (dbData.success && (dbData.source === 'db' || dbData.movies || dbData.series)) {
+                (dbData.movies || []).forEach(function(m) {
+                    var d = m.release_date;
+                    if (d) {
+                        var mk = calKey(new Date(d).getFullYear(), new Date(d).getMonth());
+                        if (!calMovies[mk]) calMovies[mk] = {};
+                        if (!calMovies[mk][d]) calMovies[mk][d] = [];
+                        if (!calMovies[mk][d].find(function(x){return x.id===m.id})) calMovies[mk][d].push(m);
+                    }
+                });
+                (dbData.series || []).forEach(function(s) {
+                    var d = s.air_date || s.first_air_date;
+                    if (d) {
+                        var sk = calKey(new Date(d).getFullYear(), new Date(d).getMonth());
+                        if (!calSeries[sk]) calSeries[sk] = {};
+                        if (!calSeries[sk][d]) calSeries[sk][d] = [];
+                        if (!calSeries[sk][d].find(function(x){return x.id===s.id && x.air_date===s.air_date})) calSeries[sk][d].push(s);
+                    }
+                });
+                calFetched['db_' + monthKey] = true;
+            }
+        }
+    } catch(e) { console.error('Calendar fetch error:', e); }
+
+    calLoading[rangeKey] = false;
+    calFetched[rangeKey] = true;
+}
+
+async function calFetchMonth(year, month) {
+    var startStr = year + '-' + String(month+1).padStart(2,'0') + '-01';
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var endStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(daysInMonth).padStart(2,'0');
+    await calFetchRange(startStr, endStr);
+}
+
+function calNavigate(dir) { calDate.setMonth(calDate.getMonth() + dir); calLoadAndRender(); }
+
+async function calLoadAndRender() {
+    var y = calDate.getFullYear(), m = calDate.getMonth();
+    document.getElementById('calYearLabel').textContent = y;
+    document.getElementById('calMonthLabel').textContent = monthNames[m];
+    document.getElementById('calGrid').innerHTML = '<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;padding:3rem"><div class="cal-spinner" style="width:30px;height:30px"></div></div>';
+    calRenderGrid(); calRenderSidePanel();
+    await calFetchMonth(y, m);
+    calRenderGrid(); calRenderSidePanel();
+}
+
+function calRenderGrid() {
+    var grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+    var y = calDate.getFullYear(), m = calDate.getMonth(), key = calKey(y, m);
+    var firstDay = (new Date(y, m, 1).getDay() + 6) % 7; // Mon=0
+    var daysInMonth = new Date(y, m+1, 0).getDate();
+    var today = new Date(), todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    for (var i = 0; i < firstDay; i++) { var e=document.createElement('div'); e.className='cal-day empty'; grid.appendChild(e); }
+    var monthMovies = calMovies[key]||{}, monthSeries = calSeries[key]||{};
+    for (var d=1; d<=daysInMonth; d++) {
+        var dateKey = y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        var cell = document.createElement('div');
+        cell.className = 'cal-day'+(dateKey===todayStr?' today':'');
+        var num = document.createElement('div'); num.className='cal-day-num'; num.textContent=d; cell.appendChild(num);
+        var movies=monthMovies[dateKey]||[], series=monthSeries[dateKey]||[], total=movies.length+series.length;
+        if (total>0) {
+            var counts=document.createElement('div'); counts.className='cal-day-counts';
+            if(movies.length>0){
+                var lm=document.createElement('div'); lm.className='cal-count-line mv';
+                lm.innerHTML='<i class="fas fa-film"></i><span class="n">'+movies.length+'</span><span>'+(movies.length>1?'Movies':'Movie')+'</span>';
+                counts.appendChild(lm);
+            }
+            if(series.length>0){
+                var ls=document.createElement('div'); ls.className='cal-count-line tv';
+                ls.innerHTML='<i class="fas fa-tv"></i><span class="n">'+series.length+'</span><span>'+(series.length>1?'Shows':'Show')+'</span>';
+                counts.appendChild(ls);
+            }
+            cell.appendChild(counts);
+        }
+        cell.style.cursor='pointer'; cell.dataset.date=dateKey;
+        (function(dk){cell.onclick=function(e){e.stopPropagation();document.querySelectorAll('.cal-day').forEach(function(c){c.classList.remove('selected');c.style.background='';});cell.classList.add('selected');cell.style.background='rgba(99,102,241,.12)';var target=document.querySelector('.cal-side-date[data-date="'+dk+'"]');if(target){var sp=document.getElementById('calSide');var pr=sp.getBoundingClientRect();var tr=target.getBoundingClientRect();sp.scrollTo({top:tr.top-pr.top+sp.scrollTop-8,behavior:'smooth'});target.style.borderColor='rgba(99,102,241,.6)';target.style.background='rgba(99,102,241,.1)';setTimeout(function(){target.style.borderColor='';target.style.background='';},1500);}};})(dateKey);
+        grid.appendChild(cell);
+    }
+}
+
+function calRenderSidePanel() {
+    var side=document.getElementById('calSide'); side.innerHTML='';
+    var y=calDate.getFullYear(), m=calDate.getMonth(), key=calKey(y,m), daysInMonth=new Date(y,m+1,0).getDate();
+    var monthMovies=calMovies[key]||{}, monthSeries=calSeries[key]||{}, hasAny=false;
+    for (var d=1;d<=daysInMonth;d++) {
+        var dateKey=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        var movies=monthMovies[dateKey]||[], series=monthSeries[dateKey]||[];
+        if(movies.length+series.length===0) continue;
+        hasAny=true;
+        var card=document.createElement('div'); card.className='cal-side-date'; card.dataset.date=dateKey;
+        var header=document.createElement('div'); header.className='cal-side-date-header';
+        var dt=new Date(y,m,d), counts='';
+        if(movies.length>0) counts+='<span class="cal-mc">'+movies.length+' movie'+(movies.length>1?'s':'')+'</span>';
+        if(movies.length>0&&series.length>0) counts+='<span class="cal-sep">+</span>';
+        if(series.length>0) counts+='<span class="cal-sc">'+series.length+' show'+(series.length>1?'s':'')+'</span>';
+        header.innerHTML='<span>'+monthNames[m].substring(0,3)+' '+d+' '+counts+'</span><span class="day-name">'+dayNames[dt.getDay()]+'</span>';
+        card.appendChild(header);
+        movies.forEach(function(mv){
+            var poster=mv.poster_path?'https://image.tmdb.org/t/p/w185'+mv.poster_path:'';
+            var item=document.createElement('div'); item.className='cal-side-item';
+            item.innerHTML=(poster?'<img src="'+poster+'" alt="">':'')+'<div class="cal-side-item-info"><div class="cal-side-item-title">'+(mv.title||'')+'</div><div class="cal-side-item-ep">Movie</div></div>';
+            item.onclick=function(e){e.stopPropagation();calOpenPopup('movie',mv.id,item,mv);};
+            card.appendChild(item);
+        });
+        series.forEach(function(sv){
+            var poster=sv.poster_path?'https://image.tmdb.org/t/p/w185'+sv.poster_path:'';
+            var epText=sv.season_number&&sv.episode_number?'S'+sv.season_number+'E'+sv.episode_number+(sv.episode_title?' '+sv.episode_title:''):'Series';
+            var item=document.createElement('div'); item.className='cal-side-item';
+            item.innerHTML=(poster?'<img src="'+poster+'" alt="">':'')+'<div class="cal-side-item-info"><div class="cal-side-item-title">'+(sv.name||sv.title||'')+'</div><div class="cal-side-item-ep">'+epText+'</div></div>';
+            item.onclick=function(e){e.stopPropagation();calOpenPopup('tv',sv.id,item,sv);};
+            card.appendChild(item);
+        });
+        side.appendChild(card);
+    }
+    if(!hasAny) side.innerHTML='<div class="cal-side-empty">No releases this month</div>';
+}
+
+/* ===== Detail popup (Apple-style expand/collapse) ===== */
+async function calOpenPopup(type, id, itemEl, itemData) {
+    if (_calPopupOpen && _calPopupItem === id) { calClosePopup(); return; }
+    _calPopupOpen = true;
+    _calPopupItem = id;
+
+    var overlay = document.getElementById('calPopupOverlay');
+    var popup = document.getElementById('calPopup');
+    var body = document.getElementById('calPopupBody');
+    var bg = document.getElementById('calPopupBg');
+
+    // Popup always centers on screen via CSS
+
+    var d = itemData || {};
+    var title = d.title || d.name || '';
+    var overview = d.overview || '';
+    var backdrop = d.backdrop_path ? 'https://image.tmdb.org/t/p/w780' + d.backdrop_path : '';
+    var poster = d.poster_path ? 'https://image.tmdb.org/t/p/w342' + d.poster_path : '';
+    var rating = d.vote_average || 0;
+    var year = (d.release_date || d.first_air_date || '').substring(0, 4);
+    var epInfo = d.season_number && d.episode_number ? 'S' + d.season_number + 'E' + d.episode_number : '';
+
+    var slug = title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || type+'-'+id;
+    var detailUrl = type === 'tv' ? '/series/' + slug + '/' : '/movies/' + slug + '/';
+
+    bg.src = backdrop || poster;
+    var html = '';
+    html += '<div class="cal-popup-title">' + title + (epInfo ? ' <span class="cal-popup-eps">' + epInfo + '</span>' : '') + '</div>';
+    html += '<div class="cal-popup-meta">';
+    if (year) html += '<span>' + year + '</span>';
+    if (rating > 0) html += '<span class="rating">★ ' + rating.toFixed(1) + '</span>';
+    html += '</div>';
+    if (overview) html += '<div class="cal-popup-overview">' + overview.substring(0, 300) + (overview.length > 300 ? '...' : '') + '</div>';
+    html += '<div class="cal-popup-actions">';
+    html += '<button class="cal-popup-btn play" onclick="event.stopPropagation();window.location.href=\'' + detailUrl + '\'"><i class="fas fa-play"></i> Play</button>';
+    html += '<button class="cal-popup-btn trailer" onclick="event.stopPropagation();window.location.href=\'' + detailUrl + '\'"><i class="fas fa-info-circle"></i> Details</button>';
+    html += '</div>';
+    html += '<div id="calPopupExtra"></div>';
+    body.innerHTML = html;
+
+    overlay.classList.add('active');
+    popup.classList.add('active');
+
+    // Prevent clicks inside popup from triggering base template's page-transition handler
+    popup.addEventListener('click', function(e) { e.stopPropagation(); }, true);
+
+    // Fetch trailers + cast in background
+    try {
+        var resp = await fetch('/ajax/tmdb-extra/?tmdb_id=' + id + '&type=' + type);
+        var extra = await resp.json();
+        var extraHtml = '';
+        var trailers = (extra.trailers || []).filter(function(t) { return t.type === 'Trailer'; });
+        var trailerKey = trailers.length > 0 ? trailers[0].key : ((extra.trailers && extra.trailers[0]) ? extra.trailers[0].key : null);
+        if (trailerKey) {
+            extraHtml += '<div style="margin:14px 0;border-radius:10px;overflow:hidden;aspect-ratio:16/9;background:#000"><iframe width="100%" height="100%" src="https://www.youtube.com/embed/' + trailerKey + '" frameborder="0" allowfullscreen allow="autoplay; encrypted-media"></iframe></div>';
+        }
+        if (extra.cast && extra.cast.length > 0) {
+            extraHtml += '<div style="margin-top:12px"><div class="cal-cast-head">Cast</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">';
+            extra.cast.slice(0, 5).forEach(function(c) {
+                if (c.profile_path) {
+                    extraHtml += '<div style="text-align:center;flex-shrink:0;width:56px"><img src="https://image.tmdb.org/t/p/w92' + c.profile_path + '" style="width:42px;height:42px;border-radius:50%;object-fit:cover;margin-bottom:2px"><div class="cal-cast-name">' + c.name + '</div></div>';
+                }
+            });
+            extraHtml += '</div></div>';
+        }
+        var extraDiv = document.getElementById('calPopupExtra');
+        if (extraDiv) extraDiv.innerHTML = extraHtml;
+    } catch(e) {}
+}
+
+function calClosePopup() {
+    _calPopupOpen = false;
+    _calPopupItem = null;
+    document.getElementById('calPopupOverlay').classList.remove('active');
+    document.getElementById('calPopup').classList.remove('active');
+}
+
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') calClosePopup(); });
+
+calLoadAndRender();
+</script>
+<style>@keyframes calSpin{to{transform:rotate(360deg)}}</style>
+{% endblock %}

@@ -12,7 +12,7 @@
         <div class="d-flex gap-3">
             {% if hero_movie.id or hero_movie.slug %}
             <a href="{% if site_settings.url_format == 'id' %}{% url 'movie_detail_by_id' hero_movie.id %}{% else %}{% url 'movie_detail' hero_movie.slug %}{% endif %}" class="hero-btn hero-btn-primary">
-                ▶ Watch
+                <i class="fas fa-play"></i> Watch
             </a>
             {% endif %}
         </div>

@@ -90,6 +90,57 @@
     }
     .em-tabs .nav-link:hover { color: #cbd5e1; }
     .em-tabs .nav-link.active { color: #38bdf8; border-bottom-color: #38bdf8; background: none; }
+
+    /* ================= LIGHT THEME (email page) ================= */
+    html[data-theme="light"] .em-title { color: #0f172a; }
+    html[data-theme="light"] .em-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f2f5fb 100%);
+        border-color: rgba(0,0,0,.08);
+        box-shadow: 0 2px 12px rgba(20,20,45,.05);
+    }
+    html[data-theme="light"] .em-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
+    html[data-theme="light"] .em-card .text-white { color: #0f172a !important; }
+    html[data-theme="light"] .em-tmpl-card { background: #ffffff; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .em-tmpl-card:hover { border-color: rgba(0,0,0,.16); }
+    html[data-theme="light"] .em-tmpl-body { color: #334155; background: #f1f5f9; }
+    html[data-theme="light"] .em-group-header { color: #475569; border-bottom-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .em-name { color: #0f172a; }
+    html[data-theme="light"] .em-email { color: #475569; }
+    html[data-theme="light"] .em-smtp-detail { color: #475569; }
+    html[data-theme="light"] .em-smtp-detail i { color: #94a3b8; }
+    html[data-theme="light"] .em-tabs .nav-link { color: #475569; }
+    html[data-theme="light"] .em-tabs .nav-link:hover { color: #0f172a; }
+    html[data-theme="light"] .em-tabs .nav-link.active { color: #0284c7; border-bottom-color: #0284c7; }
+    html[data-theme="light"] .em-purpose-verification { color: #0369a1; }
+    html[data-theme="light"] .em-purpose-password_reset { color: #b45309; }
+    html[data-theme="light"] .em-purpose-notification { color: #7c3aed; }
+    html[data-theme="light"] .em-purpose-newsletter { color: #15803d; }
+    html[data-theme="light"] .em-purpose-marketing { color: #be185d; }
+    html[data-theme="light"] .em-purpose-transactional { color: #dc2626; }
+    html[data-theme="light"] .em-card td { color: #0f172a !important; }
+    html[data-theme="light"] .em-log-recipient { color: #0f172a; }
+    html[data-theme="light"] .em-empty { color: #64748b; }
+    html[data-theme="light"] a[href*="admin_dashboard"] { color: #2563eb; }
+
+    /* Light modals on the email page */
+    html[data-theme="light"] .modal-content {
+        background: linear-gradient(135deg, #ffffff 0%, #f2f5fb 100%) !important;
+        border-color: rgba(0,0,0,.1) !important;
+        color: #1e293b;
+    }
+    html[data-theme="light"] .modal-content .form-control,
+    html[data-theme="light"] .modal-content .form-select {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border-color: rgba(0,0,0,.16) !important;
+    }
+    html[data-theme="light"] .modal-content .form-control::placeholder { color: #94a3b8 !important; }
+    html[data-theme="light"] .modal-content .text-white { color: #0f172a !important; }
+    html[data-theme="light"] .modal-content .modal-body { color: #334155; }
+    html[data-theme="light"] .modal-content .form-label,
+    html[data-theme="light"] .modal-content .form-check-label { color: #0f172a !important; }
+    html[data-theme="light"] .modal-content .text-muted, html[data-theme="light"] .modal-content small { color: #64748b !important; }
+    html[data-theme="light"] .em-empty { color: #334155; }
 </style>
 
 <div class="container py-4" style="max-width:1100px;">
@@ -101,7 +152,7 @@
                 <i class="fas fa-envelope text-white" style="font-size:1.1rem;"></i>
             </div>
             <div>
-                <h3 class="text-white mb-0" style="font-size:1.25rem;">Email Management</h3>
+                <h3 class="em-title mb-0" style="font-size:1.25rem;">Email Management</h3>
                 <div style="color:#64748b;font-size:.82rem;">Configure SMTP addresses, assign purposes, and manage email templates</div>
             </div>
         </div>

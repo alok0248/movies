@@ -56,14 +56,14 @@
 <div class="mb-4">
     <div class="d-flex align-items-center mb-3">
         <i class="fas fa-cog me-2 text-secondary" style="font-size:.85rem;"></i>
-        <h6 class="text-white fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Configuration</h6>
+        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Configuration</h6>
     </div>
     <div class="row g-3">
         <div class="col-md-4 col-lg-3">
             <a href="{% url 'branding_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-palette mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#a78bfa,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Branding</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Branding</div>
                     <div class="text-secondary small">Brand name, tagline, color</div>
                 </div>
             </a>
@@ -72,7 +72,7 @@
             <a href="{% url 'display_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-tv mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#60a5fa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Display</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Display</div>
                     <div class="text-secondary small">Items per row, card size, theme</div>
                 </div>
             </a>
@@ -81,7 +81,7 @@
             <a href="{% url 'navbar_item_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-bars mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Navbar</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Navbar</div>
                     <div class="text-secondary small">Edit nav items, order, icons</div>
                 </div>
             </a>
@@ -90,7 +90,7 @@
             <a href="{% url 'data_source_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-database mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Data Source</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Data Source</div>
                     <div class="text-secondary small">TMDB API or database</div>
                 </div>
             </a>
@@ -99,7 +99,7 @@
             <a href="{% url 'data_source_config' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-server mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#c084fc,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">TMDB Database</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">TMDB Database</div>
                     <div class="text-secondary small">Local TMDB connection</div>
                 </div>
             </a>
@@ -108,7 +108,7 @@
             <a href="{% url 'player_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-play-circle mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Player</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Player</div>
                     <div class="text-secondary small">Default movie/TV player</div>
                 </div>
             </a>
@@ -117,7 +117,7 @@
             <a href="{% url 'url_blocking_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-shield-alt mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#f87171,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">URL Blocking</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">URL Blocking</div>
                     <div class="text-secondary small">Block URLs and redirects</div>
                 </div>
             </a>
@@ -126,7 +126,7 @@
             <a href="{% url 'footer_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-window-maximize mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Footer</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Footer</div>
                     <div class="text-secondary small">Footer layout and links</div>
                 </div>
             </a>
@@ -138,14 +138,14 @@
 <div class="mb-4">
     <div class="d-flex align-items-center mb-3">
         <i class="fas fa-tools me-2 text-secondary" style="font-size:.85rem;"></i>
-        <h6 class="text-white fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Management</h6>
+        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Management</h6>
     </div>
     <div class="row g-3">
         <div class="col-md-4 col-lg-3">
             <a href="{% url 'content_row_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-th-large mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#a78bfa,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Content Rows</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Content Rows</div>
                     <div class="text-secondary small">Home page rows</div>
                 </div>
             </a>
@@ -154,7 +154,7 @@
             <a href="{% url 'player_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-gamepad mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Players</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Players</div>
                     <div class="text-secondary small">Video player configs</div>
                 </div>
             </a>
@@ -163,7 +163,7 @@
             <a href="{% url 'ad_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-ad mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Ads</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Ads</div>
                     <div class="text-secondary small">Ad providers and rules</div>
                 </div>
             </a>
@@ -172,7 +172,7 @@
             <a href="{% url 'provider_item_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-plug mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Providers</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Providers</div>
                     <div class="text-secondary small">TMDB provider management</div>
                 </div>
             </a>
@@ -181,7 +181,7 @@
             <a href="{% url 'android_app_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fab fa-android mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#16a34a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Android Apps</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Android Apps</div>
                     <div class="text-secondary small">Endpoints and credentials</div>
                 </div>
             </a>
@@ -190,7 +190,7 @@
             <a href="{% url 'synced_users_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-users mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Synced Users</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Synced Users</div>
                     <div class="text-secondary small">Android app users</div>
                 </div>
             </a>
@@ -199,7 +199,7 @@
             <a href="{% url 'admin_user_list' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-user-shield mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#c084fc,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">User Management</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">User Management</div>
                     <div class="text-secondary small">All registered users</div>
                 </div>
             </a>
@@ -208,7 +208,7 @@
             <a href="{% url 'email_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-envelope mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#38bdf8,#0ea5e9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Email SMTP</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Email SMTP</div>
                     <div class="text-secondary small">Email configuration</div>
                 </div>
             </a>
@@ -220,14 +220,14 @@
 <div class="mb-4">
     <div class="d-flex align-items-center mb-3">
         <i class="fas fa-chart-line me-2 text-secondary" style="font-size:.85rem;"></i>
-        <h6 class="text-white fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">System & Analytics</h6>
+        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">System & Analytics</h6>
     </div>
     <div class="row g-3">
         <div class="col-md-4 col-lg-3">
             <a href="{% url 'admin_analytics' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-chart-line mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">User Analytics</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">User Analytics</div>
                     <div class="text-secondary small">Page views, time, platforms</div>
                 </div>
             </a>
@@ -236,7 +236,7 @@
             <a href="{% url 'web_management_dashboard' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-chart-bar mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#60a5fa,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Web Analytics</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Web Analytics</div>
                     <div class="text-secondary small">Visitors and pageviews</div>
                 </div>
             </a>
@@ -245,7 +245,7 @@
             <a href="{% url 'system_resource_dashboard' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-server mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#f472b6,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">System Resources</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">System Resources</div>
                     <div class="text-secondary small">CPU, memory, disk</div>
                 </div>
             </a>
@@ -254,7 +254,7 @@
             <a href="{% url 'db_connection_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-plug mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">DB Connections</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">DB Connections</div>
                     <div class="text-secondary small">Add/edit database connections</div>
                 </div>
             </a>
@@ -263,7 +263,7 @@
             <a href="{% url 'db_routing_settings' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-route mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">Data Routing</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Data Routing</div>
                     <div class="text-secondary small">Local vs external DB</div>
                 </div>
             </a>
@@ -272,7 +272,7 @@
             <a href="{% url 'db_dashboard' %}" class="admin-card d-block text-decoration-none h-100">
                 <div class="admin-card-body text-center py-4">
                     <i class="fas fa-heartbeat mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#f87171,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="text-white fw-semibold" style="font-size:.85rem;">DB Dashboard</div>
+                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">DB Dashboard</div>
                     <div class="text-secondary small">Health, size, tables</div>
                 </div>
             </a>

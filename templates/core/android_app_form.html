@@ -83,10 +83,24 @@
                         {% if form.is_active.errors %}<div class="text-danger small mt-1">{{ form.is_active.errors|join:', ' }}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            {{ form.log_collection_enabled }}
+                            <label class="form-check-label text-white" for="{{ form.log_collection_enabled.id_for_label }}">Log Collection Enabled</label>
+                        </div>
+                        <div class="form-text text-secondary">When disabled, the app's /log/ endpoint will reject incoming logs.</div>
+                        {% if form.log_collection_enabled.errors %}<div class="text-danger small mt-1">{{ form.log_collection_enabled.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label text-white">{{ form.data_retention_days.label }}</label>
                         {{ form.data_retention_days }}
                         <div class="form-text text-secondary">Days to keep analytics logs. Older data is auto-deleted.</div>
                         {% if form.data_retention_days.errors %}<div class="text-danger small mt-1">{{ form.data_retention_days.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white">{{ form.log_retention_days.label }}</label>
+                        {{ form.log_retention_days }}
+                        <div class="form-text text-secondary">Days to keep Android app log entries (app_logs). Older logs are auto-deleted.</div>
+                        {% if form.log_retention_days.errors %}<div class="text-danger small mt-1">{{ form.log_retention_days.errors|join:', ' }}</div>{% endif %}
                     </div>
                 </div>
 

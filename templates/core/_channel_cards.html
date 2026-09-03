@@ -6,11 +6,11 @@
     {% endif %}
     <div class="netflix-card">
         <div class="card-info">
-            <h5 class="card-title">{{ channel.name|default:channel.title }}</h5>
+            <h5 class="card-title">{% firstof channel.name channel.title %}</h5>
         </div>
         <div class="card-hover-preview">
             <div class="preview-details">
-                <h5 class="preview-title">{{ channel.name|default:channel.title }}</h5>
+                <h5 class="preview-title">{% firstof channel.name channel.title %}</h5>
             </div>
         </div>
     </div>
