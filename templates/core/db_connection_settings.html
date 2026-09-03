@@ -306,6 +306,14 @@ function loadConn(id, name, dbType, host, port, dbName, user, notes, isDefault) 
     document.getElementById('testResult').style.display = 'none';
     window.scrollTo({ top: 300, behavior: 'smooth' });
 }
+function readJsonResponse(r) {
+    var ct = r.headers.get('Content-Type') || '';
+    if (!r.ok || ct.indexOf('application/json') === -1) {
+        // Login redirect (expired session), CSRF 403 or an error page: all HTML.
+        throw new Error('The server returned an HTML page (status ' + r.status + ') instead of JSON — your admin session has likely expired. Refresh the page and log in again.');
+    }
+    return r.json();
+}
 function testCurrentConn() {
     var result = document.getElementById('testResult');
     result.style.display = 'block';
@@ -321,7 +329,7 @@ function testCurrentConn() {
             username: document.getElementById('connUser').value,
             password: document.getElementById('connPass').value
         })
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(readJsonResponse).then(function(data) {
         if (data.success) { result.innerHTML = '<div class="alert" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e;"><i class="fas fa-check-circle me-2"></i><strong>Success!</strong> ' + data.message + '</div>'; }
         else { result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-times-circle me-2"></i><strong>Failed!</strong> ' + data.message + '</div>'; }
     }).catch(function(err) { result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-exclamation-triangle me-2"></i>Error: ' + err.message + '</div>'; });
@@ -334,10 +342,10 @@ function testSavedConn(connId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
         body: JSON.stringify({ conn_id: connId })
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(readJsonResponse).then(function(data) {
         if (data.success) { result.innerHTML = '<div class="alert" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e;"><i class="fas fa-check-circle me-2"></i><strong>Success!</strong> ' + data.message + '</div>'; }
         else { result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-times-circle me-2"></i><strong>Failed!</strong> ' + data.message + '</div>'; }
-    });
+    }).catch(function(err) { result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-exclamation-triangle me-2"></i>Error: ' + err.message + '</div>'; });
 }
 function writeConfig(connId) {
     if (!confirm('Write this connection config?')) return;
@@ -345,12 +353,12 @@ function writeConfig(connId) {
     formData.append('conn_id', connId);
     formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
     fetch("{% url 'ajax_write_db_config' %}", { method: 'POST', body: formData })
-    .then(function(r) { return r.json(); }).then(function(data) {
+    .then(readJsonResponse).then(function(data) {
         var result = document.getElementById('testResult');
         result.style.display = 'block';
         if (data.success) { result.innerHTML = '<div class="alert" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e;"><i class="fas fa-check-circle me-2"></i>' + data.message + '</div>'; }
         else { result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-times-circle me-2"></i>' + data.message + '</div>'; }
-    });
+    }).catch(function(err) { result.innerHTML = '<div class="alert" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444;"><i class="fas fa-exclamation-triangle me-2"></i>Error: ' + err.message + '</div>'; });
 }
 </script>
 {% endblock %}
