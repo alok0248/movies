@@ -1373,6 +1373,13 @@
                             </li>
                         {% endif %}
                     {% endfor %}
+                    {% if user.is_staff or user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'navbar_item_list' %}" title="Manage navigation menu items" style="color:var(--brand, #e50914);">
+                            <i class="fas fa-bars"></i> Navbar
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
 
                 <form class="nav-search" method="GET" action="{% url 'search' %}">
