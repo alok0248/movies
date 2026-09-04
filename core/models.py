@@ -1138,10 +1138,16 @@ class SyncedUser(models.Model):
 
 
 class EmailVerification(models.Model):
-    """Email verification token for registration."""
+    """Email verification token + 6-digit OTP for registration.
+
+    The link-based token lets browser users verify by clicking the emailed
+    link; the OTP lets the Android app verify without opening the browser
+    (POST /api/user/verify-email/ with {email, otp}).
+    """
     # Cross-DB link (external users DB) — no DB-level constraint.
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_verifications', db_constraint=False)
     token = models.CharField(max_length=64, unique=True)
+    otp = models.CharField(max_length=6, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     verified = models.BooleanField(default=False)
 
@@ -1156,6 +1162,11 @@ class EmailVerification(models.Model):
         from django.utils import timezone
         from datetime import timedelta
         return timezone.now() > self.created_at + timedelta(minutes=5)
+
+    @staticmethod
+    def generate_otp():
+        import secrets
+        return f"{secrets.randbelow(1000000):06d}"
 
 
 class PasswordResetOTP(models.Model):

@@ -3842,6 +3842,40 @@ def ajax_login(request):
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
+def _issue_verification_email(django_user, request, display_name=''):
+    """Create an EmailVerification row (link token + 6-digit OTP) and email both.
+
+    Used by web + Android registration and by resend-verification. The email
+    carries the OTP so the Android app can verify without opening the browser
+    (POST /api/user/verify-email/ with {email, otp}), plus the clickable link
+    for browser users.
+    """
+    from .models import EmailVerification, SiteSettings
+    token = secrets.token_hex(32)
+    otp = EmailVerification.generate_otp()
+    EmailVerification.objects.create(user=django_user, token=token, otp=otp)
+    verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
+    brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
+    try:
+        send_configured_email(
+            subject=f'Verify your email - {brand}',
+            message=(
+                f'Hi {display_name or django_user.first_name or django_user.username},\r\n\r\n'
+                f'Your verification code is: {otp}\r\n\r\n'
+                f'This code expires in 5 minutes. Enter it in the app to verify your email.\r\n\r\n'
+                f'Or click the link below to verify in your browser (also valid for 5 minutes):\r\n\r\n'
+                f'{verify_url}\r\n\r\n'
+                f'If you did not register, please ignore this email.'
+            ),
+            recipient_list=[django_user.email],
+            purpose='verification',
+            fail_silently=True,
+        )
+    except Exception as e:
+        logger.warning(f'Failed to send verification email: {e}', exc_info=True)
+    return token, otp
+
+
 def ajax_register(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -3876,23 +3910,8 @@ def ajax_register(request):
                 existing_user.first_name = username
                 existing_user.is_active = False
                 existing_user.save()
-                # Create email verification token
-                from .models import EmailVerification
-                token = secrets.token_hex(32)
-                EmailVerification.objects.create(user=existing_user, token=token)
-                # Send verification email
-                verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
-                try:
-                    send_configured_email(
-                        subject='Verify your email - NewMovies',
-                        message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
-                        recipient_list=[email],
-                        purpose='verification',
-                        fail_silently=True,
-                    )
-                except Exception as e:
-                    logger.warning(f'Failed to send verification email: {e}', exc_info=True)
-                return JsonResponse({'success': True, 'message': 'Verification email sent. Please check your inbox.', 'requires_verification': True})
+                _issue_verification_email(existing_user, request, display_name=username)
+                return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
         
         if User.objects.filter(username=username).exists():
             return JsonResponse({'success': False, 'message': 'Username already taken'})
@@ -3901,26 +3920,9 @@ def ajax_register(request):
         user = User.objects.create_user(username=username, email=email, password=password)
         user.is_active = False
         user.save()
-        
-        # Create email verification token
-        from .models import EmailVerification
-        token = secrets.token_hex(32)
-        EmailVerification.objects.create(user=user, token=token)
-        
-        # Send verification email
-        verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
-        try:
-            send_configured_email(
-                subject='Verify your email - NewMovies',
-                message=f'Hi {username},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
-                recipient_list=[email],
-                purpose='verification',
-                fail_silently=True,
-            )
-        except Exception as e:
-            logger.warning(f'Failed to send verification email: {e}', exc_info=True)
-        
-        return JsonResponse({'success': True, 'message': 'Verification email sent. Please check your inbox.', 'requires_verification': True})
+        _issue_verification_email(user, request, display_name=username)
+
+        return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
@@ -7687,25 +7689,12 @@ def api_user_register(request):
         UserCloudData.objects.create(user=django_user)
         created = True
 
-    # Send verification email
-    from .models import EmailVerification
-    token = secrets.token_hex(32)
-    EmailVerification.objects.create(user=django_user, token=token)
-    verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
-    try:
-        send_configured_email(
-            subject='Verify your email - NewMovies',
-            message=f'Hi {display_name},\n\nClick the link below to verify your email (valid for 5 minutes):\n\n{verify_url}\n\nIf you did not register, please ignore this email.',
-            recipient_list=[email],
-            purpose='verification',
-            fail_silently=True,
-        )
-    except Exception as e:
-        logger.warning(f'Failed to send verification email: {e}', exc_info=True)
+    # Send verification email with link token + 6-digit OTP (app can verify via OTP)
+    _issue_verification_email(django_user, request, display_name=display_name)
 
     resp = {
         'status': 'success',
-        'message': 'Account registered. Please verify your email via the link sent to your inbox.',
+        'message': 'Account registered. Check your inbox for the verification code.',
         'requiresVerification': True,
         'user': _user_payload(user_obj, django_user),
         'subscription': FREE_SUBSCRIPTION,
@@ -7920,7 +7909,8 @@ def api_user_forgot_password(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_verify_email(request):
-    """POST /api/user/verify-email/ — verify email with token (Android app can't open browser links)."""
+    """POST /api/user/verify-email/ — verify email with a 6-digit OTP (Android app)
+    or with the link token (browser). Payload: {email, otp} or {email?, token}."""
     app_match, err = _validate_android_auth(request)
     if err:
         return err
@@ -7929,26 +7919,72 @@ def api_user_verify_email(request):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
     token = body.get('token', '').strip()
+    otp_code = body.get('otp', '').strip()
     email = body.get('email', '').strip().lower()
-    if not token:
-        return JsonResponse({'status': 'error', 'message': 'Verification token is required'}, status=400)
 
     from .models import EmailVerification
-    ev = EmailVerification.objects.select_related('user').filter(token=token)
-    if email:
-        ev = ev.filter(user__email=email)
-    ev = ev.first()
-    if not ev:
-        return JsonResponse({'status': 'error', 'message': 'Invalid verification link.'}, status=400)
+
+    if otp_code and email:
+        # Android OTP flow: {email, otp} — find the latest unverified code for this user
+        django_user = User.objects.filter(email=email).first()
+        if not django_user:
+            return JsonResponse({'status': 'error', 'message': 'Invalid verification code.'}, status=400)
+        ev = EmailVerification.objects.filter(
+            user=django_user, otp=otp_code, verified=False,
+        ).order_by('-created_at').first()
+        if not ev:
+            return JsonResponse({'status': 'error', 'message': 'Invalid verification code.'}, status=400)
+        if ev.is_expired:
+            return JsonResponse({'status': 'error', 'message': 'Verification code has expired. Please request a new code.'}, status=400)
+    elif token:
+        # Browser link flow: {token} or {email, token}
+        ev = EmailVerification.objects.select_related('user').filter(token=token)
+        if email:
+            ev = ev.filter(user__email=email)
+        ev = ev.first()
+        if not ev:
+            return JsonResponse({'status': 'error', 'message': 'Invalid verification link.'}, status=400)
+        if ev.is_expired:
+            return JsonResponse({'status': 'error', 'message': 'Verification link has expired. Please register again.'}, status=400)
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Provide either (email + otp) or token.'}, status=400)
+
     if ev.verified:
         return JsonResponse({'status': 'success', 'message': 'Email already verified. You can now login.'})
-    if ev.is_expired:
-        return JsonResponse({'status': 'error', 'message': 'Verification link has expired. Please register again.'}, status=400)
     ev.verified = True
     ev.save(update_fields=['verified'])
     ev.user.is_active = True
     ev.user.save(update_fields=['is_active'])
     return JsonResponse({'status': 'success', 'message': 'Email verified successfully! You can now login.'})
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_resend_verification(request):
+    """POST /api/user/resend-verification/ — send a fresh verification code/link.
+    For users who registered (or reset from Android sync) but never received or
+    never used the first email. Payload: {email}. Always returns success to avoid
+    leaking which emails are registered; only registered, unverified users get mail."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+    email = body.get('email', '').strip().lower()
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    django_user = User.objects.filter(email=email).first()
+    if not django_user or not django_user.has_usable_password():
+        # Never confirm account existence — generic success for unknown emails too
+        return JsonResponse({'status': 'success', 'message': 'If your email is registered, a new verification code has been sent to your inbox.'})
+    if django_user.is_active:
+        return JsonResponse({'status': 'success', 'message': 'This email is already verified. You can login now.'})
+    _issue_verification_email(django_user, request, display_name=django_user.first_name)
+    return JsonResponse({'status': 'success', 'message': 'A new verification code has been sent to your inbox. It expires in 5 minutes.', 'requiresVerification': True})
 
 
 @_guard_android_api_errors
