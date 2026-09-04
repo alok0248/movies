@@ -3,19 +3,29 @@
 {% block content %}
 <style>
     /* ===== ADMIN SIDEBAR ===== */
-    .admin-layout { display: flex; min-height: 100vh; padding-top: 56px; }
+    html, body { overflow: hidden; }
+    .admin-layout { display: flex; height: 100vh; overflow: hidden; padding-top: 56px; }
     .admin-sidebar {
         position: fixed; top: 56px; left: 0; bottom: 0;
         width: 260px; background: linear-gradient(180deg, #0d0d14 0%, #11111b 100%);
         border-right: 1px solid rgba(255,255,255,.06);
-        overflow-y: auto; z-index: 900;
+        overflow-y: auto; overscroll-behavior: contain; z-index: 900;
         transition: transform .3s cubic-bezier(.4,0,.2,1), width .3s;
         scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent;
         padding-bottom: 2rem;
     }
     .admin-sidebar::-webkit-scrollbar { width: 4px; }
     .admin-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
-    .admin-main { flex: 1; margin-left: 260px; padding: 1.5rem 2rem 3rem; min-height: calc(100vh - 56px); }
+    .admin-main {
+        flex: 1; margin-left: 260px; padding: 1.5rem 2rem 3rem;
+        height: calc(100vh - 56px); min-height: 0;
+        overflow-y: auto; overscroll-behavior: contain;
+        scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent;
+        transition: opacity .18s;
+    }
+    .admin-main::-webkit-scrollbar { width: 6px; }
+    .admin-main::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 3px; }
+    .admin-main.admin-loading { opacity: .55; pointer-events: none; }
     @media(max-width:991px) {
         .admin-sidebar { transform: translateX(-100%); width: 280px; }
         .admin-sidebar.open { transform: translateX(0); box-shadow: 0 0 60px rgba(0,0,0,.8); }
@@ -494,7 +504,7 @@ function readJson(resp) {
 }
 
 // Auto-show Django messages as toasts
-document.addEventListener('DOMContentLoaded', function() {
+function autoToast() {
     var msgs = document.querySelectorAll('.alert-dismissible');
     msgs.forEach(function(el) {
         var type = 'info';
@@ -505,6 +515,133 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.display = 'none';
         if (text) showToast(text, type);
     });
+}
+
+/* ============================================================
+ * SPA-style sidebar navigation
+ * Clicking a sidebar link swaps ONLY the right-hand content (the
+ * .admin-main pane) via fetch instead of reloading the whole page.
+ * The sidebar and the content pane scroll independently because
+ * each is its own scroll container (see CSS above).
+ * ============================================================ */
+var _adminNavIntervals = [];
+var _adminNavOrigSetInterval = window.setInterval;
+window.setInterval = function(fn, ms) {
+    var id = _adminNavOrigSetInterval(fn, ms);
+    _adminNavIntervals.push(id);
+    return id;
+};
+
+// Pages that mount their JS in base.html's extra-js block (outside
+// .admin-main) and/or poll continuously — they must do a full page load so
+// their scripts and timers initialize correctly.
+var _ADMIN_FULL_RELOAD = [
+    '/admin-dashboard/web-management',
+    '/admin-dashboard/system-resources',
+    '/admin-dashboard/android-apps/',
+];
+
+function _adminFullReloadNeeded(url) {
+    for (var i = 0; i < _ADMIN_FULL_RELOAD.length; i++) {
+        if (url.indexOf(_ADMIN_FULL_RELOAD[i]) === 0) return true;
+    }
+    return false;
+}
+
+function _clearAdminPageIntervals() {
+    _adminNavIntervals.forEach(function(id) { clearInterval(id); });
+    _adminNavIntervals = [];
+}
+
+function _execAdminScripts(container) {
+    // innerHTML does NOT run <script> tags — re-create and inject them
+    // so page-specific JS (settings forms, charts) initializes correctly.
+    var scripts = container.querySelectorAll('script');
+    scripts.forEach(function(old) {
+        var fresh = document.createElement('script');
+        if (old.src) {
+            fresh.src = old.src;
+        } else {
+            fresh.textContent = old.textContent;
+        }
+        old.parentNode.replaceChild(fresh, old);
+    });
+}
+
+function _adminLoad(url, push) {
+    var main = document.querySelector('.admin-main');
+    if (!main) { window.location.href = url; return; }
+    main.classList.add('admin-loading');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+        .then(function(r) {
+            if (!r.ok) { window.location.href = url; return null; }
+            return r.text();
+        })
+        .then(function(html) {
+            if (html === null) return;
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var newMain = doc.querySelector('.admin-main');
+            if (!newMain) { window.location.href = url; return; }
+            // Kill intervals from the outgoing page (dashboards poll).
+            _clearAdminPageIntervals();
+            // Swap only the right-hand pane.
+            main.innerHTML = newMain.innerHTML;
+            _execAdminScripts(main);
+            // Reflect the new page's title + active sidebar item.
+            var title = doc.querySelector('title');
+            if (title && title.textContent) document.title = title.textContent;
+            var path = url.split('?')[0].split('#')[0];
+            document.querySelectorAll('.admin-sidebar .sb-item').forEach(function(a) {
+                var href = a.getAttribute('href') || '';
+                var h = href.split('?')[0].split('#')[0];
+                var active = (h === '/admin-dashboard/' && path === '/admin-dashboard/') ||
+                             (h !== '/admin-dashboard/' && path.indexOf(h) === 0);
+                a.classList.toggle('active', active);
+            });
+            if (push) history.pushState({ adminUrl: url }, '', url);
+            // Let page-specific DOMContentLoaded handlers (if any) run.
+            document.dispatchEvent(new Event('DOMContentLoaded'));
+            // Scroll the content pane back to top for a fresh view.
+            main.scrollTop = 0;
+            main.classList.remove('admin-loading');
+            // Close mobile drawer if open.
+            var sb = document.getElementById('adminSidebar');
+            if (sb && sb.classList.contains('open')) toggleSidebar();
+        })
+        .catch(function() { main.classList.remove('admin-loading'); window.location.href = url; });
+}
+
+// Intercept sidebar clicks (skip modifier/right-click/new-tab).
+document.addEventListener('click', function(e) {
+    var a = e.target.closest ? e.target.closest('.sb-item') : null;
+    if (!a) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    var url = a.getAttribute('href');
+    if (!url || url.charAt(0) === '#') return;
+    e.preventDefault();
+    if (_adminFullReloadNeeded(url)) {
+        window.location.href = url;
+        return;
+    }
+    _adminLoad(url, true);
 });
+
+// Back/forward buttons restore the previously loaded admin pane.
+window.addEventListener('popstate', function(e) {
+    if (e.state && e.state.adminUrl) {
+        if (_adminFullReloadNeeded(e.state.adminUrl)) {
+            window.location.href = e.state.adminUrl;
+            return;
+        }
+        _adminLoad(e.state.adminUrl, false);
+    } else if (window.location.href.indexOf('/admin-dashboard/') > -1) {
+        // Entry created by a full page load — reload for real so the
+        // content matches the URL.
+        window.location.reload();
+    }
+});
+
+// Auto-show Django messages as toasts
+document.addEventListener('DOMContentLoaded', autoToast);
 </script>
 {% endblock %}

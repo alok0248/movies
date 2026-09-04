@@ -2512,6 +2512,10 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Guard: admin SPA navigation re-dispatches DOMContentLoaded after
+            // swapping the right-hand pane; only run this site-wide init once.
+            if (window.__siteDomReady) return;
+            window.__siteDomReady = true;
             // Register browser-based proxy Service Worker (no server needed)
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw-proxy.js').catch(function(){});
