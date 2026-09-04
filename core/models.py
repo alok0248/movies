@@ -1431,12 +1431,70 @@ class UserCloudData(models.Model):
                 episode_number=episode if episode >= 0 else None,
                 defaults={
                     'title': entry.get('title', ''),
-                    'poster_path': entry.get('posterPath', ''),
+                    'poster_path': entry.get('posterPath', '') or entry.get('posterUrl', ''),
                     'duration_seconds': pos_ms // 1000,
                     'total_duration_seconds': dur_ms // 1000,
                     'completed': dur_ms > 0 and (pos_ms / dur_ms) > 0.95,
                 },
             )
+
+        # --- Watch history -> PlayHistory metadata (title/poster/season/episode) ---
+        # The app's watchHistory entries carry the display metadata (title,
+        # posterUrl, last season/episode) that playbackProgress entries lack,
+        # so fold them into the matching PlayHistory rows (which otherwise end
+        # up with empty titles and no posters on the web play-history page).
+        for h in (self.watch_history or []):
+            if not isinstance(h, dict):
+                continue
+            h_mid = h.get('tmdbId') or h.get('mediaId') or h.get('id')
+            if not h_mid:
+                continue
+            h_is_tv = bool(h.get('isTv'))
+            h_season = h.get('lastSeasonNumber', -1)
+            h_episode = h.get('lastEpisodeNumber', -1)
+            try:
+                h_season = int(h_season)
+            except (TypeError, ValueError):
+                h_season = -1
+            try:
+                h_episode = int(h_episode)
+            except (TypeError, ValueError):
+                h_episode = -1
+            h_season_final = h_season if h_season >= 0 else None
+            h_episode_final = h_episode if h_episode >= 0 else None
+            defaults = {
+                'title': h.get('title', ''),
+                'poster_path': h.get('posterUrl', '') or h.get('posterPath', ''),
+                'episode_title': h.get('lastEpisodeName', ''),
+            }
+            if h.get('lastWatchedEpoch'):
+                try:
+                    defaults['last_played_at'] = timezone.datetime.fromtimestamp(
+                        int(h['lastWatchedEpoch']) / 1000.0, tz=timezone.UTC)
+                except (TypeError, ValueError, OSError, OverflowError):
+                    pass
+            # Match an existing row first (exact season/episode, then the base
+            # movie/show row) so this never duplicates PlayHistory entries.
+            h_type = 'tv' if h_is_tv else 'movie'
+            row = PlayHistory.objects.filter(
+                user=self.user, tmdb_id=h_mid, media_type=h_type,
+                season_number=h_season_final, episode_number=h_episode_final,
+            ).first()
+            if row is None and h_season_final is not None:
+                row = PlayHistory.objects.filter(
+                    user=self.user, tmdb_id=h_mid, media_type=h_type,
+                    season_number=None, episode_number=None,
+                ).first()
+            if row is None:
+                PlayHistory.objects.create(
+                    user=self.user, tmdb_id=h_mid, media_type=h_type,
+                    season_number=h_season_final, episode_number=h_episode_final,
+                    **defaults,
+                )
+            else:
+                for f, v in defaults.items():
+                    setattr(row, f, v)
+                row.save()
 
     def sync_from_web_models(self):
         """Pull web WatchList + PlayHistory into cloud data."""
