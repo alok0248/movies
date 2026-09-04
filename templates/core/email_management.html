@@ -26,6 +26,7 @@
     .em-purpose-newsletter { background: rgba(34,197,94,.15); color: #22c55e; }
     .em-purpose-marketing { background: rgba(244,114,182,.15); color: #f472b6; }
     .em-purpose-transactional { background: rgba(248,113,113,.15); color: #f87171; }
+    .em-card.purpose-fail { border-color: rgba(239,68,68,.5); box-shadow: 0 0 0 1px rgba(239,68,68,.12), 0 4px 20px rgba(239,68,68,.07); }
     .em-tmpl-card {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 1px solid rgba(255,255,255,.06);
@@ -163,7 +164,7 @@
     <ul class="nav em-tabs mb-4" id="emailTabs">
         <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-addresses"><i class="fas fa-server me-1"></i> SMTP Addresses</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-templates"><i class="fas fa-file-alt me-1"></i> Message Templates</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-logs"><i class="fas fa-history me-1"></i> Send Logs <span class="badge" style="background:rgba(56,189,248,.2);color:#38bdf8;font-size:.7rem;">{{ log_stats.total }}</span></a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-logs"><i class="fas fa-history me-1"></i> Send Logs <span id="emTabBadge" class="badge" style="background:rgba(56,189,248,.2);color:#38bdf8;font-size:.7rem;">{{ log_stats.total }}</span></a></li>
     </ul>
 
     <div class="tab-content">
@@ -272,61 +273,101 @@
         <div class="tab-pane fade" id="tab-logs">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="text-white mb-0" style="font-size:.95rem;"><i class="fas fa-history me-2" style="color:#38bdf8;"></i>Email Send Logs</h6>
+                <div class="d-flex align-items-center gap-2">
+                    <span id="emLiveDot" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.12);color:#22c55e;font-size:.72rem;font-weight:600;padding:5px 12px;border-radius:20px;"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.8);"></span>LIVE <span id="emLogUpdated" style="color:#94a3b8;font-weight:400;"></span></span>
+                    <button class="btn btn-sm" style="background:rgba(255,255,255,.06);color:#cbd5e1;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 14px;font-size:.78rem;" onclick="emLoadLogs(true)" id="emRefreshBtn"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+                </div>
             </div>
 
             <div class="row g-3 mb-4">
                 <div class="col-md-3">
                     <div class="em-card p-3 text-center">
-                        <div style="font-size:1.8rem;font-weight:700;color:#38bdf8;">{{ log_stats.total }}</div>
-                        <div style="color:#64748b;font-size:.75rem;">Total Sent</div>
+                        <div id="emStatTotal" style="font-size:1.8rem;font-weight:700;color:#38bdf8;">{{ log_stats.total }}</div>
+                        <div style="color:#64748b;font-size:.75rem;">Total Emails</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="em-card p-3 text-center">
-                        <div style="font-size:1.8rem;font-weight:700;color:#22c55e;">{{ log_stats.sent }}</div>
-                        <div style="color:#64748b;font-size:.75rem;">Successful</div>
+                        <div id="emStatSent" style="font-size:1.8rem;font-weight:700;color:#22c55e;">{{ log_stats.sent }}</div>
+                        <div style="color:#64748b;font-size:.75rem;">Delivered</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="em-card p-3 text-center">
-                        <div style="font-size:1.8rem;font-weight:700;color:#ef4444;">{{ log_stats.failed }}</div>
+                        <div id="emStatFailed" style="font-size:1.8rem;font-weight:700;color:#ef4444;">{{ log_stats.failed }}</div>
                         <div style="color:#64748b;font-size:.75rem;">Failed</div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="em-card p-3 text-center">
-                        <div style="font-size:1.8rem;font-weight:700;color:#fbbf24;">{{ log_stats.today }}</div>
+                        <div id="emStatToday" style="font-size:1.8rem;font-weight:700;color:#fbbf24;">{{ log_stats.today }}</div>
                         <div style="color:#64748b;font-size:.75rem;">Today</div>
                     </div>
                 </div>
             </div>
 
+            <!-- Delivery by purpose -->
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="em-group-header mb-0" style="border:none;margin:0;"><i class="fas fa-layer-group me-1"></i>Delivery by Purpose</div>
+                <div style="color:#475569;font-size:.72rem;">Each purpose shows the SMTP box that serves it — red border means deliveries are failing</div>
+            </div>
+            <div class="row g-3 mb-4" id="emPurposeCards">
+                {% for g in log_by_purpose %}
+                <div class="col-md-6 col-xl-3">
+                    <div class="em-card p-3 h-100 {% if g.failed %}purpose-fail{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span style="font-weight:600;color:#f1f5f9;font-size:.85rem;">{{ g.label }}</span>
+                            <span style="background:rgba(255,255,255,.06);color:#64748b;border-radius:6px;padding:2px 8px;font-size:.68rem;">today {{ g.today }}</span>
+                        </div>
+                        <div style="display:flex;gap:16px;align-items:baseline;margin-bottom:10px;">
+                            <div><span style="font-size:1.5rem;font-weight:700;color:#e2e8f0;">{{ g.total }}</span> <span style="color:#64748b;font-size:.68rem;">total</span></div>
+                            <div><span style="font-size:1.1rem;font-weight:600;color:#22c55e;">{{ g.sent }}</span> <span style="color:#64748b;font-size:.68rem;">sent</span></div>
+                            <div><span style="font-size:1.1rem;font-weight:600;color:#ef4444;">{{ g.failed }}</span> <span style="color:#64748b;font-size:.68rem;">failed</span></div>
+                        </div>
+                        <div class="em-log-addr">
+                            {% if g.served_by %}
+                                <span style="color:#38bdf8;font-size:.72rem;"><i class="fas fa-paper-plane me-1"></i>{{ g.served_by }}{% if g.is_fallback %}<span style="color:#fbbf24;" title="No purpose-specific address — sends via the default SMTP box"> (fallback)</span>{% endif %}</span>
+                            {% else %}
+                                <span style="color:#ef4444;font-size:.72rem;"><i class="fas fa-exclamation-triangle me-1"></i>No SMTP address configured</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12"><div class="em-empty" style="padding:20px;"><i class="fas fa-inbox"></i>No email activity yet</div></div>
+                {% endfor %}
+            </div>
+
             <div class="em-card p-0 overflow-hidden">
+                <div class="d-flex justify-content-between align-items-center px-3 py-2" style="border-bottom:1px solid rgba(255,255,255,.06);">
+                    <span style="color:#64748b;font-size:.78rem;"><i class="fas fa-list me-1"></i>Recent activity (last 50)</span>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-dark table-hover mb-0" style="font-size:.82rem;">
                         <thead>
                             <tr style="border-bottom:1px solid rgba(255,255,255,.06);">
-                                <th style="color:#64748b;padding:12px 14px;">Status</th>
-                                <th style="color:#64748b;padding:12px 14px;">Recipient</th>
-                                <th style="color:#64748b;padding:12px 14px;">Subject</th>
-                                <th style="color:#64748b;padding:12px 14px;">SMTP Address</th>
-                                <th style="color:#64748b;padding:12px 14px;">Source</th>
-                                <th style="color:#64748b;padding:12px 14px;">Sent By</th>
-                                <th style="color:#64748b;padding:12px 14px;">Date</th>
+                                <th style="color:#64748b;padding:10px 14px;">Status</th>
+                                <th style="color:#64748b;padding:10px 14px;">Recipient</th>
+                                <th style="color:#64748b;padding:10px 14px;">Subject</th>
+                                <th style="color:#64748b;padding:10px 14px;">SMTP Address</th>
+                                <th style="color:#64748b;padding:10px 14px;">Purpose</th>
+                                <th style="color:#64748b;padding:10px 14px;">Sent By</th>
+                                <th style="color:#64748b;padding:10px 14px;">Date</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="emLogRows">
                             {% for log in send_logs %}
                             <tr style="border-bottom:1px solid rgba(255,255,255,.04);">
-                                <td style="padding:10px 14px;">
+                                <td style="padding:10px 14px;width:150px;">
                                     {% if log.status == 'sent' %}
                                         <span style="background:rgba(34,197,94,.15);color:#22c55e;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;"><i class="fas fa-check me-1"></i>Sent</span>
                                     {% else %}
-                                        <span style="background:rgba(239,68,68,.15);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;" title="{{ log.error_message }}"><i class="fas fa-times me-1"></i>Failed</span>
+                                        <span style="background:rgba(239,68,68,.15);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;"><i class="fas fa-times me-1"></i>Failed</span>
+                                        <div style="color:#f87171;font-size:.68rem;font-family:monospace;margin-top:4px;max-width:220px;white-space:normal;word-break:break-word;">{{ log.error_message }}</div>
                                     {% endif %}
                                 </td>
                                 <td style="padding:10px 14px;color:#f1f5f9;">{{ log.recipient }}</td>
-                                <td style="padding:10px 14px;color:#cbd5e1;max-width:200px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">{{ log.subject }}</td>
+                                <td style="padding:10px 14px;color:#cbd5e1;max-width:220px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" title="{{ log.subject }}">{{ log.subject }}</td>
                                 <td style="padding:10px 14px;">
                                     {% if log.address %}
                                         <span style="color:#38bdf8;">{{ log.address.email }}</span>
@@ -335,7 +376,7 @@
                                     {% endif %}
                                 </td>
                                 <td style="padding:10px 14px;">
-                                    <span class="em-purpose-tag em-purpose-{{ log.purpose }}">{{ log.get_source_display }}</span>
+                                    <span class="em-purpose-tag em-purpose-{{ log.purpose }}">{{ log.get_purpose_display }}</span>
                                 </td>
                                 <td style="padding:10px 14px;color:#94a3b8;">{{ log.sent_by|default:"System" }}</td>
                                 <td style="padding:10px 14px;color:#64748b;font-size:.75rem;">{{ log.created_at|date:"M d, H:i" }}</td>
@@ -853,5 +894,121 @@ function sendTestMail() {
         result.innerHTML = '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;color:#ef4444;font-size:.85rem;"><i class="fas fa-times-circle me-1"></i>Network error: ' + e.message + '</div>';
     });
 }
+
+// ─── Live Send Logs (purpose-grouped delivery view) ───
+var LOG_JSON_URL = '{% url "ajax_email_logs" %}';
+var EM_PURPOSE_ICONS = {
+    verification: 'fa-check-circle', password_reset: 'fa-key', notification: 'fa-bell',
+    newsletter: 'fa-envelope-open-text', marketing: 'fa-bullhorn', transactional: 'fa-receipt'
+};
+var emLogTimer = null;
+
+function emEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function emStatusHtml(status, error) {
+    if (status === 'sent') {
+        return '<span style="background:rgba(34,197,94,.15);color:#22c55e;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;"><i class="fas fa-check me-1"></i>Sent</span>';
+    }
+    return '<span style="background:rgba(239,68,68,.15);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:.75rem;font-weight:600;"><i class="fas fa-times me-1"></i>Failed</span>' +
+        (error ? '<div style="color:#f87171;font-size:.68rem;font-family:monospace;margin-top:4px;max-width:230px;white-space:normal;word-break:break-word;">' + emEsc(error) + '</div>' : '');
+}
+
+function emRowHtml(r) {
+    var icon = EM_PURPOSE_ICONS[r.purpose] || 'fa-envelope';
+    return '<tr style="border-bottom:1px solid rgba(255,255,255,.04);">' +
+        '<td style="padding:10px 14px;width:150px;">' + emStatusHtml(r.status, r.error) + '</td>' +
+        '<td style="padding:10px 14px;color:#f1f5f9;">' + emEsc(r.recipient) + '</td>' +
+        '<td style="padding:10px 14px;color:#cbd5e1;max-width:220px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" title="' + emEsc(r.subject) + '">' + emEsc(r.subject) + '</td>' +
+        '<td style="padding:10px 14px;">' + (r.address ? '<span style="color:#38bdf8;">' + emEsc(r.address) + '</span>' : '<span style="color:#475569;">N/A</span>') + '</td>' +
+        '<td style="padding:10px 14px;"><span style="font-size:.72rem;color:#94a3b8;"><i class="fas ' + icon + ' me-1" style="opacity:.7;"></i>' + emEsc(r.purpose_label) + '</span></td>' +
+        '<td style="padding:10px 14px;color:#94a3b8;">' + emEsc(r.sent_by) + '</td>' +
+        '<td style="padding:10px 14px;color:#64748b;font-size:.75rem;">' + emEsc(r.time) + '</td></tr>';
+}
+
+function emCardHtml(g) {
+    var addr;
+    if (g.served_by) {
+        addr = '<span style="color:#38bdf8;font-size:.72rem;"><i class="fas fa-paper-plane me-1"></i>' + emEsc(g.served_by) +
+            (g.is_fallback ? '<span style="color:#fbbf24;" title="No purpose-specific address — sends via the default SMTP box"> (fallback)</span>' : '') + '</span>';
+    } else {
+        addr = '<span style="color:#ef4444;font-size:.72rem;"><i class="fas fa-exclamation-triangle me-1"></i>No SMTP address configured</span>';
+    }
+    return '<div class="col-md-6 col-xl-3"><div class="em-card p-3 h-100 ' + (g.failed > 0 ? 'purpose-fail' : '') + '">' +
+        '<div class="d-flex justify-content-between align-items-start mb-2">' +
+        '<span style="font-weight:600;color:#f1f5f9;font-size:.85rem;"><i class="fas ' + (EM_PURPOSE_ICONS[g.code] || 'fa-envelope') + ' me-1" style="opacity:.8;"></i>' + emEsc(g.label) + '</span>' +
+        '<span style="background:rgba(255,255,255,.06);color:#64748b;border-radius:6px;padding:2px 8px;font-size:.68rem;">today ' + g.today + '</span></div>' +
+        '<div style="display:flex;gap:16px;align-items:baseline;margin-bottom:10px;">' +
+        '<div><span style="font-size:1.5rem;font-weight:700;color:#e2e8f0;">' + g.total + '</span> <span style="color:#64748b;font-size:.68rem;">total</span></div>' +
+        '<div><span style="font-size:1.1rem;font-weight:600;color:#22c55e;">' + g.sent + '</span> <span style="color:#64748b;font-size:.68rem;">sent</span></div>' +
+        '<div><span style="font-size:1.1rem;font-weight:600;color:#ef4444;">' + g.failed + '</span> <span style="color:#64748b;font-size:.68rem;">failed</span></div></div>' +
+        '<div class="em-log-addr">' + addr + '</div></div></div>';
+}
+
+function emRenderAll(d) {
+    var st = d.stats || {};
+    var set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    set('emStatTotal', st.total);
+    set('emStatSent', st.sent);
+    set('emStatFailed', st.failed);
+    set('emStatToday', st.today);
+    set('emTabBadge', st.total);
+    var lu = document.getElementById('emLogUpdated');
+    if (lu) lu.textContent = 'Updated ' + (d.updated_at || '');
+    var cards = document.getElementById('emPurposeCards');
+    if (cards && d.groups) {
+        cards.innerHTML = d.groups.length
+            ? d.groups.map(emCardHtml).join('')
+            : '<div class="col-12"><div class="em-empty" style="padding:20px;"><i class="fas fa-inbox"></i>No email activity yet</div></div>';
+    }
+    var rows = document.getElementById('emLogRows');
+    if (rows) {
+        rows.innerHTML = (d.recent && d.recent.length)
+            ? d.recent.map(emRowHtml).join('')
+            : '<tr><td colspan="7" class="text-center py-4" style="color:#475569;"><i class="fas fa-inbox me-2" style="font-size:1.2rem;"></i>No emails sent yet</td></tr>';
+    }
+}
+
+function emLoadLogs(manual) {
+    var btn = document.getElementById('emRefreshBtn');
+    if (manual && btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Refreshing...';
+    }
+    fetch(LOG_JSON_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(d) {
+            if (manual && btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Refresh';
+            }
+            if (d && d.ok) emRenderAll(d);
+        })
+        .catch(function() {
+            if (manual && btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Refresh';
+            }
+            // Keep whatever is on screen; the SPA nav reload / page refresh recovers.
+        });
+}
+
+// Poll every 15s, but only while the Send Logs tab is actually visible.
+function emStartLogPolling() {
+    if (emLogTimer) return;
+    emLogTimer = window.setInterval(function() {
+        var tab = document.getElementById('tab-logs');
+        if (!tab || !tab.classList.contains('active')) return;
+        if (document.hidden) return;
+        emLoadLogs(false);
+    }, 15000);
+}
+
+emLoadLogs(false);
+emStartLogPolling();
 </script>
 {% endblock %}
