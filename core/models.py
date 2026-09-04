@@ -5,6 +5,34 @@ from django.utils import timezone
 import secrets
 
 
+def normalize_poster_path(value):
+    """Normalize a poster reference to a clean TMDB-relative path.
+
+    Accepts relative paths ('/abc.jpg'), bare paths ('abc.jpg') and full
+    URLs ('https://image.tmdb.org/t/p/w500/abc.jpg') and always returns the
+    relative '/abc.jpg' form (or '' when empty) so stored values stay
+    consistent regardless of which client sent them.
+    """
+    if not value:
+        return ''
+    v = str(value).strip()
+    if not v:
+        return ''
+    if '://' in v:
+        # Strip any image-host prefix and size segment:
+        # https://image.tmdb.org/t/p/w500/abc.jpg -> /abc.jpg
+        path = v.split('://', 1)[1]
+        path = path.split('/', 1)[1] if '/' in path else ''
+        segs = path.split('/')
+        # image hosts use /t/p/{size}/... — drop the leading t/p/{size}
+        if len(segs) >= 3 and segs[0] == 't' and segs[1] == 'p':
+            segs = segs[3:]
+        v = '/' + '/'.join(segs)
+    if not v.startswith('/'):
+        v = '/' + v
+    return v
+
+
 class ContentRow(models.Model):
     ROW_TYPE_CHOICES = [
         ('popular', 'Popular'),
@@ -1387,8 +1415,8 @@ class UserCloudData(models.Model):
                     continue
                 title = item.get('title', '')
                 # The app sends posterUrl in some payloads and posterPath in
-                # others — accept both.
-                poster = item.get('posterUrl') or item.get('posterPath') or ''
+                # others — accept both; normalize full URLs to relative paths.
+                poster = normalize_poster_path(item.get('posterUrl') or item.get('posterPath') or '')
                 row = existing_wl.get((mid, mtype))
                 if row is None:
                     row = WatchList.objects.create(
@@ -1444,7 +1472,7 @@ class UserCloudData(models.Model):
                 episode_number=episode if episode >= 0 else None,
                 defaults={
                     'title': entry.get('title', ''),
-                    'poster_path': entry.get('posterPath', '') or entry.get('posterUrl', ''),
+                    'poster_path': normalize_poster_path(entry.get('posterPath') or entry.get('posterUrl') or ''),
                     'duration_seconds': pos_ms // 1000,
                     'total_duration_seconds': dur_ms // 1000,
                     'completed': dur_ms > 0 and (pos_ms / dur_ms) > 0.95,
@@ -1477,7 +1505,7 @@ class UserCloudData(models.Model):
             h_episode_final = h_episode if h_episode >= 0 else None
             defaults = {
                 'title': h.get('title', ''),
-                'poster_path': h.get('posterUrl', '') or h.get('posterPath', ''),
+                'poster_path': normalize_poster_path(h.get('posterUrl') or h.get('posterPath') or ''),
                 'episode_title': h.get('lastEpisodeName', ''),
             }
             if h.get('lastWatchedEpoch'):
