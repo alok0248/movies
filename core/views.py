@@ -2465,13 +2465,14 @@ def email_settings(request):
                 })
 
     from .models import EmailSendLog
-    send_logs = EmailSendLog.objects.select_related('address', 'sent_by').all()[:100]
+    send_logs = EmailSendLog.objects.select_related('address', 'sent_by').all()[:50]
     log_stats = {
         'total': EmailSendLog.objects.count(),
         'sent': EmailSendLog.objects.filter(status='sent').count(),
         'failed': EmailSendLog.objects.filter(status='failed').count(),
         'today': EmailSendLog.objects.filter(created_at__date__gte=timezone.now().date()).count(),
     }
+    log_by_purpose = _email_purpose_stats()
 
     return render(request, 'core/email_management.html', {
         'addresses': addresses,
@@ -2483,6 +2484,92 @@ def email_settings(request):
         'back_url': 'admin_dashboard',
         'send_logs': send_logs,
         'log_stats': log_stats,
+        'log_by_purpose': log_by_purpose,
+    })
+
+
+def _email_purpose_stats():
+    """Per-purpose delivery summary for the email dashboard. Mirrors the SMTP
+    lookup chain in core/auth.send_configured_email so each card shows exactly
+    which SMTP box a purpose sends through (including the any-purpose default
+    fallback), plus sent/failed/today counts that make delivery problems visible
+    at a glance."""
+    from .models import EmailAddress, EmailSendLog, PURPOSE_CHOICES
+
+    purpose_labels = dict(PURPOSE_CHOICES)
+    purpose_order = ['verification', 'password_reset', 'notification', 'newsletter', 'marketing', 'transactional']
+    today = timezone.now().date()
+
+    def serving_address(pcode):
+        addr = EmailAddress.objects.filter(purpose=pcode, is_active=True, is_default=True).first()
+        if not addr:
+            addr = EmailAddress.objects.filter(purpose=pcode, is_active=True).first()
+        if not addr:
+            addr = EmailAddress.objects.filter(is_active=True, is_default=True).first()
+        if not addr:
+            addr = EmailAddress.objects.filter(is_active=True).first()
+        return addr
+
+    log_purposes = set(EmailSendLog.objects.values_list('purpose', flat=True))
+    cfg_purposes = set(EmailAddress.objects.values_list('purpose', flat=True))
+    present = sorted(log_purposes | cfg_purposes, key=lambda p: (purpose_order.index(p) if p in purpose_order else 99, p))
+
+    groups = []
+    for pcode in present:
+        base = EmailSendLog.objects.filter(purpose=pcode)
+        addr = serving_address(pcode)
+        groups.append({
+            'code': pcode,
+            'label': purpose_labels.get(pcode, pcode.title()),
+            'total': base.count(),
+            'sent': base.filter(status='sent').count(),
+            'failed': base.filter(status='failed').count(),
+            'today': base.filter(created_at__date=today).count(),
+            'served_by': addr.email if addr else None,
+            'is_fallback': bool(addr and addr.purpose != pcode),
+            'configured': EmailAddress.objects.filter(purpose=pcode, is_active=True).exists(),
+        })
+    return groups
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ajax_email_logs(request):
+    """JSON feed for the Send Logs tab — per-purpose delivery stats, overall
+    counters, and the most recent log rows. The dashboard polls this so delivery
+    problems are visible without reloading the page or digging into the DB."""
+    from .models import EmailSendLog, PURPOSE_CHOICES
+
+    purpose_labels = dict(PURPOSE_CHOICES)
+    recent = []
+    for log in EmailSendLog.objects.select_related('address').all()[:50]:
+        recent.append({
+            'id': log.pk,
+            'status': log.status,
+            'recipient': log.recipient,
+            'subject': (log.subject or '')[:120],
+            'purpose': log.purpose,
+            'purpose_label': purpose_labels.get(log.purpose, log.purpose.title()),
+            'source': log.get_source_display(),
+            'address': log.address.email if log.address_id else None,
+            'error': log.error_message or '',
+            'sent_by': str(log.sent_by) if log.sent_by_id else 'System',
+            'time': log.created_at.strftime('%b %d, %H:%M:%S'),
+        })
+
+    today = timezone.now().date()
+    qs = EmailSendLog.objects.all()
+    return JsonResponse({
+        'ok': True,
+        'stats': {
+            'total': qs.count(),
+            'sent': qs.filter(status='sent').count(),
+            'failed': qs.filter(status='failed').count(),
+            'today': qs.filter(created_at__date=today).count(),
+        },
+        'groups': _email_purpose_stats(),
+        'recent': recent,
+        'updated_at': timezone.now().strftime('%H:%M:%S'),
     })
 
 
