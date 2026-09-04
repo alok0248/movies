@@ -9095,6 +9095,111 @@ def _admin_cloud_view(cloud):
     }
 
 
+def _history_calendar_payload(user_qs, year, month):
+    """Build the calendar payload: per-day counts + up to 200 recent items.
+
+    Grouped by local day of the given month so the calendar grid can show
+    how many titles each user watched per day.
+    """
+    from datetime import timedelta
+    start = timezone.make_aware(timezone.datetime(year, month, 1))
+    end = (start + timedelta(days=32)).replace(day=1)
+    qs = PlayHistory.objects.filter(user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end)
+
+    days = {}
+    items = []
+    for h in qs.order_by('-last_played_at')[:400]:
+        local_dt = timezone.localtime(h.last_played_at)
+        day = local_dt.day
+        day_info = days.setdefault(day, {'count': 0, 'tv': 0, 'movie': 0})
+        day_info['count'] += 1
+        if h.media_type == 'tv' or h.season_number:
+            day_info['tv'] += 1
+        else:
+            day_info['movie'] += 1
+        if len(items) < 200:
+            items.append({
+                'id': h.id,
+                'tmdbId': h.tmdb_id,
+                'title': h.title or '(untitled)',
+                'poster': h.poster_path or '',
+                'mediaType': h.media_type or 'movie',
+                'season': h.season_number,
+                'episode': h.episode_number,
+                'episodeTitle': h.episode_title or '',
+                'ts': h.last_played_at.isoformat(),
+                'time': local_dt.strftime('%I:%M %p'),
+                'day': day,
+                'user': {
+                    'id': h.user_id,
+                    'name': (h.user.first_name or h.user.username) if h.user_id else '',
+                    'email': h.user.email if h.user_id else '',
+                } if h.user_id else None,
+            })
+    return {'days': days, 'items': items}
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_history_calendar(request):
+    """Admin calendar dashboard of play history across all users."""
+    now = timezone.localtime()
+    try:
+        year = int(request.GET.get('year', now.year))
+        month = int(request.GET.get('month', now.month))
+    except (TypeError, ValueError):
+        year, month = now.year, now.month
+    try:
+        user_id = int(request.GET.get('user_id') or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+
+    if user_id > 0:
+        user_qs = User.objects.filter(id=user_id)
+    else:
+        user_qs = User.objects.all()
+
+    users = User.objects.filter(id__in=PlayHistory.objects.values_list('user_id', flat=True).distinct())\
+        .order_by('username')
+    payload = _history_calendar_payload(user_qs, year, month)
+    payload['year'] = year
+    payload['month'] = month
+    payload['totalEvents'] = sum(d['count'] for d in payload['days'].values())
+    return render(request, 'core/admin_history_calendar.html', {
+        'users': users,
+        'selected_user_id': user_id,
+        'year': year,
+        'month': month,
+        'initial_data': json.dumps(payload),
+        'total_events': payload['totalEvents'],
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_history_calendar_data(request):
+    """JSON data endpoint used by the calendar page when navigating months/users."""
+    now = timezone.localtime()
+    try:
+        year = int(request.GET.get('year', now.year))
+        month = int(request.GET.get('month', now.month))
+    except (TypeError, ValueError):
+        year, month = now.year, now.month
+    try:
+        user_id = int(request.GET.get('user_id') or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+    if user_id > 0:
+        user_qs = User.objects.filter(id=user_id)
+    else:
+        user_qs = User.objects.all()
+    payload = _history_calendar_payload(user_qs, year, month)
+    payload['year'] = year
+    payload['month'] = month
+    payload['totalEvents'] = sum(d['count'] for d in payload['days'].values())
+    return JsonResponse(payload)
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 @require_POST

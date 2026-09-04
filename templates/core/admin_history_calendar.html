@@ -1,0 +1,256 @@
+{% extends 'core/admin_base.html' %}
+{% load static %}
+
+{% block title %}History Calendar{% endblock %}
+
+{% block admin_content %}
+<style>
+    .hc-wrap { max-width: 1200px; }
+    .hc-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem; }
+    .hc-title { color: #fff; font-size: 1.5rem; font-weight: 700; margin: 0; }
+    .hc-title i { color: #818cf8; margin-right: .5rem; }
+    .hc-sub { color: rgba(255,255,255,.45); font-size: .82rem; margin-top: 2px; }
+
+    .hc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin-bottom: 1.2rem; }
+    .hc-stat {
+        background: linear-gradient(160deg, #16161f, #1c1c2a);
+        border: 1px solid rgba(255,255,255,.06); border-radius: 14px;
+        padding: .9rem 1rem;
+    }
+    .hc-stat .v { font-size: 1.5rem; font-weight: 800; color: #fff; line-height: 1.1; }
+    .hc-stat .l { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.4); margin-top: 2px; }
+    .hc-stat.purple .v { color: #a78bfa; }
+    .hc-stat.blue .v { color: #60a5fa; }
+    .hc-stat.green .v { color: #34d399; }
+    .hc-stat.amber .v { color: #fbbf24; }
+
+    .hc-controls { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .hc-controls select, .hc-controls .hc-month-nav {
+        background: #16161f; color: #e5e7eb; border: 1px solid rgba(255,255,255,.1);
+        border-radius: 10px; padding: .5rem .8rem; font-size: .82rem; outline: none;
+    }
+    .hc-controls .hc-month-nav { display: flex; align-items: center; gap: .6rem; }
+    .hc-controls .hc-month-nav button {
+        background: rgba(255,255,255,.06); color: #e5e7eb; border: none;
+        width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: .8rem;
+        transition: background .15s;
+    }
+    .hc-controls .hc-month-nav button:hover { background: rgba(255,255,255,.16); }
+    .hc-month-label { min-width: 130px; text-align: center; font-weight: 700; }
+
+    .hc-grid {
+        display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+        background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06);
+        border-radius: 16px; padding: 12px;
+    }
+    .hc-dow { text-align: center; font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.35); padding: 4px 0 8px; }
+    .hc-day {
+        min-height: 78px; border-radius: 12px; border: 1px solid rgba(255,255,255,.05);
+        background: #14141c; cursor: pointer; padding: 6px 8px; position: relative;
+        display: flex; flex-direction: column; justify-content: space-between;
+        transition: transform .15s, border-color .15s, box-shadow .15s;
+    }
+    .hc-day:hover { transform: translateY(-2px); border-color: rgba(129,140,248,.4); }
+    .hc-day.empty { background: transparent; border-color: transparent; cursor: default; }
+    .hc-day.empty:hover { transform: none; border-color: transparent; }
+    .hc-day .d { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.7); }
+    .hc-day.today .d { color: #fff; }
+    .hc-day.today { border-color: #6366f1; box-shadow: 0 0 0 1px #6366f1; }
+    .hc-day .cnt { align-self: flex-end; font-size: .68rem; font-weight: 700; }
+    .hc-day .heat { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; border-radius: 0 0 12px 12px; }
+    .hc-day.no-data { opacity: .45; }
+
+    .hc-layout { display: grid; grid-template-columns: 1fr 380px; gap: 1rem; margin-top: 1rem; align-items: start; }
+    @media(max-width: 1100px) { .hc-layout { grid-template-columns: 1fr; } }
+
+    .hc-daydetail {
+        background: linear-gradient(160deg, #15151f, #1a1a26);
+        border: 1px solid rgba(255,255,255,.07); border-radius: 16px;
+        padding: 1rem; position: sticky; top: 1rem; max-height: calc(100vh - 140px); overflow-y: auto;
+    }
+    .hc-daydetail h6 { color: #fff; font-weight: 700; }
+    .hc-daydetail .hc-item {
+        display: flex; gap: .7rem; align-items: center;
+        padding: .5rem; border-radius: 10px; border: 1px solid rgba(255,255,255,.05);
+        margin-bottom: .5rem; background: rgba(255,255,255,.02); text-decoration: none;
+        transition: background .15s;
+    }
+    .hc-daydetail .hc-item:hover { background: rgba(255,255,255,.06); }
+    .hc-item img { width: 38px; height: 54px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+    .hc-item .hc-item-ph {
+        width: 38px; height: 54px; border-radius: 6px; flex-shrink: 0;
+        background: linear-gradient(160deg,#1a1a2e,#2d1b4e);
+        display: flex; align-items: center; justify-content: center;
+        color: #e50914; font-size: .7rem; font-weight: 700;
+    }
+    .hc-item .t { color: #fff; font-size: .78rem; font-weight: 600; line-height: 1.25; }
+    .hc-item .m { color: rgba(255,255,255,.4); font-size: .66rem; }
+    .hc-item .badge-tv { background: rgba(96,165,250,.15); color: #60a5fa; font-size: .58rem; border-radius: 6px; padding: 1px 6px; }
+    .hc-item .badge-mv { background: rgba(167,139,250,.15); color: #a78bfa; font-size: .58rem; border-radius: 6px; padding: 1px 6px; }
+    .hc-empty { color: rgba(255,255,255,.35); font-size: .8rem; text-align: center; padding: 2rem 0; }
+</style>
+
+<div class="hc-wrap">
+    <div class="hc-header">
+        <div>
+            <h1 class="hc-title"><i class="fas fa-calendar-alt"></i>History Calendar</h1>
+            <div class="hc-sub">When every user watched movies &amp; series — grouped by day.</div>
+        </div>
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-sm btn-outline-light"><i class="fas fa-arrow-left me-1"></i>Dashboard</a>
+    </div>
+
+    <div class="hc-stats">
+        <div class="hc-stat"><div class="v" id="hc-total">0</div><div class="l">Watch events</div></div>
+        <div class="hc-stat purple"><div class="v" id="hc-movies">0</div><div class="l">Movies</div></div>
+        <div class="hc-stat blue"><div class="v" id="hc-tv">0</div><div class="l">TV / Episodes</div></div>
+        <div class="hc-stat green"><div class="v" id="hc-days">0</div><div class="l">Active days</div></div>
+        <div class="hc-stat amber"><div class="v" id="hc-users">0</div><div class="l">Users active</div></div>
+    </div>
+
+    <div class="hc-controls">
+        <select id="hc-user" class="form-select form-select-sm" style="width:auto;background:#16161f;color:#e5e7eb;border-color:rgba(255,255,255,.1);">
+            <option value="0">All users</option>
+            {% for u in users %}
+            <option value="{{ u.id }}" {% if u.id == selected_user_id %}selected{% endif %}>{{ u.first_name|default:u.username }} ({{ u.email }})</option>
+            {% endfor %}
+        </select>
+        <div class="hc-month-nav">
+            <button id="hc-prev" title="Previous month"><i class="fas fa-chevron-left"></i></button>
+            <span class="hc-month-label" id="hc-month-label"></span>
+            <button id="hc-next" title="Next month"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <button id="hc-today-btn" class="btn btn-sm btn-outline-light ms-auto">Today</button>
+    </div>
+
+    <div class="hc-layout">
+        <div>
+            <div class="hc-grid" id="hc-grid"></div>
+        </div>
+        <div class="hc-daydetail" id="hc-daydetail">
+            <h6><i class="fas fa-list-ul me-2 text-info"></i>Day details</h6>
+            <div id="hc-daybody"><div class="hc-empty">Click a day to see what was watched.</div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var curYear = {{ year }}, curMonth = {{ month }};
+    var data = {{ initial_data|safe }};
+    var selectedDay = null;
+
+    function dayCount(day) { return (data.days[day] && data.days[day].count) || 0; }
+    function heatColor(n, max) {
+        if (n === 0) return 'rgba(255,255,255,0.05)';
+        var t = max <= 1 ? 1 : n / max;
+        if (t < 0.33) return 'rgba(96,165,250,.45)';
+        if (t < 0.66) return 'rgba(129,140,248,.7)';
+        return 'rgba(168,85,247,.95)';
+    }
+
+    function renderGrid() {
+        var grid = document.getElementById('hc-grid');
+        grid.innerHTML = '';
+        ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function (d) {
+            var el = document.createElement('div');
+            el.className = 'hc-dow';
+            el.textContent = d;
+            grid.appendChild(el);
+        });
+        var first = new Date(curYear, curMonth - 1, 1);
+        var lead = first.getDay();
+        var daysInMonth = new Date(curYear, curMonth, 0).getDate();
+        var max = 1;
+        for (var d = 1; d <= daysInMonth; d++) { if (dayCount(d) > max) max = dayCount(d); }
+        var today = new Date();
+        var isThisMonth = today.getFullYear() === curYear && today.getMonth() === curMonth - 1;
+
+        for (var i = 0; i < lead; i++) {
+            var empty = document.createElement('div');
+            empty.className = 'hc-day empty';
+            grid.appendChild(empty);
+        }
+        for (var d = 1; d <= daysInMonth; d++) {
+            var cell = document.createElement('div');
+            cell.className = 'hc-day' + (dayCount(d) === 0 ? ' no-data' : '') + (isThisMonth && today.getDate() === d ? ' today' : '');
+            cell.innerHTML = '<span class="d">' + d + '</span>' +
+                (dayCount(d) > 0 ? '<span class="cnt">' + dayCount(d) + '</span>' : '') +
+                '<span class="heat" style="background:' + heatColor(dayCount(d), max) + '"></span>';
+            cell.onclick = (function (day) { return function () { selectDay(day); }; })(d);
+            grid.appendChild(cell);
+        }
+
+        document.getElementById('hc-month-label').textContent = MONTHS[curMonth - 1] + ' ' + curYear;
+        document.getElementById('hc-total').textContent = data.totalEvents || 0;
+        var mv = 0, tv = 0, activeDays = 0, users = {};
+        for (var k in data.days) {
+            var info = data.days[k];
+            mv += info.movie || 0; tv += info.tv || 0; activeDays++;
+        }
+        (data.items || []).forEach(function (it) { if (it.user) users[it.user.id] = 1; });
+        document.getElementById('hc-movies').textContent = mv;
+        document.getElementById('hc-tv').textContent = tv;
+        document.getElementById('hc-days').textContent = activeDays;
+        document.getElementById('hc-users').textContent = Object.keys(users).length;
+
+        if (selectedDay !== null) selectDay(selectedDay);
+    }
+
+    function selectDay(day) {
+        selectedDay = day;
+        var body = document.getElementById('hc-daybody');
+        var items = (data.items || []).filter(function (it) { return it.day === day; });
+        var heading = '<h6><i class="fas fa-calendar-day me-2 text-warning"></i>' + MONTHS[curMonth - 1] + ' ' + day + ', ' + curYear +
+            ' <span class="badge bg-secondary ms-1">' + items.length + '</span></h6>';
+        if (!items.length) {
+            body.innerHTML = heading + '<div class="hc-empty">Nothing watched this day.</div>';
+            return;
+        }
+        var html = heading;
+        items.forEach(function (it) {
+            var isTv = it.mediaType === 'tv' || (it.season != null);
+            var poster = it.poster
+                ? (it.poster.indexOf('http') === 0 ? it.poster : 'https://image.tmdb.org/t/p/w92' + it.poster)
+                : '';
+            var thumb = poster ? '<img src="' + poster + '" alt="" loading="lazy">'
+                               : '<div class="hc-item-ph">' + (it.title || '?').substring(0, 2).toUpperCase() + '</div>';
+            var link = (it.tmdbId > 0)
+                ? (isTv ? '/series/id/' + it.tmdbId + '/' : '/movies/id/' + it.tmdbId + '/')
+                : null;
+            var who = it.user ? '<span style="color:rgba(255,255,255,.5);font-size:.62rem;">' + (it.user.name || it.user.email) + '</span>' : '';
+            var badge = '<span class="' + (isTv ? 'badge-tv' : 'badge-mv') + '">' + (isTv ? 'TV' : 'MOVIE') + '</span>';
+            var se = (it.season != null) ? ' <span style="color:rgba(255,255,255,.55);font-size:.64rem;">S' + it.season + 'E' + (it.episode != null ? it.episode : '') + '</span>' : '';
+            var inner = thumb +
+                '<div style="min-width:0;flex:1;">' +
+                    '<div class="t">' + it.title + se + '</div>' +
+                    '<div class="m">' + badge + ' &middot; ' + it.time + ' &middot; ' + who + '</div>' +
+                '</div>' +
+                '<i class="fas fa-chevron-right" style="color:rgba(255,255,255,.2);font-size:.7rem;"></i>';
+            html += link
+                ? '<a class="hc-item" href="' + link + '" target="_blank">' + inner + '</a>'
+                : '<div class="hc-item">' + inner + '</div>';
+        });
+        body.innerHTML = html;
+    }
+
+    function fetchData() {
+        var userId = document.getElementById('hc-user').value;
+        var url = '{% url "admin_history_calendar_data" %}?year=' + curYear + '&month=' + curMonth + '&user_id=' + userId;
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { data = d; selectedDay = null; renderGrid(); })
+            .catch(function () {});
+    }
+
+    document.getElementById('hc-prev').onclick = function () { curMonth--; if (curMonth < 1) { curMonth = 12; curYear--; } fetchData(); };
+    document.getElementById('hc-next').onclick = function () { curMonth++; if (curMonth > 12) { curMonth = 1; curYear++; } fetchData(); };
+    document.getElementById('hc-user').onchange = fetchData;
+    document.getElementById('hc-today-btn').onclick = function () {
+        var t = new Date(); curYear = t.getFullYear(); curMonth = t.getMonth() + 1; fetchData();
+    };
+
+    renderGrid();
+})();
+</script>
+{% endblock %}
