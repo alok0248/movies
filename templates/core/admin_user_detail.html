@@ -35,6 +35,12 @@
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'admin_user_edit' detail_user.id %}" class="btn btn-warning"><i class="fas fa-edit me-1"></i>Edit</a>
+            {% if not detail_user.is_active %}
+            <form method="post" action="{% url 'admin_user_resend_verification' detail_user.id %}" onsubmit="return confirm('Send a fresh verification code + link to {{ detail_user.email }}?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-info"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
+            </form>
+            {% endif %}
             <button class="btn btn-{% if detail_user.is_active %}outline-warning{% else %}outline-success{% endif %}" onclick="toggleBlock({{ detail_user.id }})">
                 <i class="fas fa-{% if detail_user.is_active %}ban{% else %}check{% endif %} me-1"></i>{% if detail_user.is_active %}Block{% else %}Unblock{% endif %}
             </button>
