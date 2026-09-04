@@ -84,11 +84,13 @@ def check_rate_limit(identifier, action='default'):
     Check rate limit for an identifier (IP or email).
     Returns (allowed: bool, remaining: int, retry_after: int or None).
     """
-    # Check lockout
+    # Check lockout — the value stores the unix time the lockout ends so the
+    # remaining seconds work on any cache backend (cache.ttl is redis-only).
     lockout_key = _get_rate_limit_key(identifier, f'{action}:lockout')
-    if cache.get(lockout_key):
-        ttl = cache.ttl(lockout_key) or RATE_LIMIT_LOCKOUT
-        return False, 0, ttl
+    lockout_until = cache.get(lockout_key)
+    if lockout_until:
+        remaining = int(lockout_until - time.time())
+        return False, 0, max(remaining, 1) if remaining > 0 else RATE_LIMIT_LOCKOUT
 
     # Check attempt count
     key = _get_rate_limit_key(identifier, action)
@@ -96,7 +98,7 @@ def check_rate_limit(identifier, action='default'):
 
     if attempts >= RATE_LIMIT_MAX_ATTEMPTS:
         # Lock out
-        cache.set(lockout_key, True, RATE_LIMIT_LOCKOUT)
+        cache.set(lockout_key, time.time() + RATE_LIMIT_LOCKOUT, RATE_LIMIT_LOCKOUT)
         return False, 0, RATE_LIMIT_LOCKOUT
 
     return True, RATE_LIMIT_MAX_ATTEMPTS - attempts, None
