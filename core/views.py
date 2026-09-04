@@ -4134,6 +4134,8 @@ def ajax_toggle_watchlist(request):
             cloud.save(update_fields=['watchlist_ids'])
             return JsonResponse({'success': True, 'action': 'removed', 'message': 'Removed from watchlist'})
 
+        from .models import UserCloudData, normalize_poster_path
+        poster_path = normalize_poster_path(poster_path)
         WatchList.objects.create(
             user=request.user,
             tmdb_id=tmdb_id,
@@ -4142,7 +4144,6 @@ def ajax_toggle_watchlist(request):
             poster_path=poster_path
         )
         # Add to cloud data too
-        from .models import UserCloudData
         cloud, _ = UserCloudData.objects.get_or_create(user=request.user)
         is_tv = media_type == 'tv'
         existing_cloud = [w for w in (cloud.watchlist_ids or []) if w.get('mediaId') == tmdb_id and w.get('isTv') == is_tv]
@@ -4185,6 +4186,16 @@ def ajax_check_watchlist(request):
 
 @login_required
 def watchlist(request):
+    from .models import normalize_poster_path
+
+    def _cover_url(poster_path):
+        # Handle both relative paths ('/abc.jpg') and full URLs
+        # ('https://image.tmdb.org/t/p/w500/abc.jpg').
+        p = (poster_path or '').strip()
+        if not p:
+            return None
+        return p if p.startswith('http') else f"{settings.TMDB_IMAGE_BASE_URL}{p}"
+
     watchlist_items = WatchList.objects.filter(user=request.user)
     
     movie_items = []
@@ -4196,7 +4207,7 @@ def watchlist(request):
         processed_item = {
             'title': item.title,
             'slug': slugify(item.title),
-            'cover_url': f"{settings.TMDB_IMAGE_BASE_URL}{item.poster_path}" if item.poster_path else None,
+            'cover_url': _cover_url(item.poster_path),
             'id': item.tmdb_id,
             'poster_path': item.poster_path,
             'vote_average': 0,
@@ -4221,19 +4232,20 @@ def watchlist(request):
         mtype = 'tv' if is_tv else 'movie'
         if mid and (mid, mtype) not in existing_tmdb_ids:
             # Also create the WatchList entry so it persists
+            cloud_poster = normalize_poster_path(cloud_item.get('posterUrl') or cloud_item.get('posterPath') or '')
             WatchList.objects.get_or_create(
                 user=request.user, tmdb_id=mid, media_type=mtype,
                 defaults={
                     'title': cloud_item.get('title', ''),
-                    'poster_path': cloud_item.get('posterPath', ''),
+                    'poster_path': cloud_poster,
                 },
             )
             processed_item = {
                 'title': cloud_item.get('title', ''),
                 'slug': slugify(cloud_item.get('title', str(mid))),
-                'cover_url': f"{settings.TMDB_IMAGE_BASE_URL}{cloud_item.get('posterPath', '')}" if cloud_item.get('posterPath') else None,
+                'cover_url': _cover_url(cloud_poster),
                 'id': mid,
-                'poster_path': cloud_item.get('posterPath', ''),
+                'poster_path': cloud_poster,
                 'vote_average': 0,
                 'year': '',
                 'first_air_date': '',
