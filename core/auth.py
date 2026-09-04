@@ -140,17 +140,26 @@ def send_configured_email(subject, message, recipient_list=None, purpose='notifi
         recipient_list = []
     from django.core.mail import EmailMessage
 
-    # 1. Try EmailAddress model (purpose-based)
+    # 1. Try EmailAddress model (purpose-based, then any default active address)
     try:
         from .models import EmailAddress
         addr = EmailAddress.objects.filter(purpose=purpose, is_active=True, is_default=True).first()
         if not addr:
             addr = EmailAddress.objects.filter(purpose=purpose, is_active=True).first()
+        if not addr:
+            # No address configured for this purpose (e.g. 'verification' or
+            # 'password_reset') — fall back to the default active address of
+            # any purpose so emails still reach the configured SMTP box.
+            addr = EmailAddress.objects.filter(is_active=True, is_default=True).first()
+        if not addr:
+            addr = EmailAddress.objects.filter(is_active=True).first()
         if addr:
             backend = addr.get_backend()
             from_email = addr.smtp_username or addr.email
             email = EmailMessage(subject=subject, body=message, from_email=from_email, to=recipient_list, connection=backend)
-            email.send(fail_silently=fail_silently)
+            # Send non-silently so failures raise and get logged as 'failed'
+            # instead of being mislabelled 'sent' by fail_silently=True.
+            email.send(fail_silently=False)
             logger.info(f'Email sent via {addr.email} ({purpose}) to {recipient_list}: {subject}')
             # Log to EmailSendLog
             try:
