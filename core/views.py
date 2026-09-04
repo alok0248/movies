@@ -2386,7 +2386,7 @@ def email_settings(request):
                     smtp_user = addr_obj.smtp_username or addr_obj.email
                     smtp_pass = addr_obj.smtp_password
                     if not smtp_pass:
-                        EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message='SMTP password not set', sent_by=request.user, source='test_mail')
+                        EmailSendLog.objects.create(address_id=addr_obj.pk, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message='SMTP password not set', sent_by=request.user, source='test_mail')
                         return JsonResponse({'success': False, 'message': 'SMTP password is not set for this address. Edit and save the password first.'})
                     server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=15)
                     server.ehlo()
@@ -2396,19 +2396,19 @@ def email_settings(request):
                     server.login(smtp_user, smtp_pass)
                     server.sendmail(addr_obj.email, [to_email], msg.as_string())
                     server.quit()
-                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='sent', sent_by=request.user, source='test_mail')
+                    EmailSendLog.objects.create(address_id=addr_obj.pk, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='sent', sent_by=request.user, source='test_mail')
                     return JsonResponse({'success': True, 'message': f'Test email sent successfully to {to_email}! Check inbox.'})
                 except smtplib.SMTPAuthenticationError as e:
-                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Authentication failed: {str(e)}', sent_by=request.user, source='test_mail')
+                    EmailSendLog.objects.create(address_id=addr_obj.pk, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Authentication failed: {str(e)}', sent_by=request.user, source='test_mail')
                     return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check email and app password.'})
                 except smtplib.SMTPConnectError as e:
-                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Connection failed: {str(e)}', sent_by=request.user, source='test_mail')
+                    EmailSendLog.objects.create(address_id=addr_obj.pk, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Connection failed: {str(e)}', sent_by=request.user, source='test_mail')
                     return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
                 except smtplib.SMTPException as e:
-                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'SMTP error: {str(e)}', sent_by=request.user, source='test_mail')
+                    EmailSendLog.objects.create(address_id=addr_obj.pk, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'SMTP error: {str(e)}', sent_by=request.user, source='test_mail')
                     return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
                 except Exception as e:
-                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=str(e), sent_by=request.user, source='test_mail')
+                    EmailSendLog.objects.create(address_id=addr_obj.pk, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=str(e), sent_by=request.user, source='test_mail')
                     return JsonResponse({'success': False, 'message': f'Failed to send: {str(e)}'})
 
             return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
@@ -8742,6 +8742,57 @@ def admin_user_delete(request, user_id):
     return redirect('admin_user_list')
 
 
+def _admin_cloud_entry(item):
+    """Normalize a raw cloud-data entry (dict / int / string) so templates never
+    crash on a missing key (e.g. dicts that have 'mediaId' but no 'id')."""
+    if isinstance(item, dict):
+        out = dict(item)
+        if 'mediaId' not in out and 'id' in out:
+            out['mediaId'] = out['id']
+        if 'id' not in out and 'mediaId' in out:
+            out['id'] = out['mediaId']
+        return out
+    if isinstance(item, (int, float)) and not isinstance(item, bool):
+        return {'mediaId': item, 'id': item}
+    return {}
+
+
+def _admin_cloud_view(cloud):
+    """Return a render-safe snapshot of a UserCloudData row for the admin UI.
+    The Android app's JSON can contain dicts without an 'id' key (only
+    'mediaId') or plain ids; Django templates raise on missing keys used as
+    filter arguments, so every entry is normalized here before rendering."""
+    if cloud is None:
+        return None
+
+    def _as_list(value):
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            return list(value.values())
+        if isinstance(value, (tuple, set)):
+            return list(value)
+        return []
+
+    pb = cloud.playback_progress or {}
+    if isinstance(pb, list):
+        pb = {}
+    playback = {k: _admin_cloud_entry(v) for k, v in pb.items()}
+
+    return {
+        'data_version': cloud.data_version,
+        'last_synced_at': cloud.last_synced_at,
+        'playback_progress': playback,
+        'watchlist_ids': [_admin_cloud_entry(v) for v in _as_list(cloud.watchlist_ids)],
+        'seen_keys': _as_list(cloud.seen_keys),
+        'favorites': [_admin_cloud_entry(v) for v in _as_list(cloud.favorites)],
+        'watch_history': [_admin_cloud_entry(v) for v in _as_list(cloud.watch_history)],
+        'user_ratings': cloud.user_ratings or {},
+    }
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_user_detail(request, user_id):
@@ -8764,7 +8815,7 @@ def admin_user_detail(request, user_id):
     return render(request, 'core/admin_user_detail.html', {
         'detail_user': detail_user,
         'synced_profile': synced_profile,
-        'cloud_data': cloud_data,
+        'cloud_data': _admin_cloud_view(cloud_data),
         'play_history': play_history,
         'sessions': sessions,
         'total_logins': total_logins,
