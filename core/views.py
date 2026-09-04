@@ -7799,20 +7799,27 @@ def api_user_forgot_password(request):
     django_user = User.objects.filter(email=email).first()
     resp = {'status': 'success', 'message': 'Password reset instructions sent to your email.'}
     if django_user and django_user.has_usable_password():
+        # Generate 6-digit OTP for the Android app
+        from .models import PasswordResetOTP
+        otp_code = PasswordResetOTP.generate()
+        PasswordResetOTP.objects.create(user=django_user, otp=otp_code)
+
+        # Also generate link-based token for web users (backward compat)
         token = default_token_generator.make_token(django_user)
         from django.utils.encoding import force_bytes
         from django.utils.http import urlsafe_base64_encode
         uid = urlsafe_base64_encode(force_bytes(django_user.pk))
         reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
-        # Include uid + token so the Android app can reset directly
-        # without opening a browser (use with POST /api/user/reset-password/)
-        resp['resetToken'] = token
-        resp['resetUid'] = uid
-        resp['resetUrl'] = reset_url
         try:
             send_configured_email(
                 subject='Password Reset - NewMovies',
-                message=f'Click the link below to reset your password:\n\n{reset_url}\n\nIf you did not request this, please ignore this email.',
+                message=(
+                    f'Your password reset code is: {otp_code}\n\n'
+                    f'This code expires in 10 minutes.\n\n'
+                    f'Alternatively, click the link below to reset via browser:\n\n'
+                    f'{reset_url}\n\n'
+                    f'If you did not request this, please ignore this email.'
+                ),
                 recipient_list=[email],
                 purpose='password_reset',
                 fail_silently=True,
@@ -7861,7 +7868,7 @@ def api_user_verify_email(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_reset_password(request):
-    """POST /api/user/reset-password/ — reset password with token (Android app can't open browser links)."""
+    """POST /api/user/reset-password/ — reset password via OTP (Android) or token (web)."""
     app_match, err = _validate_android_auth(request)
     if err:
         return err
@@ -7869,23 +7876,49 @@ def api_user_reset_password(request):
         body = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
-    uidb64 = body.get('uid', '').strip()
-    token = body.get('token', '').strip()
+
     new_password = body.get('newPassword', '')
-    if not uidb64 or not token or not new_password:
-        return JsonResponse({'status': 'error', 'message': 'uid, token, and newPassword are required'}, status=400)
+    if not new_password:
+        return JsonResponse({'status': 'error', 'message': 'newPassword is required'}, status=400)
     if len(new_password) < 6:
         return JsonResponse({'status': 'error', 'message': 'Password must be at least 6 characters'}, status=400)
 
-    from django.utils.encoding import force_bytes
-    from django.utils.http import urlsafe_base64_decode
-    try:
-        uid = urlsafe_base64_decode(uidb64)
-        django_user = User.objects.get(pk=uid)
-    except (ValueError, User.DoesNotExist):
-        return JsonResponse({'status': 'error', 'message': 'Invalid reset link.'}, status=400)
-    if not default_token_generator.check_token(django_user, token):
-        return JsonResponse({'status': 'error', 'message': 'Invalid or expired reset link.'}, status=400)
+    otp_code = body.get('otp', '').strip()
+    email = body.get('email', '').strip().lower()
+    uidb64 = body.get('uid', '').strip()
+    token = body.get('token', '').strip()
+
+    django_user = None
+
+    # Flow 1: OTP (Android app) — {email, otp, newPassword}
+    if otp_code and email:
+        from .models import PasswordResetOTP
+        django_user = User.objects.filter(email=email).first()
+        if not django_user:
+            return JsonResponse({'status': 'error', 'message': 'Invalid OTP or email.'}, status=400)
+        otp_obj = PasswordResetOTP.objects.filter(
+            user=django_user, otp=otp_code, used=False
+        ).order_by('-created_at').first()
+        if not otp_obj or otp_obj.is_expired:
+            return JsonResponse({'status': 'error', 'message': 'Invalid or expired OTP.'}, status=400)
+        otp_obj.used = True
+        otp_obj.save(update_fields=['used'])
+
+    # Flow 2: Token (web link backward compat) — {uid, token, newPassword}
+    elif uidb64 and token:
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_decode
+        try:
+            uid = urlsafe_base64_decode(uidb64)
+            django_user = User.objects.get(pk=uid)
+        except (ValueError, User.DoesNotExist):
+            return JsonResponse({'status': 'error', 'message': 'Invalid reset link.'}, status=400)
+        if not default_token_generator.check_token(django_user, token):
+            return JsonResponse({'status': 'error', 'message': 'Invalid or expired reset link.'}, status=400)
+
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Provide either (email + otp) or (uid + token) with newPassword.'}, status=400)
+
     django_user.set_password(new_password)
     django_user.is_active = True
     django_user.save(update_fields=['password', 'is_active'])
