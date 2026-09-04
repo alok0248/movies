@@ -14,7 +14,7 @@ from django.core.mail import send_mail
 from django.core.cache import cache
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
-from django.views.decorators.http import require_http_methods, require_GET
+from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
@@ -8220,6 +8220,39 @@ def synced_user_detail(request, user_id):
     })
 
 
+def _admin_resend_verification(django_user, request):
+    """Admin resend of the verification email — always the same OTP content
+    (code + link) used by registration/resend. Returns (ok, message)."""
+    if not django_user:
+        return False, 'No linked web account found for this email.'
+    if not django_user.has_usable_password():
+        return False, 'This account has no password yet (Android-only). Verification is only needed after registration sets a password.'
+    if django_user.is_active:
+        return True, 'This email is already verified and active — no verification needed.'
+    _issue_verification_email(django_user, request, display_name=django_user.first_name or django_user.username)
+    return True, f'Verification email with code sent to {django_user.email}.'
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def synced_user_resend_verification(request, user_id):
+    """Admin: resend verification code+link for a synced (Android) user."""
+    user_obj = get_object_or_404(SyncedUser, id=user_id)
+    linked_user = User.objects.filter(pk=user_obj.user_id).first() if user_obj.user_id else None
+    if not linked_user and user_obj.email:
+        linked_user = User.objects.filter(email=user_obj.email).first()
+        if linked_user and user_obj.user_id != linked_user.pk:
+            user_obj.user = linked_user
+            user_obj.save(update_fields=['user'])
+    ok, msg = _admin_resend_verification(linked_user, request)
+    if ok:
+        messages.success(request, msg)
+    else:
+        messages.error(request, msg)
+    return redirect('synced_user_detail', user_id=user_obj.id)
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def synced_user_edit(request, user_id):
@@ -8960,6 +8993,20 @@ def _admin_cloud_view(cloud):
         'watch_history': [_admin_cloud_entry(v) for v in _as_list(cloud.watch_history)],
         'user_ratings': cloud.user_ratings or {},
     }
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def admin_user_resend_verification(request, user_id):
+    """Admin: resend verification code+link for a web user."""
+    detail_user = get_object_or_404(User, id=user_id)
+    ok, msg = _admin_resend_verification(detail_user, request)
+    if ok:
+        messages.success(request, msg)
+    else:
+        messages.error(request, msg)
+    return redirect('admin_user_detail', user_id=detail_user.id)
 
 
 @login_required
