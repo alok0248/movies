@@ -1,0 +1,136 @@
+{% extends 'core/admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ date_label }} - Watch History{% endblock %}
+
+{% block admin_content %}
+<style>
+    .hd-wrap { max-width: 1000px; }
+    .hd-title { color: #fff; font-size: 1.4rem; font-weight: 700; margin: 0; }
+    .hd-title i { color: #fbbf24; margin-right: .5rem; }
+    .hd-sub { color: rgba(255,255,255,.45); font-size: .82rem; margin-top: 2px; }
+
+    .hd-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .75rem; margin: 1.2rem 0; }
+    .hd-stat {
+        background: linear-gradient(160deg, #16161f, #1c1c2a);
+        border: 1px solid rgba(255,255,255,.06); border-radius: 14px; padding: .9rem 1rem;
+    }
+    .hd-stat .v { font-size: 1.5rem; font-weight: 800; color: #fff; line-height: 1.1; }
+    .hd-stat .l { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.4); margin-top: 2px; }
+    .hd-stat.purple .v { color: #a78bfa; }
+    .hd-stat.blue .v { color: #60a5fa; }
+
+    .hd-list { display: flex; flex-direction: column; gap: .6rem; }
+    .hd-row {
+        display: flex; gap: 1rem; align-items: center;
+        background: linear-gradient(160deg, #15151f, #1a1a26);
+        border: 1px solid rgba(255,255,255,.07); border-radius: 14px;
+        padding: .65rem .8rem; text-decoration: none; transition: background .15s, transform .15s;
+    }
+    .hd-row:hover { background: rgba(129,140,248,.1); transform: translateX(3px); }
+    .hd-row img { width: 44px; height: 62px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+    .hd-row .hd-ph {
+        width: 44px; height: 62px; border-radius: 8px; flex-shrink: 0;
+        background: linear-gradient(160deg,#1a1a2e,#2d1b4e);
+        display: flex; align-items: center; justify-content: center;
+        color: #e50914; font-size: .8rem; font-weight: 700;
+    }
+    .hd-time {
+        flex-shrink: 0; width: 84px; text-align: center;
+        font-size: .8rem; font-weight: 800; color: #fbbf24;
+        background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.15);
+        padding: .3rem .4rem; border-radius: 8px;
+    }
+    .hd-info { min-width: 0; flex: 1; }
+    .hd-info .t { color: #fff; font-size: .88rem; font-weight: 600; }
+    .hd-info .m { color: rgba(255,255,255,.4); font-size: .7rem; margin-top: 2px; }
+    .hd-who { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+    .hd-who .av {
+        width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+        background: linear-gradient(135deg,#4F46E5,#7C3AED);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: .7rem; font-weight: 700;
+    }
+    .hd-who .nm { color: rgba(255,255,255,.65); font-size: .72rem; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hd-who .em { color: rgba(255,255,255,.35); font-size: .64rem; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hd-badge { font-size: .6rem; border-radius: 6px; padding: 2px 7px; font-weight: 700; flex-shrink: 0; }
+    .hd-badge.tv { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .hd-badge.mv { background: rgba(167,139,250,.15); color: #a78bfa; }
+    .hd-se { color: rgba(255,255,255,.55); font-size: .68rem; }
+    .hd-empty { text-align: center; color: rgba(255,255,255,.35); padding: 3rem 0; }
+    @media(max-width: 700px) {
+        .hd-who .em { display: none; }
+        .hd-time { width: 64px; font-size: .7rem; }
+    }
+</style>
+
+<div class="hd-wrap">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h1 class="hd-title"><i class="fas fa-calendar-day"></i>{{ date_label }} — Watch History</h1>
+            <div class="hd-sub">
+                {% if detail_user %}Everything <strong>{{ detail_user.first_name|default:detail_user.username }}</strong> ({{ detail_user.email }}) watched this day.
+                {% else %}Everything <strong>all users</strong> watched this day.{% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'admin_history_calendar' %}{% if detail_user %}?user_id={{ detail_user.id }}{% endif %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-calendar-alt me-1"></i>Calendar</a>
+            <a href="{% if detail_user %}{% url 'admin_user_detail' detail_user.id %}{% else %}{% url 'admin_dashboard' %}{% endif %}" class="btn btn-sm btn-outline-light"><i class="fas fa-arrow-left me-1"></i>Back</a>
+        </div>
+    </div>
+
+    <div class="hd-stats">
+        <div class="hd-stat"><div class="v">{{ total }}</div><div class="l">Watch events</div></div>
+        <div class="hd-stat purple"><div class="v">{{ movies }}</div><div class="l">Movies</div></div>
+        <div class="hd-stat blue"><div class="v">{{ tv }}</div><div class="l">TV / Episodes</div></div>
+        <div class="hd-stat" style="background:linear-gradient(160deg,#15151f,#1f1c2c);"><div class="v" style="color:#fbbf24;">{{ users_active }}</div><div class="l">Users active</div></div>
+    </div>
+
+    {% if rows %}
+    <div class="hd-list">
+        {% for r in rows %}
+        {% with h=r.h %}
+        {% if h.tmdb_id > 0 %}
+        <a class="hd-row" href="{% if h.media_type == 'tv' or h.season_number %}/series/id/{{ h.tmdb_id }}/{% else %}/movies/id/{{ h.tmdb_id }}/{% endif %}" target="_blank">
+        {% else %}
+        <div class="hd-row">
+        {% endif %}
+            {% if h.poster_path %}
+            <img src="{% if h.poster_path|slice:':1' == '/' %}https://image.tmdb.org/t/p/w92{{ h.poster_path }}{% else %}{{ h.poster_path }}{% endif %}" alt="{{ h.title }}" loading="lazy">
+            {% else %}
+            <div class="hd-ph">{{ h.title|truncatechars:2 }}</div>
+            {% endif %}
+            <div class="hd-time">{{ r.time }}</div>
+            <div class="hd-info">
+                <div class="t">{{ h.title }}{% if h.season_number and h.episode_number %} <span class="hd-se">S{{ h.season_number }}E{{ h.episode_number }}{% if h.episode_title %} · {{ h.episode_title }}{% endif %}</span>{% endif %}</div>
+                <div class="m">
+                    <span class="hd-badge {% if h.media_type == 'tv' or h.season_number %}tv{% else %}mv{% endif %}">{% if h.media_type == 'tv' or h.season_number %}TV{% else %}MOVIE{% endif %}</span>
+                    {% if h.completed %} <span class="hd-badge" style="background:rgba(52,211,153,.15);color:#34d399;">DONE</span>{% endif %}
+                </div>
+            </div>
+            {% if r.user %}
+            <div class="hd-who">
+                <div class="av">{{ r.user.first_name|default:r.user.username|first|upper }}</div>
+                <div>
+                    <div class="nm">{{ r.user.first_name|default:r.user.username }}</div>
+                    <div class="em">{{ r.user.email }}</div>
+                </div>
+            </div>
+            {% endif %}
+            <i class="fas fa-chevron-right" style="color:rgba(255,255,255,.2);font-size:.75rem;flex-shrink:0;"></i>
+        {% if h.tmdb_id > 0 %}
+        </a>
+        {% else %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="hd-empty">
+        <i class="fas fa-inbox fa-2x mb-2" style="color:rgba(255,255,255,.15);"></i>
+        <div>Nothing was watched on this day.</div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

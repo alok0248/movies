@@ -190,6 +190,7 @@ urlpatterns = [
     path('ajax/ad-files/delete/', views.ajax_delete_ad_file, name='ajax_delete_ad_file'),
     path('admin-dashboard/history-calendar/', views.admin_history_calendar, name='admin_history_calendar'),
     path('admin-dashboard/history-calendar/data/', views.admin_history_calendar_data, name='admin_history_calendar_data'),
+    path('admin-dashboard/history-calendar/day/', views.admin_history_day, name='admin_history_day'),
     path('admin-dashboard/users/', views.admin_user_list, name='admin_user_list'),
     path('admin-dashboard/users/add/', views.admin_user_add, name='admin_user_add'),
     path('admin-dashboard/users/<int:user_id>/', views.admin_user_detail, name='admin_user_detail'),

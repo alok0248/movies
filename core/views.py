@@ -9189,6 +9189,62 @@ def admin_history_calendar(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def admin_history_day(request):
+    """Full-page list of everything watched on a specific day (all users or one)."""
+    now = timezone.localtime()
+    try:
+        year = int(request.GET.get('year', now.year))
+        month = int(request.GET.get('month', now.month))
+        day = int(request.GET.get('day', now.day))
+        user_id = int(request.GET.get('user_id') or 0)
+    except (TypeError, ValueError):
+        return redirect('admin_history_calendar')
+    if user_id > 0:
+        user_qs = User.objects.filter(id=user_id)
+        detail_user = User.objects.filter(id=user_id).first()
+    else:
+        user_qs = User.objects.all()
+        detail_user = None
+    try:
+        start = timezone.make_aware(timezone.datetime(year, month, day))
+    except ValueError:
+        return redirect('admin_history_calendar')
+    from datetime import timedelta
+    end = start + timedelta(days=1)
+    items = PlayHistory.objects.filter(
+        user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end,
+    ).select_related('user').order_by('-last_played_at')
+
+    rows = []
+    for h in items:
+        local_dt = timezone.localtime(h.last_played_at)
+        rows.append({
+            'h': h,
+            'time': local_dt.strftime('%I:%M %p'),
+            'user': h.user,
+        })
+    total = len(rows)
+    movies = sum(1 for r in rows if not (r['h'].media_type == 'tv' or r['h'].season_number))
+    tv = total - movies
+    users_active = len({r['h'].user_id for r in rows if r['h'].user_id})
+    titles_unique = len({(r['h'].tmdb_id, r['h'].media_type, r['h'].season_number, r['h'].episode_number) for r in rows})
+    return render(request, 'core/admin_history_day.html', {
+        'rows': rows,
+        'detail_user': detail_user,
+        'year': year,
+        'month': month,
+        'day': day,
+        'total': total,
+        'movies': movies,
+        'tv': tv,
+        'users_active': users_active,
+        'titles_unique': titles_unique,
+        'date_label': timezone.make_aware(timezone.datetime(year, month, day)).strftime('%B %d, %Y'),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_history_calendar_data(request):
     """JSON data endpoint used by the calendar page when navigating months/users."""
     now = timezone.localtime()
