@@ -1466,17 +1466,25 @@ class UserCloudData(models.Model):
             media_type = 'tv' if is_tv else 'movie'
             pos_ms = entry.get('positionMs', 0)
             dur_ms = entry.get('durationMs', 0)
+            defaults = {
+                'duration_seconds': pos_ms // 1000,
+                'total_duration_seconds': dur_ms // 1000,
+                'completed': dur_ms > 0 and (pos_ms / dur_ms) > 0.95,
+            }
+            # Only set title/poster when the entry actually carries them —
+            # otherwise leave the existing metadata alone so a TMDB/watch-history
+            # backfill isn't clobbered by an empty value on the next sync.
+            title_val = entry.get('title', '') or ''
+            poster_val = normalize_poster_path(entry.get('posterPath') or entry.get('posterUrl') or '')
+            if title_val:
+                defaults['title'] = title_val
+            if poster_val:
+                defaults['poster_path'] = poster_val
             PlayHistory.objects.update_or_create(
                 user=self.user, tmdb_id=mid, media_type=media_type,
                 season_number=season if season >= 0 else None,
                 episode_number=episode if episode >= 0 else None,
-                defaults={
-                    'title': entry.get('title', ''),
-                    'poster_path': normalize_poster_path(entry.get('posterPath') or entry.get('posterUrl') or ''),
-                    'duration_seconds': pos_ms // 1000,
-                    'total_duration_seconds': dur_ms // 1000,
-                    'completed': dur_ms > 0 and (pos_ms / dur_ms) > 0.95,
-                },
+                defaults=defaults,
             )
 
         # --- Watch history -> PlayHistory metadata (title/poster/season/episode) ---
