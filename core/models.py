@@ -1157,6 +1157,34 @@ class EmailVerification(models.Model):
         return timezone.now() > self.created_at + timedelta(minutes=5)
 
 
+class PasswordResetOTP(models.Model):
+    """6-digit OTP for password reset via the Android app."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps', db_constraint=False)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {'used' if self.used else self.otp}"
+
+    @property
+    def is_expired(self):
+        from datetime import timedelta
+        return timezone.now() > self.created_at + timedelta(minutes=10)
+
+    @property
+    def is_valid(self):
+        return not self.used and not self.is_expired
+
+    @staticmethod
+    def generate():
+        import secrets
+        return f"{secrets.randbelow(1000000):06d}"
+
+
 class PlayHistory(models.Model):
     """Track play sessions for logged-in users."""
     MEDIA_TYPE_CHOICES = [
