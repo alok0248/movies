@@ -1,0 +1,119 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}API Errors - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .ae-card {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 12px;
+        transition: transform .15s, box-shadow .15s;
+    }
+    .ae-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .ae-badge {
+        display: inline-block;
+        font-size: .65rem;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: rgba(239,68,68,.15);
+        color: #ef4444;
+    }
+    .ae-view {
+        font-family: monospace;
+        font-size: .82rem;
+        color: #fbbf24;
+    }
+    .ae-tb {
+        font-family: Consolas, Menlo, monospace;
+        font-size: .72rem;
+        line-height: 1.5;
+        color: #f87171;
+        background: rgba(0,0,0,.35);
+        border: 1px solid rgba(255,255,255,.05);
+        border-radius: 8px;
+        padding: 12px 14px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 360px;
+        overflow-y: auto;
+        margin: 0;
+    }
+    .ae-empty {
+        text-align: center;
+        padding: 56px 16px;
+        color: #475569;
+    }
+    .ae-empty i { font-size: 2.6rem; margin-bottom: 12px; display: block; color: #334155; }
+    .ae-meta { font-size: .75rem; color: #64748b; }
+    .ae-meta i { width: 14px; text-align: center; margin-right: 4px; color: #475569; }
+    .ae-msg { font-size: .85rem; color: #f1f5f9; }
+
+    html[data-theme="light"] .ae-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(20,20,45,.05); }
+    html[data-theme="light"] .ae-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
+    html[data-theme="light"] .ae-view { color: #b45309; }
+    html[data-theme="light"] .ae-tb { color: #dc2626; background: #f1f5f9; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .ae-msg { color: #0f172a; }
+    html[data-theme="light"] .ae-empty { color: #64748b; }
+    html[data-theme="light"] .ae-empty i { color: #94a3b8; }
+</style>
+
+<div class="container py-4" style="max-width:1100px;">
+    <div class="mb-4">
+        <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;"><i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard</a>
+        <div class="d-flex align-items-center gap-3 mt-2">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#f97316);display:flex;align-items:center;justify-content:center;">
+                <i class="fas fa-bug text-white" style="font-size:1.1rem;"></i>
+            </div>
+            <div>
+                <h3 class="mb-0" style="font-size:1.25rem;">Android API Errors</h3>
+                <div style="color:#64748b;font-size:.82rem;">Recent exceptions from the Android user API — full tracebacks, no log digging</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444;font-size:.8rem;">{{ count }} captured</span>
+            <span class="ms-2" style="color:#475569;font-size:.72rem;">
+                <i class="fas fa-info-circle me-1"></i>Held in server memory — resets when the server restarts; request bodies (passwords) are never stored.
+            </span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'api_error_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+            <a href="{% url 'api_error_log' %}?format=json" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</a>
+            <form method="post" action="{% url 'api_error_log' %}" onsubmit="return confirm('Clear all captured API errors?');" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="clear">
+                <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>
+            </form>
+        </div>
+    </div>
+
+    {% for rec in records %}
+    <div class="ae-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start mb-2" style="gap:.75rem;">
+            <div style="min-width:0;">
+                <span class="ae-badge">{{ rec.error_type }}</span>
+                <span class="ae-view ms-2">{{ rec.view }}</span>
+                <span class="ms-2" style="color:#64748b;font-size:.72rem;">{{ rec.method }} {{ rec.path }}</span>
+            </div>
+            <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.time }}</div>
+        </div>
+        <div class="ae-msg mb-2">{{ rec.message }}</div>
+        <div class="ae-meta mb-2">
+            <i class="fas fa-network-wired"></i>{{ rec.client_ip|default:"—" }}
+        </div>
+        <pre class="ae-tb">{{ rec.traceback }}</pre>
+    </div>
+    {% empty %}
+    <div class="ae-card ae-empty">
+        <i class="fas fa-check-circle"></i>
+        <div style="font-size:.95rem;color:#94a3b8;">No API errors captured</div>
+        <div style="font-size:.82rem;color:#475569;margin-top:4px;">Exceptions from /api/user/* endpoints will appear here automatically.</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -7439,13 +7439,44 @@ def _guard_android_api_errors(view_func):
     def _wrapper(request, *args, **kwargs):
         try:
             return view_func(request, *args, **kwargs)
-        except Exception:
+        except Exception as e:
             logger.exception('Unhandled error in Android API endpoint %s', view_func.__name__)
+            try:
+                from .api_errors import record_api_error
+                record_api_error(view_func.__name__, request, e)
+            except Exception:
+                pass
             return JsonResponse({
                 'status': 'error',
                 'message': 'Internal server error. Please try again.',
             }, status=500)
     return _wrapper
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def api_error_log(request):
+    """Admin page: recent Android API exceptions captured by the error guard."""
+    from .api_errors import recent_errors, clear_errors
+
+    if request.method == 'POST':
+        if request.POST.get('action') == 'clear':
+            clear_errors()
+        return redirect('api_error_log')
+
+    records = recent_errors()
+    if request.GET.get('format') == 'json':
+        return JsonResponse({
+            'status': 'success',
+            'count': len(records),
+            'errors': records,
+        })
+
+    return render(request, 'core/admin_api_errors.html', {
+        'records': records,
+        'count': len(records),
+        'back_url': 'admin_dashboard',
+    })
 
 
 @_guard_android_api_errors
@@ -7681,6 +7712,7 @@ def api_user_sync(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@_guard_android_api_errors
 def api_user_profile(request):
     """GET /api/user/profile/ — fetch user profile + subscription via JWT token."""
     app_match, err = _validate_android_auth(request)
@@ -7702,6 +7734,7 @@ def api_user_profile(request):
     }))
 
 
+@_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_forgot_password(request):
