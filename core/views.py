@@ -8525,6 +8525,18 @@ def user_play_history(request):
     return render(request, 'core/user_play_history.html', {'history': history})
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_play_history(request, user_id):
+    """Admin view of a specific user's play history (same look as the user's page)."""
+    detail_user = get_object_or_404(User, id=user_id)
+    history = PlayHistory.objects.filter(user=detail_user).order_by('-last_played_at')
+    return render(request, 'core/user_play_history.html', {
+        'history': history,
+        'admin_viewing_user': detail_user,
+    })
+
+
 @require_http_methods(["GET"])
 def ajax_play_progress(request):
     """Return play progress for a list of tmdb_ids (for poster progress bars)."""
