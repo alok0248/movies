@@ -309,13 +309,55 @@
             {% endif %}
 
             <!-- Play History -->
-            {% if play_history %}
             <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
                     <h5 class="text-white mb-0"><i class="fas fa-history me-2 text-warning"></i>Play History <span class="badge bg-secondary ms-2">{{ play_history|length }}</span></h5>
+                    <a href="/play-history/" target="_blank" class="btn btn-sm btn-outline-light"><i class="fas fa-external-link-alt me-1"></i>View as User</a>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                {% if play_history %}
+                <div class="card-body">
+                    <!-- Poster grid (same look as the user play-history page) -->
+                    <div class="row g-3">
+                        {% for h in play_history %}
+                        <div class="col-4 col-md-3 col-lg-2">
+                            <div class="card bg-dark border-secondary shadow-sm h-100" style="overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+                                {% if h.tmdb_id > 0 %}<a href="{% if h.media_type == 'tv' or h.season_number %}/series/id/{{ h.tmdb_id }}/{% else %}/movies/id/{{ h.tmdb_id }}/{% endif %}" target="_blank" class="text-decoration-none" style="display:block;" title="{{ h.title }}">{% endif %}
+                                    <div style="position:relative;padding-top:150%;overflow:hidden;background:#1a1a2e;">
+                                        {% if h.poster_path %}
+                                        {% if h.poster_path|slice:":1" == "/" %}
+                                        <img src="https://image.tmdb.org/t/p/w300{{ h.poster_path }}" alt="{{ h.title }}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';var f=this.parentElement.querySelector('.ph-fallback');if(f)f.style.display='flex';">
+                                        {% else %}
+                                        <img src="{{ h.poster_path }}" alt="{{ h.title }}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';var f=this.parentElement.querySelector('.ph-fallback');if(f)f.style.display='flex';">
+                                        {% endif %}
+                                        {% endif %}
+                                        <div class="ph-fallback" style="position:absolute;top:0;left:0;width:100%;height:100%;{% if h.poster_path %}display:none;{% else %}display:flex;{% endif %}flex-direction:column;align-items:center;justify-content:center;gap:6px;background:linear-gradient(160deg,#1a1a2e,#2d1b4e);">
+                                            <span style="width:34px;height:34px;border-radius:50%;background:rgba(229,9,20,.25);color:#e50914;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;">{{ h.title|truncatechars:2 }}</span>
+                                            <i class="fas fa-play text-secondary" style="font-size:.7rem;"></i>
+                                        </div>
+                                        {% if h.progress_percent > 0 %}
+                                        <div style="position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(0,0,0,0.6);">
+                                            <div style="height:100%;width:{{ h.progress_percent }}%;background:var(--brand,#e50914);border-radius:0 2px 2px 0;"></div>
+                                        </div>
+                                        {% endif %}
+                                        {% if h.completed %}
+                                        <div style="position:absolute;top:6px;right:6px;"><span class="badge bg-success bg-opacity-75"><i class="fas fa-check"></i></span></div>
+                                        {% endif %}
+                                    </div>
+                                {% if h.tmdb_id > 0 %}</a>{% endif %}
+                                <div class="card-body p-2">
+                                    <div class="text-white small fw-semibold text-truncate" style="font-size:.75rem;">{{ h.title }}</div>
+                                    {% if h.season_number and h.episode_number %}
+                                    <div class="text-secondary" style="font-size:.65rem;">S{{ h.season_number }}E{{ h.episode_number }}{% if h.episode_title %} &middot; {{ h.episode_title }}{% endif %}</div>
+                                    {% endif %}
+                                    <div class="text-secondary" style="font-size:.65rem;">{{ h.last_played_at|date:"M d, H:i" }} &middot; {{ h.formatted_duration }} watched</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Detail table -->
+                    <div class="table-responsive mt-3" style="max-height:400px;overflow-y:auto;">
                         <table class="table table-dark table-sm mb-0">
                             <thead class="sticky-top"><tr style="background:#1e1e2a;"><th style="width:50px;"></th><th>Title</th><th>Type</th><th>Progress</th><th>Last Played</th><th></th></tr></thead>
                             <tbody>
@@ -346,8 +388,13 @@
                         </table>
                     </div>
                 </div>
+                {% else %}
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-play-circle fa-2x text-secondary mb-2"></i>
+                    <div class="text-secondary small">No play history yet for this user.</div>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
 
         <!-- Right Column -->
