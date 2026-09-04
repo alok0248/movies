@@ -7620,7 +7620,6 @@ def api_user_register(request):
         'status': 'success',
         'message': 'Account registered. Please verify your email via the link sent to your inbox.',
         'requiresVerification': True,
-        'verificationToken': token,
         'user': _user_payload(user_obj, django_user),
         'subscription': FREE_SUBSCRIPTION,
     }
