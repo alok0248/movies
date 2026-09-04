@@ -7960,6 +7960,55 @@ def api_user_refresh_token(request):
     })
 
 
+def _permanently_delete_user(user_obj=None, email=''):
+    """Permanently remove a user and ALL linked data keyed by email.
+
+    Links every record — Django auth user, Android synced profile, cloud
+    data, sessions, watchlist, play history, verification tokens, reset
+    OTPs, and newsletter subscription — to the same email and deletes them
+    all together. Call with either the SyncedUser or the Django User; the
+    other half is located by email so nothing is orphaned.
+    """
+    from .models import SyncedUser, Subscriber
+    # Note: EmailVerification, PasswordResetOTP, UserCloudData, UserSession,
+    # PlayHistory, WatchList all CASCADE from Django's auth.User, so deleting
+    # the user wipes them automatically.
+    email = (email or '').strip().lower()
+    if not email and user_obj:
+        email = getattr(user_obj, 'email', '') or ''
+        if not email and hasattr(user_obj, 'user') and user_obj.user_id:
+            linked = User.objects.filter(pk=user_obj.user_id).first()
+            email = linked.email if linked else ''
+    email = (email or '').strip().lower()
+
+    django_user = None
+    if user_obj is not None and isinstance(user_obj, User):
+        django_user = user_obj
+    elif user_obj is not None and user_obj.user_id:
+        django_user = User.objects.filter(pk=user_obj.user_id).first()
+    if django_user is None and email:
+        django_user = User.objects.filter(email=email).first()
+
+    # Android synced profile — delete BEFORE the Django user because
+    # SyncedUser.user is SET_NULL; deleting the user first would null the
+    # link and orphan the profile.
+    if email:
+        SyncedUser.objects.filter(email=email).delete()
+    if django_user is not None and django_user.pk:
+        SyncedUser.objects.filter(user_id=django_user.pk).delete()
+
+    # The linked Django auth user (cascades: EmailVerification, PasswordResetOTP,
+    # UserCloudData, UserSession, PlayHistory, WatchList via CASCADE FKs).
+    if django_user:
+        django_user.delete()
+
+    # Newsletter subscription keyed by the same email.
+    if email:
+        Subscriber.objects.filter(email=email).delete()
+
+    return email or 'unknown'
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def synced_users_list(request):
@@ -7986,6 +8035,12 @@ def synced_user_detail(request, user_id):
     linked_user = None
     if user_obj.user_id:
         linked_user = User.objects.filter(pk=user_obj.user_id).first()
+    if not linked_user and user_obj.email:
+        # Re-link by the same email when the FK is stale/missing.
+        linked_user = User.objects.filter(email=user_obj.email).first()
+        if linked_user and user_obj.user_id != linked_user.pk:
+            user_obj.user = linked_user
+            user_obj.save(update_fields=['user'])
     cloud_data = None
     if linked_user:
         cloud_data, _ = UserCloudData.objects.get_or_create(user=linked_user)
@@ -8020,10 +8075,11 @@ def synced_user_edit(request, user_id):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def synced_user_delete(request, user_id):
-    """Admin: delete a synced user."""
+    """Admin: permanently delete a synced user and ALL linked data by email."""
     user_obj = get_object_or_404(SyncedUser, id=user_id)
     if request.method == 'POST':
-        user_obj.delete()
+        email = _permanently_delete_user(user_obj)
+        messages.success(request, f'User {email} and all linked data (profile, sessions, cloud data, watchlist, play history) permanently deleted.')
     return redirect('synced_users_list')
 
 
@@ -8677,12 +8733,12 @@ def admin_user_edit(request, user_id):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_user_delete(request, user_id):
-    """Admin: delete a user."""
+    """Admin: permanently delete a user and ALL linked data by email."""
     user_obj = get_object_or_404(User, id=user_id)
     if request.method == 'POST':
         username = user_obj.username
-        user_obj.delete()
-        messages.success(request, f'User {username} deleted')
+        email = _permanently_delete_user(user_obj)
+        messages.success(request, f'User {username} ({email}) and all linked data (profile, sessions, cloud data, watchlist, play history) permanently deleted.')
     return redirect('admin_user_list')
 
 
@@ -8693,6 +8749,12 @@ def admin_user_detail(request, user_id):
     from .models import UserSession
     detail_user = get_object_or_404(User, id=user_id)
     synced_profile = SyncedUser.objects.filter(user=detail_user).first()
+    if not synced_profile and detail_user.email:
+        # Re-link the Android profile to this Django user by the same email.
+        synced_profile = SyncedUser.objects.filter(email=detail_user.email).first()
+        if synced_profile and synced_profile.user_id != detail_user.pk:
+            synced_profile.user = detail_user
+            synced_profile.save(update_fields=['user'])
     cloud_data = UserCloudData.objects.filter(user=detail_user).first()
     play_history = PlayHistory.objects.filter(user=detail_user).order_by('-last_played_at')[:50]
     sessions = UserSession.objects.filter(user=detail_user).order_by('-logged_in_at')[:50]
