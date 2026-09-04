@@ -144,23 +144,25 @@
     </div>
 
     <!-- Linked Django User -->
-    {% if user_obj.user %}
+    {% if linked_user %}
     <div class="card bg-dark border-secondary shadow-sm mb-4">
         <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-link me-2 text-primary"></i>Linked Web Account</div>
         <div class="card-body">
             <table class="table table-dark table-borderless mb-0 small">
-                <tr><td class="text-secondary" style="width:35%">Web User ID</td><td class="text-white">#{{ user_obj.user.id }}</td></tr>
-                <tr><td class="text-secondary">Username</td><td class="text-white">{{ user_obj.user.username }}</td></tr>
-                <tr><td class="text-secondary">Email</td><td class="text-info">{{ user_obj.user.email }}</td></tr>
-                <tr><td class="text-secondary">Full Name</td><td class="text-white">{{ user_obj.user.first_name }} {{ user_obj.user.last_name }}</td></tr>
-                <tr><td class="text-secondary">Has Password</td><td>{% if user_obj.user.has_usable_password %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-warning">No (Android-only)</span>{% endif %}</td></tr>
-                <tr><td class="text-secondary">Active</td><td>{% if user_obj.user.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Inactive</span>{% endif %}</td></tr>
-                <tr><td class="text-secondary">Staff</td><td>{% if user_obj.user.is_staff %}<span class="badge bg-info">Yes</span>{% else %}No{% endif %}</td></tr>
-                <tr><td class="text-secondary">Date Joined</td><td class="text-white">{{ user_obj.user.date_joined }}</td></tr>
-                <tr><td class="text-secondary">Last Login</td><td class="text-white">{{ user_obj.user.last_login|default:'Never' }}</td></tr>
+                <tr><td class="text-secondary" style="width:35%">Web User ID</td><td class="text-white">#{{ linked_user.id }}</td></tr>
+                <tr><td class="text-secondary">Username</td><td class="text-white">{{ linked_user.username }}</td></tr>
+                <tr><td class="text-secondary">Email</td><td class="text-info">{{ linked_user.email }}</td></tr>
+                <tr><td class="text-secondary">Full Name</td><td class="text-white">{{ linked_user.first_name }} {{ linked_user.last_name }}</td></tr>
+                <tr><td class="text-secondary">Has Password</td><td>{% if linked_user.has_usable_password %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-warning">No (Android-only)</span>{% endif %}</td></tr>
+                <tr><td class="text-secondary">Active</td><td>{% if linked_user.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Inactive</span>{% endif %}</td></tr>
+                <tr><td class="text-secondary">Staff</td><td>{% if linked_user.is_staff %}<span class="badge bg-info">Yes</span>{% else %}No{% endif %}</td></tr>
+                <tr><td class="text-secondary">Date Joined</td><td class="text-white">{{ linked_user.date_joined }}</td></tr>
+                <tr><td class="text-secondary">Last Login</td><td class="text-white">{{ linked_user.last_login|default:'Never' }}</td></tr>
             </table>
         </div>
     </div>
+    {% else %}
+    <div class="alert alert-secondary border-secondary small mb-4"><i class="fas fa-unlink me-2"></i>No linked web account (Android-only user).</div>
     {% endif %}
 
     <!-- Cloud Sync Data -->
