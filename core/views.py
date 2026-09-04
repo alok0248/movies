@@ -6282,8 +6282,50 @@ _PROXY_DNS_SERVERS = ['1.1.1.1', '8.8.8.8', '1.0.0.1', '8.8.4.4']
 
 @require_GET
 def health_view(request):
-    """Simple health-check endpoint for the Videasy player."""
-    return JsonResponse({"status": "ok"})
+    """curl-able /api/health — reports server health and last Android API error."""
+    from .api_errors import recent_errors
+    from django.db import connections
+    import time
+
+    result = {
+        'status': 'ok',
+        'timestamp': time.time(),
+        'databases': {},
+        'last_api_error': None,
+        'api_error_count': len(recent_errors()),
+    }
+
+    # DB connectivity check
+    for alias in ['default', 'external']:
+        try:
+            start = time.time()
+            connections[alias].ensure_connection()
+            result['databases'][alias] = {
+                'status': 'ok',
+                'latency_ms': round((time.time() - start) * 1000, 1),
+            }
+        except Exception as e:
+            result['status'] = 'degraded'
+            result['databases'][alias] = {
+                'status': 'error',
+                'error': str(e)[:200],
+            }
+
+    # Last API error from in-memory ring buffer
+    errors = recent_errors(limit=1)
+    if errors:
+        last = errors[0]
+        result['last_api_error'] = {
+            'time': last.get('time'),
+            'view': last.get('view'),
+            'method': last.get('method'),
+            'path': last.get('path'),
+            'error_type': last.get('error_type'),
+            'message': last.get('message', '')[:200],
+        }
+
+    status_code = 200 if result['status'] == 'ok' else 503
+    return JsonResponse(result, status=status_code)
 
 
 @require_GET
@@ -7755,12 +7797,18 @@ def api_user_forgot_password(request):
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
     # Always return success to prevent email enumeration
     django_user = User.objects.filter(email=email).first()
+    resp = {'status': 'success', 'message': 'Password reset instructions sent to your email.'}
     if django_user and django_user.has_usable_password():
         token = default_token_generator.make_token(django_user)
         from django.utils.encoding import force_bytes
         from django.utils.http import urlsafe_base64_encode
         uid = urlsafe_base64_encode(force_bytes(django_user.pk))
         reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
+        # Include uid + token so the Android app can reset directly
+        # without opening a browser (use with POST /api/user/reset-password/)
+        resp['resetToken'] = token
+        resp['resetUid'] = uid
+        resp['resetUrl'] = reset_url
         try:
             send_configured_email(
                 subject='Password Reset - NewMovies',
@@ -7771,10 +7819,77 @@ def api_user_forgot_password(request):
             )
         except Exception as e:
             logger.warning(f'Failed to send reset email: {e}', exc_info=True)
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Password reset instructions sent to your email.',
-    })
+    return JsonResponse(resp)
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_verify_email(request):
+    """POST /api/user/verify-email/ — verify email with token (Android app can't open browser links)."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+    token = body.get('token', '').strip()
+    email = body.get('email', '').strip().lower()
+    if not token:
+        return JsonResponse({'status': 'error', 'message': 'Verification token is required'}, status=400)
+
+    from .models import EmailVerification
+    ev = EmailVerification.objects.select_related('user').filter(token=token)
+    if email:
+        ev = ev.filter(user__email=email)
+    ev = ev.first()
+    if not ev:
+        return JsonResponse({'status': 'error', 'message': 'Invalid verification link.'}, status=400)
+    if ev.verified:
+        return JsonResponse({'status': 'success', 'message': 'Email already verified. You can now login.'})
+    if ev.is_expired:
+        return JsonResponse({'status': 'error', 'message': 'Verification link has expired. Please register again.'}, status=400)
+    ev.verified = True
+    ev.save(update_fields=['verified'])
+    ev.user.is_active = True
+    ev.user.save(update_fields=['is_active'])
+    return JsonResponse({'status': 'success', 'message': 'Email verified successfully! You can now login.'})
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_reset_password(request):
+    """POST /api/user/reset-password/ — reset password with token (Android app can't open browser links)."""
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+    uidb64 = body.get('uid', '').strip()
+    token = body.get('token', '').strip()
+    new_password = body.get('newPassword', '')
+    if not uidb64 or not token or not new_password:
+        return JsonResponse({'status': 'error', 'message': 'uid, token, and newPassword are required'}, status=400)
+    if len(new_password) < 6:
+        return JsonResponse({'status': 'error', 'message': 'Password must be at least 6 characters'}, status=400)
+
+    from django.utils.encoding import force_bytes
+    from django.utils.http import urlsafe_base64_decode
+    try:
+        uid = urlsafe_base64_decode(uidb64)
+        django_user = User.objects.get(pk=uid)
+    except (ValueError, User.DoesNotExist):
+        return JsonResponse({'status': 'error', 'message': 'Invalid reset link.'}, status=400)
+    if not default_token_generator.check_token(django_user, token):
+        return JsonResponse({'status': 'error', 'message': 'Invalid or expired reset link.'}, status=400)
+    django_user.set_password(new_password)
+    django_user.is_active = True
+    django_user.save(update_fields=['password', 'is_active'])
+    return JsonResponse({'status': 'success', 'message': 'Password reset successful! You can now login.'})
 
 
 @_guard_android_api_errors
