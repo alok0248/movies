@@ -309,7 +309,8 @@ class AmazonAffiliateProduct(models.Model):
 
 
 class UserActivity(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activity', null=True, blank=True)
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activity', null=True, blank=True, db_constraint=False)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     activity_date = models.DateField(auto_now_add=True)
     clicks_today = models.IntegerField(default=0)
@@ -334,7 +335,8 @@ class WatchList(models.Model):
         ('movie', 'Movie'),
         ('tv', 'TV Show'),
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watchlist')
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watchlist', db_constraint=False)
     tmdb_id = models.IntegerField()
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES)
     title = models.CharField(max_length=255)
@@ -966,7 +968,8 @@ class WebsiteVisitor(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='website_visitors'
+        related_name='website_visitors',
+        db_constraint=False
     )
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(auto_now=True)
@@ -1088,7 +1091,8 @@ class EmailDelivery(models.Model):
 
 class SyncedUser(models.Model):
     """Android app user synced via POST /api/user/sync."""
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='synced_profiles')
+    # Cross-DB link (external users DB vs default auth) — no DB-level constraint.
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='synced_profiles', db_constraint=False)
     email = models.EmailField(unique=True)
     display_name = models.CharField(max_length=255, blank=True, default='')
     photo_url = models.URLField(blank=True, default='')
@@ -1134,7 +1138,8 @@ class SyncedUser(models.Model):
 
 class EmailVerification(models.Model):
     """Email verification token for registration."""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_verifications')
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_verifications', db_constraint=False)
     token = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     verified = models.BooleanField(default=False)
@@ -1158,7 +1163,8 @@ class PlayHistory(models.Model):
         ('movie', 'Movie'),
         ('tv', 'TV Show'),
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='play_history')
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='play_history', db_constraint=False)
     tmdb_id = models.IntegerField()
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES)
     title = models.CharField(max_length=255)
@@ -1201,7 +1207,8 @@ class PlayHistory(models.Model):
 class UserCloudData(models.Model):
     """Cloud storage for user data synced between Android app and web.
     Stores playback progress, watch history, favorites, watchlist, and ratings."""
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='cloud_data')
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='cloud_data', db_constraint=False)
     playback_progress = models.JSONField(default=dict, blank=True)
     seen_keys = models.JSONField(default=list, blank=True)
     watch_history = models.JSONField(default=list, blank=True)
@@ -1244,13 +1251,18 @@ class UserCloudData(models.Model):
             return
 
         def _get_id(item):
-            """Get mediaId from item — supports both 'mediaId' and 'id' keys."""
-            return item.get('mediaId') or item.get('id')
+            """Get mediaId from an item. Supports dicts ('mediaId'/'id' keys) and
+            plain string/number ids the app may send — never crashes on either."""
+            if isinstance(item, dict):
+                return item.get('mediaId') or item.get('id')
+            return item
 
         # Playback progress — app data wins, normalize fields
         app_progress = incoming.get('playbackProgress', {})
         if app_progress:
             for key, entry in app_progress.items():
+                if not isinstance(entry, dict):
+                    continue
                 # Normalize: position -> positionMs, duration -> durationMs
                 if 'position' in entry and 'positionMs' not in entry:
                     entry['positionMs'] = entry.pop('position')
@@ -1327,6 +1339,8 @@ class UserCloudData(models.Model):
                 for w in WatchList.objects.filter(user=self.user)
             }
             for item in cloud_wl:
+                if not isinstance(item, dict):
+                    continue
                 mid = item.get('mediaId') or item.get('id')
                 mtype = 'tv' if item.get('isTv') else 'movie'
                 if mid and (mid, mtype) not in existing_wl:
@@ -1341,6 +1355,8 @@ class UserCloudData(models.Model):
         # --- Playback progress -> PlayHistory ---
         cloud_progress = self.playback_progress or {}
         for key, entry in cloud_progress.items():
+            if not isinstance(entry, dict):
+                continue
             mid = entry.get('mediaId')
             if not mid:
                 # Try parsing from key: movie_550, movie_550_-1_-1, tv_123_2_3
@@ -1390,7 +1406,7 @@ class UserCloudData(models.Model):
 
         # --- WatchList -> cloud watchlist_ids ---
         web_wl = WatchList.objects.filter(user=self.user)
-        cloud_existing = {w.get('mediaId'): w for w in (self.watchlist_ids or [])}
+        cloud_existing = {w.get('mediaId'): w for w in (self.watchlist_ids or []) if isinstance(w, dict)}
         for item in web_wl:
             if item.tmdb_id not in cloud_existing:
                 cloud_item = {
@@ -1527,7 +1543,8 @@ class UserSession(models.Model):
         ('ios', 'iOS'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions', db_constraint=False)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='web')
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     user_agent = models.TextField(blank=True, default='')
@@ -1883,7 +1900,8 @@ class DBConnectionConfig(models.Model):
 
 class EmailSendLog(models.Model):
     """Track every email sent from the platform."""
-    address = models.ForeignKey('EmailAddress', on_delete=models.SET_NULL, null=True, blank=True, help_text='SMTP address used')
+    # Cross-DB link (external users DB vs default config) — no DB-level constraint.
+    address = models.ForeignKey('EmailAddress', on_delete=models.SET_NULL, null=True, blank=True, help_text='SMTP address used', db_constraint=False)
     recipient = models.EmailField(help_text='Recipient email address')
     subject = models.CharField(max_length=500)
     purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES, default='notification')
@@ -1892,7 +1910,8 @@ class EmailSendLog(models.Model):
         ('failed', 'Failed'),
     ])
     error_message = models.TextField(blank=True, default='')
-    sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text='Admin who triggered it')
+    # Cross-DB link (external users DB vs default auth) — no DB-level constraint.
+    sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text='Admin who triggered it', db_constraint=False)
     source = models.CharField(max_length=20, choices=[
         ('test_mail', 'Test Mail'),
         ('verification', 'Email Verification'),
