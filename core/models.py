@@ -1383,14 +1383,27 @@ class UserCloudData(models.Model):
                     continue
                 mid = item.get('mediaId') or item.get('id')
                 mtype = 'tv' if item.get('isTv') else 'movie'
-                if mid and (mid, mtype) not in existing_wl:
-                    WatchList.objects.get_or_create(
+                if not mid:
+                    continue
+                title = item.get('title', '')
+                # The app sends posterUrl in some payloads and posterPath in
+                # others — accept both.
+                poster = item.get('posterUrl') or item.get('posterPath') or ''
+                row = existing_wl.get((mid, mtype))
+                if row is None:
+                    row = WatchList.objects.create(
                         user=self.user, tmdb_id=mid, media_type=mtype,
-                        defaults={
-                            'title': item.get('title', ''),
-                            'poster_path': item.get('posterPath', ''),
-                        },
+                        title=title, poster_path=poster,
                     )
+                    existing_wl[(mid, mtype)] = row
+                elif (not row.title or not row.poster_path) and (title or poster):
+                    # Backfill metadata on rows that were created before the
+                    # app sent it (e.g. web-toggle adds with empty poster).
+                    if title:
+                        row.title = title
+                    if poster:
+                        row.poster_path = poster
+                    row.save()
 
         # --- Playback progress -> PlayHistory ---
         cloud_progress = self.playback_progress or {}
