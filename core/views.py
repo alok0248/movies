@@ -4042,16 +4042,28 @@ def ajax_reset_password_otp(request):
     if len(new_password) < 6:
         return JsonResponse({'success': False, 'message': 'Password must be at least 6 characters'})
 
+    # Rate-limit code attempts per IP and per email (10 tries / 15 min) so a
+    # wrong-code flood can't brute-force the 6-digit code from the web form.
+    rate_err = _otp_rate_limit_error(request, email, 'web_reset_otp')
+    if rate_err:
+        return JsonResponse(
+            {'success': False, 'message': 'Too many attempts. Please wait a few minutes and try again.'},
+            status=429,
+        )
+
     from .models import PasswordResetOTP
     user = User.objects.filter(email=email).first()
     if not user:
+        _record_otp_attempt(request, email, 'web_reset_otp')
         return JsonResponse({'success': False, 'message': 'Invalid code or email. Please request a new code.'})
     otp_obj = PasswordResetOTP.objects.filter(
         user=user, otp=otp_code, used=False,
     ).order_by('-created_at').first()
     if not otp_obj or otp_obj.is_expired:
+        _record_otp_attempt(request, email, 'web_reset_otp')
         return JsonResponse({'success': False, 'message': 'Invalid or expired code. Please request a new one.'})
 
+    _reset_otp_rate_limit(request, email, 'web_reset_otp')
     otp_obj.used = True
     otp_obj.save(update_fields=['used'])
     # Any other outstanding reset codes for this user are now stale
@@ -7951,6 +7963,40 @@ def api_user_forgot_password(request):
     return JsonResponse(resp)
 
 
+def _get_client_ip(request):
+    return (request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR', ''))
+
+
+def _otp_rate_limit_error(request, email, action):
+    """Return a 429 response when this IP/email exceeds the attempt budget
+    for `action`, otherwise None. Per-IP and per-email budgets are tracked
+    independently so rotating IPs cannot brute-force a 6-digit code."""
+    ip = _get_client_ip(request)
+    allowed, _, retry_after = check_rate_limit(ip, action)
+    if not allowed:
+        return rate_limit_response(retry_after)
+    if email:
+        allowed_email, _, retry_email = check_rate_limit(email, f'{action}_email')
+        if not allowed_email:
+            return rate_limit_response(retry_email)
+    return None
+
+
+def _record_otp_attempt(request, email, action):
+    ip = _get_client_ip(request)
+    record_rate_limit_attempt(ip, action)
+    if email:
+        record_rate_limit_attempt(email, f'{action}_email')
+
+
+def _reset_otp_rate_limit(request, email, action):
+    ip = _get_client_ip(request)
+    reset_rate_limit(ip, action)
+    if email:
+        reset_rate_limit(email, f'{action}_email')
+
+
 @_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -7972,15 +8018,23 @@ def api_user_verify_email(request):
 
     if otp_code and email:
         # Android OTP flow: {email, otp} — find the latest unverified code for this user
+        # Rate-limit code attempts per IP and per email (10 tries / 15 min) so a
+        # wrong-code flood can't brute-force the 6-digit code.
+        rate_err = _otp_rate_limit_error(request, email, 'verify_otp')
+        if rate_err:
+            return rate_err
         django_user = User.objects.filter(email=email).first()
         if not django_user:
+            _record_otp_attempt(request, email, 'verify_otp')
             return JsonResponse({'status': 'error', 'message': 'Invalid verification code.'}, status=400)
         ev = EmailVerification.objects.filter(
             user=django_user, otp=otp_code, verified=False,
         ).order_by('-created_at').first()
         if not ev:
+            _record_otp_attempt(request, email, 'verify_otp')
             return JsonResponse({'status': 'error', 'message': 'Invalid verification code.'}, status=400)
         if ev.is_expired:
+            _record_otp_attempt(request, email, 'verify_otp')
             return JsonResponse({'status': 'error', 'message': 'Verification code has expired. Please request a new code.'}, status=400)
     elif token:
         # Browser link flow: {token} or {email, token}
@@ -7995,6 +8049,10 @@ def api_user_verify_email(request):
     else:
         return JsonResponse({'status': 'error', 'message': 'Provide either (email + otp) or token.'}, status=400)
 
+    # Valid code/token — clear any earlier failed attempts so a user who
+    # mistyped a few times isn't left locked out.
+    if otp_code and email:
+        _reset_otp_rate_limit(request, email, 'verify_otp')
     if ev.verified:
         return JsonResponse({'status': 'success', 'message': 'Email already verified. You can now login.'})
     ev.verified = True
@@ -8060,15 +8118,22 @@ def api_user_reset_password(request):
     django_user = None
 
     # Flow 1: OTP (Android app) — {email, otp, newPassword}
+    # Rate-limit code attempts per IP and per email (10 tries / 15 min) so a
+    # wrong-code flood can't brute-force the 6-digit code.
     if otp_code and email:
+        rate_err = _otp_rate_limit_error(request, email, 'reset_otp')
+        if rate_err:
+            return rate_err
         from .models import PasswordResetOTP
         django_user = User.objects.filter(email=email).first()
         if not django_user:
+            _record_otp_attempt(request, email, 'reset_otp')
             return JsonResponse({'status': 'error', 'message': 'Invalid OTP or email.'}, status=400)
         otp_obj = PasswordResetOTP.objects.filter(
             user=django_user, otp=otp_code, used=False
         ).order_by('-created_at').first()
         if not otp_obj or otp_obj.is_expired:
+            _record_otp_attempt(request, email, 'reset_otp')
             return JsonResponse({'status': 'error', 'message': 'Invalid or expired OTP.'}, status=400)
         otp_obj.used = True
         otp_obj.save(update_fields=['used'])
@@ -8088,6 +8153,9 @@ def api_user_reset_password(request):
     else:
         return JsonResponse({'status': 'error', 'message': 'Provide either (email + otp) or (uid + token) with newPassword.'}, status=400)
 
+    # Valid code/link — clear earlier failed attempts for this user/IP.
+    if otp_code and email:
+        _reset_otp_rate_limit(request, email, 'reset_otp')
     django_user.set_password(new_password)
     django_user.is_active = True
     django_user.save(update_fields=['password', 'is_active'])
