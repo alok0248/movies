@@ -5,6 +5,23 @@ from django.utils import timezone
 import secrets
 
 
+def _epoch_ms_to_dt(value):
+    """Convert an epoch-ms value (or seconds) to an aware datetime, or None."""
+    if value in (None, ''):
+        return None
+    try:
+        ms = float(value)
+    except (TypeError, ValueError):
+        return None
+    # Values below ~1e11 are seconds, not milliseconds.
+    if ms < 1e11:
+        ms *= 1000.0
+    try:
+        return timezone.datetime.fromtimestamp(ms / 1000.0, tz=timezone.UTC)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def normalize_poster_path(value):
     """Normalize a poster reference to a clean TMDB-relative path.
 
@@ -1243,7 +1260,10 @@ class PlayHistory(models.Model):
     duration_seconds = models.IntegerField(default=0)
     total_duration_seconds = models.IntegerField(default=0)
     completed = models.BooleanField(default=False)
-    last_played_at = models.DateTimeField(auto_now=True)
+    # NOTE: not auto_now — callers pass the real watch time (app sync uses the
+    # entry's lastUpdated/lastWatchedEpoch; web plays pass timezone.now), and
+    # updates must never clobber a newer recorded time.
+    last_played_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1471,6 +1491,13 @@ class UserCloudData(models.Model):
                 'total_duration_seconds': dur_ms // 1000,
                 'completed': dur_ms > 0 and (pos_ms / dur_ms) > 0.95,
             }
+            # Record the real watch time from the entry (lastUpdated epoch-ms).
+            # The web play-history/calendar pages show per-item times, so rows
+            # must not all collapse to the sync moment.
+            watched = _epoch_ms_to_dt(entry.get('lastUpdated') or entry.get('lastWatchedEpoch') or entry.get('timestamp'))
+            if watched is None:
+                watched = timezone.now()
+            defaults['last_played_at'] = watched
             # Only set title/poster when the entry actually carries them —
             # otherwise leave the existing metadata alone so a TMDB/watch-history
             # backfill isn't clobbered by an empty value on the next sync.
@@ -1499,8 +1526,8 @@ class UserCloudData(models.Model):
             if not h_mid:
                 continue
             h_is_tv = bool(h.get('isTv'))
-            h_season = h.get('lastSeasonNumber', -1)
-            h_episode = h.get('lastEpisodeNumber', -1)
+            h_season = h.get('lastSeasonNumber', h.get('season', -1))
+            h_episode = h.get('lastEpisodeNumber', h.get('episode', -1))
             try:
                 h_season = int(h_season)
             except (TypeError, ValueError):
@@ -1514,14 +1541,12 @@ class UserCloudData(models.Model):
             defaults = {
                 'title': h.get('title', ''),
                 'poster_path': normalize_poster_path(h.get('posterUrl') or h.get('posterPath') or ''),
-                'episode_title': h.get('lastEpisodeName', ''),
+                'episode_title': h.get('lastEpisodeName', h.get('episodeTitle', '')),
             }
-            if h.get('lastWatchedEpoch'):
-                try:
-                    defaults['last_played_at'] = timezone.datetime.fromtimestamp(
-                        int(h['lastWatchedEpoch']) / 1000.0, tz=timezone.UTC)
-                except (TypeError, ValueError, OSError, OverflowError):
-                    pass
+            # Real watch time: lastWatchedEpoch (app) or lastUpdated (web path).
+            watched_at = _epoch_ms_to_dt(h.get('lastWatchedEpoch') or h.get('lastUpdated'))
+            if watched_at is not None:
+                defaults['last_played_at'] = watched_at
             # Match an existing row first (exact season/episode, then the base
             # movie/show row) so this never duplicates PlayHistory entries.
             h_type = 'tv' if h_is_tv else 'movie'

@@ -8473,6 +8473,8 @@ def ajax_record_play_progress(request):
             'duration_seconds': duration_seconds,
             'total_duration_seconds': total_duration_seconds,
             'completed': completed,
+            # Field is not auto_now — record the real play moment.
+            'last_played_at': timezone.now(),
         }
     )
     # Also sync to UserCloudData for Android app
