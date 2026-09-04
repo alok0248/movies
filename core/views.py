@@ -7648,7 +7648,11 @@ def api_user_login(request):
     user_obj, _ = SyncedUser.objects.get_or_create(
         email=email, defaults={'user': auth_user, 'display_name': auth_user.first_name},
     )
-    if not user_obj.user:
+    # A SyncedUser created by an earlier sync can hold a stale FK to a Django
+    # user that no longer exists. Dereferencing `.user` then raises
+    # User.DoesNotExist and 500s the login, so compare the FK id directly and
+    # repoint it at the authenticated user.
+    if not user_obj.user_id or user_obj.user_id != auth_user.pk:
         user_obj.user = auth_user
         user_obj.save(update_fields=['user'])
 
@@ -7829,10 +7833,19 @@ def synced_users_list(request):
 def synced_user_detail(request, user_id):
     """Show full details for a single synced user."""
     user_obj = get_object_or_404(SyncedUser, id=user_id)
+    # Never dereference the .user relation blindly — sync-created rows can
+    # hold a stale FK to a deleted Django user (User.DoesNotExist crash).
+    linked_user = None
+    if user_obj.user_id:
+        linked_user = User.objects.filter(pk=user_obj.user_id).first()
     cloud_data = None
-    if user_obj.user:
-        cloud_data, _ = UserCloudData.objects.get_or_create(user=user_obj.user)
-    return render(request, 'core/synced_user_detail.html', {'user_obj': user_obj, 'cloud_data': cloud_data})
+    if linked_user:
+        cloud_data, _ = UserCloudData.objects.get_or_create(user=linked_user)
+    return render(request, 'core/synced_user_detail.html', {
+        'user_obj': user_obj,
+        'linked_user': linked_user,
+        'cloud_data': cloud_data,
+    })
 
 
 @login_required
