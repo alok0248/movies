@@ -400,6 +400,9 @@
             <a href="{% url 'synced_users_list' %}" class="sb-item {% if 'synced-users' in request.path %}active{% endif %}">
                 <i class="fas fa-users"></i> Synced Users
             </a>
+            <a href="{% url 'admin_history_calendar' %}" class="sb-item {% if 'history-calendar' in request.path %}active{% endif %}">
+                <i class="fas fa-calendar-alt"></i> History Calendar
+            </a>
             <a href="{% url 'email_settings' %}" class="sb-item {% if 'email' in request.path %}active{% endif %}">
                 <i class="fas fa-envelope"></i> Email SMTP
             </a>
