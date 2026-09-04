@@ -123,6 +123,7 @@ urlpatterns = [
     path('ajax/verify-email/', views.verify_email, name='verify_email'),
     path('ajax/logout/', views.ajax_logout, name='ajax_logout'),
     path('ajax/forgot-password/', views.ajax_forgot_password, name='ajax_forgot_password'),
+    path('ajax/reset-password-otp/', views.ajax_reset_password_otp, name='ajax_reset_password_otp'),
     path('reset-password/<uidb64>/<token>/', views.reset_password, name='reset_password'),
     path('ajax/toggle-watchlist/', views.ajax_toggle_watchlist, name='ajax_toggle_watchlist'),
     path('ajax/check-watchlist/', views.ajax_check_watchlist, name='ajax_check_watchlist'),

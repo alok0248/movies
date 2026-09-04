@@ -4025,6 +4025,43 @@ def ajax_forgot_password(request):
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
+def ajax_reset_password_otp(request):
+    """POST /ajax/reset-password-otp/ — reset password on the website with the
+    6-digit code from the forgot-password email (no browser link needed)."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    email = request.POST.get('email', '').strip().lower()
+    otp_code = request.POST.get('otp', '').strip()
+    new_password = request.POST.get('new_password', '')
+    confirm_password = request.POST.get('confirm_password', '')
+
+    if not email or not otp_code or not new_password:
+        return JsonResponse({'success': False, 'message': 'All fields are required'})
+    if new_password != confirm_password:
+        return JsonResponse({'success': False, 'message': 'Passwords do not match'})
+    if len(new_password) < 6:
+        return JsonResponse({'success': False, 'message': 'Password must be at least 6 characters'})
+
+    from .models import PasswordResetOTP
+    user = User.objects.filter(email=email).first()
+    if not user:
+        return JsonResponse({'success': False, 'message': 'Invalid code or email. Please request a new code.'})
+    otp_obj = PasswordResetOTP.objects.filter(
+        user=user, otp=otp_code, used=False,
+    ).order_by('-created_at').first()
+    if not otp_obj or otp_obj.is_expired:
+        return JsonResponse({'success': False, 'message': 'Invalid or expired code. Please request a new one.'})
+
+    otp_obj.used = True
+    otp_obj.save(update_fields=['used'])
+    # Any other outstanding reset codes for this user are now stale
+    PasswordResetOTP.objects.filter(user=user, used=False).update(used=True)
+    user.set_password(new_password)
+    user.is_active = True
+    user.save(update_fields=['password', 'is_active'])
+    return JsonResponse({'success': True, 'message': 'Password reset successful! Please sign in with your new password.'})
+
+
 def reset_password(request, uidb64, token):
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
