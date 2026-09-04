@@ -201,13 +201,21 @@
         selectedDay = day;
         var body = document.getElementById('hc-daybody');
         var items = (data.items || []).filter(function (it) { return it.day === day; });
-        var heading = '<h6><i class="fas fa-calendar-day me-2 text-warning"></i>' + MONTHS[curMonth - 1] + ' ' + day + ', ' + curYear +
-            ' <span class="badge bg-secondary ms-1">' + items.length + '</span></h6>';
+        var fullCount = dayCount(day);
+        var userId = document.getElementById('hc-user').value;
+        var dayUrl = '{% url "admin_history_day" %}?year=' + curYear + '&month=' + curMonth + '&day=' + day + '&user_id=' + userId;
+        var heading = '<div class="d-flex justify-content-between align-items-center">' +
+            '<h6 class="mb-0"><i class="fas fa-calendar-day me-2 text-warning"></i>' + MONTHS[curMonth - 1] + ' ' + day + ', ' + curYear +
+            ' <span class="badge bg-secondary ms-1">' + fullCount + '</span></h6>' +
+            (fullCount > items.length || items.length > 8
+                ? '<a class="btn btn-sm btn-outline-warning" href="' + dayUrl + '" target="_blank"><i class="fas fa-list-ul me-1"></i>View all</a>'
+                : '<a class="btn btn-sm btn-outline-warning" href="' + dayUrl + '" target="_blank"><i class="fas fa-external-link-alt me-1"></i>Open page</a>') +
+            '</div>';
         if (!items.length) {
-            body.innerHTML = heading + '<div class="hc-empty">Nothing watched this day.</div>';
+            body.innerHTML = heading + '<div style="height:8px;"></div><div class="hc-empty">Nothing watched this day.</div>';
             return;
         }
-        var html = heading;
+        var html = heading + '<div style="height:10px;"></div>';
         items.forEach(function (it) {
             var isTv = it.mediaType === 'tv' || (it.season != null);
             var poster = it.poster
