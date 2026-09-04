@@ -157,7 +157,18 @@ def send_configured_email(subject, message, recipient_list=None, purpose='notifi
             addr = EmailAddress.objects.filter(is_active=True).first()
         if addr:
             backend = addr.get_backend()
-            from_email = addr.smtp_username or addr.email
+            # Use the configured display name (or the site brand) in the From
+            # header so Gmail/Yahoo show a friendly sender instead of a bare
+            # address — e.g. "NewMovies <newtechax@gmail.com>".
+            display = (addr.display_name or '').strip()
+            if not display:
+                try:
+                    from .models import SiteSettings
+                    display = getattr(SiteSettings.get_settings(), 'brand_name', '') or ''
+                except Exception:
+                    display = ''
+            user_addr = addr.smtp_username or addr.email
+            from_email = f'{display} <{user_addr}>' if display else user_addr
             email = EmailMessage(subject=subject, body=message, from_email=from_email, to=recipient_list, connection=backend)
             # Send non-silently so failures raise and get logged as 'failed'
             # instead of being mislabelled 'sent' by fail_silently=True.
@@ -195,7 +206,10 @@ def send_configured_email(subject, message, recipient_list=None, purpose='notifi
                 username=user, password=password,
                 use_tls=getattr(site, 'email_use_tls', True), fail_silently=False,
             )
-            email = EmailMessage(subject=subject, body=message, from_email=from_email or user, to=recipient_list, connection=backend)
+            display = (getattr(site, 'brand_name', '') or '').strip()
+            user_addr = from_email or user
+            from_email = f'{display} <{user_addr}>' if display and '<' not in str(user_addr) else user_addr
+            email = EmailMessage(subject=subject, body=message, from_email=from_email, to=recipient_list, connection=backend)
             email.send(fail_silently=fail_silently)
             logger.info(f'Email sent via SiteSettings ({user}) to {recipient_list}: {subject}')
             return True

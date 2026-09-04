@@ -3862,10 +3862,10 @@ def _issue_verification_email(django_user, request, display_name=''):
             message=(
                 f'Hi {display_name or django_user.first_name or django_user.username},\r\n\r\n'
                 f'Your verification code is: {otp}\r\n\r\n'
-                f'This code expires in 5 minutes. Enter it in the app to verify your email.\r\n\r\n'
-                f'Or click the link below to verify in your browser (also valid for 5 minutes):\r\n\r\n'
+                f'This code is valid for 5 minutes. Enter it where prompted to verify your email.\r\n\r\n'
+                f'Or verify instantly by opening the link below in your browser (also valid for 5 minutes):\r\n\r\n'
                 f'{verify_url}\r\n\r\n'
-                f'If you did not register, please ignore this email.'
+                f'If you did not register with {brand}, please ignore this email.'
             ),
             recipient_list=[django_user.email],
             purpose='verification',
@@ -3898,12 +3898,13 @@ def _issue_password_reset_email(django_user, request):
     brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
     try:
         send_configured_email(
-            subject=f'Password Reset - {brand}',
+            subject=f'Reset your password - {brand}',
             message=(
-                f'Your password reset code is: {otp_code}\n\n'
-                f'This code expires in 10 minutes. Enter it in the app or website to reset your password.\n\n'
-                f'Or click the link below to reset via browser (valid for 10 minutes):\n\n'
-                f'{reset_url}\n\n'
+                f'Hi {django_user.first_name or django_user.username},\r\n\r\n'
+                f'Your password reset code is: {otp_code}\r\n\r\n'
+                f'This code is valid for 10 minutes. Enter it on the "Forgot password" screen in the app or website to set a new password.\r\n\r\n'
+                f'Or reset instantly by opening the link below in your browser (valid for 10 minutes):\r\n\r\n'
+                f'{reset_url}\r\n\r\n'
                 f'If you did not request this, please ignore this email.'
             ),
             recipient_list=[django_user.email],
