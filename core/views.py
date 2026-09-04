@@ -3883,6 +3883,10 @@ def _issue_password_reset_email(django_user, request):
     (forgot-password) so every trigger mails the same content and the
     OTP is always stored (PasswordResetOTP) for the app's
     /api/user/reset-password/ {email, otp} flow.
+
+    Returns a dict {otp, uid, token, resetUrl} so the Android API can
+    hand resetUid/resetToken straight to the app (the app completes the
+    reset with the Django uid+token path).
     """
     from .models import PasswordResetOTP, SiteSettings
     otp_code = PasswordResetOTP.generate()
@@ -3913,7 +3917,12 @@ def _issue_password_reset_email(django_user, request):
         )
     except Exception as e:
         logger.warning(f'Failed to send reset email: {e}', exc_info=True)
-    return otp_code
+    return {
+        'otp': otp_code,
+        'uid': uid,
+        'token': token,
+        'resetUrl': reset_url,
+    }
 
 
 def ajax_register(request):
@@ -7955,12 +7964,22 @@ def api_user_forgot_password(request):
     email = body.get('email', '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
-    # Always return success to prevent email enumeration
+    # Always return success to prevent email enumeration; the reset uid/token
+    # (used by the app's token path) is only included when the user exists.
     django_user = User.objects.filter(email=email).first()
     resp = {'status': 'success', 'message': 'Password reset instructions sent to your email.'}
     if django_user and django_user.has_usable_password():
         # Email contains both the 6-digit reset code (for the app) and a browser link
-        _issue_password_reset_email(django_user, request)
+        reset_info = _issue_password_reset_email(django_user, request)
+        resp.update({
+            'resetToken': reset_info.get('token'),
+            'resetUid': reset_info.get('uid'),
+            'resetUrl': reset_info.get('resetUrl'),
+        })
+    else:
+        # No account (or Android-synced account without a password yet) — the
+        # app still shows the OTP step, but there is nothing to validate.
+        resp.update({'resetToken': None, 'resetUid': None, 'resetUrl': None})
     return JsonResponse(resp)
 
 
