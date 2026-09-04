@@ -29,6 +29,7 @@ import requests
 import calendar
 import base64
 import secrets
+from functools import wraps
 from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
@@ -2175,6 +2176,18 @@ def url_blocking_settings(request):
     })
 
 
+def _safe_smtp_port(raw_value, default=587):
+    """Parse an SMTP port from POST data; fall back to default on empty/garbage."""
+    try:
+        port = int(str(raw_value or '').strip() or default)
+    except (TypeError, ValueError):
+        return default
+    if port < 1 or port > 65535:
+        return default
+    return port
+
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def email_settings(request):
@@ -2183,222 +2196,226 @@ def email_settings(request):
 
     # Handle AJAX actions
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        action = request.POST.get('action') or request.GET.get('action')
+        try:
+            action = request.POST.get('action') or request.GET.get('action')
 
-        # Add / Edit email address
-        if action == 'save_email':
-            eid = request.POST.get('id')
-            email_obj = EmailAddress.objects.filter(pk=eid).first() if eid else None
-            new_email = request.POST.get('email', '').strip()
-            if not new_email:
-                return JsonResponse({'success': False, 'message': 'Email address is required.'}, status=400)
-            try:
-                if email_obj:
-                    # Check uniqueness against other records
-                    if EmailAddress.objects.filter(email=new_email).exclude(pk=email_obj.pk).exists():
-                        return JsonResponse({'success': False, 'message': 'This email address is already in use.'}, status=400)
-                    email_obj.email = new_email
-                    email_obj.display_name = request.POST.get('display_name', '')
-                    email_obj.smtp_host = request.POST.get('smtp_host', 'smtp.gmail.com')
-                    email_obj.smtp_port = int(request.POST.get('smtp_port', 587))
-                    email_obj.smtp_username = request.POST.get('smtp_username', '')
-                    pwd = request.POST.get('smtp_password', '')
-                    if pwd:
-                        email_obj.smtp_password = pwd
-                    email_obj.smtp_use_tls = request.POST.get('smtp_use_tls') == 'on'
-                    email_obj.purpose = request.POST.get('purpose', 'notification')
-                    email_obj.is_active = request.POST.get('is_active') == 'on'
-                    email_obj.is_default = request.POST.get('is_default') == 'on'
-                    email_obj.save()
+            # Add / Edit email address
+            if action == 'save_email':
+                eid = request.POST.get('id')
+                email_obj = EmailAddress.objects.filter(pk=eid).first() if eid else None
+                new_email = request.POST.get('email', '').strip()
+                if not new_email:
+                    return JsonResponse({'success': False, 'message': 'Email address is required.'}, status=400)
+                try:
+                    if email_obj:
+                        # Check uniqueness against other records
+                        if EmailAddress.objects.filter(email=new_email).exclude(pk=email_obj.pk).exists():
+                            return JsonResponse({'success': False, 'message': 'This email address is already in use.'}, status=400)
+                        email_obj.email = new_email
+                        email_obj.display_name = request.POST.get('display_name', '')
+                        email_obj.smtp_host = request.POST.get('smtp_host', 'smtp.gmail.com')
+                        email_obj.smtp_port = _safe_smtp_port(request.POST.get('smtp_port', 587))
+                        email_obj.smtp_username = request.POST.get('smtp_username', '')
+                        pwd = request.POST.get('smtp_password', '')
+                        if pwd:
+                            email_obj.smtp_password = pwd
+                        email_obj.smtp_use_tls = request.POST.get('smtp_use_tls') == 'on'
+                        email_obj.purpose = request.POST.get('purpose', 'notification')
+                        email_obj.is_active = request.POST.get('is_active') == 'on'
+                        email_obj.is_default = request.POST.get('is_default') == 'on'
+                        email_obj.save()
+                    else:
+                        if EmailAddress.objects.filter(email=new_email).exists():
+                            return JsonResponse({'success': False, 'message': 'This email address is already in use.'}, status=400)
+                        email_obj = EmailAddress.objects.create(
+                            email=new_email,
+                            display_name=request.POST.get('display_name', ''),
+                            smtp_host=request.POST.get('smtp_host', 'smtp.gmail.com'),
+                            smtp_port=_safe_smtp_port(request.POST.get('smtp_port', 587)),
+                            smtp_username=request.POST.get('smtp_username', ''),
+                            smtp_password=request.POST.get('smtp_password', ''),
+                            smtp_use_tls=request.POST.get('smtp_use_tls') == 'on',
+                            purpose=request.POST.get('purpose', 'notification'),
+                            is_active=request.POST.get('is_active') == 'on',
+                            is_default=request.POST.get('is_default') == 'on',
+                        )
+                except Exception as e:
+                    return JsonResponse({'success': False, 'message': f'Save failed: {str(e)}'}, status=500)
+                return JsonResponse({'success': True, 'id': email_obj.id})
+
+            # Delete email address
+            if action == 'delete_email':
+                eid = request.POST.get('id')
+                EmailAddress.objects.filter(pk=eid).delete()
+                return JsonResponse({'success': True})
+
+            # Toggle email active
+            if action == 'toggle_email':
+                eid = request.POST.get('id')
+                obj = EmailAddress.objects.filter(pk=eid).first()
+                if obj:
+                    obj.is_active = not obj.is_active
+                    obj.save(update_fields=['is_active'])
+                return JsonResponse({'success': True, 'is_active': obj.is_active if obj else False})
+
+            # Save template
+            if action == 'save_template':
+                tid = request.POST.get('id')
+                tmpl = EmailTemplate.objects.filter(pk=tid).first() if tid else None
+                if tmpl:
+                    tmpl.name = request.POST.get('name', tmpl.name)
+                    tmpl.purpose = request.POST.get('purpose', tmpl.purpose)
+                    tmpl.subject = request.POST.get('subject', tmpl.subject)
+                    tmpl.body = request.POST.get('body', tmpl.body)
+                    tmpl.is_active = request.POST.get('is_active') == 'on'
+                    tmpl.save()
                 else:
-                    if EmailAddress.objects.filter(email=new_email).exists():
-                        return JsonResponse({'success': False, 'message': 'This email address is already in use.'}, status=400)
-                    email_obj = EmailAddress.objects.create(
-                        email=new_email,
-                        display_name=request.POST.get('display_name', ''),
-                        smtp_host=request.POST.get('smtp_host', 'smtp.gmail.com'),
-                        smtp_port=int(request.POST.get('smtp_port', 587)),
-                        smtp_username=request.POST.get('smtp_username', ''),
-                        smtp_password=request.POST.get('smtp_password', ''),
-                        smtp_use_tls=request.POST.get('smtp_use_tls') == 'on',
+                    tmpl = EmailTemplate.objects.create(
+                        name=request.POST.get('name', ''),
                         purpose=request.POST.get('purpose', 'notification'),
+                        subject=request.POST.get('subject', ''),
+                        body=request.POST.get('body', ''),
                         is_active=request.POST.get('is_active') == 'on',
-                        is_default=request.POST.get('is_default') == 'on',
                     )
-            except Exception as e:
-                return JsonResponse({'success': False, 'message': f'Save failed: {str(e)}'}, status=500)
-            return JsonResponse({'success': True, 'id': email_obj.id})
+                return JsonResponse({'success': True, 'id': tmpl.id})
 
-        # Delete email address
-        if action == 'delete_email':
-            eid = request.POST.get('id')
-            EmailAddress.objects.filter(pk=eid).delete()
-            return JsonResponse({'success': True})
+            # Delete template
+            if action == 'delete_template':
+                tid = request.POST.get('id')
+                EmailTemplate.objects.filter(pk=tid).delete()
+                return JsonResponse({'success': True})
 
-        # Toggle email active
-        if action == 'toggle_email':
-            eid = request.POST.get('id')
-            obj = EmailAddress.objects.filter(pk=eid).first()
-            if obj:
-                obj.is_active = not obj.is_active
-                obj.save(update_fields=['is_active'])
-            return JsonResponse({'success': True, 'is_active': obj.is_active if obj else False})
+            # Test SMTP connection
+            if action == 'test_smtp':
+                import smtplib
+                from email.mime.text import MIMEText
+                host = request.POST.get('smtp_host', '').strip()
+                port = _safe_smtp_port(request.POST.get('smtp_port', 587))
+                username = request.POST.get('smtp_username', '').strip()
+                password = request.POST.get('smtp_password', '').strip()
 
-        # Save template
-        if action == 'save_template':
-            tid = request.POST.get('id')
-            tmpl = EmailTemplate.objects.filter(pk=tid).first() if tid else None
-            if tmpl:
-                tmpl.name = request.POST.get('name', tmpl.name)
-                tmpl.purpose = request.POST.get('purpose', tmpl.purpose)
-                tmpl.subject = request.POST.get('subject', tmpl.subject)
-                tmpl.body = request.POST.get('body', tmpl.body)
-                tmpl.is_active = request.POST.get('is_active') == 'on'
-                tmpl.save()
-            else:
-                tmpl = EmailTemplate.objects.create(
-                    name=request.POST.get('name', ''),
-                    purpose=request.POST.get('purpose', 'notification'),
-                    subject=request.POST.get('subject', ''),
-                    body=request.POST.get('body', ''),
-                    is_active=request.POST.get('is_active') == 'on',
-                )
-            return JsonResponse({'success': True, 'id': tmpl.id})
-
-        # Delete template
-        if action == 'delete_template':
-            tid = request.POST.get('id')
-            EmailTemplate.objects.filter(pk=tid).delete()
-            return JsonResponse({'success': True})
-
-        # Test SMTP connection
-        if action == 'test_smtp':
-            import smtplib
-            from email.mime.text import MIMEText
-            host = request.POST.get('smtp_host', '').strip()
-            port = int(request.POST.get('smtp_port', 587))
-            username = request.POST.get('smtp_username', '').strip()
-            password = request.POST.get('smtp_password', '').strip()
-
-            use_tls = request.POST.get('smtp_use_tls') == 'on'
-            test_email = request.POST.get('email', '').strip()
-            if not host or not test_email:
-                return JsonResponse({'success': False, 'message': 'Email and SMTP host are required for testing.'})
-            if not username:
-                username = test_email
-            try:
-                msg = MIMEText('This is a test email from your NewMovies email settings.\n\nIf you see this, SMTP is working correctly!')
-                msg['Subject'] = 'NewMovies SMTP Test'
-                msg['From'] = f'{request.POST.get("display_name", "NewMovies")} <{test_email}>'
-                msg['To'] = test_email
-                server = smtplib.SMTP(host, port, timeout=10)
-                server.ehlo()
-                if use_tls:
-                    server.starttls()
+                use_tls = request.POST.get('smtp_use_tls') == 'on'
+                test_email = request.POST.get('email', '').strip()
+                if not host or not test_email:
+                    return JsonResponse({'success': False, 'message': 'Email and SMTP host are required for testing.'})
+                if not username:
+                    username = test_email
+                try:
+                    msg = MIMEText('This is a test email from your NewMovies email settings.\n\nIf you see this, SMTP is working correctly!')
+                    msg['Subject'] = 'NewMovies SMTP Test'
+                    msg['From'] = f'{request.POST.get("display_name", "NewMovies")} <{test_email}>'
+                    msg['To'] = test_email
+                    server = smtplib.SMTP(host, port, timeout=10)
                     server.ehlo()
-                server.login(username, password)
-                server.sendmail(test_email, [test_email], msg.as_string())
-                server.quit()
-                return JsonResponse({'success': True, 'message': f'Test email sent successfully to {test_email}! Check your inbox.'})
-            except smtplib.SMTPAuthenticationError as e:
-                return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check your email and password/app password.'})
-            except smtplib.SMTPConnectError as e:
-                return JsonResponse({'success': False, 'message': f'Cannot connect to {host}:{port}. Check host and port.'})
-            except smtplib.SMTPException as e:
-                return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
-            except Exception as e:
-                return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
+                    if use_tls:
+                        server.starttls()
+                        server.ehlo()
+                    server.login(username, password)
+                    server.sendmail(test_email, [test_email], msg.as_string())
+                    server.quit()
+                    return JsonResponse({'success': True, 'message': f'Test email sent successfully to {test_email}! Check your inbox.'})
+                except smtplib.SMTPAuthenticationError as e:
+                    return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check your email and password/app password.'})
+                except smtplib.SMTPConnectError as e:
+                    return JsonResponse({'success': False, 'message': f'Cannot connect to {host}:{port}. Check host and port.'})
+                except smtplib.SMTPException as e:
+                    return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
+                except Exception as e:
+                    return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
 
-        # Test saved SMTP address
-        if action == 'test_saved_smtp':
-            import smtplib
-            from email.mime.text import MIMEText
-            eid = request.POST.get('id')
-            addr_obj = EmailAddress.objects.filter(pk=eid).first()
-            if not addr_obj:
-                return JsonResponse({'success': False, 'message': 'Email address not found.'})
-            try:
-                msg = MIMEText('This is a test email from your NewMovies email settings.\n\nIf you see this, SMTP is working correctly!')
-                msg['Subject'] = 'NewMovies SMTP Test'
-                msg['From'] = f'{addr_obj.display_name or "NewMovies"} <{addr_obj.email}>'
-                msg['To'] = addr_obj.email
-                server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=10)
-                server.ehlo()
-                if addr_obj.smtp_use_tls:
-                    server.starttls()
+            # Test saved SMTP address
+            if action == 'test_saved_smtp':
+                import smtplib
+                from email.mime.text import MIMEText
+                eid = request.POST.get('id')
+                addr_obj = EmailAddress.objects.filter(pk=eid).first()
+                if not addr_obj:
+                    return JsonResponse({'success': False, 'message': 'Email address not found.'})
+                try:
+                    msg = MIMEText('This is a test email from your NewMovies email settings.\n\nIf you see this, SMTP is working correctly!')
+                    msg['Subject'] = 'NewMovies SMTP Test'
+                    msg['From'] = f'{addr_obj.display_name or "NewMovies"} <{addr_obj.email}>'
+                    msg['To'] = addr_obj.email
+                    server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=10)
                     server.ehlo()
-                server.login(addr_obj.smtp_username or addr_obj.email, addr_obj.smtp_password)
-                server.sendmail(addr_obj.email, [addr_obj.email], msg.as_string())
-                server.quit()
-                return JsonResponse({'success': True, 'message': f'Test email sent successfully to {addr_obj.email}! Check your inbox.'})
-            except smtplib.SMTPAuthenticationError as e:
-                return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check your email and password/app password.'})
-            except smtplib.SMTPConnectError as e:
-                return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
-            except smtplib.SMTPException as e:
-                return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
-            except Exception as e:
-                return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
+                    if addr_obj.smtp_use_tls:
+                        server.starttls()
+                        server.ehlo()
+                    server.login(addr_obj.smtp_username or addr_obj.email, addr_obj.smtp_password)
+                    server.sendmail(addr_obj.email, [addr_obj.email], msg.as_string())
+                    server.quit()
+                    return JsonResponse({'success': True, 'message': f'Test email sent successfully to {addr_obj.email}! Check your inbox.'})
+                except smtplib.SMTPAuthenticationError as e:
+                    return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check your email and password/app password.'})
+                except smtplib.SMTPConnectError as e:
+                    return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
+                except smtplib.SMTPException as e:
+                    return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
+                except Exception as e:
+                    return JsonResponse({'success': False, 'message': f'Connection failed: {str(e)}'})
 
-        # Send test mail to any recipient using a saved SMTP address
-        if action == 'send_test_mail':
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            from .models import EmailSendLog
-            addr_id = request.POST.get('address_id')
-            to_email = request.POST.get('to_email', '').strip()
-            subject = request.POST.get('subject', 'NewMovies - Test Email').strip()
-            body = request.POST.get('body', '').strip()
-            if not addr_id or not to_email:
-                return JsonResponse({'success': False, 'message': 'Select an SMTP address and enter a recipient email.'})
-            addr_obj = EmailAddress.objects.filter(pk=addr_id).first()
-            if not addr_obj:
-                return JsonResponse({'success': False, 'message': 'SMTP address not found.'})
-            if not addr_obj.smtp_host:
-                return JsonResponse({'success': False, 'message': 'SMTP host is not configured for this address.'})
-            try:
-                msg = MIMEMultipart('alternative')
-                msg['Subject'] = subject
-                msg['From'] = f'{addr_obj.display_name or "NewMovies"} <{addr_obj.email}>'
-                msg['To'] = to_email
-                # Plain text version
-                text_part = MIMEText(body, 'plain')
-                msg.attach(text_part)
-                # HTML version
-                html_body = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;"><div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;"><h2 style="color:#fff;margin:0;">NewMovies</h2><p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Test Email</p></div><div style="padding:24px;background:#fff;border-radius:0 0 12px 12px;"><p style="color:#334155;font-size:15px;line-height:1.6;">' + body.replace(chr(10), '<br>') + '</p><hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"><p style="color:#94a3b8;font-size:12px;text-align:center;">Sent from NewMovies Admin Panel - ' + addr_obj.email + '</p></div></div>'
-                html_part = MIMEText(html_body, 'html')
-                msg.attach(html_part)
-                smtp_user = addr_obj.smtp_username or addr_obj.email
-                smtp_pass = addr_obj.smtp_password
-                if not smtp_pass:
-                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message='SMTP password not set', sent_by=request.user, source='test_mail')
-                    return JsonResponse({'success': False, 'message': 'SMTP password is not set for this address. Edit and save the password first.'})
-                server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=15)
-                server.ehlo()
-                if addr_obj.smtp_use_tls:
-                    server.starttls()
+            # Send test mail to any recipient using a saved SMTP address
+            if action == 'send_test_mail':
+                import smtplib
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+                from .models import EmailSendLog
+                addr_id = request.POST.get('address_id')
+                to_email = request.POST.get('to_email', '').strip()
+                subject = request.POST.get('subject', 'NewMovies - Test Email').strip()
+                body = request.POST.get('body', '').strip()
+                if not addr_id or not to_email:
+                    return JsonResponse({'success': False, 'message': 'Select an SMTP address and enter a recipient email.'})
+                addr_obj = EmailAddress.objects.filter(pk=addr_id).first()
+                if not addr_obj:
+                    return JsonResponse({'success': False, 'message': 'SMTP address not found.'})
+                if not addr_obj.smtp_host:
+                    return JsonResponse({'success': False, 'message': 'SMTP host is not configured for this address.'})
+                try:
+                    msg = MIMEMultipart('alternative')
+                    msg['Subject'] = subject
+                    msg['From'] = f'{addr_obj.display_name or "NewMovies"} <{addr_obj.email}>'
+                    msg['To'] = to_email
+                    # Plain text version
+                    text_part = MIMEText(body, 'plain')
+                    msg.attach(text_part)
+                    # HTML version
+                    html_body = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;"><div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;"><h2 style="color:#fff;margin:0;">NewMovies</h2><p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Test Email</p></div><div style="padding:24px;background:#fff;border-radius:0 0 12px 12px;"><p style="color:#334155;font-size:15px;line-height:1.6;">' + body.replace(chr(10), '<br>') + '</p><hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"><p style="color:#94a3b8;font-size:12px;text-align:center;">Sent from NewMovies Admin Panel - ' + addr_obj.email + '</p></div></div>'
+                    html_part = MIMEText(html_body, 'html')
+                    msg.attach(html_part)
+                    smtp_user = addr_obj.smtp_username or addr_obj.email
+                    smtp_pass = addr_obj.smtp_password
+                    if not smtp_pass:
+                        EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message='SMTP password not set', sent_by=request.user, source='test_mail')
+                        return JsonResponse({'success': False, 'message': 'SMTP password is not set for this address. Edit and save the password first.'})
+                    server = smtplib.SMTP(addr_obj.smtp_host, addr_obj.smtp_port, timeout=15)
                     server.ehlo()
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(addr_obj.email, [to_email], msg.as_string())
-                server.quit()
-                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='sent', sent_by=request.user, source='test_mail')
-                return JsonResponse({'success': True, 'message': f'Test email sent successfully to {to_email}! Check inbox.'})
-            except smtplib.SMTPAuthenticationError as e:
-                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Authentication failed: {str(e)}', sent_by=request.user, source='test_mail')
-                return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check email and app password.'})
-            except smtplib.SMTPConnectError as e:
-                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Connection failed: {str(e)}', sent_by=request.user, source='test_mail')
-                return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
-            except smtplib.SMTPException as e:
-                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'SMTP error: {str(e)}', sent_by=request.user, source='test_mail')
-                return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
-            except Exception as e:
-                EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=str(e), sent_by=request.user, source='test_mail')
-                return JsonResponse({'success': False, 'message': f'Failed to send: {str(e)}'})
+                    if addr_obj.smtp_use_tls:
+                        server.starttls()
+                        server.ehlo()
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(addr_obj.email, [to_email], msg.as_string())
+                    server.quit()
+                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='sent', sent_by=request.user, source='test_mail')
+                    return JsonResponse({'success': True, 'message': f'Test email sent successfully to {to_email}! Check inbox.'})
+                except smtplib.SMTPAuthenticationError as e:
+                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Authentication failed: {str(e)}', sent_by=request.user, source='test_mail')
+                    return JsonResponse({'success': False, 'message': f'Authentication failed: {str(e)}. Check email and app password.'})
+                except smtplib.SMTPConnectError as e:
+                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'Connection failed: {str(e)}', sent_by=request.user, source='test_mail')
+                    return JsonResponse({'success': False, 'message': f'Cannot connect to {addr_obj.smtp_host}:{addr_obj.smtp_port}. Check host and port.'})
+                except smtplib.SMTPException as e:
+                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=f'SMTP error: {str(e)}', sent_by=request.user, source='test_mail')
+                    return JsonResponse({'success': False, 'message': f'SMTP error: {str(e)}'})
+                except Exception as e:
+                    EmailSendLog.objects.create(address=addr_obj, recipient=to_email, subject=subject, purpose=addr_obj.purpose, status='failed', error_message=str(e), sent_by=request.user, source='test_mail')
+                    return JsonResponse({'success': False, 'message': f'Failed to send: {str(e)}'})
 
-        return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
+            return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
 
+        except Exception as e:
+            logger.exception('email_settings AJAX error: %s', e)
+            return JsonResponse({'success': False, 'message': 'Server error: %s' % e}, status=500)
     # GET — render the page
     addresses = EmailAddress.objects.all()
     templates = EmailTemplate.objects.all()
@@ -7415,6 +7432,23 @@ def _ensure_user_and_profile(email, body):
     return django_user, user_obj, created
 
 
+def _guard_android_api_errors(view_func):
+    """Return clean JSON + full server-side traceback when an Android user-API
+    endpoint hits an unexpected exception, instead of an opaque HTML 500."""
+    @wraps(view_func)
+    def _wrapper(request, *args, **kwargs):
+        try:
+            return view_func(request, *args, **kwargs)
+        except Exception:
+            logger.exception('Unhandled error in Android API endpoint %s', view_func.__name__)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Internal server error. Please try again.',
+            }, status=500)
+    return _wrapper
+
+
+@_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_register(request):
@@ -7519,6 +7553,7 @@ def api_user_register(request):
     return JsonResponse(resp)
 
 
+@_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_login(request):
@@ -7604,6 +7639,7 @@ def api_user_login(request):
     }))
 
 
+@_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_sync(request):
@@ -7704,6 +7740,7 @@ def api_user_forgot_password(request):
     })
 
 
+@_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_user_refresh_token(request):

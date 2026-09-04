@@ -1,10 +1,15 @@
 /* ===== Shared Player Core - Streaming ===== */
 var _allSources = []; var _mainHls = null; var _audioHls = null;
+var _allSubs = [];          /* subtitle tracks collected client-side */
+var _curMedia = null;       /* {tmdbId, type, season, episode} for subtitle fallback */
 var _audioEl = null; var _dualMode = false; var _playerPlaying = false; var _audioOffset = 0;
+var _startedPlay = false; var _lastSwOk = false;
 
 /* ===== Buffering Overlay ===== */
 function _showBuf(vid) {
   var p = vid.parentNode; if (!p) return;
+  /* Never paint a buffering overlay on top of an active error/status panel. */
+  if (p.querySelector && p.querySelector('.player-msg-panel')) return;
   var el = document.getElementById('bufOverlay');
   if (!el) {
     el = document.createElement('div'); el.id = 'bufOverlay'; el.className = 'buf-overlay';
@@ -45,90 +50,460 @@ function _initBufEvents(vid) {
   }, 500);
 }
 
-var _sourceQueue = []; var _srcIdx = 0; var _triedUrls = {};
+/* ===== Attempt-based playback engine =====
+ * Every returned source is played in the BEST possible order, all purely in the browser:
+ *   1. DIRECT from the CDN — works for CORS-open HLS CDNs, and for any MP4/progressive
+ *      file, because <video> needs no CORS headers at all.
+ *   2. Through the BROWSER service worker ('/proxy/...', intercepted by sw-proxy.js) —
+ *      still fetched by the browser itself. Proxy attempts are SKIPPED when the SW is
+ *      not active, so a request can never fall through to the Django server.
+ * If a URL is fully exhausted we move to the next returned source, and so on.
+ */
+var _sourceQueue = [];
+var _attemptQueue = [];
+var _attemptIdx = 0;
+var _failedPlayUrls = {};
+var _activeSrcUrl = '';
+var _favHost = ''; /* CDN host that played successfully last — tried first next time */
+var _hostFails = {}; /* CDN host -> consecutive fatal failures; >=3 and we skip it for this run */
 
 function _makeProxyUrl(url) {
   if (!url) return url;
   try { var u = new URL(url); return location.origin + '/proxy/' + u.hostname + u.pathname + u.search; } catch(e) { return url; }
 }
 
-function _playHls(url, mediaEl) {
-  if (!mediaEl || !url) return;
-  _srcIdx = 0; _sourceQueue = []; _triedUrls = {};
-  _allSources.forEach(function(s) { _sourceQueue.push(s); });
-  if (_sourceQueue.length && _sourceQueue[0].url !== url) {
-    for (var i = 0; i < _sourceQueue.length; i++) {
-      if (_sourceQueue[i].url === url) { _sourceQueue.splice(i, 1); break; }
-    }
-    _sourceQueue.unshift({url: url, quality: '?', language: 'Original', server: 'first'});
-  }
-  _tryCurrentSource(mediaEl);
+function _looksHls(url) { return !!(url && url.indexOf('.m3u8') > -1); }
+function _hlsJsUsable() { return !!(window.Hls && window.Hls.isSupported()); }
+
+/* True when sw-proxy.js is actually controlling this page right now. */
+function _swActiveNow() {
+  if (typeof ClientExtract !== 'undefined' && ClientExtract.swProxyActive) return ClientExtract.swProxyActive();
+  if (!('serviceWorker' in navigator)) return false;
+  var c = navigator.serviceWorker.controller;
+  return !!(c && c.scriptURL && c.scriptURL.indexOf('/sw-proxy.js') !== -1);
 }
 
-function _tryHlsDirect(url, mediaEl) {
+/* Wait for the SW to claim this page (first-load race) — never blocks longer than ~1.2s. */
+function _swReady(maxWait) {
+  return new Promise(function(resolve) {
+    if (_swActiveNow()) { resolve(true); return; }
+    if (!('serviceWorker' in navigator)) { resolve(false); return; }
+    var done = false;
+    function finish(v) { if (!done) { done = true; resolve(v); } }
+    var to = setTimeout(function() { finish(_swActiveNow()); }, maxWait || 1200);
+    try {
+      navigator.serviceWorker.ready.then(function() {
+        setTimeout(function() { clearTimeout(to); finish(_swActiveNow()); }, 200);
+      }).catch(function() { clearTimeout(to); finish(false); });
+      navigator.serviceWorker.addEventListener('controllerchange', function h() {
+        if (_swActiveNow()) { clearTimeout(to); finish(true); }
+      });
+    } catch (e) { clearTimeout(to); finish(false); }
+  });
+}
+
+/* Ordered play attempts for one source URL. */
+function _attemptsForUrl(url, swOk) {
+  var out = [{ label: 'direct', url: url }];
+  if (swOk) out.push({ label: 'browser-proxy', url: _makeProxyUrl(url) });
+  return out;
+}
+
+function _cdnHostOf(url) {
+  if (!url) return '';
+  try {
+    var u = new URL(url);
+    if (u.pathname.indexOf('/proxy/') === 0) return u.pathname.split('/')[2] || '';
+    return u.hostname;
+  } catch (e) { return ''; }
+}
+
+/* Remember which CDN host actually delivered media, so the next play starts there. */
+function _rememberWorking(it) {
+  var host = _cdnHostOf(it ? it.playUrl : '');
+  if (host && host.indexOf('.') > -1) _favHost = host;
+}
+
+/* Normalize a quality label to a comparable rank (lower = better). */
+function _qRank(q) {
+  var s = String(q || '').toLowerCase();
+  var m = { '2160p':0,'2160':0,'4k':0,'uhd':0,'1080p':1,'1080':1,'fullhd':1,'fhd':1,'720p':2,'720':2,'hd':2,'480p':3,'480':3,'sd':3,'360p':4,'360':4,'240p':5,'240':5,'auto':99,'autohls':99,'auto hls':99,'adaptive':99,'hls':99 };
+  if (Object.prototype.hasOwnProperty.call(m, s)) return m[s];
+  if (s.indexOf('2160') > -1 || s.indexOf('4k') > -1) return 0;
+  if (s.indexOf('1080') > -1) return 1;
+  if (s.indexOf('720') > -1) return 2;
+  if (s.indexOf('480') > -1) return 3;
+  if (s.indexOf('360') > -1) return 4;
+  if (s.indexOf('auto') > -1 || s.indexOf('adaptive') > -1 || s.indexOf('hls') > -1) return 99;
+  return 50;
+}
+
+/* Deduplicated source list, with the chosen URL first when provided. */
+function _orderedSources(preferUrl) {
+  var seen = {}; var list = [];
+  _allSources.forEach(function(s) {
+    if (!s || !s.url || seen[s.url]) return;
+    seen[s.url] = 1;
+    list.push(s);
+  });
+  if (preferUrl && seen[preferUrl] && list[0].url !== preferUrl) {
+    for (var i = 1; i < list.length; i++) {
+      if (list[i].url === preferUrl) { var it = list.splice(i, 1)[0]; list.unshift(it); break; }
+    }
+  }
+  /* Keep the user's choice first, then other sources at the SAME quality before
+     any different quality — a dead 1080p server falls back to another 1080p,
+     never back to the previous 720p/Auto stream. The remembered fast CDN is only
+     a tiebreak inside each quality group. */
+  function _favCmp(a, b) {
+    var ah = _cdnHostOf(a.url), bh = _cdnHostOf(b.url);
+    if (ah === _favHost && bh !== _favHost) return -1;
+    if (bh === _favHost && ah !== _favHost) return 1;
+    return 0;
+  }
+  if (list.length > 1) {
+    var head = list[0];
+    var q0 = head ? _qRank(head._quality) : null;
+    var sameQ = [], other = [];
+    list.slice(1).forEach(function(s) {
+      if (q0 !== null && _qRank(s._quality) === q0) sameQ.push(s); else other.push(s);
+    });
+    sameQ.sort(_favCmp);
+    other.sort(_favCmp);
+    list = [head].concat(sameQ, other);
+  }
+  return list;
+}
+
+/* ---- Cheap manifest probes ------------------------------------------------
+ * Before attaching hls.js to a URL we lightly fetch its master playlist. Dead
+ * CDNs (403/404/502, CORS-blocked) fail in a second or two and get skipped, so
+ * playback starts on a source that actually responds instead of grinding
+ * through the whole list blindly. Probes run in the browser only. */
+var _probeCache = {};
+var _probeTtlMs = 20000;   /* re-probe a URL after 20s so a fresh pick can recover */
+
+function _probeUrl(playUrl, timeoutMs) {
+  var cached = _probeCache[playUrl];
+  if (cached && (Date.now() - cached.t) < _probeTtlMs) {
+    return Promise.resolve(cached.ok);
+  }
+  timeoutMs = timeoutMs || 5000;
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, timeoutMs) : null;
+  var isProxy = playUrl.indexOf('/proxy/') === 0;
+  var opts = {
+    method: 'GET',
+    cache: 'no-store',
+    mode: isProxy ? 'same-origin' : 'cors',
+    /* No Range — mirrors exactly what hls.js will do when it attaches, so a
+       probe pass means the manifest really loads. */
+    headers: { 'Accept': '*/*' }
+  };
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(playUrl, opts).then(function(r) {
+    if (timer) clearTimeout(timer);
+    var ok = r.ok && (r.status >= 200 && r.status < 300);
+    _probeCache[playUrl] = { ok: ok, t: Date.now() };
+    return ok;
+  }, function() {
+    if (timer) clearTimeout(timer);
+    _probeCache[playUrl] = { ok: false, t: Date.now() };
+    return false;
+  });
+}
+
+/* When the user explicitly picks a source, forget any stale probe result for it
+   (direct + proxy route) so the choice gets a fresh chance immediately. */
+window._pcInvalidateProbe = function(url) {
+  delete _probeCache[url];
+  var p = _makeProxyUrl(url);
+  if (p !== url) delete _probeCache[p];
+};
+
+function _buildPlainQueue(sources, swOk) {
+  var queue = [];
+  sources.forEach(function(s) {
+    _attemptsForUrl(s.url, swOk).forEach(function(a) {
+      queue.push({ src: s, playUrl: a.url, label: a.label });
+    });
+  });
+  return queue;
+}
+
+/* Probe every HLS candidate (direct + browser proxy) in parallel, wait for all
+ * of them (hard-capped so the user is never stuck), then order the attempt
+ * queue so sources that actually respond play first. Everything still remains
+ * in the queue afterwards as a fallback, so a wrong probe can never lose a
+ * source. MP4/progressive files are never probed — <video> plays them without
+ * CORS and they keep their original order.
+ *
+ * When the user EXPLICITLY picked a source (keepFirst), that source is always
+ * attempted first regardless of its probe result — a probe false-negative must
+ * never silently veto an explicit choice; hls.js itself gets the real chance. */
+function _buildSmartQueue(sources, swOk, cb, keepFirst) {
+  var hlsCands = [];
+  sources.forEach(function(s) { if (_looksHls(s.url)) hlsCands.push(s); });
+  var plain = _buildPlainQueue(sources, swOk);
+  if (hlsCands.length <= 1 || typeof window.Hls === 'undefined') {
+    cb(plain);
+    return;
+  }
+
+  var jobs = [];
+  hlsCands.forEach(function(s) {
+    jobs.push({ src: s, url: s.url, label: 'direct' });
+    if (swOk) jobs.push({ src: s, url: _makeProxyUrl(s.url), label: 'browser-proxy' });
+  });
+
+  var pass = {};       /* src.url -> {playUrl, label} (direct preferred) */
+  var pending = jobs.length;
+  var done = false;
+
+  function finish() {
+    if (done) return;
+    done = true;
+    var queue = [];
+    var seen = {};
+    var seenPlay = {};
+    if (keepFirst && sources[0]) {
+      _attemptsForUrl(sources[0].url, swOk).forEach(function(a) {
+        if (!seenPlay[a.playUrl]) {
+          seenPlay[a.playUrl] = 1;
+          queue.push({ src: sources[0], playUrl: a.url, label: a.label });
+        }
+      });
+      seen[sources[0].url] = 1;
+    }
+    hlsCands.forEach(function(s) { /* probe order is sources order, so favHost stays first */
+      if (pass[s.url] && !seen[s.url]) {
+        seen[s.url] = 1;
+        queue.push({ src: s, playUrl: pass[s.url].playUrl, label: pass[s.url].label });
+      }
+    });
+    plain.forEach(function(a) { if (!seen[a.src.url]) queue.push(a); });
+    cb(queue);
+  }
+
+  var safety = setTimeout(finish, 6000); /* never stall playback on slow probes */
+  jobs.forEach(function(job) {
+    _probeUrl(job.url).then(function(ok) {
+      pending--;
+      if (ok && !pass[job.src.url]) {
+        pass[job.src.url] = { playUrl: job.url, label: job.label };
+      }
+      if (pending <= 0) { clearTimeout(safety); finish(); }
+    });
+  });
+  if (!jobs.length) finish();
+}
+
+/* Public entry: play a specific source URL (falls back through the rest of the list). */
+var _explicitPick = false;
+var _firstPickSrc = null;
+var _downgradeToastShown = false;
+function _playHls(url, mediaEl) {
+  if (!mediaEl || !url) return;
+  _activeSrcUrl = url;
+  _failedPlayUrls = {};
+  _hostFails = {};
+  _explicitPick = !!window._pcUserPicked;
+  window._pcUserPicked = false;
+  var sources = _orderedSources(url);
+  _swReady().then(function(swOk) {
+    _lastSwOk = swOk;
+    _attemptQueue = [];
+    _buildSmartQueue(sources, swOk, function(queue) {
+      _attemptQueue = queue;
+      _attemptIdx = 0;
+      _firstPickSrc = queue.length ? queue[0].src : null;
+      _downgradeToastShown = false;
+      _setActiveByUrl(url);
+      _tryNextAttempt(mediaEl);
+    }, _explicitPick);
+  });
+}
+
+function _tryHlsDirect(url, mediaEl, onFatal, onReady) {
   var h = new window.Hls({
     enableWorker: true, lowLatencyMode: false, maxBufferLength: 1800, maxMaxBufferLength: 7200,
     backBufferLength: 600, highBufferWatchdogPeriod: 0.1, nudgeOffset: 0.05, maxSeekHole: 120,
-    fragLoadingTimeOut: 60000, manifestLoadingTimeOut: 20000, levelLoadingTimeOut: 30000,
-    fragLoadingMaxRetry: 12, levelLoadingMaxRetry: 8, manifestLoadingMaxRetry: 8,
+    fragLoadingTimeOut: 30000, manifestLoadingTimeOut: 15000, levelLoadingTimeOut: 15000,
+    fragLoadingMaxRetry: 5, levelLoadingMaxRetry: 2, manifestLoadingMaxRetry: 2,
     startLevel: -1, capLevelToPlayerSize: false, stretchShortVideoTrack: true,
     maxAudioFramesDrift: 4, startFragPrefetch: true, maxBufferSize: 1073741824,
     maxBufferHole: 1.0, appendErrorMaxRetry: 10, debug: false
   });
-  h.loadSource(url); h.attachMedia(mediaEl); return h;
+  h.on(window.Hls.Events.MANIFEST_PARSED, function() {
+    if (typeof onReady === 'function') onReady();
+    mediaEl.play().catch(function(){});
+    hidePlayerLoading();
+  });
+  h.on(window.Hls.Events.FRAG_BUFFERED, function() {
+    if (!mediaEl.paused && mediaEl.currentTime > 0) mediaEl.play().catch(function(){});
+  });
+  h.on(window.Hls.Events.ERROR, function(evt, data) {
+    if (!data.fatal) return;
+    console.warn('[Player] attempt failed:', data.type, data.details);
+    try { h.destroy(); } catch (e) {}
+    _mainHls = null;
+    if (typeof onFatal === 'function') onFatal(data);
+  });
+  (function() {
+    var _sc = null;
+    mediaEl.addEventListener('waiting', function() { clearTimeout(_sc); _sc = setTimeout(function() { if (!mediaEl.paused && mediaEl.readyState < 3 && h) { try { h.startLoad(mediaEl.currentTime || 0); } catch(ex) {} mediaEl.play().catch(function(){}); } }, 5000); });
+    mediaEl.addEventListener('playing', function() { clearTimeout(_sc); });
+    mediaEl.addEventListener('stalled', function() { setTimeout(function() { if (!mediaEl.paused && h) try { h.startLoad(mediaEl.currentTime); } catch(ex) {} }, 3000); });
+  })();
+  h.loadSource(url);
+  h.attachMedia(mediaEl);
+  return h;
 }
 
-function _tryCurrentSource(mediaEl) {
-  if (_srcIdx >= _sourceQueue.length) {
-    console.error('All sources exhausted');
-    hidePlayerLoading();
-    var wrap = mediaEl && mediaEl.closest ? mediaEl.closest('.player-video-wrap') : null;
-    var container = wrap && wrap.parentNode ? wrap.parentNode : null;
-    if (container) {
-      _showPlayerMsg(container, {
-        icon: 'fa-ban',
-        title: 'All streams failed to play',
-        detail: 'None of the returned sources could start. Try again, or try a different server / official embed.',
-        retry: true
-      });
+function _tryNextAttempt(mediaEl) {
+  while (_attemptIdx < _attemptQueue.length) {
+    var it = _attemptQueue[_attemptIdx];
+    if (_failedPlayUrls[it.playUrl]) { _attemptIdx++; continue; }
+    /* A host that already killed several routes is dead for this title — skip it fast. */
+    var host = _cdnHostOf(it.src ? it.src.url : '');
+    if (host && (_hostFails[host] || 0) >= 3) {
+      console.log('[Player] skipping dead host ' + host + ' (' + (_hostFails[host] || 0) + ' fails)');
+      _failedPlayUrls[it.playUrl] = 1;
+      _attemptIdx++;
+      continue;
     }
+    _playOneAttempt(it, mediaEl);
     return;
   }
-  var s = _sourceQueue[_srcIdx];
-  if (_triedUrls[s.url]) { _srcIdx++; _tryCurrentSource(mediaEl); return; }
-  _triedUrls[s.url] = 1; console.log('PLAY: ' + s.server + ' ' + s.quality + ' ' + s.url.substring(0, 80));
-  if (_mainHls) { try{_mainHls.destroy();}catch(e){} _mainHls = null; }
-  /* Always route through browser SW proxy — no direct CDN, no server proxy */
-  var playUrl = _makeProxyUrl(s.url);
-  if (s.url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    var h = _tryHlsDirect(playUrl, mediaEl);
-    h.on(window.Hls.Events.MANIFEST_PARSED, function() { mediaEl.play().catch(function(){}); hidePlayerLoading(); });
-    h.on(window.Hls.Events.FRAG_BUFFERED, function() { if (!mediaEl.paused && mediaEl.currentTime > 0) mediaEl.play().catch(function(){}); });
-    (function() {
-      var _sc = null;
-      mediaEl.addEventListener('waiting', function() { clearTimeout(_sc); _sc = setTimeout(function() { if (!mediaEl.paused && mediaEl.readyState < 3 && h) { try { h.startLoad(mediaEl.currentTime || 0); } catch(ex) {} mediaEl.play().catch(function(){}); } }, 5000); });
-      mediaEl.addEventListener('playing', function() { clearTimeout(_sc); });
-      mediaEl.addEventListener('stalled', function() { setTimeout(function() { if (!mediaEl.paused && h) try { h.startLoad(mediaEl.currentTime); } catch(ex) {} }, 3000); });
-    })();
-    h.on(window.Hls.Events.ERROR, function(evt, data) {
-      if (!data.fatal) return;
-      console.warn('[Player] Source failed, trying next:', data.type, data.details);
-      h.destroy(); _mainHls = null;
-      _advanceSource(mediaEl);
-    });
+  _allStreamsExhausted(mediaEl);
+}
+
+function _playOneAttempt(it, mediaEl) {
+  _failedPlayUrls[it.playUrl] = 1;
+  var url = it.playUrl;
+  var src = it.src || {};
+  if (src.url) _activeSrcUrl = src.url;   /* keep the tracks UI in sync with the real attempt */
+  /* The user picked a specific quality and we had to move off it — say so once. */
+  if (_explicitPick && !_downgradeToastShown && _firstPickSrc && src.url !== _firstPickSrc.url) {
+    var fq = _firstPickSrc._quality || '?', aq = src._quality || '?';
+    if (_qRank(fq) !== _qRank(aq)) {
+      _downgradeToastShown = true;
+      _showPickToast(fq + " isn't available right now — playing " +
+        (String(aq).toLowerCase().indexOf('auto') > -1 ? 'Auto (best available)' : aq) + '.');
+    }
+  }
+  var name = (src.server || 'Server') + (src.quality && src.quality !== '?' ? ' · ' + src.quality : '');
+  console.log('[Player] trying: ' + name + ' [' + it.label + '] ' + url.substring(0, 90));
+  if (_mainHls) { try { _mainHls.destroy(); } catch (e) {} _mainHls = null; }
+  if (_audioEl) { try { _audioEl.pause(); } catch (e) {} }
+
+  function advance() {
+    if (_audioHls) { try { _audioHls.destroy(); } catch (e) {} _audioHls = null; }
+    var failedHost = _cdnHostOf(it.src ? it.src.url : '');
+    if (failedHost) {
+      _hostFails[failedHost] = (_hostFails[failedHost] || 0) + 1;
+    }
+    _attemptIdx++;
+    _tryNextAttempt(mediaEl);
+  }
+
+  /* HLS via hls.js (MSE). Direct first — CDNs that send CORS play instantly with no proxy. */
+  if (_looksHls(url) && _hlsJsUsable()) {
+    var h = _tryHlsDirect(url, mediaEl, advance, function() { _rememberWorking(it); });
     _mainHls = h;
-  } else if (s.url.indexOf('.m3u8') > -1 && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
-    /* Safari native HLS — still route through SW proxy */
-    mediaEl.src = playUrl;
-    mediaEl.addEventListener('loadedmetadata', function() { mediaEl.play().catch(function(){}); }, {once:true});
-    mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
-  } else {
-    /* Direct MP4 / other — route through SW proxy */
-    mediaEl.src = playUrl; mediaEl.play().catch(function () {});
-    mediaEl.addEventListener('error', function() { _advanceSource(mediaEl); }, {once:true});
+    return;
+  }
+
+  /* HLS via native Safari playback. */
+  if (_looksHls(url) && mediaEl.canPlayType && mediaEl.canPlayType('application/vnd.apple.mpegurl')) {
+    mediaEl.addEventListener('loadedmetadata', function() { _rememberWorking(it); mediaEl.play().catch(function(){}); hidePlayerLoading(); }, { once: true });
+    mediaEl.addEventListener('error', advance, { once: true });
+    mediaEl.src = url;
+    return;
+  }
+
+  /* MP4 / progressive / anything else — a <video> element plays cross-origin without CORS. */
+  if (mediaEl.canPlayType && url.indexOf('.m3u8') > -1 && !_hlsJsUsable() &&
+      !(mediaEl.canPlayType('application/vnd.apple.mpegurl'))) {
+    /* HLS but no hls.js and no native support — can't play, skip. */
+    advance();
+    return;
+  }
+  mediaEl.addEventListener('error', advance, { once: true });
+  mediaEl.addEventListener('canplay', function() { _rememberWorking(it); hidePlayerLoading(); }, { once: true });
+  mediaEl.src = url;
+  mediaEl.play().catch(function(){});
+}
+
+/* Small status toast for pick fallbacks. */
+function _showPickToast(msg) {
+  try {
+    var prev = document.getElementById('pickToast');
+    if (prev) prev.remove();
+    var toast = document.createElement('div');
+    toast.id = 'pickToast';
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed;top:74px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(229,9,20,.92);color:#fff;padding:10px 18px;border-radius:999px;font-size:.8rem;font-weight:700;box-shadow:0 10px 34px rgba(0,0,0,.5);pointer-events:none;max-width:min(92vw,560px);text-align:center;';
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity .5s'; }, 3800);
+    setTimeout(function() { toast.remove(); }, 4400);
+  } catch (e) {}
+}
+
+function _allStreamsExhausted(mediaEl) {
+  /* Sources that arrive while we are playing/falling back are appended, never lost. */
+  var known = {};
+  _attemptQueue.forEach(function(it) { if (it && it.src && it.src.url) known[it.src.url] = 1; });
+  var more = _allSources.filter(function(s) { return s && s.url && !known[s.url]; });
+  if (more.length) {
+    console.log('[Player] more sources arrived after playback start: ' + more.length);
+    _swReady().then(function(swOk) {
+      _lastSwOk = swOk;
+      more.forEach(function(s) {
+        _attemptsForUrl(s.url, swOk).forEach(function(a) {
+          _attemptQueue.push({ src: s, playUrl: a.url, label: a.label });
+        });
+      });
+      _tryNextAttempt(mediaEl);
+    });
+    return;
+  }
+  console.error('All streams exhausted');
+  hidePlayerLoading();
+  var wrap = mediaEl && mediaEl.closest ? mediaEl.closest('.player-video-wrap') : null;
+  var container = wrap && wrap.parentNode ? wrap.parentNode : null;
+  if (!container) return;
+  var tried = _attemptQueue.length;
+  var hint = '';
+  if (!_swActiveNow() && _looksHls((mediaEl.currentSrc || ''))) {
+    hint = ' Your browser could not play any stream directly (they need a browser proxy, which needs a secure HTTPS connection). Try the browser version on HTTPS, or use Try Again.';
+  }
+  _showPlayerMsg(container, {
+    icon: 'fa-ban',
+    title: 'All streams failed to play',
+    detail: 'Tried ' + tried + ' stream route' + (tried === 1 ? '' : 's') + ' and none could start.' + hint + ' Try again, or pick another stream from the list below.',
+    retry: true
+  });
+}
+
+function _advanceSource(mediaEl) {
+  /* Legacy hook: skip the whole remaining attempt list of the current source. */
+  var cur = _attemptQueue[_attemptIdx];
+  var curUrl = cur ? cur.src.url : null;
+  while (_attemptIdx < _attemptQueue.length) {
+    var it = _attemptQueue[_attemptIdx];
+    if (curUrl && it.src.url !== curUrl) break;
+    _failedPlayUrls[it.playUrl] = 1;
+    _attemptIdx++;
+  }
+  _tryNextAttempt(mediaEl);
+}
+
+function _setActiveByUrl(url) {
+  for (var i = 0; i < _uniqueSources.length; i++) {
+    if (_uniqueSources[i].s.url === url) { _activeSrcIdx = i; return; }
   }
 }
-function _advanceSource(mediaEl) { _srcIdx++; _tryCurrentSource(mediaEl); }
 
 function _openPopup() {
   var match = _findBestMatch();
@@ -156,8 +531,17 @@ function _detectLangFromManifest(url, callback) {
   if (!url || url.indexOf('.m3u8') === -1) { callback([]); return; }
   if (_langCache[url]) { callback(_langCache[url].langs || []); return; }
   _langCache[url] = {langs:[], resolved:false};
-  var proxyUrl = _makeProxyUrl(url);
-  fetch(proxyUrl, {cache: 'no-store'}).then(function(r){return r.text();}).then(function(text){
+  var tryUrls = [url];
+  if (_swActiveNow()) tryUrls.push(_makeProxyUrl(url));
+  var bodyP = tryUrls.reduce(function(chain, u) {
+    return chain.catch(function() {
+      return fetch(u, {cache: 'no-store', mode: (u === url ? 'cors' : 'same-origin')}).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      });
+    });
+  }, Promise.reject(new Error('start')));
+  bodyP.then(function(text){
     var langs = [];
     /* Parse #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="...",NAME="...",LANGUAGE="..." */
     var re = /#EXT-X-MEDIA:[^\n]*/gi; var m;
@@ -178,8 +562,13 @@ function _detectLangFromManifest(url, callback) {
   }).catch(function() { _langCache[url] = {langs:[], resolved:true}; callback([]); });
 }
 
+
 /* ===== Source management ===== */
 function _addSource(s) {
+  /* Ignore duplicates of a URL we already track (many servers return the same master). */
+  for (var i = 0; i < _allSources.length; i++) {
+    if (_allSources[i].url === s.url) return;
+  }
   s._lang = _detectLangFromSource(s);
   s._quality = s.quality || '?';
   s._server = s.server || s.server_name || '?';
@@ -204,6 +593,7 @@ function _addSource(s) {
 var _activeSrcIdx = 0; var _uniqueSources = [];
 
 function _renderSourceList() {
+  if (typeof _pcRefreshSources === 'function') _pcRefreshSources();
   var box = document.getElementById('sourceSelector');
   if (!box || !_allSources.length) return;
   /* Don't group — show EVERY source individually with server name, quality, language */
@@ -278,6 +668,7 @@ function selectSource(idx) {
 /* ===== Dual Audio Mode ===== */
 function _buildDualInline() {
   var box = document.getElementById('sourceSelector');
+  if (!box) return;
   var existing = document.getElementById('dualInline'); if (existing) existing.remove();
   if (!_allSources.length) return;
   var vids = _allSources; var auds = _allSources;
@@ -305,7 +696,7 @@ function switchDualAudio() {
   if (!_audioEl) { _audioEl = document.createElement('audio'); _audioEl.id = 'dualAudio'; _audioEl.muted = false; document.body.appendChild(_audioEl); }
   _audioEl.muted = false; _audioEl.volume = 1;
   if (d.url.indexOf('.m3u8') > -1 && window.Hls && window.Hls.isSupported()) {
-    var h = new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,highBufferWatchdogPeriod:0.3,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,fragLoadingMaxRetry:8,levelLoadingMaxRetry:6,manifestLoadingMaxRetry:6,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:209715200});
+    var h = new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:900,maxMaxBufferLength:1800,backBufferLength:60,highBufferWatchdogPeriod:0.3,nudgeOffset:0.1,maxSeekHole:60,fragLoadingTimeOut:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,fragLoadingMaxRetry:5,levelLoadingMaxRetry:2,manifestLoadingMaxRetry:2,startLevel:-1,capLevelToPlayerSize:true,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:209715200});
     h.loadSource(d.url); h.attachMedia(_audioEl);
     h.on(window.Hls.Events.MANIFEST_PARSED, function() { var v = document.getElementById('mainVideo'); if (v) { _audioEl.currentTime = v.currentTime + _audioOffset; } _audioEl.play().catch(function(){}); });
     _audioHls = h;
@@ -332,9 +723,10 @@ function _startSync() {
 }
 function _stopSync() { clearInterval(_syncInterval); _syncInterval = null; }
 function toggleDualMode() {
+  var box = document.getElementById('sourceSelector');
+  if (!box) return;
   _dualMode = !_dualMode;
   var b = document.getElementById('dualToggle'); if (b) b.classList.toggle('active', _dualMode);
-  var box = document.getElementById('sourceSelector');
   if (_dualMode) {
     var srcList = box.querySelector('.src-list'); if (srcList) srcList.style.display = 'none';
     _buildDualInline(); _startSync();
@@ -347,12 +739,77 @@ function toggleDualMode() {
   }
 }
 
+/* ===== Client-side source extraction (browser only, no server) ===== */
+function _fetchClientSources(container, params, vid) {
+  if (typeof ClientExtract === 'undefined' || !ClientExtract.extractSources) {
+    _showPlayerMsg(container, {
+      icon: 'fa-unlink',
+      title: 'Browser extractor unavailable',
+      detail: 'The client-side stream extractor did not load. Hard-refresh the page (Ctrl/Cmd+Shift+R) and try again.',
+      retry: true
+    });
+    return;
+  }
+  var tmdbId = params.tmdb_id || params.tmdbId;
+  var mediaType = params.type || params.mediaType || params.media_type || 'movie';
+  var season = params.season || params.season_id || '';
+  var episode = params.episode || params.episode_id || '';
+  _curMedia = { tmdbId: String(tmdbId || ''), type: mediaType, season: String(season || ''), episode: String(episode || '') };
+  var startedPlay = false;
+  console.log('[Player] Extracting sources in-browser:', mediaType, tmdbId, season ? 'S' + season : '', episode ? 'E' + episode : '');
+
+  function setStatus(t) {
+    var el = document.querySelector('.player-loading-subtext');
+    if (el) el.textContent = t || '';
+  }
+
+  ClientExtract.extractSources(tmdbId, mediaType, season, episode, {
+    onStatus: function(t) { setStatus(t); },
+    onSource: function(src) {
+      _addSource(src);
+      /* Start playing the first usable stream right away; the rest keep arriving. */
+      if (!startedPlay && !_startedPlay) {
+        startedPlay = true;
+        _startedPlay = true;
+        _playerPlaying = true;
+        hidePlayerLoading();
+        _playHls(src.url, vid);
+      }
+    },
+    onSubtitles: function(sub) {
+      if (!sub || !sub.url) return;
+      for (var si = 0; si < _allSubs.length; si++) {
+        if (_allSubs[si].url === sub.url) return;
+      }
+      var code = String(sub.lang || sub.language || sub.lang_name || 'en').substring(0, 2);
+      var name = sub.language || sub.lang_name || sub.lang || 'Subtitle';
+      _allSubs.push({ url: sub.url, lang: code, lang_name: name, label: name, source: 'stream' });
+      if (typeof _pcRefreshSources === 'function') _pcRefreshSources();
+    },
+    onDone: function(err) {
+      setStatus('');
+      if (_allSources.length) return;
+      _showPlayerMsg(container, {
+        icon: err ? 'fa-unlink' : 'fa-film',
+        title: err ? 'Stream lookup failed' : 'No streams found for this title',
+        detail: err
+          ? String(err) + ' Streams are now searched straight from your browser (no server involved), so a network or CORS block on the source API can cause this. Try again, or use another server button / official embed below.'
+          : 'No server returned a playable stream for this ' + (mediaType === 'tv' ? 'episode' : 'title') + '. Try again later, or use another server button / official embed below.',
+        retry: true
+      });
+    }
+  });
+}
+
 /* ===== Main Player Builder ===== */
 function _buildVideasyPlayer(container, apiUrl, retryFn) {
-  _allSources = []; _playerPlaying = false;
+  _allSources = []; _allSubs = []; _curMedia = null; _playerPlaying = false;
+  _startedPlay = false; _lastSwOk = false;
   _retryFn = typeof retryFn === 'function' ? retryFn : null;
   var vw = document.createElement('div'); vw.className = 'player-video-wrap'; vw.style.cssText = 'position:relative;width:100%;';
-  var vid = document.createElement('video'); vid.id = 'mainVideo'; vid.controls = true; vid.autoplay = true; vid.playsInline = true;
+  /* Native controls are OFF — the detail pages render their own control bar
+     (nf-controls), so enabling the browser's controls stacked a second player UI. */
+  var vid = document.createElement('video'); vid.id = 'mainVideo'; vid.controls = false; vid.autoplay = true; vid.playsInline = true;
   vid.style.cssText = 'width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;object-fit:contain;';
   vw.appendChild(vid); _initBufEvents(vid);
   function _syncAudioToVideo() {
@@ -364,42 +821,18 @@ function _buildVideasyPlayer(container, apiUrl, retryFn) {
     vid.addEventListener('ratechange', function() { if (_audioEl) _audioEl.playbackRate = vid.playbackRate; });
   }
   _syncAudioToVideo();
-  var sd = document.createElement('div'); sd.id = 'sourceSelector'; sd.className = 'src-selector'; vw.appendChild(sd);
-  sd.addEventListener('click', function(e) { e.stopPropagation(); });
-  sd.addEventListener('mouseenter', function() {});
   container.appendChild(vw);
-  /* Collapse icon */
-  var collapseSvg = '<svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
-  var icon = document.createElement('div'); icon.className = 'player-collapse-icon'; icon.innerHTML = collapseSvg; vw.appendChild(icon);
-  var _foldTimer = null, _iconHideTimer = null, _showIconTimer = null, _foldAnimTimer = null;
-  var _state = 'hidden';
-  function _setBarVisible(visible) {
-    clearTimeout(_foldAnimTimer);
-    if (visible) { sd.classList.remove('folded','folding'); sd.classList.add('open'); sd.style.display = 'flex'; sd.style.opacity = '1'; sd.style.transform = ''; }
-    else { sd.classList.add('folding'); sd.classList.remove('open'); _foldAnimTimer = setTimeout(function() { sd.classList.remove('folding'); sd.classList.add('folded'); }, 350); }
-  }
-  function _setIconVisible(visible) { if (visible) icon.classList.add('show'); else icon.classList.remove('show'); }
-  function _showIcon() { _state = 'icon'; _setIconVisible(true); }
-  function _hideIcon() { _setIconVisible(false); if (_state === 'icon') _state = 'hidden'; }
-  function _foldBar() { _setBarVisible(false); clearTimeout(_showIconTimer); _showIconTimer = setTimeout(function() { _showIcon(); }, 350); }
-  function _openBar() { clearTimeout(_foldTimer); clearTimeout(_showIconTimer); _state = 'open'; _setIconVisible(false); _setBarVisible(true); _startAutoFold(); }
-  function _startAutoFold() { clearTimeout(_foldTimer); _foldTimer = setTimeout(function() { var ddOpen = document.querySelector('.src-dd.open'); if (ddOpen) { _startAutoFold(); return; } _foldBar(); }, 5000); }
-  icon.addEventListener('click', function(e) { e.stopPropagation(); if (_state !== 'open') _openBar(); });
-  function _insideBar(el) { return el.closest('.src-selector') || el.closest('.player-collapse-icon') || el.closest('.dual-panel-inline'); }
-  vw.addEventListener('click', function(e) { if (_insideBar(e.target)) return; if (_state === 'hidden') _showIcon(); });
-  vw.addEventListener('mouseenter', function() { if (_state === 'hidden') _showIcon(); });
-  vw.addEventListener('mouseleave', function() { if (_state === 'icon') { clearTimeout(_iconHideTimer); _iconHideTimer = setTimeout(function() { _hideIcon(); }, 1000); } });
-  vw.addEventListener('touchstart', function(e) { if (_insideBar(e.target)) return; if (_state === 'hidden') _showIcon(); }, {passive: true});
-  _state = 'hidden'; _setBarVisible(false);
-  function _onFullscreenChange() {
-    if (document.fullscreenElement || document.webkitFullscreenElement) { sd.style.fontSize = '0.85rem'; icon.style.width = '42px'; icon.style.height = '42px'; if (_state === 'hidden') _showIcon(); }
-    else { sd.style.fontSize = ''; icon.style.width = ''; icon.style.height = ''; }
-  }
-  document.addEventListener('fullscreenchange', _onFullscreenChange);
-  document.addEventListener('webkitfullscreenchange', _onFullscreenChange);
+  if (typeof _pcInitUI === 'function') _pcInitUI(vw, vid);
+  /* The old in-player source/resolution bar (#sourceSelector) has been removed —
+     the Tracks sheet (tracks-ui.js) is the single Audio/Resolution/Dual selector. */
+  var isClientMode = !!(apiUrl && typeof apiUrl === 'object');
   var params = {};
-  (apiUrl.split('?')[1] || '').split('&').forEach(function(p) { var kv = p.split('='); params[kv[0]] = decodeURIComponent(kv[1] || ''); });
-  var tmdbId = params.tmdb_id || (typeof movieId !== 'undefined' ? movieId : '');
+  if (isClientMode) {
+    params = apiUrl;
+  } else {
+    (apiUrl.split('?')[1] || '').split('&').forEach(function(p) { var kv = p.split('='); params[kv[0]] = decodeURIComponent(kv[1] || ''); });
+  }
+  var tmdbId = params.tmdb_id || params.tmdbId || (typeof movieId !== 'undefined' ? movieId : '');
   if (!tmdbId) {
     _showPlayerMsg(container, {
       icon: 'fa-exclamation-triangle',
@@ -409,7 +842,11 @@ function _buildVideasyPlayer(container, apiUrl, retryFn) {
     });
     return;
   }
-  _fetchFromServer(container, apiUrl, vid);
+  if (isClientMode) {
+    _fetchClientSources(container, params, vid);
+  } else {
+    _fetchFromServer(container, apiUrl, vid);
+  }
   vid.addEventListener('playing', function() { hidePlayerLoading(); }, {once:true});
   vid.addEventListener('canplay', function() { hidePlayerLoading(); }, {once:true});
   vid.addEventListener('error', function() { hidePlayerLoading(); }, {once:true});
@@ -417,10 +854,25 @@ function _buildVideasyPlayer(container, apiUrl, retryFn) {
 
 var _retryFn = null;
 
+/* Stop everything that could still be playing/buffering underneath an error state. */
+function _stopActivePlayback() {
+  try {
+    if (_mainHls) { _mainHls.destroy(); _mainHls = null; }
+    if (_audioHls) { _audioHls.destroy(); _audioHls = null; }
+    if (_audioEl) { try { _audioEl.pause(); _audioEl.removeAttribute('src'); } catch (e) {} }
+    var v = document.getElementById('mainVideo');
+    if (v) {
+      try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+    }
+  } catch (e) {}
+  _hideBuf();
+}
+
 /* ===== Honest player states: clear message instead of an endless spinner ===== */
 function _showPlayerMsg(container, opts) {
   opts = opts || {};
   hidePlayerLoading();
+  _stopActivePlayback();
   /* Make sure the series 'extracting' splash never lingers over an error state */
   try {
     var splash = document.getElementById('epSplash');
@@ -458,6 +910,11 @@ function _showPlayerMsg(container, opts) {
     if (_retryFn) _retryFn();
   });
   return panel;
+}
+
+/* Page-level 'hide' helper used by templates may not exist on every page. */
+if (typeof window.hidePlayerLoading !== 'function' && typeof hidePlayerLoading !== 'function') {
+  window.hidePlayerLoading = function() {};
 }
 
 function _fetchFromServer(container, apiUrl, vid) {

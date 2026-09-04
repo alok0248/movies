@@ -466,6 +466,30 @@ function showToast(message, type) {
     setTimeout(function() { toast.style.animation = 'toastOut .3s forwards'; setTimeout(function() { toast.remove(); }, 300); }, 4000);
 }
 
+/*
+ * Defensive AJAX JSON reader (shared by all admin pages).
+ * Django answers with HTML when the session expires, CSRF fails, or a view
+ * throws (403/500/login redirect) — blind r.json() then throws the cryptic
+ * "Unexpected token '<'". This turns those responses into clear messages and
+ * always resolves with { ok, data } where data carries both `ok` and
+ * `success` so every page's existing checks keep working.
+ */
+function readJson(resp) {
+    return resp.text().then(function(t) {
+        var ct = (resp.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('json') > -1) {
+            try { return { ok: resp.ok, data: JSON.parse(t) }; }
+            catch (e) { return { ok: false, data: { ok: false, success: false, message: 'The server returned an invalid response.' } }; }
+        }
+        var msg;
+        if (resp.status === 401) msg = 'You are not signed in. Reload this page and sign in again.';
+        else if (resp.status === 403) msg = 'Your session expired or the security check failed. Reload this page and sign in again.';
+        else if (resp.status === 500) msg = 'Server error (500). Please try again in a moment.';
+        else msg = 'The server returned an unexpected response (you may need to sign in again). Reload the page and try again.';
+        return { ok: false, data: { ok: false, success: false, message: msg } };
+    });
+}
+
 // Auto-show Django messages as toasts
 document.addEventListener('DOMContentLoaded', function() {
     var msgs = document.querySelectorAll('.alert-dismissible');

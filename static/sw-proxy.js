@@ -88,20 +88,114 @@ self.addEventListener('fetch', function(event) {
  * Looks like normal browser traffic — no custom headers
  */
 function stealthFetch(request, pathStart) {
+  var cdnUrl = cdnUrlOf(request.url, pathStart);
   return caches.open(PREFETCH_CACHE).then(function(cache) {
     return cache.match(request).then(function(cached) {
-      if (cached) return cached;
+      if (cached) return maybeRewritePlaylist(cdnUrl, cached);
       return fetchDirect(request, pathStart).then(function(response) {
         if (response && response.ok) {
-          /* Cache successful responses (segments, manifests) */
+          /* Cache the RAW successful response (segments, manifests) */
           var toCache = response.clone();
           cache.put(request, toCache);
           trimCache(cache);
         }
-        return response;
+        return maybeRewritePlaylist(cdnUrl, response);
       });
     });
   });
+}
+
+/* Extract the real CDN URL from a /proxy/ request. */
+function cdnUrlOf(requestUrl, pathStart) {
+  var proxyPath = requestUrl.substring(pathStart + PROXY_PREFIX.length);
+  return proxyPath.startsWith('http/') ? 'http://' + proxyPath.substring(5) : 'https://' + proxyPath;
+}
+
+/*
+ * Rewrite HLS playlists served through the proxy so EVERY child URI becomes an
+ * absolute /proxy/<host>/... URL. Without this, root-relative child paths
+ * (e.g. "/r6/s/seg.ts") are resolved by hls.js against the PAGE origin and
+ * leak to the site server as 404s instead of staying in the browser proxy.
+ */
+function maybeRewritePlaylist(cdnUrl, response) {
+  if (!response || !response.ok) return response;
+  var ct = (response.headers.get('content-type') || '').toLowerCase();
+  var isPlaylist = ct.indexOf('mpegurl') > -1 || ct.indexOf('hls') > -1 || /\\.m3u8(\\?|$)/i.test(cdnUrl || '');
+  if (!isPlaylist) {
+    /* Some CDNs serve tokenized playlists with no .m3u8 in the URL and a generic
+       content-type. Peek only the FIRST chunk of a clone (never buffer a big
+       media body in memory) to check for the #EXTM3U magic. */
+    if (!response.body) return response;
+    var clone = response.clone();
+    var reader = clone.body.getReader();
+    var decoder = new TextDecoder('utf-8');
+    return reader.read().then(function(r) {
+      try { reader.cancel(); } catch (e) {}
+      var head = r && r.value ? decoder.decode(r.value, { stream: true }) : '';
+      head = String(head).replace(/^\uFEFF/, '').replace(/^\s+/, '');
+      if (head.indexOf('#EXTM3U') !== 0) return response;
+      return response.text().then(function(text) {
+        return rewritePlaylistResponse(cdnUrl, response, text);
+      });
+    }).catch(function() { return response; });
+  }
+  return response.text().then(function(text) {
+    return rewritePlaylistResponse(cdnUrl, response, text);
+  }).catch(function() { return response; });
+}
+
+function rewritePlaylistResponse(cdnUrl, response, text) {
+  var rewritten = rewriteManifest(text, cdnUrl);
+  var h = new Headers(response.headers);
+  h.delete('content-length');
+  h.delete('content-encoding');
+  h.set('Access-Control-Allow-Origin', '*');
+  if (!h.get('content-type')) h.set('content-type', 'application/vnd.apple.mpegurl');
+  return new Response(rewritten, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: h
+  });
+}
+
+function resolveChildUri(uri, cdnUrl) {
+  if (!uri) return '';
+  if (/^https?:\/\//i.test(uri)) return uri;
+  if (uri.indexOf('//') === 0) return 'https:' + uri;
+  if (uri.charAt(0) === '/') {
+    var origin = cdnUrl.split('/').slice(0, 3).join('/');   /* scheme + host */
+    return origin + uri;
+  }
+  var base = cdnUrl.substring(0, cdnUrl.lastIndexOf('/') + 1);
+  return base + uri;
+}
+
+function rewriteManifest(text, cdnUrl) {
+  var lines = String(text || '').split('\n');
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (line === '') { out.push(''); continue; }
+    if (line.charAt(0) === '#') {
+      /* Tags carry URIs: EXT-X-KEY, EXT-X-MEDIA, EXT-X-MAP, EXT-X-I-FRAME-STREAM-INF... */
+      out.push(line.replace(/URI="([^"]*)"/gi, function(m, u) {
+        var full = resolveChildUri(u, cdnUrl);
+        return 'URI="' + makeProxyUri(full) + '"';
+      }));
+    } else {
+      out.push(makeProxyUri(resolveChildUri(line, cdnUrl)));
+    }
+  }
+  return out.join('\n');
+}
+
+function makeProxyUri(fullUrl) {
+  if (!fullUrl || !/^https?:\/\//i.test(fullUrl)) return fullUrl;
+  try {
+    var u = new URL(fullUrl);
+    if (u.origin === self.location.origin && u.pathname.indexOf('/proxy/') === 0) return fullUrl;  /* already proxied */
+    return self.location.origin + '/proxy/' + u.hostname + u.pathname + u.search;
+  } catch (e) { return fullUrl; }
 }
 
 function trimCache(cache) {

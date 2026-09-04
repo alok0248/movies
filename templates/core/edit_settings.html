@@ -204,7 +204,7 @@
                         },
                         body: 'key=' + encodeURIComponent(key) + '&is_active=on'
                     });
-                    var data = await response.json();
+                    var data = (await readJson(response)).data;
                     if (data.success) {
                         location.reload();
                     } else {
@@ -213,7 +213,7 @@
                         addApiKeyBtn.innerHTML = '<i class="fas fa-plus"></i> Add Key';
                     }
                 } catch (e) {
-                    alert('Error adding key');
+                    alert(e && e.message ? e.message : 'Error adding key');
                     addApiKeyBtn.disabled = false;
                     addApiKeyBtn.innerHTML = '<i class="fas fa-plus"></i> Add Key';
                 }
@@ -232,7 +232,7 @@
                             method: 'POST',
                             headers: { 'X-CSRFToken': csrfToken }
                         });
-                        var data = await response.json();
+                        var data = (await readJson(response)).data;
                         if (!data.success) {
                             e.target.checked = !e.target.checked;
                             alert('Error: ' + (data.message || 'Could not toggle key'));
@@ -255,7 +255,7 @@
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken }
                     });
-                    var data = await response.json();
+                    var data = (await readJson(response)).data;
                     if (data.success) {
                         var row = apiKeysList.querySelector('tr[data-key-id="' + keyId + '"]');
                         if (row) row.remove();

@@ -105,6 +105,15 @@
 .pause-overlay .po-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.1)}
 .pause-overlay .po-progress-fill{height:100%;background:var(--brand,#e50914);border-radius:0 2px 0 0;transition:width .3s}
 
+/* Floating playback-speed pill (this page uses the native bar, which has no speed control) */
+.mp-speed-pill{position:absolute;top:44px;right:12px;z-index:18;display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(8,6,14,.72);color:#fff;font-size:.72rem;font-weight:700;cursor:pointer;opacity:0;transform:translateY(-4px);transition:opacity .25s,transform .25s,background .2s;backdrop-filter:blur(10px);pointer-events:none;font-family:inherit;line-height:1}
+.mp-speed-pill.active,.det-player-left:hover .mp-speed-pill{opacity:1;transform:translateY(0);pointer-events:auto}
+.mp-speed-pill:hover{background:rgba(24,18,40,.95)}
+.mp-speed-pill svg{width:13px;height:13px;fill:#a78bfa;flex-shrink:0}
+.det-player-left:fullscreen .mp-speed-pill{top:64px;right:26px}
+html[data-theme="light"] .mp-speed-pill{background:rgba(255,255,255,.92);color:#111;border-color:rgba(0,0,0,.14)}
+html[data-theme="light"] .mp-speed-pill svg{fill:#6d28d9}
+
 /* Player loading overlay */
 .player-loading-overlay{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);transition:opacity .4s ease}
 .player-loading-overlay.hidden{opacity:0;pointer-events:none}
@@ -488,6 +497,11 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
                 </div>
                 <div class="po-progress"><div class="po-progress-fill" id="poProgressFill" style="width:0%"></div></div>
             </div>
+            <!-- Floating playback-speed pill (native bar has no speed control) -->
+            <button class="mp-speed-pill" id="mpSpeedPill" title="Playback speed — click to cycle 0.5x–3x">
+                <svg viewBox="0 0 24 24"><path d="M13.05 9.79 10 7.5v9l3.05-2.29L16 12l-2.95-2.21zm3.89 2.29L14 14.43V9.57l2.94 2.36zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>
+                <span id="mpSpeedLabel">1x</span>
+            </button>
         </div>
         <div class="deferred-ad-slot" data-ad-position="below_player" data-ad-positions="below_player"></div>
     </div>
@@ -759,8 +773,9 @@ window.addEventListener('message',function(ev){
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="/static/js/client-extract.js?v=1787592396"></script>
-<script src="/static/js/player-core.js?v=1787592396"></script>
+<script src="/static/js/client-extract.js?v=1788464000"></script>
+<script src="/static/js/player-core.js?v=1788465900"></script>
+<script src="/static/js/tracks-ui.js?v=1788465900"></script>
 <script>
 // ===== Player UI Style =====
 (function() {
@@ -877,7 +892,7 @@ function loadMoviePlayer() {
 
     /* Server 0 (Extractor): fetch sources and play with source selection */
     if (cfg.isExtractor) {
-        var apiUrl = '/ajax/player-sources/?tmdb_id=' + movieId + '&type=movie';
+        var apiUrl = { tmdbId: movieId, mediaType: 'movie' };
         _buildVideasyPlayer(container, apiUrl, loadMoviePlayer);
     } else {
         /* Other servers: load iframe */
@@ -929,10 +944,108 @@ if (playerConfigs[currentPlayerId]) {
     loadMoviePlayer();
 }
 
-/* Pre-fetch seed for instant play */
-if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor) {
-    fetch('/ajax/prefetch-sources/?tmdb_id=' + movieId + '&type=movie', {mode: 'no-cors'}).catch(function(){});
-}
+/* Movies use the native control bar (this page has no custom bar), so the
+   browser controls must be ON here — the series page instead uses its own
+   custom bar and keeps them OFF to avoid double control rows. */
+(function() {
+    var pc = document.getElementById('playerContainer');
+    if (!pc) return;
+    var obs = new MutationObserver(function() {
+        var v = document.getElementById('mainVideo');
+        if (v && !v._nativeControlsSet) {
+            v._nativeControlsSet = true;
+            v.controls = true;
+        }
+    });
+    obs.observe(pc, { childList: true, subtree: true });
+    var v0 = document.getElementById('mainVideo');
+    if (v0) { v0._nativeControlsSet = true; v0.controls = true; }
+})();
+
+/* ── Floating speed pill + boost keys (movies use the native bar, no speed control) ── */
+(function() {
+    var pill = document.getElementById('mpSpeedPill');
+    var labelEl = document.getElementById('mpSpeedLabel');
+    if (!pill) return;
+    var speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+
+    function vid() { return document.getElementById('mainVideo'); }
+    function nearest(r) {
+        var b = 0, bd = 1e9;
+        for (var i = 0; i < speeds.length; i++) {
+            var d = Math.abs(speeds[i] - r);
+            if (d < bd) { bd = d; b = i; }
+        }
+        return b;
+    }
+    function fmt(r) { return (Math.round(r * 100) / 100) + 'x'; }
+    function persist(r) { try { localStorage.setItem('nm_speed', String(r)); } catch (e) {} }
+    function applyRate(r) {
+        r = Math.max(speeds[0], Math.min(speeds[speeds.length - 1], Math.round(r * 100) / 100));
+        var v = vid();
+        if (v) v.playbackRate = r;
+        if (labelEl) labelEl.textContent = fmt(r);
+        persist(r);
+        pill.classList.add('active');
+        clearTimeout(pill._hide);
+        pill._hide = setTimeout(function() {
+            var vv = vid();
+            if (vv && !vv.paused) pill.classList.remove('active');
+        }, 2500);
+        return r;
+    }
+    function restoreSpeed() {
+        var s = null;
+        try { s = parseFloat(localStorage.getItem('nm_speed')); } catch (e) {}
+        if (s && isFinite(s) && s >= speeds[0] && s <= speeds[speeds.length - 1]) applyRate(s);
+        else if (labelEl) labelEl.textContent = '1x';
+    }
+    pill.addEventListener('click', function() {
+        var v = vid();
+        if (!v) return;
+        var cur = (typeof v.playbackRate === 'number' && v.playbackRate > 0) ? v.playbackRate : 1;
+        var i = nearest(cur);
+        i = (i + 1) % speeds.length;
+        applyRate(speeds[i]);
+    });
+    document.addEventListener('keydown', function(ev) {
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'SELECT') return;
+        var v = vid();
+        if (!v) return;
+        if (ev.key === '>') { ev.preventDefault(); applyRate((v.playbackRate || 1) + 0.25); }
+        else if (ev.key === '<') { ev.preventDefault(); applyRate((v.playbackRate || 1) - 0.25); }
+    });
+    /* Apply + show the saved speed on the current video and any rebuilt ones */
+    var curVideo = null;
+    setInterval(function() {
+        var v = vid();
+        if (!v) {
+            pill.classList.remove('active');
+            clearTimeout(pill._hide);
+            return;
+        }
+        if (curVideo !== v) {
+            curVideo = v;
+            v.addEventListener('loadedmetadata', restoreSpeed);
+            restoreSpeed();
+        }
+        if (v.paused || v.ended) {
+            pill.classList.add('active');
+            clearTimeout(pill._hide);
+        }
+    }, 900);
+    restoreSpeed();
+    var box = document.querySelector('.det-player-left');
+    if (box) box.addEventListener('mousemove', function() {
+        pill.classList.add('active');
+        clearTimeout(pill._hide);
+        pill._hide = setTimeout(function() {
+            var vv = vid();
+            if (vv && !vv.paused) pill.classList.remove('active');
+        }, 2500);
+    });
+})();
+
 
 /* Single click = pause, Double click = fullscreen */
 (function() {

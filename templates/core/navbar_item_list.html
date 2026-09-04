@@ -82,11 +82,11 @@
                 },
                 body: `item_id=${itemId}`
             });
-            const data = await response.json();
+            const data = (await readJson(response)).data;
             
             if (!data.success) {
                 checkbox.checked = !checkbox.checked;
-                alert('Error toggling navbar item');
+                alert(data.message || 'Error toggling navbar item');
             }
         } catch (e) {
             checkbox.checked = !checkbox.checked;
