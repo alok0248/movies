@@ -319,11 +319,11 @@
                                         {% if h.poster_path %}<img src="https://image.tmdb.org/t/p/w92{{ h.poster_path }}" alt="" style="width:36px;height:54px;object-fit:cover;border-radius:4px;">{% else %}<div style="width:36px;height:54px;border-radius:4px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;"><i class="fas fa-film text-secondary" style="font-size:.7rem;"></i></div>{% endif %}
                                     </td>
                                     <td class="text-white">
-                                        {% with mid=h.tmdb_id %}{% if h.media_type == 'tv' %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ h.title }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ h.title }}</a>{% endif %}{% endwith %}
+                                        {% if h.tmdb_id > 0 %}{% with mid=h.tmdb_id %}{% if h.media_type == 'tv' or h.season_number %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ h.title }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ h.title }}</a>{% endif %}{% endwith %}{% else %}{{ h.title }}{% endif %}
                                         {% if h.season_number %}<span class="text-secondary"> S{{ h.season_number }}E{{ h.episode_number }}</span>{% endif %}
                                         {% if h.episode_title %}<div class="text-secondary small">{{ h.episode_title }}</div>{% endif %}
                                     </td>
-                                    <td><span class="badge {% if h.media_type == 'tv' %}bg-info{% else %}bg-purple{% endif %}" style="{% if h.media_type == 'movie' %}background:rgba(168,85,247,.2);color:#c084fc;{% endif %}">{{ h.media_type|upper }}</span></td>
+                                    <td><span class="badge {% if h.media_type == 'tv' or h.season_number %}bg-info{% else %}bg-purple{% endif %}" style="{% if h.media_type != 'tv' and not h.season_number %}background:rgba(168,85,247,.2);color:#c084fc;{% endif %}">{% if h.media_type == 'tv' or h.season_number %}TV{% else %}{{ h.media_type|upper }}{% endif %}</span></td>
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             <div class="progress flex-grow-1" style="height:6px;width:100px;">
@@ -333,7 +333,7 @@
                                         </div>
                                     </td>
                                     <td class="text-secondary small">{{ h.last_played_at|date:"M d, H:i" }}</td>
-                                    <td>{% with mid=h.tmdb_id %}{% if mid %}{% if h.media_type == 'tv' %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
+                                    <td>{% if h.tmdb_id > 0 %}{% with mid=h.tmdb_id %}{% if h.media_type == 'tv' or h.season_number %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endwith %}{% endif %}</td>
                                 </tr>
                             {% endfor %}
                             </tbody>

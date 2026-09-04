@@ -156,7 +156,7 @@ def send_configured_email(subject, message, recipient_list=None, purpose='notifi
             try:
                 from .models import EmailSendLog
                 for recipient in recipient_list:
-                    EmailSendLog.objects.create(address=addr, recipient=recipient, subject=subject, purpose=purpose, status='sent', source=purpose)
+                    EmailSendLog.objects.create(address_id=addr.pk, recipient=recipient, subject=subject, purpose=purpose, status='sent', source=purpose)
             except Exception:
                 pass
             return True
