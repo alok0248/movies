@@ -411,6 +411,9 @@
             <a href="{% url 'navbar_item_list' %}" class="sb-item {% if 'navbar-items' in request.path %}active{% endif %}">
                 <i class="fas fa-bars"></i> Navbar
             </a>
+            <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
+                <i class="fas fa-bug"></i> API Errors
+            </a>
         </div>
 
         <div class="sb-divider"></div>

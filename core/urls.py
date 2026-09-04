@@ -23,6 +23,7 @@ urlpatterns = [
     path('admin-dashboard/settings/player/', views.player_settings, name='player_settings'),
     path('admin-dashboard/settings/url-blocking/', views.url_blocking_settings, name='url_blocking_settings'),
     path('admin-dashboard/settings/email/', views.email_settings, name='email_settings'),
+    path('admin-dashboard/api-errors/', views.api_error_log, name='api_error_log'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
     path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),
