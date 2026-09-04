@@ -3876,6 +3876,45 @@ def _issue_verification_email(django_user, request, display_name=''):
     return token, otp
 
 
+def _issue_password_reset_email(django_user, request):
+    """Issue a 6-digit reset OTP + browser link and email both.
+
+    Shared by the website forgot-password form and the Android API
+    (forgot-password) so every trigger mails the same content and the
+    OTP is always stored (PasswordResetOTP) for the app's
+    /api/user/reset-password/ {email, otp} flow.
+    """
+    from .models import PasswordResetOTP, SiteSettings
+    otp_code = PasswordResetOTP.generate()
+    PasswordResetOTP.objects.create(user=django_user, otp=otp_code)
+
+    # Link-based token for browser users (backward compat)
+    token = default_token_generator.make_token(django_user)
+    from django.utils.encoding import force_bytes
+    from django.utils.http import urlsafe_base64_encode
+    uid = urlsafe_base64_encode(force_bytes(django_user.pk))
+    reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
+
+    brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
+    try:
+        send_configured_email(
+            subject=f'Password Reset - {brand}',
+            message=(
+                f'Your password reset code is: {otp_code}\n\n'
+                f'This code expires in 10 minutes. Enter it in the app or website to reset your password.\n\n'
+                f'Or click the link below to reset via browser (valid for 10 minutes):\n\n'
+                f'{reset_url}\n\n'
+                f'If you did not request this, please ignore this email.'
+            ),
+            recipient_list=[django_user.email],
+            purpose='password_reset',
+            fail_silently=True,
+        )
+    except Exception as e:
+        logger.warning(f'Failed to send reset email: {e}', exc_info=True)
+    return otp_code
+
+
 def ajax_register(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -3971,19 +4010,14 @@ def ajax_logout(request):
 
 def ajax_forgot_password(request):
     if request.method == 'POST':
-        email = request.POST.get('email')
+        email = request.POST.get('email', '').strip().lower()
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email is required'})
         try:
             user = User.objects.get(email=email)
-            token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            
-            # Send email
-            reset_url = request.build_absolute_uri(f'/reset-password/{uid}/{token}/')
-            subject = f'Password Reset for {SiteSettings.get_settings().brand_name}'
-            message = f'Click the link to reset your password: {reset_url}'
-            send_configured_email(subject, message, [email], purpose='password_reset')
-            
-            return JsonResponse({'success': True, 'message': 'Password reset link sent to your email'})
+            # Email contains both the 6-digit reset code (app/OTP use) and the browser link
+            _issue_password_reset_email(user, request)
+            return JsonResponse({'success': True, 'message': 'Password reset code sent to your email. Check your inbox or spam folder.'})
         except User.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'Email not found'})
         except Exception as e:
@@ -7875,33 +7909,8 @@ def api_user_forgot_password(request):
     django_user = User.objects.filter(email=email).first()
     resp = {'status': 'success', 'message': 'Password reset instructions sent to your email.'}
     if django_user and django_user.has_usable_password():
-        # Generate 6-digit OTP for the Android app
-        from .models import PasswordResetOTP
-        otp_code = PasswordResetOTP.generate()
-        PasswordResetOTP.objects.create(user=django_user, otp=otp_code)
-
-        # Also generate link-based token for web users (backward compat)
-        token = default_token_generator.make_token(django_user)
-        from django.utils.encoding import force_bytes
-        from django.utils.http import urlsafe_base64_encode
-        uid = urlsafe_base64_encode(force_bytes(django_user.pk))
-        reset_url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
-        try:
-            send_configured_email(
-                subject='Password Reset - NewMovies',
-                message=(
-                    f'Your password reset code is: {otp_code}\n\n'
-                    f'This code expires in 10 minutes.\n\n'
-                    f'Alternatively, click the link below to reset via browser:\n\n'
-                    f'{reset_url}\n\n'
-                    f'If you did not request this, please ignore this email.'
-                ),
-                recipient_list=[email],
-                purpose='password_reset',
-                fail_silently=True,
-            )
-        except Exception as e:
-            logger.warning(f'Failed to send reset email: {e}', exc_info=True)
+        # Email contains both the 6-digit reset code (for the app) and a browser link
+        _issue_password_reset_email(django_user, request)
     return JsonResponse(resp)
 
 
