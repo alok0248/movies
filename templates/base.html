@@ -657,6 +657,7 @@
         .auth-form-message { border-radius: var(--radius-sm); padding: .5rem .8rem; font-size: .82rem; font-weight: 500; margin-top: .6rem; }
         .auth-form-message.success { background: rgba(70,211,105,.1); color: #46d369; border: 1px solid rgba(70,211,105,.15); }
         .auth-form-message.error { background: rgba(239,68,68,.1); color: #ef4444; border: 1px solid rgba(239,68,68,.15); }
+        .auth-form-message.info, .auth-form-message-info { background: rgba(79,70,229,.12); color: #818cf8; border: 1px solid rgba(79,70,229,.2); }
         .auth-divider { display: flex; align-items: center; margin: 1rem 0; color: var(--text-3); font-size: .8rem; }
         .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
         .auth-form-link { color: var(--brand); font-weight: 600; cursor: pointer; }
@@ -1715,23 +1716,50 @@
                 </div>
             </div>
             
-            <!-- Forgot Password Form -->
+            <!-- Forgot Password Form (two steps: email -> code + new password) -->
             <div id="forgotForm" style="display: none;">
                 <div class="auth-modal-header">
                     <div class="auth-logo-icon"><i class="fas fa-key"></i></div>
-                    <h2 class="auth-form-title">Reset Password</h2>
-                    <p class="auth-form-subtitle">We'll send you a reset link</p>
+                    <h2 class="auth-form-title" id="forgotTitle">Reset Password</h2>
+                    <p class="auth-form-subtitle" id="forgotSubtitle">We'll email you a 6-digit reset code</p>
                 </div>
                 <div class="auth-modal-body">
-                    <form id="forgotFormElement" onsubmit="handleForgotPassword(event)">
-                        {% csrf_token %}
-                        <div class="auth-form-group">
-                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Email</label>
-                            <input type="email" class="auth-form-input" id="forgotEmail" name="email" placeholder="Enter your registered email" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
-                        </div>
-                        <div id="forgotMessage" class="auth-form-message" style="display: none;"></div>
-                        <button type="submit" class="auth-form-btn">Send Reset Link</button>
-                    </form>
+                    <!-- Step 1: request the code -->
+                    <div id="forgotStep1">
+                        <form id="forgotFormElement" onsubmit="handleForgotPassword(event)">
+                            {% csrf_token %}
+                            <div class="auth-form-group">
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Email</label>
+                                <input type="email" class="auth-form-input" id="forgotEmail" name="email" placeholder="Enter your registered email" required style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                            </div>
+                            <div id="forgotMessage" class="auth-form-message" style="display: none;"></div>
+                            <button type="submit" class="auth-form-btn">Send Reset Code</button>
+                        </form>
+                    </div>
+                    <!-- Step 2: enter the code + new password -->
+                    <div id="forgotStep2" style="display: none;">
+                        <form id="otpResetFormElement" onsubmit="handleResetWithOtp(event)">
+                            {% csrf_token %}
+                            <div id="otpResetInfo" class="auth-form-message auth-form-message-info" style="display: none;"></div>
+                            <div class="auth-form-group">
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Verification Code</label>
+                                <input type="text" class="auth-form-input" id="otpResetCode" name="otp" placeholder="6-digit code from your email" required maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;letter-spacing:0.35em;text-align:center;font-weight:600;">
+                            </div>
+                            <div class="auth-form-group">
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">New Password</label>
+                                <input type="password" class="auth-form-input" id="otpResetPassword" name="new_password" placeholder="Choose a new password (min 6 chars)" required minlength="6" style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                            </div>
+                            <div class="auth-form-group">
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Confirm New Password</label>
+                                <input type="password" class="auth-form-input" id="otpResetConfirm" name="confirm_password" placeholder="Confirm your new password" required minlength="6" style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;">
+                            </div>
+                            <div id="otpResetMessage" class="auth-form-message" style="display: none;"></div>
+                            <button type="submit" class="auth-form-btn">Reset Password</button>
+                            <div style="text-align:center;margin-top:0.75rem;">
+                                <span class="auth-form-link" onclick="showForgotStep(1)" style="font-size:0.82rem;color:var(--brand-color);cursor:pointer;font-weight:500;">Didn't get the code? Resend to another email</span>
+                            </div>
+                        </form>
+                    </div>
                     <div class="auth-divider">
                         <span>Remember your password?</span>
                     </div>
@@ -3065,17 +3093,18 @@
             setTimeout(() => {
                 backdrop.classList.remove('active');
                 document.body.style.overflow = 'auto';
-                ['loginFormElement', 'registerFormElement', 'forgotFormElement'].forEach(id => {
+                ['loginFormElement', 'registerFormElement', 'forgotFormElement', 'otpResetFormElement'].forEach(id => {
                     const form = document.getElementById(id);
                     if (form) form.reset();
                 });
-                ['loginMessage', 'registerMessage', 'forgotMessage'].forEach(id => {
+                ['loginMessage', 'registerMessage', 'forgotMessage', 'otpResetMessage', 'otpResetInfo'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) {
                         el.style.display = 'none';
                         el.className = 'auth-form-message';
                     }
                 });
+                window._forgotEmail = '';
             }, 300);
         }
 
@@ -3084,6 +3113,33 @@
             document.getElementById('registerForm').style.display = 'none';
             document.getElementById('forgotForm').style.display = 'none';
             document.getElementById(formType + 'Form').style.display = 'block';
+            if (formType === 'forgot') {
+                showForgotStep(1);
+            }
+        }
+
+        function showForgotStep(step) {
+            const step1 = document.getElementById('forgotStep1');
+            const step2 = document.getElementById('forgotStep2');
+            const title = document.getElementById('forgotTitle');
+            const subtitle = document.getElementById('forgotSubtitle');
+            const msg1 = document.getElementById('forgotMessage');
+            const msg2 = document.getElementById('otpResetMessage');
+            if (step === 2) {
+                step1.style.display = 'none';
+                step2.style.display = 'block';
+                title.textContent = 'Enter Reset Code';
+                subtitle.textContent = 'Enter the 6-digit code from your email and choose a new password';
+                if (msg2) msg2.style.display = 'none';
+                const codeInput = document.getElementById('otpResetCode');
+                if (codeInput) setTimeout(() => codeInput.focus(), 60);
+            } else {
+                step1.style.display = 'block';
+                step2.style.display = 'none';
+                title.textContent = 'Reset Password';
+                subtitle.textContent = "We'll email you a 6-digit reset code";
+                if (msg1) msg1.style.display = 'none';
+            }
         }
 
         function showMessage(elementId, message, type) {
@@ -3159,12 +3215,58 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showMessage('forgotMessage', data.message, 'success');
+                    // Remember the email and move to the code step
+                    window._forgotEmail = formData.get('email') || '';
+                    showForgotStep(2);
+                    const info = document.getElementById('otpResetInfo');
+                    info.textContent = 'Code sent to ' + window._forgotEmail + '. Check your inbox (and spam folder).';
+                    info.className = 'auth-form-message-info';
+                    info.style.display = 'block';
+                    const resetForm = document.getElementById('otpResetFormElement');
+                    if (resetForm) resetForm.reset();
                 } else {
                     showMessage('forgotMessage', data.message, 'error');
                 }
             } catch (error) {
                 showMessage('forgotMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleResetWithOtp(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            formData.set('email', window._forgotEmail || document.getElementById('forgotEmail').value);
+            const newPw = formData.get('new_password');
+            const confirmPw = formData.get('confirm_password');
+            if (newPw !== confirmPw) {
+                showMessage('otpResetMessage', 'Passwords do not match', 'error');
+                return;
+            }
+            const btn = event.target.querySelector('button[type=submit]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Resetting...'; }
+            try {
+                const response = await fetch('{% url "ajax_reset_password_otp" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('otpResetMessage', data.message, 'success');
+                    setTimeout(() => {
+                        // Prefill login with the reset email so the user signs in right away
+                        const loginEmail = document.getElementById('loginEmail') || document.getElementById('loginUsername');
+                        if (loginEmail) loginEmail.value = window._forgotEmail || '';
+                        switchAuthForm('login');
+                        const lm = document.getElementById('loginMessage');
+                        if (lm) { lm.textContent = 'Password reset successful! Sign in with your new password.'; lm.className = 'auth-form-message success'; lm.style.display = 'block'; }
+                    }, 1600);
+                } else {
+                    showMessage('otpResetMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('otpResetMessage', 'An error occurred', 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Reset Password'; }
             }
         }
 
