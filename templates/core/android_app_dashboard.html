@@ -422,8 +422,9 @@ function updateRetention() {
         },
         body: 'retention_days=' + days
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+    .then(readJson)
+    .then(function(res) {
+        var data = res.data;
         if (data.success) {
             var msg = 'Retention set to ' + data.data_retention_days + ' days.';
             if (data.deleted && Object.values(data.deleted).some(function(v){return v>0;})) {
@@ -456,8 +457,9 @@ function updateLogSettings() {
         },
         body: 'log_collection_enabled=' + (enabled ? 'on' : 'off') + '&log_retention_days=' + logDays
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+    .then(readJson)
+    .then(function(res) {
+        var data = res.data;
         if (data.success) {
             badge.textContent = data.log_collection_enabled ? 'ON' : 'OFF';
             badge.className = 'badge ' + (data.log_collection_enabled ? 'bg-success' : 'bg-secondary');

@@ -123,6 +123,10 @@
 .ep-splash-overview{font-size:.82rem;color:rgba(255,255,255,.4);line-height:1.6;max-width:500px;margin-bottom:1.2rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .ep-splash-status{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:rgba(255,255,255,.4)}
 .ep-splash-status .ep-splash-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--brand,#e50914);border-radius:50%;animation:spin .8s linear infinite}
+/* Full-bleed episode/show art behind the splash content */
+.ep-splash.with-bg{background-size:cover;background-position:center 22%;background-repeat:no-repeat}
+.ep-splash.with-bg>*{position:relative;z-index:1}
+.ep-splash-thumb{box-shadow:0 8px 40px rgba(0,0,0,.6)}
 html[data-theme="light"] .ep-splash{background:linear-gradient(135deg,rgba(0,0,0,.92),rgba(15,15,25,.95))}
 html[data-theme="light"] .pause-overlay{background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.15) 70%,transparent 100%)}
 
@@ -566,6 +570,37 @@ html[data-theme="light"] .src-minimize:hover svg line{stroke:rgba(26,26,46,.9)}
 .nf-speed-badge{position:absolute;top:12px;right:12px;z-index:18;padding:4px 10px;border-radius:6px;background:rgba(0,0,0,.7);color:#fff;font-size:.7rem;font-weight:700;opacity:0;transition:opacity .3s;pointer-events:none;backdrop-filter:blur(4px)}
 .nf-speed-badge.visible{opacity:1}
 
+/* Autoplay-next toggle (nonstop binge mode) */
+.nf-auto{display:flex;align-items:center;gap:4px}
+.nf-auto .nf-auto-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.28);transition:all .2s}
+.nf-auto.on .nf-auto-dot{background:#46d369;box-shadow:0 0 8px rgba(70,211,105,.8)}
+.nf-auto .nf-auto-txt{font-size:.66rem;font-weight:800;letter-spacing:.05em;color:rgba(255,255,255,.45);transition:color .2s;white-space:nowrap}
+.nf-auto.on .nf-auto-txt{color:#46d369}
+@media (max-width:600px){.nf-auto{display:none}}
+
+/* Up-next auto-advance card */
+.nf-upnext{position:absolute;inset:0;z-index:19;display:none;align-items:flex-end;justify-content:flex-end;padding:0 18px 96px;background:linear-gradient(to top,rgba(0,0,0,.55),transparent 45%);cursor:pointer;border-radius:16px}
+.det-player-left:fullscreen .nf-upnext{padding:0 26px 112px;border-radius:0}
+.nf-upnext.visible{display:flex}
+.up-card{width:min(340px,100%);background:rgba(12,10,20,.93);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 16px;box-shadow:0 18px 60px rgba(0,0,0,.6);backdrop-filter:blur(16px);cursor:default;pointer-events:auto}
+.up-kicker{display:flex;align-items:center;gap:7px;font-size:.64rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#46d369;margin-bottom:7px}
+.up-kicker i{color:#46d369}
+.up-title{font-size:1.02rem;font-weight:700;color:#fff;line-height:1.3;margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.up-meta{font-size:.72rem;color:rgba(255,255,255,.45);font-weight:600;margin-bottom:9px}
+.up-count{font-size:.72rem;color:rgba(255,255,255,.6);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.up-count b{color:#46d369;font-size:.9rem}
+.up-progress{height:3px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.up-progress-fill{height:100%;background:linear-gradient(90deg,#46d369,#a3e635);transition:width 1s linear}
+.up-actions{display:flex;gap:8px}
+.up-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#fff;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit}
+.up-btn:hover{background:rgba(255,255,255,.16)}
+.up-btn.primary{background:var(--brand,#e50914);border-color:transparent}
+.up-btn.primary:hover{background:#f6121d;box-shadow:0 4px 18px rgba(229,9,20,.4)}
+html[data-theme="light"] .up-card{background:rgba(248,246,252,.97);border-color:rgba(0,0,0,.1)}
+html[data-theme="light"] .up-title{color:#111}
+html[data-theme="light"] .up-meta{color:rgba(0,0,0,.5)}
+html[data-theme="light"] .up-count{color:rgba(0,0,0,.55)}
+
 /* Fullscreen tweaks */
 .det-player-left:fullscreen .nf-controls{padding:0 24px 16px}
 .det-player-left:fullscreen .nf-ep-info .nf-ep-title{font-size:1.3rem}
@@ -683,6 +718,21 @@ body.player-netflix .dual-panel{display:none!important}
                 <div class="po-progress"><div class="po-progress-fill" id="poProgressFill" style="width:0%"></div></div>
             </div>
 
+            <!-- Up-next auto-advance card (nonstop mode) -->
+            <div class="nf-upnext" id="nfUpNext">
+                <div class="up-card">
+                    <div class="up-kicker"><i class="fas fa-play-circle"></i> Up next</div>
+                    <div class="up-title" id="upNextTitle"></div>
+                    <div class="up-meta" id="upNextMeta"></div>
+                    <div class="up-count" id="upNextCount" style="display:none"><span>Playing next in</span>&nbsp;<b id="upNextSecs">10</b>&nbsp;<span>s…</span></div>
+                    <div class="up-progress" id="upNextProg" style="display:none"><div class="up-progress-fill" id="upNextFill" style="width:0%"></div></div>
+                    <div class="up-actions">
+                        <button class="up-btn primary" id="upNextNow"><i class="fas fa-play"></i> Play now</button>
+                        <button class="up-btn" id="upNextCancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Netflix-style custom controls -->
             <div class="nf-controls" id="nfControls">
                 <!-- Progress bar -->
@@ -707,6 +757,7 @@ body.player-netflix .dual-panel{display:none!important}
                     <div class="nf-spacer"></div>
                     <button class="nf-btn" id="nfPrevBtn" title="Previous Episode" style="display:none"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
                     <button class="nf-btn" id="nfNextBtn" title="Next Episode" style="display:none"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+                    <button class="nf-btn nf-auto" id="nfAutoBtn" title="Autoplay next episode (nonstop)"><span class="nf-auto-dot"></span><span class="nf-auto-txt" id="nfAutoLabel">AUTO ▶</span></button>
                     <button class="nf-btn" id="nfSpeedBtn" title="Playback Speed"><span style="font-size:.7rem;font-weight:700" id="nfSpeedLabel">1x</span></button>
                     <button class="nf-btn" id="nfFsBtn" title="Fullscreen (F)"><svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
                 </div>
@@ -1039,8 +1090,9 @@ window.addEventListener('message',function(ev){
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="/static/js/client-extract.js?v=1787592396"></script>
-<script src="/static/js/player-core.js?v=1787592396"></script>
+<script src="/static/js/client-extract.js?v=1788464000"></script>
+<script src="/static/js/player-core.js?v=1788465900"></script>
+<script src="/static/js/tracks-ui.js?v=1788465900"></script>
 <script>
 // ===== Player UI Style =====
 (function() {
@@ -1074,10 +1126,9 @@ const playerConfigs = {
 
 const SERIES_TMDB_ID = {{ series_id }};
 const SERIES_IMDB_ID = "{{ series.imdb_id|default:''|escapejs }}";
-/* Prefetch seed in background so extraction is instant when user clicks play */
-fetch('/ajax/prefetch-sources/?tmdb_id='+SERIES_TMDB_ID).catch(function(){});
 const seriesTitle = "{{ series.title|escapejs }}";
 const SERIES_POSTER_PATH = "{{ series.poster_path|default:""|escapejs }}";
+const SERIES_BACKDROP_PATH = "{{ series.backdrop_path|default:""|escapejs }}";
 const isAdminUser = {% if request.user.is_staff or request.user.is_superuser %}true{% else %}false{% endif %};
 
 let currentSeason = {{ current_season }};
@@ -1163,7 +1214,7 @@ function updatePlayerUrl() {
 
     /* Server 0 (Extractor): fetch sources and play with source selection */
     if (cfg.isExtractor) {
-        var apiUrl = '/ajax/player-sources/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv&season=' + currentSeason + '&episode=' + currentEpisode;
+        var apiUrl = { tmdbId: SERIES_TMDB_ID, mediaType: 'tv', season: currentSeason, episode: currentEpisode };
         _buildVideasyPlayer(container, apiUrl, updatePlayerUrl);
     } else {
         var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
@@ -1323,6 +1374,9 @@ function _getSeriesFallback() {
         var bg = getComputedStyle(heroBg).backgroundImage;
         if (bg && bg !== 'none') src = bg.replace(/url\(['"]?/, '').replace(/['"]?\)/, '');
     }
+    if (!src && typeof SERIES_BACKDROP_PATH !== 'undefined' && SERIES_BACKDROP_PATH) {
+        src = 'https://image.tmdb.org/t/p/w1280' + SERIES_BACKDROP_PATH;
+    }
     if (!src) {
         var posterImg = document.querySelector('.det-poster img, .det-poster-wrap img');
         if (posterImg) src = posterImg.src;
@@ -1354,6 +1408,23 @@ function _loadImageWithFallback(imgEl, thumbEl, primarySrc, fallbackSrc) {
     }
 }
 
+/* Fill the whole player area with the episode/show image while extracting. */
+function _setSplashArt(splashEl, url) {
+    if (!splashEl) return;
+    splashEl.classList.remove('with-bg');
+    splashEl.style.backgroundImage = '';
+    if (!url) return;
+    splashEl.classList.add('with-bg');
+    splashEl.style.backgroundImage = 'linear-gradient(rgba(8,8,16,.22) 0%,rgba(8,8,16,.5) 45%,rgba(10,10,18,.96) 100%),url("' + url + '")';
+    /* If the art fails to load, drop silently back to the gradient — never a broken icon. */
+    var probe = new Image();
+    probe.onerror = function() {
+        splashEl.classList.remove('with-bg');
+        splashEl.style.backgroundImage = '';
+    };
+    probe.src = url;
+}
+
 function showEpSplash(ep, epNum) {
     var splash = document.getElementById('epSplash');
     if (!splash) return;
@@ -1364,20 +1435,31 @@ function showEpSplash(ep, epNum) {
     var badge = document.getElementById('epSplashBadge');
     var thumb = document.getElementById('epSplashThumb');
     var fallback = _getSeriesFallback();
-    if (ep) {
-        var epSrc = ep.still_path ? ('https://image.tmdb.org/t/p/w780' + ep.still_path) : '';
-        _loadImageWithFallback(img, thumb, epSrc, fallback);
-        if (title) title.textContent = ep.name || 'Episode ' + epNum;
-        if (meta) {
-            var html = '<span>S' + currentSeason + ' · E' + epNum + '</span>';
+    var epStill = (ep && ep.still_path) ? ('https://image.tmdb.org/t/p/w780' + ep.still_path) : '';
+    /* Art priority: series/show backdrop fills the whole area, then the episode still. */
+    _setSplashArt(splash, fallback || epStill);
+    if (epStill && fallback) {
+        /* Show backdrop behind + a small "now playing" still frame with its badge. */
+        img.onerror = function() { thumb.style.display = 'none'; };
+        img.src = epStill;
+        thumb.style.display = '';
+    } else {
+        /* The full-area art already shows the picture (or nothing to show). */
+        img.removeAttribute('src');
+        thumb.style.display = 'none';
+    }
+    if (title) title.textContent = ep ? (ep.name || 'Episode ' + epNum) : (seriesTitle || 'Loading…');
+    if (meta) {
+        var html = '<span>S' + currentSeason + ' · E' + epNum + '</span>';
+        if (ep) {
             if (ep.vote_average) html += '<span class="ep-splash-rating">★ ' + Number(ep.vote_average).toFixed(1) + '</span>';
             if (ep.air_date) html += '<span>' + ep.air_date + '</span>';
             if (ep.runtime) html += '<span>' + ep.runtime + ' min</span>';
-            meta.innerHTML = html;
         }
-        if (overview) overview.textContent = ep.overview || '';
-        if (badge) badge.textContent = 'S' + currentSeason + 'E' + epNum;
+        meta.innerHTML = html;
     }
+    if (overview) overview.textContent = (ep && ep.overview) ? ep.overview : '';
+    if (badge) badge.textContent = 'S' + currentSeason + 'E' + epNum;
     splash.classList.add('visible');
     splash.classList.remove('hidden');
     /* Clear any forced-hide left by the player's error state */
@@ -1618,10 +1700,6 @@ setTimeout(function() {
     if (playerConfigs[currentPlayerId]) playEpisode(currentEpisode);
 }, 500);
 
-/* Pre-fetch seed for instant play */
-if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor) {
-    fetch('/ajax/prefetch-sources/?tmdb_id=' + SERIES_TMDB_ID + '&type=tv', {mode: 'no-cors'}).catch(function(){});
-}
 
 /* Single click = pause, Double click = fullscreen */
 (function() {
@@ -1831,17 +1909,24 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
             return;
         }
 
-        // --- > (Shift+.): Increase playback speed ---
+        // --- > (Shift+.): Increase playback speed (boost) ---
         if (key === '>') {
             ev.preventDefault();
-            if (v) { v.playbackRate = Math.min(2, v.playbackRate + 0.25); showSpeedToast(v.playbackRate); }
+            if (v && window._nfApplyRate) { window._nfApplyRate((v.playbackRate || 1) + 0.25, true); }
             return;
         }
 
         // --- < (Shift+,): Decrease playback speed ---
         if (key === '<') {
             ev.preventDefault();
-            if (v) { v.playbackRate = Math.max(0.25, v.playbackRate - 0.25); showSpeedToast(v.playbackRate); }
+            if (v && window._nfApplyRate) { window._nfApplyRate((v.playbackRate || 1) - 0.25, true); }
+            return;
+        }
+
+        // --- N: Jump straight to the next episode (nonstop) ---
+        if (key === 'n' || key === 'N') {
+            ev.preventDefault();
+            if (window._nfGoNextNow) window._nfGoNextNow(true);
             return;
         }
 
@@ -1854,19 +1939,210 @@ if (playerConfigs[currentPlayerId] && playerConfigs[currentPlayerId].isExtractor
             return;
         }
     });
+})();
 
-    // Speed toast notification
-    function showSpeedToast(rate) {
-        var existing = document.getElementById('speedToast');
-        if (existing) existing.remove();
-        var toast = document.createElement('div');
-        toast.id = 'speedToast';
-        toast.textContent = rate + 'x';
-        toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);color:#fff;padding:12px 24px;border-radius:10px;font-size:1.2rem;font-weight:700;z-index:99999;pointer-events:none;transition:opacity .5s;backdrop-filter:blur(8px);';
-        document.body.appendChild(toast);
-        setTimeout(function() { toast.style.opacity = '0'; }, 800);
-        setTimeout(function() { toast.remove(); }, 1300);
+/* ═══════════════════════════════════════════════════════════════════
+   Auto-Advance (Nonstop) Engine — plays the next episode when one ends
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+    var overlay = document.getElementById('nfUpNext');
+    var autoBtn = document.getElementById('nfAutoBtn');
+    var AUTO_LS = 'nm_autonext';
+    var COUNTDOWN = 10;
+    var autoOn = true;
+    try {
+        var savedAuto = localStorage.getItem(AUTO_LS);
+        autoOn = savedAuto === null ? true : savedAuto === '1';
+    } catch (e) {}
+    var timer = null, remain = 0, fired = false;
+
+    function getVid() { return document.getElementById('mainVideo'); }
+
+    function syncAutoUI() {
+        if (!autoBtn) return;
+        autoBtn.classList.toggle('on', autoOn);
+        var lbl = document.getElementById('nfAutoLabel');
+        if (lbl) lbl.textContent = autoOn ? 'AUTO ▶' : 'AUTO';
+        autoBtn.title = autoOn
+            ? 'Autoplay next episode — ON (click to pause nonstop)'
+            : 'Autoplay next episode — OFF (click to go nonstop)';
     }
+    if (autoBtn) autoBtn.addEventListener('click', function() {
+        autoOn = !autoOn;
+        try { localStorage.setItem(AUTO_LS, autoOn ? '1' : '0'); } catch (e) {}
+        syncAutoUI();
+    });
+
+    function domEpNumbers() {
+        var set = {};
+        var els = document.querySelectorAll('.ep-list-card[data-ep], .ep-tab[data-ep]');
+        for (var i = 0; i < els.length; i++) {
+            var n = parseInt(els[i].getAttribute('data-ep') || '', 10);
+            if (n > 0) set[n] = 1;
+        }
+        return Object.keys(set).map(Number);
+    }
+    function epObjOf(n) {
+        var list = currentEpisodesData || [];
+        for (var i = 0; i < list.length; i++) if (list[i].episode_number === n) return list[i];
+        return null;
+    }
+    function domEpTitle(n) {
+        var img = document.querySelector('.ep-list-card[data-ep="' + n + '"] img.ep-thumb');
+        if (img && img.alt) return img.alt;
+        return null;
+    }
+    function nextEpInSeason() {
+        /* Episodes can live in the DOM list (initial season) and/or in currentEpisodesData */
+        var nums = domEpNumbers();
+        var list = currentEpisodesData || [];
+        for (var i = 0; i < list.length; i++) {
+            var x = list[i].episode_number;
+            if (x > 0 && nums.indexOf(x) < 0) nums.push(x);
+        }
+        var best = null;
+        for (i = 0; i < nums.length; i++) {
+            if (nums[i] > currentEpisode && (best === null || nums[i] < best)) best = nums[i];
+        }
+        return best;
+    }
+    function nextSeasonNum() {
+        var opts = document.querySelectorAll('.ep-season-option');
+        var best = null;
+        opts.forEach(function(o) {
+            var n = parseInt(o.getAttribute('data-season') || '', 10);
+            if (n > currentSeason && (best === null || n < best)) best = n;
+        });
+        return best;
+    }
+    function findUpNext() {
+        var n = nextEpInSeason();
+        if (n !== null) return { episode: n, season: currentSeason, epObj: epObjOf(n) };
+        var s = nextSeasonNum();
+        if (s !== null) return { episode: null, season: s, epObj: null };
+        return null;
+    }
+    function seasonName(s) {
+        var opts = document.querySelectorAll('.ep-season-option');
+        for (var i = 0; i < opts.length; i++) {
+            if (parseInt(opts[i].getAttribute('data-season') || '', 10) === s) {
+                var t = (opts[i].textContent || '').trim();
+                return t || ('Season ' + s);
+            }
+        }
+        return 'Season ' + s;
+    }
+
+    function stopCountdown() {
+        if (timer) { clearInterval(timer); timer = null; }
+    }
+    function hideOverlay() {
+        if (!overlay) return;
+        overlay.classList.remove('visible');
+        stopCountdown();
+    }
+    function goNext(instant) {
+        stopCountdown();
+        hideOverlay();
+        var t = findUpNext();
+        if (!t) return;
+        /* Let the tracks UI drop any dual stream before switching episodes. */
+        try { window.dispatchEvent(new CustomEvent('nm:episode-change', { detail: { instant: !!instant } })); } catch (e) {}
+        if (t.episode !== null) {
+            if (typeof playEpisode === 'function') playEpisode(t.episode);
+            return;
+        }
+        if (typeof loadEpisodesForSeason === 'function') {
+            loadEpisodesForSeason(t.season).then(function() {
+                var list = currentEpisodesData || [];
+                if (list.length && typeof playEpisode === 'function') playEpisode(list[0].episode_number);
+            });
+        }
+    }
+    window._nfGoNextNow = function(instant) { goNext(!!instant); };
+
+    function fillCard(t) {
+        var titleEl = document.getElementById('upNextTitle');
+        var metaEl = document.getElementById('upNextMeta');
+        if (!titleEl || !metaEl) return;
+        if (t.episode !== null) {
+            titleEl.textContent = (t.epObj && t.epObj.name) || domEpTitle(t.episode) || ('Episode ' + t.episode);
+            metaEl.textContent = 'Season ' + t.season + ' · Episode ' + t.episode;
+        } else {
+            titleEl.textContent = seasonName(t.season) + ' premiere';
+            metaEl.textContent = (typeof seriesTitle !== 'undefined' ? seriesTitle + ' · ' : '') + 'Next season';
+        }
+    }
+    function showUpNext() {
+        var t = findUpNext();
+        if (!t || !overlay) return;
+        stopCountdown();
+        fired = false;
+        fillCard(t);
+        overlay.classList.add('visible');
+        var countEl = document.getElementById('upNextCount');
+        var progEl = document.getElementById('upNextProg');
+        var fillEl = document.getElementById('upNextFill');
+        var nowBtn = document.getElementById('upNextNow');
+        if (!autoOn) {
+            if (countEl) countEl.style.display = 'none';
+            if (progEl) progEl.style.display = 'none';
+            if (nowBtn) nowBtn.innerHTML = '<i class="fas fa-play"></i> Play next episode';
+            return;
+        }
+        if (countEl) countEl.style.display = '';
+        if (progEl) progEl.style.display = '';
+        if (nowBtn) nowBtn.innerHTML = '<i class="fas fa-play"></i> Play now';
+        remain = COUNTDOWN;
+        function tick() {
+            var secsEl = document.getElementById('upNextSecs');
+            if (secsEl) secsEl.textContent = Math.max(0, remain);
+            if (fillEl) fillEl.style.width = ((COUNTDOWN - remain) / COUNTDOWN * 100) + '%';
+            if (remain <= 0) {
+                stopCountdown();
+                if (!fired) { fired = true; goNext(false); }
+                return;
+            }
+            remain--;
+        }
+        tick();
+        timer = setInterval(tick, 1000);
+    }
+
+    /* Hook every video element (player rebuilds create new ones) */
+    setInterval(function() {
+        var v = getVid();
+        if (!v || v._upNextHooked) return;
+        v._upNextHooked = true;
+        v.addEventListener('ended', function() {
+            if (v._upNextHandled) return;
+            v._upNextHandled = true;
+            setTimeout(function() { v._upNextHandled = false; }, 1500);
+            showUpNext();
+        });
+        v.addEventListener('play', function() { hideOverlay(); });
+        v.addEventListener('loadstart', function() { hideOverlay(); });
+        v.addEventListener('seeking', function() { if (!v.ended) hideOverlay(); });
+    }, 800);
+
+    /* Cancel the countdown if the user takes over */
+    document.addEventListener('keydown', function(ev) {
+        if (!overlay || !overlay.classList.contains('visible')) return;
+        if (ev.key === 'Escape' || ev.key === ' ' || ev.key === 'k' || ev.key === 'K') {
+            ev.preventDefault();
+            hideOverlay();
+        }
+    });
+
+    var nowBtn = document.getElementById('upNextNow');
+    if (nowBtn) nowBtn.addEventListener('click', function(ev) { ev.stopPropagation(); goNext(true); });
+    var cancelBtn = document.getElementById('upNextCancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', function(ev) { ev.stopPropagation(); hideOverlay(); });
+    if (overlay) overlay.addEventListener('click', function(ev) {
+        if (ev.target === overlay) hideOverlay();
+    });
+
+    syncAutoUI();
 })();
 function downloadEpisode() {
     var btn = document.getElementById('download-series-btn');
@@ -1939,8 +2215,50 @@ document.addEventListener('keydown', function(e) {
 
     var hideTimer = null;
     var centerHideTimer = null;
-    var speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-    var speedIdx = 3;
+    var speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+    var speedIdx = speeds.indexOf(1);
+
+    function _speedNearest(r) {
+        var best = 0, bd = 1e9;
+        for (var i = 0; i < speeds.length; i++) {
+            var d = Math.abs(speeds[i] - r);
+            if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+    }
+    function _speedSet(r, flash) {
+        r = Math.max(speeds[0], Math.min(speeds[speeds.length - 1], Math.round(r * 100) / 100));
+        var v = getVid();
+        if (v) v.playbackRate = r;
+        speedIdx = _speedNearest(r);
+        var lbl = (Math.round(r * 100) / 100) + 'x';
+        if (speedLabel) speedLabel.textContent = lbl;
+        try { localStorage.setItem('nm_speed', String(r)); } catch (e) {}
+        if (flash && speedBadge) {
+            speedBadge.textContent = lbl;
+            speedBadge.classList.add('visible');
+            setTimeout(function() { speedBadge.classList.remove('visible'); }, 1200);
+            var prev = document.getElementById('speedToast');
+            if (prev) prev.remove();
+            var toast = document.createElement('div');
+            toast.id = 'speedToast';
+            toast.textContent = lbl;
+            toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);color:#fff;padding:12px 24px;border-radius:10px;font-size:1.2rem;font-weight:700;z-index:99999;pointer-events:none;transition:opacity .5s;backdrop-filter:blur(8px);';
+            document.body.appendChild(toast);
+            setTimeout(function() { toast.style.opacity = '0'; }, 800);
+            setTimeout(function() { toast.remove(); }, 1300);
+        }
+        return r;
+    }
+    /* Shared entry point (keyboard, buttons) — speed boost 0.5x–3x, remembered per browser */
+    window._nfApplyRate = function(r, flash) { return _speedSet(r, flash); };
+    (function() {
+        var saved = null;
+        try { saved = parseFloat(localStorage.getItem('nm_speed')); } catch (e) {}
+        if (saved && isFinite(saved) && saved >= speeds[0] && saved <= speeds[speeds.length - 1]) {
+            _speedSet(saved, false);
+        }
+    })();
 
     function getVid() { return document.getElementById('mainVideo'); }
     function fmt(s) { if (!s || !isFinite(s)) return '0:00'; var m = Math.floor(s/60); var sec = Math.floor(s%60); return m + ':' + (sec<10?'0':'') + sec; }
@@ -2008,6 +2326,13 @@ document.addEventListener('keydown', function(e) {
             updateVolIcon(v.volume, v.muted);
             if (volSlider) volSlider.value = v.muted ? 0 : v.volume;
         });
+        /* Re-apply the boosted speed every time a (new) episode's video loads */
+        v.addEventListener('loadedmetadata', function() {
+            var saved = null;
+            try { saved = parseFloat(localStorage.getItem('nm_speed')); } catch (e) {}
+            if (saved && isFinite(saved) && saved >= speeds[0] && saved <= speeds[speeds.length - 1]) _speedSet(saved, false);
+            updateNextPrev();
+        });
         v.addEventListener('ended', function() { updatePlayIcon(true); showCenterPlay(true); updateNextPrev(); });
         updateNextPrev();
     }
@@ -2072,18 +2397,14 @@ document.addEventListener('keydown', function(e) {
         }
     });
 
-    // --- Speed ---
+    // --- Speed boost (cycles 0.5x → 3x, resumes from the current rate) ---
     speedBtn.addEventListener('click', function() {
         var v = getVid();
         if (!v) return;
+        var cur = (typeof v.playbackRate === 'number' && v.playbackRate > 0) ? v.playbackRate : 1;
+        speedIdx = _speedNearest(cur);
         speedIdx = (speedIdx + 1) % speeds.length;
-        v.playbackRate = speeds[speedIdx];
-        if (speedLabel) speedLabel.textContent = speeds[speedIdx] + 'x';
-        if (speedBadge) {
-            speedBadge.textContent = speeds[speedIdx] + 'x';
-            speedBadge.classList.add('visible');
-            setTimeout(function() { speedBadge.classList.remove('visible'); }, 1200);
-        }
+        _speedSet(speeds[speedIdx], true);
     });
 
     // --- Progress bar seek ---

@@ -144,6 +144,7 @@
 </style>
 
 <div class="container py-4" style="max-width:1100px;">
+    {% csrf_token %}
     <!-- Header -->
     <div class="mb-4">
         <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;"><i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard</a>
@@ -568,18 +569,43 @@ function ajaxPost(params, onSuccess) {
         },
         body: body
     })
-    .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
-    .then(function(result) {
-        try {
-            var d = JSON.parse(result.text);
-            if (d.success) { location.reload(); }
-            else { alert(d.message || 'Failed to save'); }
-        } catch(e) {
-            console.error('Response:', result.text.substring(0, 500));
-            alert('Server error. Check console for details.');
+    .then(function(r) { return readJsonResponse(r); })
+    .then(function(res) {
+        var d = res.data;
+        if (res.ok && d.success) {
+            location.reload();
+            if (onSuccess) onSuccess(d);
+        } else {
+            alert(d.message || 'Request failed');
         }
     })
     .catch(function(e) { console.error('AJAX error:', e); alert('Network error: ' + e.message); });
+}
+
+/*
+ * Parse an AJAX response defensively. The server must return JSON, but when
+ * the session expires, CSRF fails, or the server throws, Django answers with
+ * an HTML page (403/500) — blindly calling r.json() on that produces the
+ * cryptic "Network error: Unexpected token '<'". Turn those into clear messages.
+ */
+function readJsonResponse(r) {
+    return r.text().then(function(t) {
+        var ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('json') > -1) {
+            try { return { ok: r.ok, data: JSON.parse(t) }; }
+            catch (e) { return { ok: false, data: { success: false, message: 'The server returned an invalid response.' } }; }
+        }
+        if (r.status === 401) {
+            return { ok: false, data: { success: false, message: 'You are not signed in. Reload this page and sign in again.' } };
+        }
+        if (r.status === 403) {
+            return { ok: false, data: { success: false, message: 'Your session expired or the security check failed. Reload this page and sign in again.' } };
+        }
+        if (r.status === 500) {
+            return { ok: false, data: { success: false, message: 'Server error (500). Please try again in a moment.' } };
+        }
+        return { ok: false, data: { success: false, message: 'The server returned an unexpected response. Reload the page and try again.' } };
+    });
 }
 
 // ─── Email CRUD ───
@@ -705,6 +731,10 @@ function testSmtpFromModal() {
         result.innerHTML = '<span style="color:#ef4444;">Enter password to test</span>';
         return;
     }
+    if (!/^\d+$/.test(String(port).trim())) {
+        result.innerHTML = '<span style="color:#ef4444;">Enter a valid port number (e.g. 587)</span>';
+        return;
+    }
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
     result.innerHTML = '<span style="color:#fbbf24;">Connecting...</span>';
@@ -716,14 +746,15 @@ function testSmtpFromModal() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' },
         body: parts.join('&')
     })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+    .then(function(r) { return readJsonResponse(r); })
+    .then(function(res) {
+        var d = res.data;
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-vial me-1"></i>Test Connection';
-        if (d.success) {
+        if (res.ok && d.success) {
             result.innerHTML = '<span style="color:#22c55e;"><i class="fas fa-check-circle me-1"></i>' + d.message + '</span>';
         } else {
-            result.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle me-1"></i>' + d.message + '</span>';
+            result.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle me-1"></i>' + (d.message || 'Request failed') + '</span>';
         }
     })
     .catch(function(e) {
@@ -747,11 +778,12 @@ function testSavedSmtp(id) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' },
         body: parts.join('&')
     })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+    .then(function(r) { return readJsonResponse(r); })
+    .then(function(res) {
+        var d = res.data;
         btn.disabled = false;
         btn.innerHTML = origHtml;
-        alert(d.message || (d.success ? 'Test passed!' : 'Test failed'));
+        alert(d.message || (res.ok && d.success ? 'Test passed!' : 'Test failed'));
     })
     .catch(function(e) {
         btn.disabled = false;
@@ -804,14 +836,15 @@ function sendTestMail() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' },
         body: parts.join('&')
     })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+    .then(function(r) { return readJsonResponse(r); })
+    .then(function(res) {
+        var d = res.data;
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Send Test Mail';
-        if (d.success) {
+        if (res.ok && d.success) {
             result.innerHTML = '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px 14px;color:#22c55e;font-size:.85rem;"><i class="fas fa-check-circle me-1"></i>' + d.message + '</div>';
         } else {
-            result.innerHTML = '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;color:#ef4444;font-size:.85rem;"><i class="fas fa-times-circle me-1"></i>' + d.message + '</div>';
+            result.innerHTML = '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;color:#ef4444;font-size:.85rem;"><i class="fas fa-times-circle me-1"></i>' + (d.message || 'Request failed') + '</div>';
         }
     })
     .catch(function(e) {

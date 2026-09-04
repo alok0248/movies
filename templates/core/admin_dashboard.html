@@ -284,8 +284,9 @@
 // Load stats via AJAX
 (function() {
     fetch('/ajax/click-status/')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
+        .then(readJson)
+        .then(function(res) {
+            var data = res.data;
             if (data.clicks !== undefined) document.getElementById('statVisitors').textContent = data.clicks || '--';
         })
         .catch(function() {});

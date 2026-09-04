@@ -60,6 +60,21 @@ function getCSRFToken() {
     var cookie = document.cookie.split(";").find(function(c){return c.trim().startsWith("csrftoken=");});
     return cookie ? cookie.trim().split("=")[1] : "";
 }
+function readJson(resp) {
+    return resp.text().then(function(t) {
+        var ct = (resp.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('json') > -1) {
+            try { return { ok: resp.ok, data: JSON.parse(t) }; }
+            catch (e) { return { ok: false, data: { ok: false, success: false, message: 'The server returned an invalid response.' } }; }
+        }
+        var msg;
+        if (resp.status === 401) msg = 'You are not signed in. Reload this page and sign in again.';
+        else if (resp.status === 403) msg = 'Your session expired or the security check failed. Reload this page and sign in again.';
+        else if (resp.status === 500) msg = 'Server error (500). Please try again in a moment.';
+        else msg = 'The server returned an unexpected response (you may need to sign in again). Reload the page and try again.';
+        return { ok: false, data: { ok: false, success: false, message: msg } };
+    });
+}
 function saveNewFile() {
     var name = document.getElementById("newFilename").value.trim();
     var content = document.getElementById("newFileContent").value;
@@ -68,8 +83,9 @@ function saveNewFile() {
         method: "POST",
         headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
         body: JSON.stringify({filename: name, content: content})
-    }).then(function(r){return r.json()}).then(function(d){
-        if (d.ok) location.reload(); else alert(d.message || "Error");
+    }).then(readJson).then(function(res){
+        var d = res.data;
+        if (d.ok) location.reload(); else alert(d.message || "Request failed");
     });
 }
 function editFile(name) {
@@ -86,8 +102,9 @@ function saveEditFile() {
         method: "POST",
         headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
         body: JSON.stringify({filename: editFilename, content: content})
-    }).then(function(r){return r.json()}).then(function(d){
-        if (d.ok) { closeEditModal(); location.reload(); } else alert(d.message || "Error");
+    }).then(readJson).then(function(res){
+        var d = res.data;
+        if (d.ok) { closeEditModal(); location.reload(); } else alert(d.message || "Request failed");
     });
 }
 function closeEditModal() { document.getElementById("editModal").style.display = "none"; }
@@ -97,8 +114,9 @@ function deleteFile(name) {
         method: "POST",
         headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
         body: JSON.stringify({filename: name})
-    }).then(function(r){return r.json()}).then(function(d){
-        if (d.ok) location.reload(); else alert(d.message || "Error");
+    }).then(readJson).then(function(res){
+        var d = res.data;
+        if (d.ok) location.reload(); else alert(d.message || "Request failed");
     });
 }
 </script>

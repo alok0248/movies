@@ -262,8 +262,9 @@ async function toggleBlock(userId, btn) {
             method: 'POST',
             headers: { 'X-CSRFToken': getCsrfToken() }
         });
-        const data = await resp.json();
+        const data = (await readJson(resp)).data;
         if (data.success) location.reload();
+        else alert(data.message || 'Failed to toggle user status');
     } catch (e) { alert('Failed to toggle user status'); }
 }
 
@@ -275,6 +276,7 @@ async function deleteUser(userId, username) {
             headers: { 'X-CSRFToken': getCsrfToken() }
         });
         if (resp.redirected || resp.ok) location.reload();
+        else { const d = (await readJson(resp)).data; alert(d.message || 'Failed to delete user'); }
     } catch (e) { alert('Failed to delete user'); }
 }
 </script>

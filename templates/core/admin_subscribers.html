@@ -167,14 +167,30 @@ function sendEmailToSubs() {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
         body: JSON.stringify({ subject: subject, body: body, subscriber_ids: selectedIds, send_to_all: selectAll })
-    }).then(function(r) { return r.json(); })
-    .then(function(d) {
+    }).then(readJson)
+    .then(function(res) {
+        var d = res.data;
         msgEl.className = d.ok ? 'sub-msg ok' : 'sub-msg err';
-        msgEl.textContent = d.message;
+        msgEl.textContent = d.message || 'Request failed';
         btn.disabled = false; btn.textContent = 'Send Email';
         if (d.ok) { document.getElementById('emailSubject').value = ''; document.getElementById('emailBody').value = ''; document.getElementById('selectAll').checked = false; document.querySelectorAll('.sub-checkbox').forEach(function(cb) { cb.checked = false; }); }
     }).catch(function() { msgEl.className = 'sub-msg err'; msgEl.textContent = 'Network error'; btn.disabled = false; btn.textContent = 'Send Email'; });
 }
 function getCookie(name) { var v = document.cookie.match('(^|;)\\s*' + name + '=([^;]*)'); return v ? decodeURIComponent(v[2]) : ''; }
+function readJson(resp) {
+    return resp.text().then(function(t) {
+        var ct = (resp.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('json') > -1) {
+            try { return { ok: resp.ok, data: JSON.parse(t) }; }
+            catch (e) { return { ok: false, data: { ok: false, success: false, message: 'The server returned an invalid response.' } }; }
+        }
+        var msg;
+        if (resp.status === 401) msg = 'You are not signed in. Reload this page and sign in again.';
+        else if (resp.status === 403) msg = 'Your session expired or the security check failed. Reload this page and sign in again.';
+        else if (resp.status === 500) msg = 'Server error (500). Please try again in a moment.';
+        else msg = 'The server returned an unexpected response (you may need to sign in again). Reload the page and try again.';
+        return { ok: false, data: { ok: false, success: false, message: msg } };
+    });
+}
 </script>
 {% endblock %}

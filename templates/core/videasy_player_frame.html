@@ -157,11 +157,34 @@
   });
 
   // Single play
+  var _mediaTimer=null;
+  function _stopMediaTimer(){if(_mediaTimer){clearTimeout(_mediaTimer);_mediaTimer=null;}}
+  /* Direct file first — <video> needs no CORS. Fall back to /proxy/ only on error. */
+  function playFile(el,url){
+    try{el.onerror=null;}catch(e){}
+    el.onerror=function(){
+      try{el.onerror=null;}catch(e2){}
+      var prox=makeProxy(url);
+      if(prox&&el.src!==prox){el.src=prox;el.play().catch(function(){})}
+    };
+    el.src=url;
+    el.play().catch(function(){});
+    _stopMediaTimer();
+    _mediaTimer=setTimeout(function(){_mediaTimer=null;
+      if(el.readyState<2&&!el.error&&el.currentSrc){
+        try{el.onerror=null;}catch(e2){}
+        var prox=makeProxy(url);
+        if(prox&&el.currentSrc!==prox){el.src=prox;el.play().catch(function(){})}
+      }
+    },8000);
+  }
   function playUrl(url){      if(hls){hls.destroy();hls=null}
+    try{video.onerror=null;}catch(e){}
+    _stopMediaTimer();
     video.removeAttribute("src");video.load();
     if(url.indexOf(".m3u8")>-1){
       loadHLS(video,function(){return new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:1200,maxMaxBufferLength:2400,backBufferLength:240,highBufferWatchdogPeriod:0.15,nudgeOffset:0.05,maxSeekHole:120,fragLoadingTimeOut:60000,levelLoadingTimeOut:30000,manifestLoadingTimeOut:20000,fragLoadingMaxRetry:12,levelLoadingMaxRetry:8,manifestLoadingMaxRetry:8,startLevel:-1,capLevelToPlayerSize:false,stretchShortVideoTrack:true,maxAudioFramesDrift:4,startFragPrefetch:true,maxBufferSize:524288000,maxBufferHole:0.5,appendErrorMaxRetry:8})},url,function(h){hls=h},null);
-    }else{video.src=makeProxy(url);video.play().catch(function(){})}
+    }else{playFile(video,url);}
   }
 
   // Dual play
@@ -194,37 +217,78 @@
 
   }
 
-  // Generic HLS loader
+  /* Generic HLS loader — DIRECT first, /proxy/ service worker as fallback.
+     CORS-open CDNs play straight from the original URL with no proxy at all;
+     only when hls.js cannot reach the manifest (CORS/4xx/5xx) do we retry via
+     the browser's /proxy/ service worker. The Django server is never touched. */
   function loadHLS(el,createHls,url,hlsSetter,onReady,enforceMute){
-    var px=makeProxy(url);
-    fetch(px).then(function(r){
-      if(!r.ok)throw new Error("HTTP "+r.status);
-      return r.text();
-    }).then(function(text){
-      var rewritten=rewriteManifest(text,url);
-      var blob=new Blob([rewritten],{type:"application/vnd.apple.mpegurl"});
-      var blobUrl=URL.createObjectURL(blob);
-      var h=createHls();hlsSetter(h);
-      h.on(Hls.Events.MANIFEST_PARSED,function(e,d){if(onReady)onReady()});
-      h.on(Hls.Events.ERROR,function(e,d){
-        if(d.fatal){
-          if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
-            setTimeout(function(){if(h)h.startLoad()},1500);
-          }else if(d.type===Hls.ErrorTypes.MEDIA_ERROR){
-            h.recoverMediaError();
-            setTimeout(function(){if(h&&h.media)h.media.play().catch(function(){})},500);
+    var ended=false;
+    function loadViaProxy(){
+      if(ended)return;
+      var px=makeProxy(url);
+      fetch(px).then(function(r){
+        if(!r.ok)throw new Error("HTTP "+r.status);
+        return r.text();
+      }).then(function(text){
+        if(ended)return;
+        var rewritten=rewriteManifest(text,url);
+        var blob=new Blob([rewritten],{type:"application/vnd.apple.mpegurl"});
+        var blobUrl=URL.createObjectURL(blob);
+        var h=createHls();hlsSetter(h);
+        h.on(Hls.Events.MANIFEST_PARSED,function(e,d){if(onReady)onReady()});
+        h.on(Hls.Events.ERROR,function(e,d){
+          if(d.fatal){
+            if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
+              setTimeout(function(){if(h)h.startLoad()},1500);
+            }else if(d.type===Hls.ErrorTypes.MEDIA_ERROR){
+              h.recoverMediaError();
+              setTimeout(function(){if(h&&h.media)h.media.play().catch(function(){})},500);
+            }
           }
+        });
+        if(enforceMute)h.on(Hls.Events.LEVEL_SWITCHING,function(){el.muted=true;el.volume=0});
+        h.loadSource(blobUrl);h.attachMedia(el);
+        if(enforceMute){el.muted=true;el.volume=0}
+      }).catch(function(){});
+    }
+    try{
+      if(!window.Hls||!Hls.isSupported()){loadViaProxy();return;}
+      var h=createHls();hlsSetter(h);
+      var parsed=false,failed=false;
+      function bail(){
+        if(failed||ended)return;
+        failed=true;ended=true;
+        try{h.destroy();}catch(e){}
+        loadViaProxy();
+      }
+      h.on(Hls.Events.MANIFEST_PARSED,function(){
+        parsed=true;
+        if(onReady)onReady();
+      });
+      h.on(Hls.Events.ERROR,function(e,d){
+        if(d.fatal&&d.type===Hls.ErrorTypes.NETWORK_ERROR)bail();
+        else if(d.fatal&&d.type===Hls.ErrorTypes.MEDIA_ERROR){
+          try{h.recoverMediaError();}catch(e2){}
+          setTimeout(function(){if(h&&h.media)h.media.play().catch(function(){})},400);
         }
       });
       if(enforceMute)h.on(Hls.Events.LEVEL_SWITCHING,function(){el.muted=true;el.volume=0});
-      h.loadSource(blobUrl);h.attachMedia(el);
+      h.loadSource(url);h.attachMedia(el);
       if(enforceMute){el.muted=true;el.volume=0}
-    }).catch(function(){});
+      /* If no manifest arrived within 9s the CDN is unreachable/blocked — hls.js
+         would retry a dead 4xx/5xx for minutes, so fall back to the SW proxy. */
+      setTimeout(function(){if(!parsed&&!failed&&!ended){bail();}},9000);
+    }catch(e){loadViaProxy();}
   }
 
   function makeProxy(url){
     if(!url)return url;
-    try{var u=new URL(url);return location.origin+"/proxy/"+u.host+u.pathname+u.search}catch(e){return url}
+    try{
+      var u=new URL(url);
+      /* Already a /proxy/ URL (e.g. the SW rewrote it) — never double-wrap. */
+      if(u.origin===location.origin&&u.pathname.indexOf("/proxy/")===0)return url;
+      return location.origin+"/proxy/"+u.host+u.pathname+u.search;
+    }catch(e){return url}
   }
   function rewriteManifest(text,origUrl){
     var lines=text.split("\n"),base=origUrl.substring(0,origUrl.lastIndexOf("/")+1),out=[];
