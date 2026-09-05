@@ -9060,17 +9060,28 @@ def admin_user_delete(request, user_id):
 
 def _admin_cloud_entry(item):
     """Normalize a raw cloud-data entry (dict / int / string) so templates never
-    crash on a missing key (e.g. dicts that have 'mediaId' but no 'id')."""
-    if isinstance(item, dict):
-        out = dict(item)
-        if 'mediaId' not in out and 'id' in out:
-            out['mediaId'] = out['id']
-        if 'id' not in out and 'mediaId' in out:
-            out['id'] = out['mediaId']
-        return out
+    crash on a missing key (e.g. dicts that have 'mediaId' but no 'id').
+    Django >= 6 raises VariableDoesNotExist when a dict key used as a filter
+    argument is absent, so every key referenced as one in admin_user_detail.html
+    is guaranteed to exist here."""
+    out = dict(item) if isinstance(item, dict) else {}
     if isinstance(item, (int, float)) and not isinstance(item, bool):
-        return {'mediaId': item, 'id': item}
-    return {}
+        out['id'] = item
+        out['mediaId'] = item
+    if 'mediaId' not in out and 'id' in out:
+        out['mediaId'] = out['id']
+    if 'id' not in out and 'mediaId' in out:
+        out['id'] = out['mediaId']
+    if 'id' not in out and 'mediaId' not in out:
+        tmdb = out.get('tmdbId')
+        out['id'] = tmdb
+        out['mediaId'] = tmdb
+    # Filter-argument keys in the template: always present, so the
+    # |default: filter never has to resolve a missing dict key.
+    out.setdefault('positionMs', 0)
+    out.setdefault('durationMs', 0)
+    out.setdefault('lastUpdated', '')
+    return out
 
 
 def _admin_cloud_view(cloud):
