@@ -218,11 +218,10 @@
         var html = heading + '<div style="height:10px;"></div>';
         items.forEach(function (it) {
             var isTv = it.mediaType === 'tv' || (it.season != null);
-            var poster = it.poster
-                ? (it.poster.indexOf('http') === 0 ? it.poster : 'https://image.tmdb.org/t/p/w92' + it.poster)
-                : '';
-            var thumb = poster ? '<img src="' + poster + '" alt="" loading="lazy">'
-                               : '<div class="hc-item-ph">' + (it.title || '?').substring(0, 2).toUpperCase() + '</div>';
+            var poster = it.poster && it.poster.indexOf('/') === 0
+                ? 'https://image.tmdb.org/t/p/w92' + it.poster
+                : (it.poster && it.poster.indexOf('http') === 0 ? it.poster : '');
+            var thumb = poster && poster.indexOf('http') === 0 ? '<img src="' + poster + '" alt="" loading="lazy">' : '<div class="hc-item-ph">' + (it.title || '?').substring(0, 2).toUpperCase() + '</div>';
             var link = (it.tmdbId > 0)
                 ? (isTv ? '/series/id/' + it.tmdbId + '/' : '/movies/id/' + it.tmdbId + '/')
                 : null;

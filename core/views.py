@@ -9219,7 +9219,7 @@ def _history_calendar_payload(user_qs, year, month):
             items.append({
                 'id': h.id,
                 'tmdbId': h.tmdb_id,
-                'title': h.title or '(untitled)',
+                'title': h.title,
                 'poster': h.poster_path or '',
                 'mediaType': h.media_type or 'movie',
                 'season': h.season_number,

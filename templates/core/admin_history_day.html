@@ -95,8 +95,10 @@
         {% else %}
         <div class="hd-row">
         {% endif %}
-            {% if h.poster_path %}
-            <img src="{% if h.poster_path|slice:':1' == '/' %}https://image.tmdb.org/t/p/w92{{ h.poster_path }}{% else %}{{ h.poster_path }}{% endif %}" alt="{{ h.title }}" loading="lazy">
+            {% if h.poster_path|slice:':1' == '/' %}
+            <img src="https://image.tmdb.org/t/p/w92{{ h.poster_path }}" alt="{{ h.title }}" loading="lazy">
+            {% elif h.poster_path|slice:':4' == 'http' %}
+            <img src="{{ h.poster_path }}" alt="{{ h.title }}" loading="lazy">
             {% else %}
             <div class="hd-ph">{{ h.title|truncatechars:2 }}</div>
             {% endif %}
