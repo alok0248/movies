@@ -7362,13 +7362,37 @@ def admin_subscribers(request):
     if new_subs:
         Subscriber.objects.bulk_create(new_subs, ignore_conflicts=True)
 
-    subs = Subscriber.objects.all().order_by('-created_at')
-    total_active = subs.filter(is_active=True).count()
-    total_inactive = subs.filter(is_active=False).count()
+    # Build lookup maps for registration and plan info
+    user_map = {u.email.lower(): u for u in User.objects.exclude(email='').exclude(email__isnull=True)}
+    synced_map = {s.email.lower(): s for s in SyncedUser.objects.exclude(email='').exclude(email__isnull=True)}
+
+    # Annotate each subscriber with user info
+    sub_list = []
+    for sub in Subscriber.objects.all().order_by('-created_at'):
+        em = sub.email.lower()
+        is_registered = em in user_map or em in synced_map
+        plan = ''
+        if em in synced_map:
+            su = synced_map[em]
+            plan = su.plan or ('Subscribed' if su.is_subscribed else '')
+        elif em in user_map:
+            u = user_map[em]
+            if u.is_superuser:
+                plan = 'Superadmin'
+            elif u.is_staff:
+                plan = 'Admin'
+        sub_list.append({
+            'sub': sub,
+            'is_registered': is_registered,
+            'plan': plan,
+        })
+
+    total_active = Subscriber.objects.filter(is_active=True).count()
+    total_inactive = Subscriber.objects.filter(is_active=False).count()
     sent_messages = EmailMessage.objects.select_related('sent_by').all()[:20]
     all_deliveries = EmailDelivery.objects.select_related('message', 'subscriber').all()[:100]
     return render(request, 'core/admin_subscribers.html', {
-        'subscribers': subs,
+        'sub_list': sub_list,
         'total_active': total_active,
         'total_inactive': total_inactive,
         'sent_messages': sent_messages,

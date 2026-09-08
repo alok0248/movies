@@ -9,7 +9,7 @@
     .sub-card h3 { color: var(--text); font-size: 1rem; margin-bottom: .8rem; font-weight: 700; }
     .sub-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
     .sub-header h2 { color: var(--text); font-size: 1.4rem; }
-    .sub-stats { display: flex; gap: .8rem; }
+    .sub-stats { display: flex; gap: .8rem; flex-wrap: wrap; }
     .sub-stat { padding: .5rem .8rem; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--border); text-align: center; }
     .sub-stat-num { font-size: 1.3rem; font-weight: 800; color: var(--brand, #00c896); }
     .sub-stat-label { font-size: .65rem; color: var(--text-3); text-transform: uppercase; }
@@ -19,6 +19,9 @@
     .sub-table tr:hover { background: rgba(255,255,255,.02); }
     .badge-active { background: rgba(0,200,150,.15); color: #00c896; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
     .badge-inactive { background: rgba(229,9,20,.15); color: #e50914; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
+    .badge-registered { background: rgba(99,102,241,.15); color: #818cf8; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
+    .badge-plan { background: rgba(251,191,36,.15); color: #fbbf24; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
+    .badge-admin { background: rgba(229,9,20,.15); color: #e50914; padding: 2px 8px; border-radius: 4px; font-size: .68rem; font-weight: 600; }
     .badge-sent { background: rgba(0,200,150,.15); color: #00c896; padding: 2px 6px; border-radius: 4px; font-size: .65rem; font-weight: 600; }
     .badge-failed { background: rgba(229,9,20,.15); color: #e50914; padding: 2px 6px; border-radius: 4px; font-size: .65rem; font-weight: 600; }
     .sub-mail-form label { display: block; color: var(--text-3); font-size: .75rem; margin-bottom: .2rem; font-weight: 500; }
@@ -41,6 +44,8 @@
     .delivery-email { color: var(--text); font-weight: 500; font-size: .72rem; }
     .delivery-subject { color: var(--text-3); font-size: .68rem; margin-top: .1rem; }
     .delivery-time { color: var(--text-3); font-size: .65rem; white-space: nowrap; }
+    .sub-selected-count { background: var(--brand, #00c896); color: #fff; border-radius: 20px; padding: .2rem .7rem; font-size: .75rem; font-weight: 700; display: inline-block; }
+    .sent-result { background: rgba(0,200,150,.1); border: 1px solid rgba(0,200,150,.3); border-radius: 10px; padding: .8rem 1rem; margin-top: .8rem; color: #00c896; font-weight: 600; font-size: .85rem; display: none; }
 </style>
 
 <div class="sub-wrap">
@@ -59,6 +64,7 @@
             <div class="sub-card sub-mail-form" style="margin-bottom:1.5rem">
                 <h3>✉️ Send Email to Subscribers</h3>
                 <div id="emailMsg" class="sub-msg"></div>
+                <div id="sentResult" class="sent-result"></div>
                 <label>Subject</label>
                 <input type="text" id="emailSubject" placeholder="Email subject...">
                 <label>Message Body</label>
@@ -68,8 +74,15 @@
                         <input type="checkbox" id="selectAll" style="width:16px;height:16px;accent-color:var(--brand,#00c896)">
                         Select all active ({{ total_active }})
                     </label>
+                    <span id="selectedCount" style="display:none" class="sub-selected-count">0 selected</span>
                 </div>
-                <button class="sub-send-btn" id="sendEmailBtn" onclick="sendEmailToSubs()">Send Email</button>
+                <div style="font-size:.72rem;color:var(--text-3);margin-bottom:.8rem">
+                    <i class="fas fa-shield-alt me-1"></i>
+                    Emails are sent individually (BCC) — recipients cannot see each other's addresses.
+                </div>
+                <button class="sub-send-btn" id="sendEmailBtn" onclick="sendEmailToSubs()">
+                    <i class="fas fa-paper-plane me-1"></i>Send Email
+                </button>
             </div>
 
             <!-- Sent Messages Log -->
@@ -84,7 +97,7 @@
                             <tr>
                                 <td style="color:var(--text);font-weight:500">{{ msg.subject }}</td>
                                 <td>{{ msg.sent_by|default:"System" }}</td>
-                                <td>{{ msg.recipient_count }}</td>
+                                <td><strong>{{ msg.recipient_count }}</strong> users</td>
                                 <td>{{ msg.sent_at|date:"M d, Y H:i" }}</td>
                             </tr>
                             {% endfor %}
@@ -121,22 +134,37 @@
             <div class="sub-card">
                 <h3>👥 All Subscribers</h3>
                 <div class="sub-right-list" id="subRightList">
-                    {% for sub in subscribers %}
+                    {% for item in sub_list %}
+                    {% with sub=item.sub %}
                     <div class="sub-right-item">
                         <div style="flex:1;min-width:0">
-                            <div class="sub-right-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sub.email }}</div>
+                            <div class="sub-right-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                                {% if item.is_registered %}<i class="fas fa-check-circle" style="color:#818cf8;margin-right:3px;font-size:.7rem"></i>{% endif %}
+                                {{ sub.email }}
+                            </div>
                             <div class="sub-right-meta">
                                 Joined {{ sub.created_at|date:"M d, Y" }}
                                 · {{ sub.messages_received }} msg{{ sub.messages_received|pluralize }}
                             </div>
+                            <div style="margin-top:3px">
+                                {% if item.is_registered %}
+                                    <span class="badge-registered">Registered</span>
+                                    {% if item.plan %}
+                                        <span class="badge-plan" style="margin-left:4px">{{ item.plan }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge-inactive" style="background:rgba(255,255,255,.06);color:var(--text-3)">No account</span>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div style="flex-shrink:0;margin-left:.5rem">
+                        <div style="flex-shrink:0;margin-left:.5rem;text-align:right">
                             {% if sub.is_active %}<span class="badge-active">Active</span>{% else %}<span class="badge-inactive">Unsub</span>{% endif %}
-                            <div style="margin-top:2px">
-                                <input type="checkbox" class="sub-checkbox" value="{{ sub.id }}" {% if not sub.is_active %}disabled{% endif %} style="width:14px;height:14px;accent-color:var(--brand,#00c896)">
+                            <div style="margin-top:4px">
+                                <input type="checkbox" class="sub-checkbox" value="{{ sub.id }}" data-email="{{ sub.email }}" {% if not sub.is_active %}disabled{% endif %} style="width:16px;height:16px;accent-color:var(--brand,#00c896)">
                             </div>
                         </div>
                     </div>
+                    {% endwith %}
                     {% empty %}
                     <div style="text-align:center;color:var(--text-3);padding:2rem;font-size:.82rem">No subscribers yet</div>
                     {% endfor %}
@@ -147,12 +175,39 @@
 </div>
 
 <script>
+// Update selected count badge
+function updateSelectedCount() {
+    var count = document.querySelectorAll('.sub-checkbox:checked').length;
+    var selectAll = document.getElementById('selectAll').checked;
+    var badge = document.getElementById('selectedCount');
+    if (selectAll || count > 0) {
+        badge.style.display = 'inline-block';
+        badge.textContent = selectAll ? 'All selected' : count + ' selected';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+document.querySelectorAll('.sub-checkbox').forEach(function(cb) {
+    cb.addEventListener('change', updateSelectedCount);
+});
+document.getElementById('selectAll').addEventListener('change', function() {
+    var checked = this.checked;
+    document.querySelectorAll('.sub-checkbox').forEach(function(cb) {
+        if (!cb.disabled) cb.checked = checked;
+    });
+    updateSelectedCount();
+});
+
 function sendEmailToSubs() {
     var subject = document.getElementById('emailSubject').value.trim();
     var body = document.getElementById('emailBody').value.trim();
     var msgEl = document.getElementById('emailMsg');
+    var resultEl = document.getElementById('sentResult');
     var btn = document.getElementById('sendEmailBtn');
     var selectAll = document.getElementById('selectAll').checked;
+
+    resultEl.style.display = 'none';
 
     if (!subject || !body) { msgEl.className = 'sub-msg err'; msgEl.textContent = 'Subject and body are required'; return; }
 
@@ -162,7 +217,9 @@ function sendEmailToSubs() {
         if (!selectedIds.length) { msgEl.className = 'sub-msg err'; msgEl.textContent = 'No subscribers selected'; return; }
     }
 
-    btn.disabled = true; btn.textContent = 'Sending...';
+    var recipientCount = selectAll ? {{ total_active }} : selectedIds.length;
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending to ' + recipientCount + ' users...';
+
     fetch('/ajax/send-email/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
@@ -171,10 +228,20 @@ function sendEmailToSubs() {
     .then(function(res) {
         var d = res.data;
         msgEl.className = d.ok ? 'sub-msg ok' : 'sub-msg err';
-        msgEl.textContent = d.message || 'Request failed';
-        btn.disabled = false; btn.textContent = 'Send Email';
-        if (d.ok) { document.getElementById('emailSubject').value = ''; document.getElementById('emailBody').value = ''; document.getElementById('selectAll').checked = false; document.querySelectorAll('.sub-checkbox').forEach(function(cb) { cb.checked = false; }); }
-    }).catch(function() { msgEl.className = 'sub-msg err'; msgEl.textContent = 'Network error'; btn.disabled = false; btn.textContent = 'Send Email'; });
+        msgEl.textContent = d.ok ? '' : (d.message || 'Request failed');
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Send Email';
+        if (d.ok) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<i class="fas fa-check-circle me-1"></i>Email sent to <strong>' + (d.sent_count || recipientCount) + '</strong> users successfully.';
+            document.getElementById('emailSubject').value = '';
+            document.getElementById('emailBody').value = '';
+            document.getElementById('selectAll').checked = false;
+            document.querySelectorAll('.sub-checkbox').forEach(function(cb) { cb.checked = false; });
+            updateSelectedCount();
+            // Reload after 2s to update sent messages log
+            setTimeout(function() { location.reload(); }, 2000);
+        }
+    }).catch(function() { msgEl.className = 'sub-msg err'; msgEl.textContent = 'Network error'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Send Email'; });
 }
 function getCookie(name) { var v = document.cookie.match('(^|;)\\s*' + name + '=([^;]*)'); return v ? decodeURIComponent(v[2]) : ''; }
 function readJson(resp) {
