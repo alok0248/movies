@@ -8984,22 +8984,38 @@ def admin_user_list(request):
         active_map = {}
         logins_map = {}
         source_map = {}
+        last_login_map = {}
         session_qs = UserSession.objects.filter(user_id__in=user_ids)
         for row in session_qs.filter(is_active=True).values('user_id').annotate(c=Count('id')):
             active_map[row['user_id']] = row['c']
         for row in session_qs.values('user_id').annotate(c=Count('id')):
             logins_map[row['user_id']] = row['c']
-        for row in session_qs.order_by('-logged_in_at').values('user_id').distinct()[:500]:
-            if row['user_id'] not in source_map:
-                # Get last source from annotation
-                pass
-        for row in session_qs.values('user_id').annotate(last_src=Max('source')):
-            source_map[row['user_id']] = row['last_src'] or ''
+        # Most recent session per user (by logged_in_at), capturing the
+        # login time, source, IP and app version for the Last Login column.
+        latest_rows = (
+            session_qs
+            .order_by('user_id', '-logged_in_at')
+            .values('user_id', 'source', 'logged_in_at', 'ip_address', 'app_version')
+        )
+        seen = set()
+        for row in latest_rows:
+            uid = row['user_id']
+            if uid in seen:
+                continue
+            seen.add(uid)
+            source_map[uid] = row.get('source') or ''
+            last_login_map[uid] = {
+                'time': row.get('logged_in_at'),
+                'source': row.get('source') or '',
+                'ip': row.get('ip_address') or '',
+                'app_version': row.get('app_version') or '',
+            }
         # Attach to each user object
         for u in users:
             u.session_active_count = active_map.get(u.id, 0)
             u.session_total_logins = logins_map.get(u.id, 0)
             u.session_last_source = source_map.get(u.id, '')
+            u.session_last_login = last_login_map.get(u.id)
 
     # Compute totals
     total_active_sessions = UserSession.objects.filter(is_active=True).count()
