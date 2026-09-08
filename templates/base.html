@@ -1723,6 +1723,36 @@
                 </div>
             </div>
             
+            <!-- Email Verification OTP Form -->
+            <div id="verifyForm" style="display: none;">
+                <div class="auth-modal-header">
+                    <div class="auth-logo-icon"><i class="fas fa-envelope-open-text"></i></div>
+                    <h2 class="auth-form-title">Verify Your Email</h2>
+                    <p class="auth-form-subtitle" id="verifySubtitle">Enter the 6-digit code sent to your email</p>
+                </div>
+                <div class="auth-modal-body">
+                    <form id="verifyFormElement" onsubmit="handleVerifyOtp(event)">
+                        {% csrf_token %}
+                        <input type="hidden" id="verifyEmail" name="email" value="">
+                        <div class="auth-form-group">
+                            <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">Verification Code</label>
+                            <input type="text" class="auth-form-input" id="verifyOtpCode" name="otp" placeholder="6-digit code from your email" required maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="padding:0.85rem 1rem;width:100%;border-radius:12px;font-size:0.95rem;letter-spacing:0.35em;text-align:center;font-weight:600;">
+                        </div>
+                        <div id="verifyMessage" class="auth-form-message" style="display: none;"></div>
+                        <button type="submit" class="auth-form-btn">Verify Email</button>
+                        <div style="text-align:center;margin-top:0.75rem;">
+                            <span class="auth-form-link" onclick="handleResendVerification()" style="font-size:0.82rem;color:var(--brand-color);cursor:pointer;font-weight:500;">Didn't get the code? Resend</span>
+                        </div>
+                    </form>
+                    <div class="auth-divider">
+                        <span>Already verified?</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="auth-form-link" onclick="switchAuthForm('login')" style="color:var(--brand-color);font-weight:600;cursor:pointer;">Sign in instead</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Forgot Password Form (two steps: email -> code + new password) -->
             <div id="forgotForm" style="display: none;">
                 <div class="auth-modal-header">
@@ -3100,11 +3130,11 @@
             setTimeout(() => {
                 backdrop.classList.remove('active');
                 document.body.style.overflow = 'auto';
-                ['loginFormElement', 'registerFormElement', 'forgotFormElement', 'otpResetFormElement'].forEach(id => {
+                ['loginFormElement', 'registerFormElement', 'forgotFormElement', 'otpResetFormElement', 'verifyFormElement'].forEach(id => {
                     const form = document.getElementById(id);
                     if (form) form.reset();
                 });
-                ['loginMessage', 'registerMessage', 'forgotMessage', 'otpResetMessage', 'otpResetInfo'].forEach(id => {
+                ['loginMessage', 'registerMessage', 'forgotMessage', 'otpResetMessage', 'otpResetInfo', 'verifyMessage'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) {
                         el.style.display = 'none';
@@ -3112,12 +3142,14 @@
                     }
                 });
                 window._forgotEmail = '';
+                window._verifyEmail = '';
             }, 300);
         }
 
         function switchAuthForm(formType) {
             document.getElementById('loginForm').style.display = 'none';
             document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('verifyForm').style.display = 'none';
             document.getElementById('forgotForm').style.display = 'none';
             document.getElementById(formType + 'Form').style.display = 'block';
             if (formType === 'forgot') {
@@ -3195,8 +3227,14 @@
                 if (data.success) {
                     if (data.requires_verification) {
                         showMessage('registerMessage', '✓ ' + data.message, 'success');
-                        // Show the email sent hint and switch to login tab
-                        setTimeout(() => { switchAuthForm('login'); }, 3000);
+                        // Store the email and switch to the verification OTP form
+                        window._verifyEmail = formData.get('email') || '';
+                        setTimeout(() => {
+                            document.getElementById('verifyEmail').value = window._verifyEmail;
+                            document.getElementById('verifySubtitle').textContent = 'Enter the 6-digit code sent to ' + window._verifyEmail;
+                            switchAuthForm('verify');
+                            setTimeout(() => document.getElementById('verifyOtpCode').focus(), 100);
+                        }, 1500);
                     } else {
                         showMessage('registerMessage', data.message, 'success');
                         setTimeout(() => {
@@ -3209,6 +3247,49 @@
                 }
             } catch (error) {
                 showMessage('registerMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleVerifyOtp(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            try {
+                const response = await fetch('{% url "ajax_verify_email_otp" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('verifyMessage', '✓ ' + data.message, 'success');
+                    setTimeout(() => {
+                        switchAuthForm('login');
+                        showMessage('loginMessage', '✓ Email verified! You can now sign in.', 'success');
+                    }, 1500);
+                } else {
+                    showMessage('verifyMessage', data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('verifyMessage', 'An error occurred', 'error');
+            }
+        }
+
+        async function handleResendVerification() {
+            const email = window._verifyEmail || document.getElementById('verifyEmail').value;
+            if (!email) {
+                showMessage('verifyMessage', 'No email found. Please register again.', 'error');
+                return;
+            }
+            try {
+                const formData = new FormData();
+                formData.append('email', email);
+                const response = await fetch('{% url "ajax_resend_verification" %}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                showMessage('verifyMessage', data.message, data.success ? 'success' : 'error');
+            } catch (error) {
+                showMessage('verifyMessage', 'An error occurred', 'error');
             }
         }
 

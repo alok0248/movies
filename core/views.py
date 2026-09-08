@@ -3854,7 +3854,7 @@ def _issue_verification_email(django_user, request, display_name=''):
     token = secrets.token_hex(32)
     otp = EmailVerification.generate_otp()
     EmailVerification.objects.create(user=django_user, token=token, otp=otp)
-    verify_url = f"{request.scheme}://{request.get_host()}/ajax/verify-email/?token={token}"
+    verify_url = f"https://{request.get_host()}/ajax/verify-email/?token={token}"
     brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
     try:
         send_configured_email(
@@ -4016,6 +4016,56 @@ def ajax_logout(request):
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
     return response
+
+
+def ajax_verify_email_otp(request):
+    """POST /ajax/verify-email-otp/ — verify email with 6-digit OTP from the web.
+
+    The registration form shows an OTP input after sending the code; this
+    endpoint validates it and activates the user.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    email = request.POST.get('email', '').strip().lower()
+    otp_code = request.POST.get('otp', '').strip()
+    if not email or not otp_code:
+        return JsonResponse({'success': False, 'message': 'Email and verification code are required'})
+    from .models import EmailVerification
+    rate_err = _otp_rate_limit_error(request, email, 'web_verify_otp')
+    if rate_err:
+        return JsonResponse({'success': False, 'message': 'Too many attempts. Please wait a few minutes and try again.'})
+    django_user = User.objects.filter(email__iexact=email).first()
+    if not django_user:
+        _record_otp_attempt(request, email, 'web_verify_otp')
+        return JsonResponse({'success': False, 'message': 'Invalid verification code.'})
+    ev = EmailVerification.objects.filter(
+        user=django_user, otp=otp_code, verified=False,
+    ).order_by('-created_at').first()
+    if not ev:
+        _record_otp_attempt(request, email, 'web_verify_otp')
+        return JsonResponse({'success': False, 'message': 'Invalid verification code.'})
+    if ev.is_expired:
+        _record_otp_attempt(request, email, 'web_verify_otp')
+        return JsonResponse({'success': False, 'message': 'Verification code has expired. Please request a new code.'})
+    ev.verified = True
+    ev.save(update_fields=['verified'])
+    django_user.is_active = True
+    django_user.save(update_fields=['is_active'])
+    return JsonResponse({'success': True, 'message': 'Email verified successfully! You can now login.'})
+
+
+def ajax_resend_verification(request):
+    """POST /ajax/resend-verification/ — resend the verification OTP to the given email."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'})
+    email = request.POST.get('email', '').strip().lower()
+    if not email:
+        return JsonResponse({'success': False, 'message': 'Email is required'})
+    django_user = User.objects.filter(email__iexact=email, is_active=False).first()
+    if not django_user:
+        return JsonResponse({'success': False, 'message': 'No pending account found for this email.'})
+    _issue_verification_email(django_user, request, display_name=django_user.first_name or django_user.username)
+    return JsonResponse({'success': True, 'message': 'Verification code resent. Check your inbox.'})
 
 
 def ajax_forgot_password(request):
