@@ -39,25 +39,32 @@ def _get_api_key():
 
 
 def _fetch_poster(tmdb_id, media_type):
-    """Fetch poster_path from TMDB for a movie or TV show."""
+    """Fetch poster_path from TMDB for a movie or TV show.
+
+    Falls back to the other media type when the primary lookup fails —
+    app syncs sometimes store a movie ID as tv or vice versa.
+    """
     api_key = _get_api_key()
     if not api_key:
         return None, None
 
-    path = '/movie' if media_type == 'movie' else '/tv'
-    try:
-        resp = requests.get(
-            f'{TMDB_BASE}{path}/{tmdb_id}',
-            params={'api_key': api_key, 'language': 'en-US'},
-            timeout=8,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            poster = data.get('poster_path') or ''
-            title = data.get('title') or data.get('name') or ''
-            return poster, title
-    except Exception:
-        pass
+    types = [media_type, 'movie' if media_type != 'movie' else 'tv']
+    for mtype in types:
+        path = '/movie' if mtype == 'movie' else '/tv'
+        try:
+            resp = requests.get(
+                f'{TMDB_BASE}{path}/{tmdb_id}',
+                params={'api_key': api_key, 'language': 'en-US'},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                poster = data.get('poster_path') or ''
+                title = data.get('title') or data.get('name') or ''
+                if poster or title:
+                    return poster or None, title or None
+        except Exception:
+            pass
     return None, None
 
 
