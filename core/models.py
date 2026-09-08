@@ -1206,7 +1206,7 @@ class EmailVerification(models.Model):
     def is_expired(self):
         from django.utils import timezone
         from datetime import timedelta
-        return timezone.now() > self.created_at + timedelta(minutes=5)
+        return timezone.now() > self.created_at + timedelta(minutes=10)
 
     @staticmethod
     def generate_otp():

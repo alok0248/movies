@@ -3818,7 +3818,7 @@ def ajax_login(request):
         # If no password provided, try email-based login for synced users
         if not password and '@' in username:
             try:
-                user = User.objects.get(email=username)
+                user = User.objects.get(email__iexact=username)
                 if not user.has_usable_password():
                     # First web login: set a password
                     new_pass = request.POST.get('new_password', '')
@@ -3862,8 +3862,8 @@ def _issue_verification_email(django_user, request, display_name=''):
             message=(
                 f'Hi {display_name or django_user.first_name or django_user.username},\r\n\r\n'
                 f'Your verification code is: {otp}\r\n\r\n'
-                f'This code is valid for 5 minutes. Enter it where prompted to verify your email.\r\n\r\n'
-                f'Or verify instantly by opening the link below in your browser (also valid for 5 minutes):\r\n\r\n'
+                f'This code is valid for 10 minutes. Enter it where prompted to verify your email.\r\n\r\n'
+                f'Or verify instantly by opening the link below in your browser (also valid for 10 minutes):\r\n\r\n'
                 f'{verify_url}\r\n\r\n'
                 f'If you did not register with {brand}, please ignore this email.'
             ),
@@ -3947,8 +3947,8 @@ def ajax_register(request):
         if email_domain not in allowed_domains:
             return JsonResponse({'success': False, 'message': 'We don\'t support this email. Please use Gmail or Yahoo.'})
         
-        # Check if email already exists (web or Android-synced user)
-        existing_user = User.objects.filter(email=email).first()
+        # Check if email already exists (web or Android-synced user, case-insensitive)
+        existing_user = User.objects.filter(email__iexact=email).first()
         if existing_user:
             # If this user came from Android sync, tell them to use email login
             if existing_user.has_usable_password():
@@ -3976,7 +3976,7 @@ def ajax_register(request):
 
 
 def verify_email(request):
-    """GET /ajax/verify-email/?token=... — verify email within 5 minutes."""
+    """GET /ajax/verify-email/?token=... — verify email within 10 minutes."""
     token = request.GET.get('token', '')
     if not token:
         return render(request, 'core/email_verified.html', {'success': False, 'message': 'Invalid verification link.'})
@@ -4024,7 +4024,7 @@ def ajax_forgot_password(request):
         if not email:
             return JsonResponse({'success': False, 'message': 'Email is required'})
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
             # Email contains both the 6-digit reset code (app/OTP use) and the browser link
             _issue_password_reset_email(user, request)
             return JsonResponse({'success': True, 'message': 'Password reset code sent to your email. Check your inbox or spam folder.'})
@@ -4062,7 +4062,7 @@ def ajax_reset_password_otp(request):
         )
 
     from .models import PasswordResetOTP
-    user = User.objects.filter(email=email).first()
+    user = User.objects.filter(email__iexact=email).first()
     if not user:
         _record_otp_attempt(request, email, 'web_reset_otp')
         return JsonResponse({'success': False, 'message': 'Invalid code or email. Please request a new code.'})
@@ -7618,8 +7618,8 @@ def _ensure_user_and_profile(email, body):
     build_number = body.get('buildNumber', 0)
 
     # Check if Django User already exists
-    django_user = User.objects.filter(email=email).first()
-    user_obj = SyncedUser.objects.filter(email=email).first()
+    django_user = User.objects.filter(email__iexact=email).first()
+    user_obj = SyncedUser.objects.filter(email__iexact=email).first()
     created = False
 
     if django_user and user_obj:
@@ -7731,7 +7731,7 @@ def api_user_register(request):
 
     email = body.get('email', '').strip().lower()
     password = body.get('password', '')
-    display_name = body.get('displayName', '')
+    display_name = body.get('displayName', '') or body.get('name', '')
 
     if not email or not password:
         return JsonResponse({'status': 'error', 'message': 'Email and password are required'}, status=400)
@@ -7745,8 +7745,8 @@ def api_user_register(request):
     if len(password) < 6:
         return JsonResponse({'status': 'error', 'message': 'Password must be at least 6 characters'}, status=400)
 
-    # Check if already registered
-    existing_user = User.objects.filter(email=email).first()
+    # Check if already registered (case-insensitive so Alok.AK639@gmail.com matches alok.ak639@gmail.com)
+    existing_user = User.objects.filter(email__iexact=email).first()
     if existing_user and existing_user.has_usable_password():
         return JsonResponse({'status': 'error', 'message': 'Email is already registered. Please login instead.'}, status=409)
 
@@ -7795,12 +7795,14 @@ def api_user_register(request):
         created = True
 
     # Send verification email with link token + 6-digit OTP (app can verify via OTP)
-    _issue_verification_email(django_user, request, display_name=display_name)
+    _token, otp = _issue_verification_email(django_user, request, display_name=display_name)
 
     resp = {
         'status': 'success',
         'message': 'Account registered. Check your inbox for the verification code.',
         'requiresVerification': True,
+        # Include the OTP so the app can pre-match it against the user's input
+        'otp': otp,
         'user': _user_payload(user_obj, django_user),
         'subscription': FREE_SUBSCRIPTION,
     }
@@ -7838,7 +7840,7 @@ def api_user_login(request):
     if not allowed_email:
         return rate_limit_response(retry_email)
 
-    django_user = User.objects.filter(email=email).first()
+    django_user = User.objects.filter(email__iexact=email).first()
     if not django_user:
         record_rate_limit_attempt(ip, 'login')
         record_rate_limit_attempt(email, 'login_email')
@@ -7978,12 +7980,14 @@ def api_user_forgot_password(request):
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
     # Always return success to prevent email enumeration; the reset uid/token
     # (used by the app's token path) is only included when the user exists.
-    django_user = User.objects.filter(email=email).first()
+    django_user = User.objects.filter(email__iexact=email).first()
     resp = {'status': 'success', 'message': 'Password reset instructions sent to your email.'}
     if django_user and django_user.has_usable_password():
         # Email contains both the 6-digit reset code (for the app) and a browser link
         reset_info = _issue_password_reset_email(django_user, request)
         resp.update({
+            # Include the OTP so the app can pre-match it against the user's input
+            'otp': reset_info.get('otp'),
             'resetToken': reset_info.get('token'),
             'resetUid': reset_info.get('uid'),
             'resetUrl': reset_info.get('resetUrl'),
@@ -7991,7 +7995,7 @@ def api_user_forgot_password(request):
     else:
         # No account (or Android-synced account without a password yet) — the
         # app still shows the OTP step, but there is nothing to validate.
-        resp.update({'resetToken': None, 'resetUid': None, 'resetUrl': None})
+        resp.update({'otp': None, 'resetToken': None, 'resetUid': None, 'resetUrl': None})
     return JsonResponse(resp)
 
 
@@ -8055,7 +8059,7 @@ def api_user_verify_email(request):
         rate_err = _otp_rate_limit_error(request, email, 'verify_otp')
         if rate_err:
             return rate_err
-        django_user = User.objects.filter(email=email).first()
+        django_user = User.objects.filter(email__iexact=email).first()
         if not django_user:
             _record_otp_attempt(request, email, 'verify_otp')
             return JsonResponse({'status': 'error', 'message': 'Invalid verification code.'}, status=400)
@@ -8113,14 +8117,19 @@ def api_user_resend_verification(request):
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
 
-    django_user = User.objects.filter(email=email).first()
+    django_user = User.objects.filter(email__iexact=email).first()
     if not django_user or not django_user.has_usable_password():
         # Never confirm account existence — generic success for unknown emails too
         return JsonResponse({'status': 'success', 'message': 'If your email is registered, a new verification code has been sent to your inbox.'})
     if django_user.is_active:
         return JsonResponse({'status': 'success', 'message': 'This email is already verified. You can login now.'})
-    _issue_verification_email(django_user, request, display_name=django_user.first_name)
-    return JsonResponse({'status': 'success', 'message': 'A new verification code has been sent to your inbox. It expires in 5 minutes.', 'requiresVerification': True})
+    _token, otp = _issue_verification_email(django_user, request, display_name=django_user.first_name)
+    return JsonResponse({
+        'status': 'success',
+        'message': 'A new verification code has been sent to your inbox. It expires in 10 minutes.',
+        'requiresVerification': True,
+        'otp': otp,
+    })
 
 
 @_guard_android_api_errors
@@ -8157,7 +8166,7 @@ def api_user_reset_password(request):
         if rate_err:
             return rate_err
         from .models import PasswordResetOTP
-        django_user = User.objects.filter(email=email).first()
+        django_user = User.objects.filter(email__iexact=email).first()
         if not django_user:
             _record_otp_attempt(request, email, 'reset_otp')
             return JsonResponse({'status': 'error', 'message': 'Invalid OTP or email.'}, status=400)
@@ -8192,6 +8201,54 @@ def api_user_reset_password(request):
     django_user.is_active = True
     django_user.save(update_fields=['password', 'is_active'])
     return JsonResponse({'status': 'success', 'message': 'Password reset successful! You can now login.'})
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_verify_reset_otp(request):
+    """POST /api/user/verify-reset-otp/ — validate the reset OTP before the
+    user types a new password. Payload: {email, otp}.
+
+    Lets the app confirm the code is correct (without consuming it) before
+    showing the new-password screen. The code is still verified again — and
+    consumed — by /api/user/reset-password/ when the reset actually happens.
+    """
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    otp_code = body.get('otp', '').strip()
+    email = body.get('email', '').strip().lower()
+    if not otp_code or not email:
+        return JsonResponse({'status': 'error', 'message': 'Email and OTP are required'}, status=400)
+
+    # Rate-limit code attempts per IP and per email (10 tries / 15 min) so a
+    # wrong-code flood can't brute-force the 6-digit code.
+    rate_err = _otp_rate_limit_error(request, email, 'verify_reset_otp')
+    if rate_err:
+        return rate_err
+
+    from .models import PasswordResetOTP
+    django_user = User.objects.filter(email__iexact=email).first()
+    if not django_user:
+        _record_otp_attempt(request, email, 'verify_reset_otp')
+        return JsonResponse({'status': 'error', 'message': 'Invalid OTP or email.'}, status=400)
+    otp_obj = PasswordResetOTP.objects.filter(
+        user=django_user, otp=otp_code, used=False
+    ).order_by('-created_at').first()
+    if not otp_obj or otp_obj.is_expired:
+        _record_otp_attempt(request, email, 'verify_reset_otp')
+        return JsonResponse({'status': 'error', 'message': 'Invalid or expired OTP. Please request a new code.'}, status=400)
+
+    # Valid code — clear earlier failed attempts so a mistyped code isn't a
+    # lockout. The OTP is NOT marked used here; reset-password consumes it.
+    _reset_otp_rate_limit(request, email, 'verify_reset_otp')
+    return JsonResponse({'status': 'success', 'message': 'OTP verified. You can now set a new password.'})
 
 
 @_guard_android_api_errors
