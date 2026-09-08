@@ -8,6 +8,7 @@ Usage:
 """
 from django.core.management.base import BaseCommand
 from django.conf import settings
+from django.db import models
 import requests
 import time
 
@@ -75,7 +76,7 @@ class Command(BaseCommand):
         from core.models import PlayHistory
 
         qs = PlayHistory.objects.filter(
-            poster_path__exact=''
+            models.Q(poster_path='') | models.Q(poster_path__isnull=True)
         ).exclude(tmdb_id__lte=0)[:limit]
 
         total = qs.count()
@@ -108,7 +109,7 @@ class Command(BaseCommand):
         from core.models import WatchList
 
         qs = WatchList.objects.filter(
-            poster_path__exact=''
+            models.Q(poster_path='') | models.Q(poster_path__isnull=True)
         ).exclude(tmdb_id__lte=0)[:limit]
 
         total = qs.count()
