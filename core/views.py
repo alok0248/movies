@@ -9461,11 +9461,18 @@ def admin_history_day(request):
 
     rows = []
     for h in items:
-        local_dt = timezone.localtime(h.last_played_at)
+        try:
+            local_dt = timezone.localtime(h.last_played_at)
+        except Exception:
+            continue
+        try:
+            user_obj = h.user
+        except Exception:
+            user_obj = None
         rows.append({
             'h': h,
             'time': local_dt.strftime('%I:%M %p'),
-            'user': h.user,
+            'user': user_obj,
             'is_tv': h.media_type == 'tv' or h.season_number is not None,
         })
     total = len(rows)
