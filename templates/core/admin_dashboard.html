@@ -280,6 +280,63 @@
     </div>
 </div>
 
+<!-- Poster Backfill Section -->
+<div class="mb-4">
+    <div class="d-flex align-items-center mb-3">
+        <i class="fas fa-image me-2 text-secondary" style="font-size:.85rem;"></i>
+        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Poster Repair</h6>
+    </div>
+    <div class="admin-card">
+        <div class="admin-card-body d-flex align-items-center justify-content-between flex-wrap gap-3 py-3">
+            <div>
+                <div class="text-white fw-semibold">Fix Missing Posters</div>
+                <div class="text-secondary small">Fetch poster images from TMDB for any Play History or Watchlist entries that are missing them</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-warning" onclick="backfillPosters('PlayHistory')">
+                    <i class="fas fa-history me-1"></i>Play History
+                </button>
+                <button class="btn btn-sm btn-outline-info" onclick="backfillPosters('WatchList')">
+                    <i class="fas fa-bookmark me-1"></i>Watchlist
+                </button>
+                <button class="btn btn-sm btn-success" onclick="backfillPosters('both')">
+                    <i class="fas fa-magic me-1"></i>Fix All
+                </button>
+            </div>
+        </div>
+        <div id="backfillResult" style="display:none;padding:0 1rem 1rem;"></div>
+    </div>
+</div>
+
+<script>
+function backfillPosters(model) {
+    var el = document.getElementById('backfillResult');
+    el.style.display = 'block';
+    el.innerHTML = '<div class="text-warning small"><i class="fas fa-spinner fa-spin me-1"></i>Fetching posters from TMDB...</div>';
+    var fd = new FormData();
+    fd.append('model', model);
+    fd.append('limit', '100');
+    fetch('{% url "admin_backfill_posters" %}', { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) {
+                var r = d.results || {};
+                var ph = r.play_history || {};
+                var wl = r.watchlist || {};
+                var html = '<div class="text-success small fw-semibold">' + d.message + '</div>';
+                if (ph.total !== undefined) html += '<div class="text-secondary small">Play History: ' + (ph.updated||0) + ' updated, ' + (ph.skipped||0) + ' skipped, ' + (ph.total||0) + ' total</div>';
+                if (wl.total !== undefined) html += '<div class="text-secondary small">Watchlist: ' + (wl.updated||0) + ' updated, ' + (wl.skipped||0) + ' skipped, ' + (wl.total||0) + ' total</div>';
+                el.innerHTML = html;
+            } else {
+                el.innerHTML = '<div class="text-danger small">' + (d.message || 'Error') + '</div>';
+            }
+        })
+        .catch(function() {
+            el.innerHTML = '<div class="text-danger small">Network error</div>';
+        });
+}
+</script>
+
 <script>
 // Load stats via AJAX
 (function() {

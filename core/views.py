@@ -9105,6 +9105,92 @@ def admin_user_block(request, user_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def admin_backfill_posters(request):
+    """POST /admin-dashboard/ajax/backfill-posters/ — fetch missing posters from TMDB.
+
+    Runs synchronously for up to 50 rows (quick enough for an AJAX call).
+    Returns JSON with counts of updated/skipped/total rows.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'POST required'})
+    model = request.POST.get('model', 'both')
+    limit = min(int(request.POST.get('limit', 50)), 200)
+    from .models import PlayHistory, WatchList
+    from django.conf import settings as _s
+    import time as _time
+
+    def _fetch(tid, mtype):
+        try:
+            api_key = _s.TMDB_API_KEY
+        except AttributeError:
+            api_key = ''
+        if not api_key:
+            try:
+                from .models import SiteSettings
+                s = SiteSettings.get_settings()
+                api_key = s.tmdb_api_key or ''
+            except Exception:
+                api_key = ''
+        if not api_key:
+            return None, None
+        path = '/movie' if mtype == 'movie' else '/tv'
+        try:
+            resp = requests.get(
+                f'https://api.themoviedb.org/3{path}/{tid}',
+                params={'api_key': api_key, 'language': 'en-US'},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                d = resp.json()
+                return d.get('poster_path') or '', d.get('title') or d.get('name') or ''
+        except Exception:
+            pass
+        return None, None
+
+    results = {'play_history': {'updated': 0, 'skipped': 0, 'total': 0},
+               'watchlist': {'updated': 0, 'skipped': 0, 'total': 0}}
+
+    if model in ('PlayHistory', 'both'):
+        qs = PlayHistory.objects.filter(poster_path__exact='').exclude(tmdb_id__lte=0)[:limit]
+        results['play_history']['total'] = qs.count()
+        for h in qs:
+            poster, title = _fetch(h.tmdb_id, h.media_type)
+            if poster:
+                h.poster_path = poster
+                if title and not h.title:
+                    h.title = title
+                h.save(update_fields=['poster_path', 'title'] if title and not h.title else ['poster_path'])
+                results['play_history']['updated'] += 1
+            else:
+                results['play_history']['skipped'] += 1
+            _time.sleep(0.12)
+
+    if model in ('WatchList', 'both'):
+        qs = WatchList.objects.filter(poster_path__exact='').exclude(tmdb_id__lte=0)[:limit]
+        results['watchlist']['total'] = qs.count()
+        for w in qs:
+            poster, title = _fetch(w.tmdb_id, w.media_type)
+            if poster:
+                w.poster_path = poster
+                if title and not w.title:
+                    w.title = title
+                w.save(update_fields=['poster_path', 'title'] if title and not w.title else ['poster_path'])
+                results['watchlist']['updated'] += 1
+            else:
+                results['watchlist']['skipped'] += 1
+            _time.sleep(0.12)
+
+    total_updated = results['play_history']['updated'] + results['watchlist']['updated']
+    total_skipped = results['play_history']['skipped'] + results['watchlist']['skipped']
+    return JsonResponse({
+        'success': True,
+        'message': f'Backfill complete: {total_updated} posters added, {total_skipped} skipped (no TMDB data).',
+        'results': results,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_user_add(request):
     """Admin: add a new user."""
     if request.method == 'POST':

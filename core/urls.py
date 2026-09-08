@@ -201,6 +201,7 @@ urlpatterns = [
     path('admin-dashboard/users/<int:user_id>/play-history/', views.admin_user_play_history, name='admin_user_play_history'),
     path('admin-dashboard/users/<int:user_id>/edit/', views.admin_user_edit, name='admin_user_edit'),
     path('admin-dashboard/users/<int:user_id>/block/', views.admin_user_block, name='admin_user_block'),
+    path('admin-dashboard/ajax/backfill-posters/', views.admin_backfill_posters, name='admin_backfill_posters'),
     path('admin-dashboard/users/<int:user_id>/delete/', views.admin_user_delete, name='admin_user_delete'),
     path('admin-dashboard/users/<int:user_id>/resend-verification/', views.admin_user_resend_verification, name='admin_user_resend_verification'),
     path('admin-dashboard/users/<int:user_id>/subscription/', views.admin_user_subscription, name='admin_user_subscription'),
