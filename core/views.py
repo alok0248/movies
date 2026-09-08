@@ -9343,33 +9343,43 @@ def _history_calendar_payload(user_qs, year, month):
     days = {}
     items = []
     for h in qs.order_by('-last_played_at')[:400]:
-        local_dt = timezone.localtime(h.last_played_at)
+        try:
+            local_dt = timezone.localtime(h.last_played_at)
+        except Exception:
+            continue
         day = local_dt.day
         day_info = days.setdefault(day, {'count': 0, 'tv': 0, 'movie': 0})
         day_info['count'] += 1
-        if h.media_type == 'tv' or h.season_number:
+        is_tv = h.media_type == 'tv' or h.season_number is not None
+        if is_tv:
             day_info['tv'] += 1
         else:
             day_info['movie'] += 1
         if len(items) < 200:
+            user_info = None
+            if h.user_id:
+                try:
+                    user_info = {
+                        'id': h.user_id,
+                        'name': (h.user.first_name or h.user.username),
+                        'email': h.user.email,
+                    }
+                except Exception:
+                    user_info = {'id': h.user_id, 'name': '', 'email': ''}
             items.append({
                 'id': h.id,
-                'tmdbId': h.tmdb_id,
-                'title': h.title,
+                'tmdbId': h.tmdb_id or 0,
+                'title': h.title or '',
                 'poster': h.poster_path or '',
                 'mediaType': h.media_type or 'movie',
                 'season': h.season_number,
                 'episode': h.episode_number,
                 'episodeTitle': h.episode_title or '',
-                'isTv': h.media_type == 'tv' or h.season_number is not None,
-                'ts': h.last_played_at.isoformat(),
+                'isTv': is_tv,
+                'ts': h.last_played_at.isoformat() if h.last_played_at else '',
                 'time': local_dt.strftime('%I:%M %p'),
                 'day': day,
-                'user': {
-                    'id': h.user_id,
-                    'name': (h.user.first_name or h.user.username) if h.user_id else '',
-                    'email': h.user.email if h.user_id else '',
-                } if h.user_id else None,
+                'user': user_info,
             })
     return {'days': days, 'items': items}
 
@@ -9378,36 +9388,47 @@ def _history_calendar_payload(user_qs, year, month):
 @user_passes_test(is_staff_or_superuser)
 def admin_history_calendar(request):
     """Admin calendar dashboard of play history across all users."""
-    now = timezone.localtime()
     try:
-        year = int(request.GET.get('year', now.year))
-        month = int(request.GET.get('month', now.month))
-    except (TypeError, ValueError):
-        year, month = now.year, now.month
-    try:
-        user_id = int(request.GET.get('user_id') or 0)
-    except (TypeError, ValueError):
-        user_id = 0
+        now = timezone.localtime()
+        try:
+            year = int(request.GET.get('year', now.year))
+            month = int(request.GET.get('month', now.month))
+        except (TypeError, ValueError):
+            year, month = now.year, now.month
+        try:
+            user_id = int(request.GET.get('user_id') or 0)
+        except (TypeError, ValueError):
+            user_id = 0
 
-    if user_id > 0:
-        user_qs = User.objects.filter(id=user_id)
-    else:
-        user_qs = User.objects.all()
+        if user_id > 0:
+            user_qs = User.objects.filter(id=user_id)
+        else:
+            user_qs = User.objects.all()
 
-    users = User.objects.filter(id__in=PlayHistory.objects.values_list('user_id', flat=True).distinct())\
-        .order_by('username')
-    payload = _history_calendar_payload(user_qs, year, month)
-    payload['year'] = year
-    payload['month'] = month
-    payload['totalEvents'] = sum(d['count'] for d in payload['days'].values())
-    return render(request, 'core/admin_history_calendar.html', {
-        'users': users,
-        'selected_user_id': user_id,
-        'year': year,
-        'month': month,
-        'initial_data': json.dumps(payload),
-        'total_events': payload['totalEvents'],
-    })
+        users = User.objects.filter(id__in=PlayHistory.objects.values_list('user_id', flat=True).distinct())\
+            .order_by('username')
+        payload = _history_calendar_payload(user_qs, year, month)
+        payload['year'] = year
+        payload['month'] = month
+        payload['totalEvents'] = sum(d['count'] for d in payload['days'].values())
+        return render(request, 'core/admin_history_calendar.html', {
+            'users': users,
+            'selected_user_id': user_id,
+            'year': year,
+            'month': month,
+            'initial_data': json.dumps(payload),
+            'total_events': payload['totalEvents'],
+        })
+    except Exception as e:
+        logger.warning(f'Calendar view error: {e}', exc_info=True)
+        return render(request, 'core/admin_history_calendar.html', {
+            'users': User.objects.none(),
+            'selected_user_id': 0,
+            'year': timezone.localtime().year,
+            'month': timezone.localtime().month,
+            'initial_data': json.dumps({'days': {}, 'items': []}),
+            'total_events': 0,
+        })
 
 
 @login_required
