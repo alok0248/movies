@@ -85,6 +85,8 @@ urlpatterns = [
     path('api/user/resend-verification', views.api_user_resend_verification),
     path('api/user/reset-password/', views.api_user_reset_password, name='api_user_reset_password'),
     path('api/user/reset-password', views.api_user_reset_password),
+    path('api/user/verify-reset-otp/', views.api_user_verify_reset_otp, name='api_user_verify_reset_otp'),
+    path('api/user/verify-reset-otp', views.api_user_verify_reset_otp),
     path('api/user/profile/', views.api_user_profile, name='api_user_profile'),
     path('api/user/profile', views.api_user_profile),
     path('admin-dashboard/synced-users/', views.synced_users_list, name='synced_users_list'),
