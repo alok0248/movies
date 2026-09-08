@@ -7430,6 +7430,21 @@ def ajax_send_email(request):
 
         from_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', 'noreply@newmovies.com')
 
+        # Get SMTP backend from the admin-configured email addresses
+        from .models import EmailAddress as EmailAddrModel
+        smtp_addr = EmailAddrModel.objects.filter(
+            is_active=True, purpose='notification'
+        ).order_by('-is_default').first()
+        if not smtp_addr:
+            smtp_addr = EmailAddrModel.objects.filter(is_active=True).order_by('-is_default').first()
+
+        if smtp_addr:
+            email_backend = smtp_addr.get_backend()
+            from_email = smtp_addr.email
+        else:
+            # Fallback to Django settings (console backend)
+            email_backend = None
+
         # Create EmailMessage record first
         email_msg = EmailMessage.objects.create(
             subject=subject,
@@ -7439,10 +7454,16 @@ def ajax_send_email(request):
         )
 
         # Send via BCC — each subscriber gets their own email, can't see others
+        from django.core.mail import EmailMessage as DjangoEmailMsg
         sent_count = 0
         for sub in sub_list:
             try:
-                send_mail(subject, body, from_email, [sub.email], fail_silently=False)
+                msg = DjangoEmailMsg(subject=subject, body=body, from_email=from_email, to=[sub.email])
+                if email_backend:
+                    msg.connection = email_backend
+                    msg.send()
+                else:
+                    msg.send()
                 EmailDelivery.objects.create(message=email_msg, subscriber=sub, status='sent')
                 sent_count += 1
             except Exception as mail_err:
