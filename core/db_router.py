@@ -17,6 +17,9 @@ USER_MODELS = {
     'websitevisitor',
     'websitevisitorvisit',
     'subscriber',
+    'emailmessage',
+    'emaildelivery',
+    'userprofile',
 }
 
 
