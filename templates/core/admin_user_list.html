@@ -196,7 +196,28 @@
                                     <span class="badge bg-danger" id="status-{{ u.id }}">Blocked</span>
                                 {% endif %}
                             </td>
-                            <td class="text-secondary small">{{ u.last_login|date:"M d, Y H:i"|default:"Never" }}</td>
+                            <td>
+                                {% if u.session_last_login and u.session_last_login.time %}
+                                    {% with info=u.session_last_login %}
+                                        <div class="d-flex align-items-center gap-1">
+                                            <i class="fas fa-{{ info.source|yesno:"mobile-alt,globe" }} fa-xs" style="width:12px;"></i>
+                                            <span class="text-secondary small">{{ info.time|date:"M d, Y H:i" }}</span>
+                                            {% if info.ip|default:"" %}
+                                                <span class="text-muted mx-1">•</span>
+                                                <span class="text-muted small" style="font-family:monospace;">{{ info.ip }}</span>
+                                            {% endif %}
+                                            {% if info.app_version|default:"" %}
+                                                <span class="text-muted mx-1">•</span>
+                                                <span class="text-muted small">v{{ info.app_version }}</span>
+                                            {% endif %}
+                                        </div>
+                                    {% endwith %}
+                                {% elif u.last_login %}
+                                    <span class="text-secondary small">{{ u.last_login|date:"M d, Y H:i" }}</span>
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <a href="{% url 'admin_user_detail' u.id %}" class="btn btn-outline-info" title="View Details">
