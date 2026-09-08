@@ -8628,6 +8628,74 @@ def ajax_record_play_progress(request):
 
 
 @login_required
+def user_profile(request):
+    """User profile edit page."""
+    from .models import UserProfile
+    profile, created = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        # Basic info
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        bio = request.POST.get('bio', '').strip()
+        dob = request.POST.get('date_of_birth', '').strip()
+        location = request.POST.get('location', '').strip()
+        website = request.POST.get('website', '').strip()
+        gender = request.POST.get('gender', '').strip()
+        language = request.POST.get('language', 'en').strip()
+
+        # Validate email uniqueness
+        if email and email != request.user.email:
+            if User.objects.filter(email=email).exclude(pk=request.user.pk).exists():
+                messages.error(request, 'This email is already in use.')
+                return redirect('user_profile')
+
+        # Update user fields
+        request.user.first_name = first_name
+        request.user.last_name = last_name
+        if email:
+            request.user.email = email
+        request.user.save(update_fields=['first_name', 'last_name', 'email'])
+
+        # Update profile fields
+        profile.phone = phone
+        profile.bio = bio
+        profile.location = location
+        profile.website = website
+        profile.gender = gender
+        profile.language = language
+        if dob:
+            try:
+                from datetime import date as _date
+                profile.date_of_birth = _date.fromisoformat(dob)
+            except (ValueError, TypeError):
+                pass
+
+        # Handle photo upload
+        if 'photo' in request.FILES:
+            photo_file = request.FILES['photo']
+            # Validate file size (max 5MB)
+            if photo_file.size > 5 * 1024 * 1024:
+                messages.error(request, 'Photo must be under 5MB.')
+                return redirect('user_profile')
+            profile.photo = photo_file
+
+        # Handle photo removal
+        if request.POST.get('remove_photo') == '1':
+            if profile.photo:
+                profile.photo.delete(save=False)
+                profile.photo = None
+
+        profile.save()
+        messages.success(request, 'Profile updated successfully.')
+        return redirect('user_profile')
+
+    return render(request, 'core/user_profile.html', {'profile': profile})
+
+
+@login_required
 def user_play_history(request):
     """Show the user's play history."""
     history = PlayHistory.objects.filter(user=request.user).order_by('-last_played_at')

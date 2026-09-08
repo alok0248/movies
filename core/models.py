@@ -1330,6 +1330,49 @@ class PlayHistory(models.Model):
         return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+class UserProfile(models.Model):
+    """Extended profile fields for web users (photo, phone, bio, etc.)."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', db_constraint=False)
+    phone = models.CharField(max_length=20, blank=True, default='')
+    bio = models.TextField(max_length=500, blank=True, default='')
+    date_of_birth = models.DateField(null=True, blank=True)
+    location = models.CharField(max_length=255, blank=True, default='')
+    website = models.URLField(blank=True, default='')
+    photo = models.ImageField(upload_to='profile/photos/', blank=True, null=True)
+    gender = models.CharField(max_length=20, blank=True, default='', choices=[
+        ('', 'Prefer not to say'),
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+    ])
+    language = models.CharField(max_length=10, blank=True, default='en')
+    notifications_email = models.BooleanField(default=True)
+    notifications_new_content = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'User Profile'
+        verbose_name_plural = 'User Profiles'
+
+    def __str__(self):
+        return f'Profile: {self.user.username}'
+
+    @property
+    def photo_url(self):
+        if self.photo:
+            return self.photo.url
+        return ''
+
+    @property
+    def initials(self):
+        name = self.user.get_full_name() or self.user.username
+        parts = name.strip().split()
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[-1][0]).upper()
+        return name[:2].upper()
+
+
 class UserCloudData(models.Model):
     """Cloud storage for user data synced between Android app and web.
     Stores playback progress, watch history, favorites, watchlist, and ratings."""

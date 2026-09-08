@@ -1,0 +1,260 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<style>
+    .profile-wrap { max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    .profile-header { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem; }
+    .profile-avatar-lg {
+        width: 100px; height: 100px; border-radius: 50%; overflow: hidden;
+        background: linear-gradient(135deg, #6366f1, #a78bfa);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 2.2rem; font-weight: 800; flex-shrink: 0;
+        position: relative; cursor: pointer; border: 3px solid rgba(255,255,255,.1);
+    }
+    .profile-avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-avatar-lg .overlay {
+        position: absolute; inset: 0; background: rgba(0,0,0,.55);
+        display: flex; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity .2s; font-size: .75rem; color: #fff;
+    }
+    .profile-avatar-lg:hover .overlay { opacity: 1; }
+    .profile-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 14px; padding: 1.5rem; margin-bottom: 1.2rem;
+    }
+    .profile-card h6 { color: var(--text); font-weight: 700; margin-bottom: 1rem; }
+    .profile-card h6 i { color: #818cf8; margin-right: .4rem; }
+    .form-floating-dark .form-control,
+    .form-floating-dark .form-select {
+        background: rgba(255,255,255,.04); color: var(--text);
+        border: 1px solid var(--border); border-radius: 10px;
+    }
+    .form-floating-dark .form-control:focus,
+    .form-floating-dark .form-select:focus {
+        border-color: #818cf8; box-shadow: 0 0 0 2px rgba(129,140,248,.15);
+    }
+    .form-floating-dark label { color: rgba(255,255,255,.4); }
+    .form-floating-dark .form-control:focus ~ label,
+    .form-floating-dark .form-control:not(:placeholder-shown) ~ label { color: #818cf8; }
+    .btn-save {
+        background: linear-gradient(135deg, #6366f1, #818cf8);
+        color: #fff; border: none; border-radius: 10px; padding: .65rem 2rem;
+        font-weight: 600; transition: transform .15s, box-shadow .15s;
+    }
+    .btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99,102,241,.35); color: #fff; }
+    .btn-remove-photo { color: #ef4444; font-size: .8rem; border: none; background: none; cursor: pointer; }
+    .btn-remove-photo:hover { color: #f87171; }
+    .switch-dark { --form-switch-bg: rgba(255,255,255,.1); }
+    .switch-dark .form-check-input:checked { background-color: #6366f1; border-color: #6366f1; }
+    html[data-theme="light"] .profile-card { background: #fff; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .profile-card h6 { color: #1a1a2e; }
+    html[data-theme="light"] .form-floating-dark .form-control,
+    html[data-theme="light"] .form-floating-dark .form-select {
+        background: rgba(0,0,0,.03); color: #1a1a2e; border-color: rgba(0,0,0,.12);
+    }
+    html[data-theme="light"] .form-floating-dark label { color: rgba(0,0,0,.45); }
+    .photo-input { display: none; }
+</style>
+
+<div class="profile-wrap">
+    {% if messages %}
+    <div class="mb-3">
+        {% for msg in messages %}
+        <div class="alert {% if msg.tags == 'success' %}alert-success{% elif msg.tags == 'error' %}alert-danger{% else %}alert-info{% endif %} alert-dismissible fade show" role="alert" style="border-radius:10px;">
+            {{ msg }}
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="profile-header">
+        <div class="profile-avatar-lg" onclick="document.getElementById('photoInput').click()">
+            {% if profile.photo %}
+                <img src="{{ profile.photo.url }}" alt="Profile">
+            {% else %}
+                {{ profile.initials }}
+            {% endif %}
+            <div class="overlay"><i class="fas fa-camera me-1"></i>Change</div>
+        </div>
+        <div>
+            <h4 style="color:var(--text);margin:0;">{{ user.get_full_name|default:user.username }}</h4>
+            <div style="color:rgba(255,255,255,.45);font-size:.85rem;">{{ user.email }}</div>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" id="profileForm">
+        {% csrf_token %}
+        <input type="file" name="photo" id="photoInput" class="photo-input" accept="image/*" onchange="previewPhoto(this)">
+        <input type="hidden" name="remove_photo" id="removePhoto" value="0">
+
+        <!-- Photo actions -->
+        {% if profile.photo %}
+        <div class="mb-3" id="photoActions">
+            <button type="button" class="btn-remove-photo" onclick="removePhoto()"><i class="fas fa-trash me-1"></i>Remove photo</button>
+        </div>
+        {% endif %}
+
+        <!-- Basic Info -->
+        <div class="profile-card">
+            <h6><i class="fas fa-user"></i> Basic Information</h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="text" class="form-control" id="firstName" name="first_name" placeholder="First Name" value="{{ user.first_name }}">
+                        <label for="firstName">First Name</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="text" class="form-control" id="lastName" name="last_name" placeholder="Last Name" value="{{ user.last_name }}">
+                        <label for="lastName">Last Name</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="email" class="form-control" id="email" name="email" placeholder="Email" value="{{ user.email }}">
+                        <label for="email">Email</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="tel" class="form-control" id="phone" name="phone" placeholder="Phone" value="{{ profile.phone }}">
+                        <label for="phone">Phone Number</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="date" class="form-control" id="dob" name="date_of_birth" placeholder="Date of Birth" value="{{ profile.date_of_birth|date:'Y-m-d'|default:'' }}">
+                        <label for="dob">Date of Birth</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <select class="form-select" id="gender" name="gender">
+                            <option value="" {% if not profile.gender %}selected{% endif %}>Prefer not to say</option>
+                            <option value="male" {% if profile.gender == 'male' %}selected{% endif %}>Male</option>
+                            <option value="female" {% if profile.gender == 'female' %}selected{% endif %}>Female</option>
+                            <option value="other" {% if profile.gender == 'other' %}selected{% endif %}>Other</option>
+                        </select>
+                        <label for="gender">Gender</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- About -->
+        <div class="profile-card">
+            <h6><i class="fas fa-info-circle"></i> About</h6>
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="form-floating form-floating-dark">
+                        <textarea class="form-control" id="bio" name="bio" placeholder="Bio" style="height:100px;resize:vertical;">{{ profile.bio }}</textarea>
+                        <label for="bio">Bio (max 500 characters)</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="text" class="form-control" id="location" name="location" placeholder="Location" value="{{ profile.location }}">
+                        <label for="location"><i class="fas fa-map-marker-alt me-1"></i>Location</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <input type="url" class="form-control" id="website" name="website" placeholder="Website" value="{{ profile.website }}">
+                        <label for="website"><i class="fas fa-globe me-1"></i>Website</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preferences -->
+        <div class="profile-card">
+            <h6><i class="fas fa-cog"></i> Preferences</h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-floating form-floating-dark">
+                        <select class="form-select" id="language" name="language">
+                            <option value="en" {% if profile.language == 'en' %}selected{% endif %}>English</option>
+                            <option value="es" {% if profile.language == 'es' %}selected{% endif %}>Espa&ntilde;ol</option>
+                            <option value="fr" {% if profile.language == 'fr' %}selected{% endif %}>Fran&ccedil;ais</option>
+                            <option value="de" {% if profile.language == 'de' %}selected{% endif %}>Deutsch</option>
+                            <option value="hi" {% if profile.language == 'hi' %}selected{% endif %}>Hindi</option>
+                            <option value="ja" {% if profile.language == 'ja' %}selected{% endif %}>Japanese</option>
+                            <option value="ko" {% if profile.language == 'ko' %}selected{% endif %}>Korean</option>
+                            <option value="pt" {% if profile.language == 'pt' %}selected{% endif %}>Portugu&ecirc;s</option>
+                        </select>
+                        <label for="language">Language</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="form-check form-switch switch-dark mb-2">
+                    <input class="form-check-input" type="checkbox" id="notifEmail" name="notifications_email" {% if profile.notifications_email %}checked{% endif %}>
+                    <label class="form-check-label" for="notifEmail" style="color:var(--text);font-size:.85rem;">Email notifications (new content, updates)</label>
+                </div>
+                <div class="form-check form-switch switch-dark">
+                    <input class="form-check-input" type="checkbox" id="notifContent" name="notifications_new_content" {% if profile.notifications_new_content %}checked{% endif %}>
+                    <label class="form-check-label" for="notifContent" style="color:var(--text);font-size:.85rem;">Notify me when new movies/series are added</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3 mb-5">
+            <a href="{% url 'home' %}" class="btn btn-outline-secondary" style="border-radius:10px;"><i class="fas fa-arrow-left me-1"></i>Back</a>
+            <button type="submit" class="btn btn-save"><i class="fas fa-check me-1"></i>Save Profile</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function previewPhoto(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var avatar = document.querySelector('.profile-avatar-lg');
+            var existing = avatar.querySelector('img');
+            if (existing) existing.remove();
+            var initials = avatar.querySelector('span');
+            if (initials) initials.remove();
+            var img = document.createElement('img');
+            img.src = e.target.result;
+            img.alt = 'Profile';
+            avatar.insertBefore(img, avatar.querySelector('.overlay'));
+            // Show remove button
+            var actions = document.getElementById('photoActions');
+            if (!actions) {
+                actions = document.createElement('div');
+                actions.id = 'photoActions';
+                actions.className = 'mb-3';
+                actions.innerHTML = '<button type="button" class="btn-remove-photo" onclick="removePhoto()"><i class="fas fa-trash me-1"></i>Remove photo</button>';
+                document.getElementById('profileForm').insertBefore(actions, document.querySelector('.profile-card'));
+            }
+            document.getElementById('removePhoto').value = '0';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function removePhoto() {
+    document.getElementById('removePhoto').value = '1';
+    var avatar = document.querySelector('.profile-avatar-lg');
+    var img = avatar.querySelector('img');
+    if (img) img.remove();
+    var initials = avatar.querySelector('.initials-text');
+    if (!initials) {
+        initials = document.createElement('span');
+        initials.textContent = '{{ profile.initials }}';
+        initials.style.cssText = 'font-size:2.2rem;font-weight:800;';
+        avatar.insertBefore(initials, avatar.querySelector('.overlay'));
+    }
+    var actions = document.getElementById('photoActions');
+    if (actions) actions.style.display = 'none';
+    // Clear file input
+    document.getElementById('photoInput').value = '';
+}
+</script>
+{% endblock %}
