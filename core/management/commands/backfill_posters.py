@@ -17,19 +17,30 @@ TMDB_BASE = 'https://api.themoviedb.org/3'
 IMG_BASE = settings.TMDB_IMAGE_BASE_URL  # e.g. https://image.tmdb.org/t/p/w500
 
 
+def _get_api_key():
+    """Get a TMDB API key from settings, credentials.json, or TMDBApiKey DB model."""
+    # 1. Environment / credentials.json
+    api_key = getattr(settings, 'TMDB_API_KEY', None) or ''
+    if api_key:
+        return api_key
+    # 2. TMDBApiKey model (primary storage on this project)
+    try:
+        from core.models import TMDBApiKey
+        key_obj = TMDBApiKey.objects.filter(is_active=True).order_by('last_used_at').first()
+        if key_obj:
+            key_obj.usage_count += 1
+            from django.utils import timezone as _tz
+            key_obj.last_used_at = _tz.now()
+            key_obj.save(update_fields=['usage_count', 'last_used_at'])
+            return key_obj.key
+    except Exception:
+        pass
+    return ''
+
+
 def _fetch_poster(tmdb_id, media_type):
     """Fetch poster_path from TMDB for a movie or TV show."""
-    try:
-        api_key = settings.TMDB_API_KEY
-    except AttributeError:
-        # Try reading from SiteSettings
-        try:
-            from core.models import SiteSettings
-            s = SiteSettings.get_settings()
-            api_key = s.tmdb_api_key or ''
-        except Exception:
-            api_key = ''
-
+    api_key = _get_api_key()
     if not api_key:
         return None, None
 
