@@ -217,7 +217,7 @@
         }
         var html = heading + '<div style="height:10px;"></div>';
         items.forEach(function (it) {
-            var isTv = it.mediaType === 'tv' || (it.season != null);
+            var isTv = it.isTv || it.mediaType === 'tv' || (it.season != null);
             var poster = it.poster && it.poster.indexOf('/') === 0
                 ? 'https://image.tmdb.org/t/p/w92' + it.poster
                 : (it.poster && it.poster.indexOf('http') === 0 ? it.poster : '');

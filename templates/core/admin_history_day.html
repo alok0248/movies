@@ -90,8 +90,8 @@
     <div class="hd-list">
         {% for r in rows %}
         {% with h=r.h %}
-        {% if h.tmdb_id > 0 %}
-        <a class="hd-row" href="{% if h.media_type == 'tv' or h.season_number %}/series/id/{{ h.tmdb_id }}/{% else %}/movies/id/{{ h.tmdb_id }}/{% endif %}" target="_blank">
+        {% if h.tmdb_id and h.tmdb_id > 0 %}
+        <a class="hd-row" href="{% if r.is_tv %}/series/id/{{ h.tmdb_id }}/{% else %}/movies/id/{{ h.tmdb_id }}/{% endif %}" target="_blank">
         {% else %}
         <div class="hd-row">
         {% endif %}
@@ -106,7 +106,7 @@
             <div class="hd-info">
                 <div class="t">{{ h.title }}{% if h.season_number and h.episode_number %} <span class="hd-se">S{{ h.season_number }}E{{ h.episode_number }}{% if h.episode_title %} · {{ h.episode_title }}{% endif %}</span>{% endif %}</div>
                 <div class="m">
-                    <span class="hd-badge {% if h.media_type == 'tv' or h.season_number %}tv{% else %}mv{% endif %}">{% if h.media_type == 'tv' or h.season_number %}TV{% else %}MOVIE{% endif %}</span>
+                    <span class="hd-badge {% if r.is_tv %}tv{% else %}mv{% endif %}">{% if r.is_tv %}TV{% else %}MOVIE{% endif %}</span>
                     {% if h.completed %} <span class="hd-badge" style="background:rgba(52,211,153,.15);color:#34d399;">DONE</span>{% endif %}
                 </div>
             </div>
@@ -120,7 +120,7 @@
             </div>
             {% endif %}
             <i class="fas fa-chevron-right" style="color:rgba(255,255,255,.2);font-size:.75rem;flex-shrink:0;"></i>
-        {% if h.tmdb_id > 0 %}
+        {% if h.tmdb_id and h.tmdb_id > 0 %}
         </a>
         {% else %}
         </div>

@@ -1483,6 +1483,10 @@ class UserCloudData(models.Model):
                         episode = int(parts[3])
                     except (ValueError, TypeError):
                         pass
+            # If season/episode are present, this is a TV episode regardless
+            # of what the entry's isTv flag says (many app payloads omit it).
+            if season >= 0 and episode >= 0:
+                is_tv = True
             media_type = 'tv' if is_tv else 'movie'
             pos_ms = entry.get('positionMs', 0)
             dur_ms = entry.get('durationMs', 0)
@@ -1549,7 +1553,11 @@ class UserCloudData(models.Model):
                 defaults['last_played_at'] = watched_at
             # Match an existing row first (exact season/episode, then the base
             # movie/show row) so this never duplicates PlayHistory entries.
+            # The playback-progress loop may have created the row with the
+            # wrong media_type (e.g. 'movie' for a TV episode), so also
+            # look for rows with the opposite type and fix them.
             h_type = 'tv' if h_is_tv else 'movie'
+            other_type = 'movie' if h_type == 'tv' else 'tv'
             row = PlayHistory.objects.filter(
                 user=self.user, tmdb_id=h_mid, media_type=h_type,
                 season_number=h_season_final, episode_number=h_episode_final,
@@ -1557,6 +1565,18 @@ class UserCloudData(models.Model):
             if row is None and h_season_final is not None:
                 row = PlayHistory.objects.filter(
                     user=self.user, tmdb_id=h_mid, media_type=h_type,
+                    season_number=None, episode_number=None,
+                ).first()
+            # Fallback: try the opposite media_type (playback-progress may
+            # have stored a TV episode as 'movie').
+            if row is None and h_season_final is not None:
+                row = PlayHistory.objects.filter(
+                    user=self.user, tmdb_id=h_mid, media_type=other_type,
+                    season_number=h_season_final, episode_number=h_episode_final,
+                ).first()
+            if row is None and h_season_final is not None:
+                row = PlayHistory.objects.filter(
+                    user=self.user, tmdb_id=h_mid, media_type=other_type,
                     season_number=None, episode_number=None,
                 ).first()
             if row is None:
@@ -1568,6 +1588,9 @@ class UserCloudData(models.Model):
             else:
                 for f, v in defaults.items():
                     setattr(row, f, v)
+                # Fix wrong media_type so the badge and link are correct.
+                if row.media_type != h_type:
+                    row.media_type = h_type
                 row.save()
 
     def sync_from_web_models(self):
