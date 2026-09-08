@@ -9225,6 +9225,7 @@ def _history_calendar_payload(user_qs, year, month):
                 'season': h.season_number,
                 'episode': h.episode_number,
                 'episodeTitle': h.episode_title or '',
+                'isTv': h.media_type == 'tv' or h.season_number is not None,
                 'ts': h.last_played_at.isoformat(),
                 'time': local_dt.strftime('%I:%M %p'),
                 'day': day,
@@ -9308,6 +9309,7 @@ def admin_history_day(request):
             'h': h,
             'time': local_dt.strftime('%I:%M %p'),
             'user': h.user,
+            'is_tv': h.media_type == 'tv' or h.season_number is not None,
         })
     total = len(rows)
     movies = sum(1 for r in rows if not (r['h'].media_type == 'tv' or r['h'].season_number))
