@@ -7336,14 +7336,36 @@ def unsubscribe_page(request):
 
 @login_required
 def admin_subscribers(request):
-    """Admin page to view subscribers, send emails."""
+    """Admin page to view subscribers, send emails.
+
+    Auto-syncs all registered User and SyncedUser emails into the
+    Subscriber table so every user who ever signed up or logged in
+    from the Android app is visible here and can be emailed.
+    """
     if not request.user.is_staff:
         return HttpResponseForbidden('Staff only')
+
+    # --- Auto-sync: create Subscriber rows for any User/SyncedUser email not yet present ---
+    from .models import SyncedUser
+    existing_emails = set(Subscriber.objects.values_list('email', flat=True))
+    new_subs = []
+    # Django auth users
+    for u in User.objects.exclude(email='').exclude(email__isnull=True):
+        if u.email.lower() not in existing_emails:
+            new_subs.append(Subscriber(email=u.email.lower(), is_active=True))
+            existing_emails.add(u.email.lower())
+    # Android-synced users
+    for su in SyncedUser.objects.exclude(email='').exclude(email__isnull=True):
+        if su.email.lower() not in existing_emails:
+            new_subs.append(Subscriber(email=su.email.lower(), is_active=True))
+            existing_emails.add(su.email.lower())
+    if new_subs:
+        Subscriber.objects.bulk_create(new_subs, ignore_conflicts=True)
+
     subs = Subscriber.objects.all().order_by('-created_at')
     total_active = subs.filter(is_active=True).count()
     total_inactive = subs.filter(is_active=False).count()
     sent_messages = EmailMessage.objects.select_related('sent_by').all()[:20]
-    # Build delivery history per subscriber
     all_deliveries = EmailDelivery.objects.select_related('message', 'subscriber').all()[:100]
     return render(request, 'core/admin_subscribers.html', {
         'subscribers': subs,
