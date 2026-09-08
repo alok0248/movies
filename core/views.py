@@ -9340,6 +9340,17 @@ def _history_calendar_payload(user_qs, year, month):
     end = (start + timedelta(days=32)).replace(day=1)
     qs = PlayHistory.objects.filter(user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end)
 
+    # Lazy backfill: fetch missing titles/posters from TMDB so the
+    # calendar always shows display data.
+    missing = qs.filter(
+        models.Q(title='') | models.Q(title__isnull=True)
+    ).exclude(tmdb_id__lte=0)[:20]
+    if missing:
+        from core.models import _backfill_from_tmdb
+        _backfill_from_tmdb(list(missing))
+        # Refresh the queryset so the loop picks up new data
+        qs = PlayHistory.objects.filter(user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end)
+
     days = {}
     items = []
     for h in qs.order_by('-last_played_at')[:400]:

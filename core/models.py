@@ -22,6 +22,44 @@ def _epoch_ms_to_dt(value):
         return None
 
 
+def _backfill_from_tmdb(rows):
+    """Fetch missing title+poster from TMDB for a batch of PlayHistory rows.
+
+    Uses the project's TMDBClient (which reads API keys from the TMDBApiKey
+    model) so it works on any server without credentials.json.
+    """
+    if not rows:
+        return
+    try:
+        from core.tmdb_client import TMDBClient
+        client = TMDBClient()
+    except Exception:
+        return
+    for h in rows:
+        try:
+            path = '/movie' if h.media_type == 'movie' else '/tv'
+            data = client._make_request(f'{path}/{h.tmdb_id}')
+            if not data:
+                continue
+            fields = []
+            if not h.title:
+                h.title = data.get('title') or data.get('name') or ''
+                if h.title:
+                    fields.append('title')
+            if not h.poster_path:
+                h.poster_path = data.get('poster_path') or ''
+                if h.poster_path:
+                    fields.append('poster_path')
+            if not h.episode_title and h.season_number is not None:
+                h.episode_title = data.get('episode_title') or ''
+                if h.episode_title:
+                    fields.append('episode_title')
+            if fields:
+                h.save(update_fields=fields)
+        except Exception:
+            continue
+
+
 def normalize_poster_path(value):
     """Normalize a poster reference to a clean TMDB-relative path.
 
@@ -1592,6 +1630,19 @@ class UserCloudData(models.Model):
                 if row.media_type != h_type:
                     row.media_type = h_type
                 row.save()
+
+        # --- Auto-backfill missing titles/posters from TMDB ---
+        # After both loops, some rows may still have empty title or no poster
+        # (the app's playbackProgress doesn't carry them).  Fetch from TMDB
+        # in a single batch so the calendar, history, and detail pages always
+        # have display data.
+        missing = PlayHistory.objects.filter(
+            user=self.user,
+        ).filter(
+            models.Q(title='') | models.Q(title__isnull=True)
+        ).exclude(tmdb_id__lte=0)[:30]
+        if missing:
+            _backfill_from_tmdb(list(missing))
 
     def sync_from_web_models(self):
         """Pull web WatchList + PlayHistory into cloud data."""
