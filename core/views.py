@@ -8706,7 +8706,7 @@ def user_profile(request):
         last_name = request.POST.get('last_name', '').strip()
         email = request.POST.get('email', '').strip()
         phone = request.POST.get('phone', '').strip()
-        bio = request.POST.get('bio', '').strip()
+        bio = request.POST.get('bio', '').strip()
         dob = request.POST.get('date_of_birth', '').strip()
         location = request.POST.get('location', '').strip()
         website = request.POST.get('website', '').strip()
@@ -9255,6 +9255,17 @@ def admin_backfill_posters(request):
     import time as _time
 
     def _fetch(tid, mtype):
+        # Use the project's TMDBClient — it reads the API key from the
+        # TMDBApiKey DB model (the primary key storage in this project).
+        try:
+            client = TMDBClient()
+            path = '/movie' if mtype == 'movie' else '/tv'
+            data = client._make_request(f'{path}/{tid}')
+            if data:
+                return data.get('poster_path') or '', data.get('title') or data.get('name') or ''
+        except Exception:
+            pass
+        # Legacy fallbacks: settings / SiteSettings
         try:
             api_key = _s.TMDB_API_KEY
         except AttributeError:
@@ -9286,30 +9297,44 @@ def admin_backfill_posters(request):
                'watchlist': {'updated': 0, 'skipped': 0, 'total': 0}}
 
     if model in ('PlayHistory', 'both'):
-        qs = PlayHistory.objects.filter(poster_path__exact='').exclude(tmdb_id__lte=0)[:limit]
+        qs = PlayHistory.objects.filter(
+            models.Q(poster_path='') | models.Q(poster_path__isnull=True)
+            | models.Q(title='') | models.Q(title__isnull=True)
+        ).exclude(tmdb_id__lte=0)[:limit]
         results['play_history']['total'] = qs.count()
         for h in qs:
             poster, title = _fetch(h.tmdb_id, h.media_type)
-            if poster:
+            changed = []
+            if title and not h.title:
+                h.title = title
+                changed.append('title')
+            if poster and not h.poster_path:
                 h.poster_path = poster
-                if title and not h.title:
-                    h.title = title
-                h.save(update_fields=['poster_path', 'title'] if title and not h.title else ['poster_path'])
+                changed.append('poster_path')
+            if changed:
+                h.save(update_fields=changed)
                 results['play_history']['updated'] += 1
             else:
                 results['play_history']['skipped'] += 1
             _time.sleep(0.12)
 
     if model in ('WatchList', 'both'):
-        qs = WatchList.objects.filter(poster_path__exact='').exclude(tmdb_id__lte=0)[:limit]
+        qs = WatchList.objects.filter(
+            models.Q(poster_path='') | models.Q(poster_path__isnull=True)
+            | models.Q(title='') | models.Q(title__isnull=True)
+        ).exclude(tmdb_id__lte=0)[:limit]
         results['watchlist']['total'] = qs.count()
         for w in qs:
             poster, title = _fetch(w.tmdb_id, w.media_type)
-            if poster:
+            changed = []
+            if title and not w.title:
+                w.title = title
+                changed.append('title')
+            if poster and not w.poster_path:
                 w.poster_path = poster
-                if title and not w.title:
-                    w.title = title
-                w.save(update_fields=['poster_path', 'title'] if title and not w.title else ['poster_path'])
+                changed.append('poster_path')
+            if changed:
+                w.save(update_fields=changed)
                 results['watchlist']['updated'] += 1
             else:
                 results['watchlist']['skipped'] += 1
@@ -9319,7 +9344,7 @@ def admin_backfill_posters(request):
     total_skipped = results['play_history']['skipped'] + results['watchlist']['skipped']
     return JsonResponse({
         'success': True,
-        'message': f'Backfill complete: {total_updated} posters added, {total_skipped} skipped (no TMDB data).',
+        'message': f'Backfill complete: {total_updated} entries fixed, {total_skipped} skipped (no TMDB data).',
         'results': results,
     })
 

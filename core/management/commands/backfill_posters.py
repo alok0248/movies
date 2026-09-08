@@ -88,6 +88,7 @@ class Command(BaseCommand):
 
         qs = PlayHistory.objects.filter(
             models.Q(poster_path='') | models.Q(poster_path__isnull=True)
+            | models.Q(title='') | models.Q(title__isnull=True)
         ).exclude(tmdb_id__lte=0)[:limit]
 
         total = qs.count()
@@ -97,18 +98,24 @@ class Command(BaseCommand):
 
         for h in qs:
             poster, title = _fetch_poster(h.tmdb_id, h.media_type)
-            if poster:
-                if dry_run:
-                    self.stdout.write(f'  WOULD UPDATE: id={h.id} tmdb={h.tmdb_id} title="{h.title}" poster={poster}')
-                else:
+            changed = []
+            if title and not h.title:
+                if not dry_run:
+                    h.title = title
+                changed.append('title')
+            if poster and not h.poster_path:
+                if not dry_run:
                     h.poster_path = poster
-                    if title and not h.title:
-                        h.title = title
-                    h.save(update_fields=['poster_path', 'title'] if title and not h.title else ['poster_path'])
+                changed.append('poster')
+            if changed:
+                if dry_run:
+                    self.stdout.write(f'  WOULD UPDATE: id={h.id} tmdb={h.tmdb_id} -> {", ".join(changed)}')
+                else:
+                    h.save(update_fields=[f + ('_path' if f == 'poster' else '') for f in changed])
                 updated += 1
             else:
                 skipped += 1
-                self.stdout.write(f'  SKIP: id={h.id} tmdb={h.tmdb_id} media={h.media_type} title="{h.title}" (no poster on TMDB)')
+                self.stdout.write(f'  SKIP: id={h.id} tmdb={h.tmdb_id} media={h.media_type} title="{h.title}" (nothing on TMDB)')
 
             if updated % 10 == 0 and updated > 0:
                 self.stdout.write(f'  ... {updated}/{total} updated')
@@ -121,6 +128,7 @@ class Command(BaseCommand):
 
         qs = WatchList.objects.filter(
             models.Q(poster_path='') | models.Q(poster_path__isnull=True)
+            | models.Q(title='') | models.Q(title__isnull=True)
         ).exclude(tmdb_id__lte=0)[:limit]
 
         total = qs.count()
@@ -130,18 +138,24 @@ class Command(BaseCommand):
 
         for w in qs:
             poster, title = _fetch_poster(w.tmdb_id, w.media_type)
-            if poster:
-                if dry_run:
-                    self.stdout.write(f'  WOULD UPDATE: id={w.id} tmdb={w.tmdb_id} title="{w.title}" poster={poster}')
-                else:
+            changed = []
+            if title and not w.title:
+                if not dry_run:
+                    w.title = title
+                changed.append('title')
+            if poster and not w.poster_path:
+                if not dry_run:
                     w.poster_path = poster
-                    if title and not w.title:
-                        w.title = title
-                    w.save(update_fields=['poster_path', 'title'] if title and not w.title else ['poster_path'])
+                changed.append('poster')
+            if changed:
+                if dry_run:
+                    self.stdout.write(f'  WOULD UPDATE: id={w.id} tmdb={w.tmdb_id} -> {", ".join(changed)}')
+                else:
+                    w.save(update_fields=[f + ('_path' if f == 'poster' else '') for f in changed])
                 updated += 1
             else:
                 skipped += 1
-                self.stdout.write(f'  SKIP: id={w.id} tmdb={w.tmdb_id} media={w.media_type} title="{w.title}" (no poster on TMDB)')
+                self.stdout.write(f'  SKIP: id={w.id} tmdb={w.tmdb_id} media={w.media_type} title="{w.title}" (nothing on TMDB)')
 
             if updated % 10 == 0 and updated > 0:
                 self.stdout.write(f'  ... {updated}/{total} updated')
