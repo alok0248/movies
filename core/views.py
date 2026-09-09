@@ -4001,8 +4001,11 @@ def verify_email(request):
         return render(request, 'core/email_verified.html', {'success': False, 'message': 'Verification link has expired. Please register again.'})
     ev.verified = True
     ev.save(update_fields=['verified'])
-    ev.user.is_active = True
-    ev.user.save(update_fields=['is_active'])
+    try:
+        ev.user.is_active = True
+        ev.user.save(update_fields=['is_active'])
+    except Exception:
+        pass  # user may have been deleted
     return render(request, 'core/email_verified.html', {'success': True, 'message': 'Email verified successfully! You can now login.'})
 
 
@@ -8220,8 +8223,11 @@ def api_user_verify_email(request):
         return JsonResponse({'status': 'success', 'message': 'Email already verified. You can now login.'})
     ev.verified = True
     ev.save(update_fields=['verified'])
-    ev.user.is_active = True
-    ev.user.save(update_fields=['is_active'])
+    try:
+        ev.user.is_active = True
+        ev.user.save(update_fields=['is_active'])
+    except Exception:
+        pass  # user may have been deleted
     return JsonResponse({'status': 'success', 'message': 'Email verified successfully! You can now login.'})
 
 
