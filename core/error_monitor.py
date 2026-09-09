@@ -74,7 +74,10 @@ def _send_alert_email(request, exc_type, exc_value, tb_text):
         ip = _get_client_ip(request)
         user = getattr(request, 'user', None)
         user_str = f'{user.username} (id={user.id})' if user and user.is_authenticated else 'Anonymous'
-        host = request.get_host()
+        try:
+            host = request.get_host()
+        except Exception:
+            host = request.META.get('SERVER_NAME', 'unknown')
         ua = (request.META.get('HTTP_USER_AGENT', '') or '')[:120]
 
         subject = f'[500] {method} {path} — {exc_type.__name__}'
