@@ -9239,14 +9239,17 @@ def admin_analytics(request):
 @user_passes_test(is_staff_or_superuser)
 def admin_engagement_analytics(request):
     """User engagement analytics with Chart.js — daily active users, peak hours,
-    most watched content, retention metrics."""
-    from .models import UserPageView, UserSession, PlayHistory, WebsiteVisitor
+    most watched content, retention metrics.
+    Supports platform (web/android) and registration (registered/unregistered) filters."""
+    from .models import UserPageView, UserSession, PlayHistory, WebsiteVisitor, SyncedUser
     from django.db.models import Sum, Count, Avg, Q, F
     from django.contrib.auth.models import User
     from django.utils import timezone
     from django.db import connection
 
     days = int(request.GET.get('days', 30))
+    platform_filter = request.GET.get('platform', 'all')  # all, web, android
+    reg_filter = request.GET.get('reg', 'all')  # all, registered, unregistered
     since = timezone.now() - timezone.timedelta(days=days)
     today = timezone.now().date()
 
@@ -9270,18 +9273,56 @@ def admin_engagement_analytics(request):
                 continue
         return qs.filter(**extra)
 
+    # Platform mapping: PlayHistory has no platform field, but UserPageView does.
+    # For PlayHistory we infer from user: SyncedUser rows = android, others = web.
+    registered_user_ids = set(User.objects.values_list('id', flat=True))
+    android_user_ids = set()
+    try:
+        android_user_ids = set(
+            SyncedUser.objects.using(user_db).filter(user__isnull=False)
+            .values_list('user_id', flat=True)
+        )
+    except Exception:
+        pass
+
+    def _apply_ph_filters(qs):
+        """Apply platform + registration filters to a PlayHistory queryset."""
+        if platform_filter == 'android':
+            qs = qs.filter(user_id__in=android_user_ids)
+        elif platform_filter == 'web':
+            qs = qs.exclude(user_id__in=android_user_ids)
+        if reg_filter == 'registered':
+            qs = qs.filter(user_id__in=registered_user_ids)
+        elif reg_filter == 'unregistered':
+            qs = qs.exclude(user_id__in=registered_user_ids)
+        return qs
+
+    def _apply_pv_filters(qs):
+        """Apply platform + registration filters to a UserPageView queryset."""
+        if platform_filter == 'android':
+            qs = qs.filter(platform='android')
+        elif platform_filter == 'web':
+            qs = qs.filter(platform='web')
+        if reg_filter == 'registered':
+            qs = qs.filter(user__isnull=False)
+        elif reg_filter == 'unregistered':
+            qs = qs.filter(user__isnull=True)
+        return qs
+
     # --- 1. Daily Active Users (DAU) chart ---
     dau_data = []
     for i in range(min(days, 60)):
         d = (timezone.now() - timezone.timedelta(days=i)).date()
-        dau = UserPageView.objects.filter(viewed_at__date=d, user__isnull=False).values('user').distinct().count()
+        qs = UserPageView.objects.filter(viewed_at__date=d)
+        qs = _apply_pv_filters(qs)
+        dau = qs.values('user').distinct().count() if reg_filter != 'unregistered' else qs.count()
         dau_data.append({'date': d.isoformat(), 'dau': dau})
     dau_data.reverse()
 
     # --- 2. Peak Viewing Hours (play history by hour) ---
     hourly_plays = [0] * 24
     try:
-        play_qs = _ph_qs(last_played_at__gte=since)
+        play_qs = _apply_ph_filters(_ph_qs(last_played_at__gte=since))
         for row in play_qs.extra(select={'hour': 'strftime("%%H", last_played_at)'}).values('hour').annotate(cnt=Count('id')):
             h = int(row['hour'])
             if 0 <= h < 24:
@@ -9292,7 +9333,7 @@ def admin_engagement_analytics(request):
     # --- 3. Most Watched Content ---
     most_watched = []
     try:
-        play_qs = _ph_qs(last_played_at__gte=since)
+        play_qs = _apply_ph_filters(_ph_qs(last_played_at__gte=since))
         most_watched = list(
             play_qs.exclude(tmdb_id__lte=0)
                    .values('tmdb_id', 'title', 'media_type', 'poster_path')
@@ -9305,7 +9346,7 @@ def admin_engagement_analytics(request):
     # --- 4. Content Type Distribution (movie vs tv) ---
     content_types = []
     try:
-        play_qs = _ph_qs(last_played_at__gte=since)
+        play_qs = _apply_ph_filters(_ph_qs(last_played_at__gte=since))
         content_types = list(
             play_qs.values('media_type')
                    .annotate(count=Count('id'))
@@ -9314,20 +9355,54 @@ def admin_engagement_analytics(request):
     except Exception:
         pass
 
-    # --- 5. Retention: users who returned after N days ---
+    # --- 5. Platform breakdown (Android vs Web) ---
+    platform_breakdown = []
+    try:
+        play_qs = _ph_qs(last_played_at__gte=since)
+        android_count = play_qs.filter(user_id__in=android_user_ids).count()
+        web_count = play_qs.exclude(user_id__in=android_user_ids).count()
+        platform_breakdown = [
+            {'platform': 'Android', 'count': android_count},
+            {'platform': 'Web', 'count': web_count},
+        ]
+    except Exception:
+        pass
+
+    # --- 6. Registration breakdown (Registered vs Unregistered) ---
+    reg_breakdown = []
+    try:
+        play_qs = _ph_qs(last_played_at__gte=since)
+        reg_count = play_qs.filter(user_id__in=registered_user_ids).count()
+        unreg_count = play_qs.exclude(user_id__in=registered_user_ids).count()
+        reg_breakdown = [
+            {'type': 'Registered', 'count': reg_count},
+            {'type': 'Unregistered', 'count': unreg_count},
+        ]
+    except Exception:
+        pass
+
+    # --- 7. Retention: users who returned after N days ---
     retention_data = []
     for back in [1, 3, 7, 14, 30]:
         day_a = today - timezone.timedelta(days=back)
         day_b = today - timezone.timedelta(days=back - 1)
         try:
-            day_a_users = set(
-                UserPageView.objects.filter(viewed_at__date=day_a, user__isnull=False)
-                    .values_list('user', flat=True).distinct()
-            )
-            day_b_users = set(
-                UserPageView.objects.filter(viewed_at__date=day_b, user__isnull=False)
-                    .values_list('user', flat=True).distinct()
-            )
+            pv_a = UserPageView.objects.filter(viewed_at__date=day_a)
+            pv_b = UserPageView.objects.filter(viewed_at__date=day_b)
+            if reg_filter == 'registered':
+                pv_a = pv_a.filter(user__isnull=False)
+                pv_b = pv_b.filter(user__isnull=False)
+            elif reg_filter == 'unregistered':
+                pv_a = pv_a.filter(user__isnull=True)
+                pv_b = pv_b.filter(user__isnull=True)
+            if platform_filter == 'android':
+                pv_a = pv_a.filter(platform='android')
+                pv_b = pv_b.filter(platform='android')
+            elif platform_filter == 'web':
+                pv_a = pv_a.filter(platform='web')
+                pv_b = pv_b.filter(platform='web')
+            day_a_users = set(pv_a.values_list('user', flat=True).distinct())
+            day_b_users = set(pv_b.values_list('user', flat=True).distinct())
             returned = len(day_a_users & day_b_users)
             rate = (returned / len(day_a_users) * 100) if day_a_users else 0
             retention_data.append({
@@ -9339,23 +9414,24 @@ def admin_engagement_analytics(request):
         except Exception:
             retention_data.append({'label': f'{back}d→{back-1}d', 'cohort_size': 0, 'returned': 0, 'rate': 0})
 
-    # --- 6. Daily plays chart ---
+    # --- 8. Daily plays chart ---
     daily_plays = []
     for i in range(min(days, 60)):
         d = (timezone.now() - timezone.timedelta(days=i)).date()
         try:
-            cnt = _ph_qs(last_played_at__date=d).count()
+            qs = _apply_ph_filters(_ph_qs(last_played_at__date=d))
+            cnt = qs.count()
         except Exception:
             cnt = 0
         daily_plays.append({'date': d.isoformat(), 'plays': cnt})
     daily_plays.reverse()
 
-    # --- 7. Summary stats ---
+    # --- 9. Summary stats ---
     total_plays = 0
     unique_watching_users = 0
     avg_plays_per_user = 0
     try:
-        play_qs = _ph_qs(last_played_at__gte=since)
+        play_qs = _apply_ph_filters(_ph_qs(last_played_at__gte=since))
         total_plays = play_qs.count()
         unique_watching_users = play_qs.values('user').distinct().count()
         avg_plays_per_user = round(total_plays / unique_watching_users, 1) if unique_watching_users else 0
@@ -9365,14 +9441,17 @@ def admin_engagement_analytics(request):
     # Avg session duration
     avg_session = 0
     try:
-        avg_session = UserPageView.objects.filter(viewed_at__gte=since).aggregate(
-            avg=Avg('time_spent_seconds'))['avg'] or 0
+        pv_qs = UserPageView.objects.filter(viewed_at__gte=since)
+        pv_qs = _apply_pv_filters(pv_qs)
+        avg_session = pv_qs.aggregate(avg=Avg('time_spent_seconds'))['avg'] or 0
         avg_session = round(avg_session)
     except Exception:
         pass
 
     return render(request, 'core/admin_engagement_analytics.html', {
         'days': days,
+        'platform_filter': platform_filter,
+        'reg_filter': reg_filter,
         'total_plays': total_plays,
         'unique_watching_users': unique_watching_users,
         'avg_plays_per_user': avg_plays_per_user,
@@ -9381,6 +9460,8 @@ def admin_engagement_analytics(request):
         'hourly_plays': hourly_plays,
         'most_watched': most_watched,
         'content_types': content_types,
+        'platform_breakdown': platform_breakdown,
+        'reg_breakdown': reg_breakdown,
         'retention_data': retention_data,
         'daily_plays': daily_plays,
     })
