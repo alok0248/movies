@@ -74,8 +74,10 @@ def activate_external_db():
         # here or request handlers (ATOMIC_REQUESTS etc.) break.
         'ATOMIC_REQUESTS': False,
         'AUTOCOMMIT': True,
-        'CONN_MAX_AGE': 0,
-        'CONN_HEALTH_CHECKS': False,
+        # Persistent connections: reuse the MySQL connection between requests
+        # instead of reconnecting on every request (big CPU/latency saving).
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
         'TIME_ZONE': None,
         'TEST': {},
     }
