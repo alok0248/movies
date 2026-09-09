@@ -217,47 +217,46 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 # Static files caching — ManifestStaticFilesStorage adds content-hash for cache busting
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
-# Reduce query logging in production
-if ENV == 'prod':
-    LOGGING = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'verbose': {
-                'format': '{asctime} {levelname} {name} {message}',
-                'style': '{',
-            },
-        },
-        'handlers': {
-            'console': {
-                'class': 'logging.StreamHandler',
-                'formatter': 'verbose',
-            },
-            'mail_admins': {
-                'level': 'ERROR',
-                'class': 'django.utils.log.AdminEmailHandler',
-                'include_html': False,
-            },
-        },
-        'loggers': {
-            'django': {
-                'handlers': ['console'],
-                'level': 'WARNING',
-            },
-            'django.request': {
-                'handlers': ['console', 'mail_admins'],
-                'level': 'ERROR',
-                'propagate': True,
-            },
-            'error_monitor': {
-                'handlers': ['console'],
-                'level': 'INFO',
-            },
-        },
-    }
-
 # Load local settings LAST (if exists) for environment-specific config
 try:
     from movie_portal.settings_local import *
 except ImportError:
     pass
+
+# Configure logging after settings_local sets ENV
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{asctime} {levelname} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'mail_admins': {
+            'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+            'include_html': False,
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+        'django.request': {
+            'handlers': ['console', 'mail_admins'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+        'error_monitor': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
