@@ -2551,7 +2551,7 @@ def ajax_email_logs(request):
             'purpose': log.purpose,
             'purpose_label': purpose_labels.get(log.purpose, log.purpose.title()),
             'source': log.get_source_display(),
-            'address': log.address.email if log.address_id else None,
+            'address': (log.address.email if log.address_id and log.address else None),
             'error': log.error_message or '',
             'sent_by': str(log.sent_by) if log.sent_by_id else 'System',
             'time': log.created_at.strftime('%b %d, %H:%M:%S'),
