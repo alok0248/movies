@@ -921,6 +921,175 @@ def admin_dashboard(request):
     })
 
 
+@require_http_methods(["GET"])
+def ajax_dashboard_stats(request):
+    """Live stats for the admin dashboard — called every 30s by auto-refresh."""
+    from django.contrib.auth.models import User
+    from .models import PlayHistory, UserSession, UserPageView, WebsiteVisitor, EmailSendLog
+    from django.utils import timezone
+    import os
+
+    now = timezone.now()
+    today = now.date()
+    hour_ago = now - timezone.timedelta(hours=1)
+    five_min_ago = now - timezone.timedelta(minutes=5)
+
+    # Determine DB alias
+    user_db = 'default'
+    try:
+        from .models import DBRoutingConfig
+        cfg = DBRoutingConfig.get_config()
+        if cfg.use_external_db and cfg.external_db_ready:
+            user_db = 'external'
+    except Exception:
+        pass
+
+    def _count(model, **kwargs):
+        for db in ([user_db, 'default'] if user_db != 'default' else ['default']):
+            try:
+                return model.objects.using(db).filter(**kwargs).count()
+            except Exception:
+                continue
+        return 0
+
+
+    # Active users (logged in in last 5 min)
+    active_users = 0
+    try:
+        active_users = User.objects.filter(
+            last_login__gte=five_min_ago
+        ).count()
+    except Exception:
+        pass
+
+    # Visitors today
+    visitors_today = _count(WebsiteVisitor, last_seen_at__date=today)
+
+    # Total users
+    user_count = User.objects.count()
+
+    # Views today
+    views_today = _count(UserPageView, viewed_at__date=today)
+
+    # Plays today
+    plays_today = _count(PlayHistory, last_played_at__date=today)
+
+    # Active sessions
+
+    active_sessions = 0
+    try:
+        active_sessions = UserSession.objects.using(user_db).filter(
+            is_active=True
+        ).count()
+    except Exception:
+        pass
+    if active_sessions == 0 and user_db != 'default':
+        try:
+            active_sessions = UserSession.objects.filter(is_active=True).count()
+        except Exception:
+            pass
+
+    # Emails sent today
+    emails_today = 0
+    try:
+        emails_today = EmailSendLog.objects.filter(
+            created_at__date=today, status='sent'
+        ).count()
+    except Exception:
+        pass
+
+    # Server health
+    import subprocess
+    server_health = 'healthy'
+    try:
+        # Check disk usage
+        result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True, timeout=5)
+        lines = result.stdout.strip().split('\n')
+        if len(lines) > 1:
+            parts = lines[1].split()
+            usage_pct = int(parts[4].replace('%', ''))
+            if usage_pct > 90:
+                server_health = 'critical'
+            elif usage_pct > 75:
+                server_health = 'warning'
+    except Exception:
+        pass
+
+    # Recent activity (last 10 events)
+    activity = []
+    try:
+        # Recent logins
+        recent_sessions = UserSession.objects.using(user_db).order_by('-logged_in_at')[:5]
+        for s in recent_sessions:
+            try:
+                uname = s.user.username
+            except Exception:
+                uname = f'User #{s.user_id}'
+            activity.append({
+                'type': 'login',
+                'icon': 'sign-in-alt',
+                'color': '#4ade80',
+                'text': f'{uname} logged in via {s.source}',
+                'time': s.logged_in_at.strftime('%I:%M %p'),
+            })
+    except Exception:
+        pass
+
+    try:
+        # Recent plays
+        recent_plays = PlayHistory.objects.using(user_db).order_by('-last_played_at')[:5]
+        for p in recent_plays:
+            try:
+                uname = p.user.username
+            except Exception:
+                uname = f'User #{p.user_id}'
+            title = p.title or f'TMDB #{p.tmdb_id}'
+            activity.append({
+                'type': 'play',
+                'icon': 'play',
+                'color': '#60a5fa',
+                'text': f'{uname} watched {title}',
+                'time': p.last_played_at.strftime('%I:%M %p'),
+            })
+    except Exception:
+        pass
+
+    try:
+        # Recent emails
+
+        recent_emails = EmailSendLog.objects.order_by('-created_at')[:5]
+        for e in recent_emails:
+            activity.append({
+                'type': 'email',
+                'icon': 'envelope',
+                'color': '#a78bfa',
+                'text': f'Email sent: {e.subject[:50]}',
+                'time': e.created_at.strftime('%I:%M %p'),
+            })
+    except Exception:
+        pass
+
+    # Sort by most recent (heuristic: just sort by time string)
+    activity.sort(key=lambda x: x['time'], reverse=True)
+    activity = activity[:15]
+
+    return JsonResponse({
+        'ok': True,
+        'stats': {
+            'active_users': active_users,
+            'visitors_today': visitors_today,
+            'user_count': user_count,
+            'views_today': views_today,
+            'plays_today': plays_today,
+            'active_sessions': active_sessions,
+            'emails_today': emails_today,
+            'server_health': server_health,
+        },
+        'activity': activity,
+        'updated_at': now.strftime('%I:%M:%S %p'),
+    })
+
+
 # Helper functions for ads
 def get_user_today_clicks(user, ip_address):
     today = timezone.now().date()

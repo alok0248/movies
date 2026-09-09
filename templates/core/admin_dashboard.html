@@ -1,56 +1,323 @@
 {% extends 'core/admin_base.html' %}
 
 {% block admin_content %}
+<style>
+    /* Live Stats Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .stat-card {
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 16px;
+        padding: 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: all .3s;
+    }
+    .stat-card:hover {
+        border-color: rgba(255,255,255,.12);
+        transform: translateY(-2px);
+    }
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--accent);
+        opacity: .6;
+    }
+    .stat-card .stat-icon {
+        width: 40px; height: 40px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem;
+        margin-bottom: .75rem;
+        background: rgba(255,255,255,.05);
+    }
+    .stat-card .stat-number {
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: .25rem;
+    }
+    .stat-card .stat-label {
+        font-size: .75rem;
+        color: rgba(255,255,255,.45);
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+    .stat-card .stat-change {
+        font-size: .7rem;
+        margin-top: .5rem;
+        display: flex;
+        align-items: center;
+        gap: .25rem;
+    }
+    .stat-card .stat-change.up { color: #4ade80; }
+    .stat-card .stat-change.down { color: #f87171; }
+
+    /* Health indicator */
+    .health-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .35rem .75rem;
+        border-radius: 20px;
+        font-size: .75rem;
+        font-weight: 600;
+    }
+    .health-badge.healthy { background: rgba(34,197,94,.15); color: #4ade80; }
+    .health-badge.warning { background: rgba(251,191,36,.15); color: #fbbf24; }
+    .health-badge.critical { background: rgba(239,68,68,.15); color: #f87171; }
+    .health-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    .health-badge.healthy .health-dot { background: #4ade80; }
+    .health-badge.warning .health-dot { background: #fbbf24; }
+    .health-badge.critical .health-dot { background: #f87171; }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .4; }
+    }
+
+    /* Activity Feed */
+    .activity-feed {
+        max-height: 400px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.1) transparent;
+    }
+    .activity-item {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        padding: .75rem 0;
+        border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-icon {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: .75rem;
+        flex-shrink: 0;
+    }
+    .activity-text {
+        font-size: .82rem;
+        color: rgba(255,255,255,.7);
+        line-height: 1.4;
+    }
+    .activity-time {
+        font-size: .7rem;
+        color: rgba(255,255,255,.3);
+        margin-top: .15rem;
+    }
+
+    /* Auto-refresh indicator */
+    .refresh-indicator {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        font-size: .72rem;
+        color: rgba(255,255,255,.35);
+    }
+    .refresh-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #4ade80;
+        animation: pulse 2s infinite;
+    }
+
+    /* Light theme */
+    html[data-theme="light"] .stat-card {
+        background: rgba(0,0,0,.02);
+        border-color: rgba(0,0,0,.08);
+    }
+    html[data-theme="light"] .stat-card .stat-icon {
+        background: rgba(0,0,0,.05);
+    }
+    html[data-theme="light"] .stat-card .stat-label {
+        color: rgba(0,0,0,.45);
+    }
+    html[data-theme="light"] .activity-text {
+        color: rgba(0,0,0,.7);
+    }
+    html[data-theme="light"] .activity-time {
+        color: rgba(0,0,0,.35);
+    }
+</style>
+
 <!-- Page Header -->
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
         <h1 class="mb-0 gradient-text" style="font-size:1.6rem;font-weight:800;">
-            <i class="fas fa-sliders-h me-2" style="background:linear-gradient(135deg,#f59e0b,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>Admin Dashboard
+            <i class="fas fa-tachometer-alt me-2" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>Dashboard
         </h1>
-        <small class="text-secondary">v2.1.0 &middot; Last updated: {% now "M d, Y H:i" %}</small>
+        <small class="text-secondary">Real-time overview &middot; Auto-refreshes every 30s</small>
     </div>
-    <div class="d-flex gap-2 align-items-center">
-        <span class="status-dot green"></span><span class="text-secondary small">System Healthy</span>
+    <div class="d-flex gap-3 align-items-center">
+        <div class="refresh-indicator">
+            <span class="refresh-dot"></span>
+            <span id="lastUpdate">--</span>
+        </div>
+        <div id="healthBadge" class="health-badge healthy">
+            <span class="health-dot"></span>
+            <span>Healthy</span>
+        </div>
     </div>
 </div>
 
-<!-- Stats Overview Bar -->
-<div class="admin-card mb-4">
-    <div class="admin-card-body">
-        <div class="row g-0 text-center">
-            <div class="col">
-                <div class="stat-counter">
-                    <div class="stat-value" id="statVisitors">{{ visitors_today|default:"0" }}</div>
-                    <div class="stat-label">Today's Visitors</div>
+<!-- Live Stats Cards -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card" style="--accent: #4ade80;">
+        <div class="stat-icon" style="color:#4ade80;"><i class="fas fa-users"></i></div>
+        <div class="stat-number" id="statActiveUsers" style="color:#4ade80;">--</div>
+        <div class="stat-label">Active Users</div>
+        <div class="stat-change up" id="statActiveUsersChange"><i class="fas fa-circle" style="font-size:.4rem;"></i> Online now</div>
+    </div>
+    <div class="stat-card" style="--accent: #60a5fa;">
+        <div class="stat-icon" style="color:#60a5fa;"><i class="fas fa-eye"></i></div>
+        <div class="stat-number" id="statViewsToday" style="color:#60a5fa;">--</div>
+        <div class="stat-label">Views Today</div>
+        <div class="stat-change up"><i class="fas fa-chart-line" style="font-size:.4rem;"></i> Page views</div>
+    </div>
+    <div class="stat-card" style="--accent: #a78bfa;">
+        <div class="stat-icon" style="color:#a78bfa;"><i class="fas fa-play-circle"></i></div>
+        <div class="stat-number" id="statPlaysToday" style="color:#a78bfa;">--</div>
+        <div class="stat-label">Plays Today</div>
+        <div class="stat-change up"><i class="fas fa-film" style="font-size:.4rem;"></i> Watch sessions</div>
+    </div>
+    <div class="stat-card" style="--accent: #fbbf24;">
+        <div class="stat-icon" style="color:#fbbf24;"><i class="fas fa-user-friends"></i></div>
+        <div class="stat-number" id="statVisitorsToday" style="color:#fbbf24;">--</div>
+        <div class="stat-label">Visitors Today</div>
+        <div class="stat-change up"><i class="fas fa-globe" style="font-size:.4rem;"></i> Unique visitors</div>
+    </div>
+    <div class="stat-card" style="--accent: #22d3ee;">
+        <div class="stat-icon" style="color:#22d3ee;"><i class="fas fa-link"></i></div>
+        <div class="stat-number" id="statSessions" style="color:#22d3ee;">--</div>
+        <div class="stat-label">Active Sessions</div>
+        <div class="stat-change up"><i class="fas fa-plug" style="font-size:.4rem;"></i> Connected</div>
+    </div>
+    <div class="stat-card" style="--accent: #f472b6;">
+        <div class="stat-icon" style="color:#f472b6;"><i class="fas fa-envelope"></i></div>
+        <div class="stat-number" id="statEmails" style="color:#f472b6;">--</div>
+        <div class="stat-label">Emails Sent</div>
+        <div class="stat-change up"><i class="fas fa-check" style="font-size:.4rem;"></i> Delivered today</div>
+    </div>
+    <div class="stat-card" style="--accent: #c084fc;">
+        <div class="stat-icon" style="color:#c084fc;"><i class="fas fa-user-shield"></i></div>
+        <div class="stat-number" id="statTotalUsers" style="color:#c084fc;">--</div>
+        <div class="stat-label">Total Users</div>
+        <div class="stat-change up"><i class="fas fa-database" style="font-size:.4rem;"></i> Registered</div>
+    </div>
+</div>
+
+<!-- Activity Feed + Quick Actions -->
+<div class="row g-4 mb-4">
+    <!-- Activity Feed -->
+    <div class="col-lg-8">
+        <div class="admin-card h-100">
+            <div class="admin-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="mb-0 fw-bold" style="font-size:.85rem;">
+                        <i class="fas fa-stream me-2" style="color:#60a5fa;"></i>Recent Activity
+                    </h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboardStats()" title="Refresh now">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="activity-feed" id="activityFeed">
+                    <div class="text-center py-4 text-secondary">
+                        <i class="fas fa-spinner fa-spin me-1"></i> Loading activity...
+                    </div>
                 </div>
             </div>
-            <div class="col" style="border-left:1px solid rgba(255,255,255,.05);">
-                <div class="stat-counter">
-                    <div class="stat-value" id="statUsers">{{ user_count|default:"--" }}</div>
-                    <div class="stat-label">Total Users</div>
-                </div>
-            </div>
-            <div class="col" style="border-left:1px solid rgba(255,255,255,.05);">
-                <div class="stat-counter">
-                    <div class="stat-value" id="statPlays">{{ plays_today|default:"0" }}</div>
-                    <div class="stat-label">Play Sessions</div>
-                </div>
-            </div>
-            <div class="col" style="border-left:1px solid rgba(255,255,255,.05);">
-                <div class="stat-counter">
-                    <div class="stat-value" id="statDb">{% if ext_db_size and ext_db_size != '--' %}{{ ext_db_size }} <small style="font-size:.6em;opacity:.5;">ext</small>{% else %}{{ db_size|default:"--" }}{% endif %}</div>
-                    <div class="stat-label">DB Size</div>
-                </div>
-            </div>
-            <div class="col" style="border-left:1px solid rgba(255,255,255,.05);">
-                <div class="stat-counter">
-                    <div class="stat-value" style="font-size:1.4rem;">🟢</div>
-                    <div class="stat-label">Server Status</div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="col-lg-4">
+        <div class="admin-card h-100">
+            <div class="admin-card-body">
+                <h6 class="mb-3 fw-bold" style="font-size:.85rem;">
+                    <i class="fas fa-bolt me-2" style="color:#fbbf24;"></i>Quick Actions
+                </h6>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'admin_user_list' %}" class="quick-action-btn">
+                        <i class="fas fa-users" style="color:#4ade80;"></i>
+                        <span>Manage Users</span>
+                        <i class="fas fa-chevron-right ms-auto" style="opacity:.3;"></i>
+                    </a>
+                    <a href="{% url 'admin_history_calendar' %}" class="quick-action-btn">
+                        <i class="fas fa-calendar" style="color:#60a5fa;"></i>
+                        <span>View History</span>
+                        <i class="fas fa-chevron-right ms-auto" style="opacity:.3;"></i>
+                    </a>
+                    <a href="{% url 'email_settings' %}" class="quick-action-btn">
+                        <i class="fas fa-envelope" style="color:#a78bfa;"></i>
+                        <span>Email Settings</span>
+                        <i class="fas fa-chevron-right ms-auto" style="opacity:.3;"></i>
+                    </a>
+                    <a href="{% url 'admin_analytics' %}" class="quick-action-btn">
+                        <i class="fas fa-chart-line" style="color:#f472b6;"></i>
+                        <span>Analytics</span>
+                        <i class="fas fa-chevron-right ms-auto" style="opacity:.3;"></i>
+                    </a>
+                    <a href="{% url 'admin_subscribers' %}" class="quick-action-btn">
+                        <i class="fas fa-paper-plane" style="color:#22d3ee;"></i>
+                        <span>Subscribers</span>
+                        <i class="fas fa-chevron-right ms-auto" style="opacity:.3;"></i>
+                    </a>
+                    <a href="{% url 'player_settings' %}" class="quick-action-btn">
+                        <i class="fas fa-play-circle" style="color:#fbbf24;"></i>
+                        <span>Player Config</span>
+                        <i class="fas fa-chevron-right ms-auto" style="opacity:.3;"></i>
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+    .quick-action-btn {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .75rem 1rem;
+        border-radius: 12px;
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+        color: rgba(255,255,255,.7);
+        text-decoration: none;
+        font-size: .82rem;
+        font-weight: 500;
+        transition: all .2s;
+    }
+    .quick-action-btn:hover {
+        background: rgba(255,255,255,.06);
+        border-color: rgba(255,255,255,.12);
+        color: #fff;
+        transform: translateX(4px);
+    }
+    html[data-theme="light"] .quick-action-btn {
+        background: rgba(0,0,0,.02);
+        border-color: rgba(0,0,0,.08);
+        color: rgba(0,0,0,.7);
+    }
+    html[data-theme="light"] .quick-action-btn:hover {
+        background: rgba(0,0,0,.04);
+        border-color: rgba(0,0,0,.12);
+        color: #000;
+    }
+</style>
 
 <!-- Configuration Section -->
 <div class="mb-4">
@@ -309,6 +576,85 @@
 </div>
 
 <script>
+// === Live Dashboard Stats ===
+var _dashboardInterval = null;
+
+function loadDashboardStats() {
+    fetch('{% url "ajax_dashboard_stats" %}')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            var s = d.stats;
+
+            // Update stat numbers with animation
+            animateNumber('statActiveUsers', s.active_users);
+            animateNumber('statViewsToday', s.views_today);
+            animateNumber('statPlaysToday', s.plays_today);
+            animateNumber('statVisitorsToday', s.visitors_today);
+            animateNumber('statSessions', s.active_sessions);
+            animateNumber('statEmails', s.emails_today);
+            animateNumber('statTotalUsers', s.user_count);
+
+            // Update health badge
+            var hb = document.getElementById('healthBadge');
+            hb.className = 'health-badge ' + s.server_health;
+            var labels = { healthy: 'Healthy', warning: 'Warning', critical: 'Critical' };
+            hb.querySelector('span:last-child').textContent = labels[s.server_health] || 'Unknown';
+
+            // Update last update time
+            document.getElementById('lastUpdate').textContent = 'Updated ' + d.updated_at;
+
+            // Update activity feed
+            var feed = document.getElementById('activityFeed');
+            if (d.activity && d.activity.length > 0) {
+                var html = '';
+                d.activity.forEach(function(item) {
+                    html += '<div class="activity-item">' +
+                        '<div class="activity-icon" style="background:' + item.color + '20;color:' + item.color + ';">' +
+                            '<i class="fas fa-' + item.icon + '"></i>' +
+                        '</div>' +
+                        '<div>' +
+                            '<div class="activity-text">' + escapeHtml(item.text) + '</div>' +
+                            '<div class="activity-time">' + item.time + '</div>' +
+                        '</div>' +
+                    '</div>';
+                });
+                feed.innerHTML = html;
+            } else {
+                feed.innerHTML = '<div class="text-center py-4 text-secondary" style="font-size:.82rem;">No recent activity</div>';
+            }
+        })
+        .catch(function() {
+            document.getElementById('lastUpdate').textContent = 'Update failed — retrying...';
+        });
+}
+
+function animateNumber(id, target) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var current = parseInt(el.textContent) || 0;
+    if (current === target) return;
+    var diff = target - current;
+    var steps = Math.min(Math.abs(diff), 20);
+    var step = diff / steps;
+    var i = 0;
+    var timer = setInterval(function() {
+        i++;
+        if (i >= steps) {
+            el.textContent = target.toLocaleString();
+            clearInterval(timer);
+        } else {
+            el.textContent = Math.round(current + step * i).toLocaleString();
+        }
+    }, 30);
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function backfillPosters(model) {
     var el = document.getElementById('backfillResult');
     el.style.display = 'block';
@@ -335,19 +681,20 @@ function backfillPosters(model) {
             el.innerHTML = '<div class="text-danger small">Network error</div>';
         });
 }
-</script>
 
-<script>
-// Load stats via AJAX
-(function() {
-    fetch('/ajax/click-status/')
-        .then(readJson)
-        .then(function(res) {
-            var data = res.data;
-            if (data.clicks !== undefined) document.getElementById('statVisitors').textContent = data.clicks || '--';
-        })
-        .catch(function() {});
-})();
+// Initial load + auto-refresh every 30s
+loadDashboardStats();
+_dashboardInterval = setInterval(loadDashboardStats, 30000);
+
+// Pause when tab is hidden, resume when visible
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        clearInterval(_dashboardInterval);
+    } else {
+        loadDashboardStats();
+        _dashboardInterval = setInterval(loadDashboardStats, 30000);
+    }
+});
 </script>
 
 <style>
