@@ -55,25 +55,34 @@
     .watched-title { font-size: .82rem; font-weight: 600; }
     .watched-meta { font-size: .7rem; color: rgba(255,255,255,.35); }
     .watched-count { margin-left: auto; font-size: .82rem; font-weight: 700; color: #fbbf24; }
-    .time-filter {
-        display: inline-flex; border-radius: 8px; overflow: hidden;
-        border: 1px solid rgba(255,255,255,.1);
+
+    /* Filter pills */
+    .filter-group { display: inline-flex; gap: 2px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); }
+    .filter-group a {
+        padding: .4rem .85rem; font-size: .72rem; font-weight: 600;
+        color: rgba(255,255,255,.45); text-decoration: none; transition: all .2s;
+        background: rgba(255,255,255,.02);
     }
-    .time-filter a {
-        padding: .35rem .75rem; font-size: .72rem; font-weight: 600;
-        color: rgba(255,255,255,.5); text-decoration: none; transition: all .2s;
+    .filter-group a:hover { color: rgba(255,255,255,.7); background: rgba(255,255,255,.05); }
+    .filter-group a.active { background: rgba(251,191,36,.2); color: #fbbf24; }
+    .filter-bar {
+        display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
     }
-    .time-filter a:hover { color: rgba(255,255,255,.8); background: rgba(255,255,255,.05); }
-    .time-filter a.active { background: rgba(251,191,36,.2); color: #fbbf24; }
+    .filter-label { font-size: .72rem; color: rgba(255,255,255,.35); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
     html[data-theme="light"] .eng-stat-card, html[data-theme="light"] .chart-card {
         background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08);
     }
     html[data-theme="light"] .eng-stat-label, html[data-theme="light"] .watched-meta { color: rgba(0,0,0,.45); }
     html[data-theme="light"] .watched-rank { background: rgba(0,0,0,.06); color: rgba(0,0,0,.5); }
     html[data-theme="light"] .retention-track { background: rgba(0,0,0,.06); }
+    html[data-theme="light"] .filter-group { border-color: rgba(0,0,0,.12); }
+    html[data-theme="light"] .filter-group a { color: rgba(0,0,0,.45); background: rgba(0,0,0,.02); }
+    html[data-theme="light"] .filter-group a.active { background: rgba(251,191,36,.15); color: #b45309; }
+    html[data-theme="light"] .filter-label { color: rgba(0,0,0,.35); }
 </style>
 
-<!-- Header -->
+<!-- Header + Filters -->
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
         <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">
@@ -81,12 +90,29 @@
         </h1>
         <small class="text-secondary">Content popularity, viewing patterns, and retention</small>
     </div>
-    <div class="time-filter">
-        {% for d in "7,14,30" %}
-        {% endfor %}
-        <a href="?days=7" class="{% if days == 7 %}active{% endif %}">7D</a>
-        <a href="?days=14" class="{% if days == 14 %}active{% endif %}">14D</a>
-        <a href="?days=30" class="{% if days == 30 %}active{% endif %}">30D</a>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar mb-4">
+    <span class="filter-label">Period</span>
+    <div class="filter-group">
+        <a href="?days=7&platform={{ platform_filter }}&reg={{ reg_filter }}" class="{% if days == 7 %}active{% endif %}">7D</a>
+        <a href="?days=14&platform={{ platform_filter }}&reg={{ reg_filter }}" class="{% if days == 14 %}active{% endif %}">14D</a>
+        <a href="?days=30&platform={{ platform_filter }}&reg={{ reg_filter }}" class="{% if days == 30 %}active{% endif %}">30D</a>
+    </div>
+
+    <span class="filter-label">Platform</span>
+    <div class="filter-group">
+        <a href="?days={{ days }}&platform=all&reg={{ reg_filter }}" class="{% if platform_filter == 'all' %}active{% endif %}">All</a>
+        <a href="?days={{ days }}&platform=web&reg={{ reg_filter }}" class="{% if platform_filter == 'web' %}active{% endif %}">🌐 Web</a>
+        <a href="?days={{ days }}&platform=android&reg={{ reg_filter }}" class="{% if platform_filter == 'android' %}active{% endif %}">📱 Android</a>
+    </div>
+
+    <span class="filter-label">Users</span>
+    <div class="filter-group">
+        <a href="?days={{ days }}&platform={{ platform_filter }}&reg=all" class="{% if reg_filter == 'all' %}active{% endif %}">All</a>
+        <a href="?days={{ days }}&platform={{ platform_filter }}&reg=registered" class="{% if reg_filter == 'registered' %}active{% endif %}">✅ Registered</a>
+        <a href="?days={{ days }}&platform={{ platform_filter }}&reg=unregistered" class="{% if reg_filter == 'unregistered' %}active{% endif %}">👤 Guest</a>
     </div>
 </div>
 
@@ -118,7 +144,7 @@
     </div>
 </div>
 
-<!-- Charts Row 1: DAU + Daily Plays -->
+<!-- Charts Row 1: DAU + Content Type -->
 <div class="row g-4 mb-4">
     <div class="col-lg-8">
         <div class="chart-card">
@@ -138,7 +164,27 @@
     </div>
 </div>
 
-<!-- Charts Row 2: Peak Hours + Daily Plays -->
+<!-- Charts Row 2: Platform + Registration Breakdown -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h6><i class="fas fa-layer-group me-2" style="color:#22d3ee;"></i>Platform Breakdown</h6>
+            <div class="chart-container" style="height:250px;">
+                <canvas id="platformChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h6><i class="fas fa-user-check me-2" style="color:#f472b6;"></i>Registered vs Guest</h6>
+            <div class="chart-container" style="height:250px;">
+                <canvas id="regChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 3: Peak Hours + Daily Plays -->
 <div class="row g-4 mb-4">
     <div class="col-lg-6">
         <div class="chart-card">
@@ -293,14 +339,57 @@ new Chart(document.getElementById('dailyPlaysChart'), {
 var ctData = {{ content_types|safe }};
 var ctLabels = ctData.map(c => c.media_type === 'tv' ? 'TV Shows' : 'Movies');
 var ctValues = ctData.map(c => c.count);
-var ctColors = ['#a78bfa', '#60a5fa', '#fbbf24', '#4ade80'];
 new Chart(document.getElementById('contentTypeChart'), {
     type: 'doughnut',
     data: {
         labels: ctLabels,
         datasets: [{
             data: ctValues,
-            backgroundColor: ctColors.slice(0, ctValues.length),
+            backgroundColor: ['#a78bfa', '#60a5fa', '#fbbf24', '#4ade80'],
+            borderWidth: 0,
+            hoverOffset: 8,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 10 } }
+        }
+    }
+});
+
+// 5. Platform Breakdown
+var platData = {{ platform_breakdown|safe }};
+new Chart(document.getElementById('platformChart'), {
+    type: 'doughnut',
+    data: {
+        labels: platData.map(p => p.platform),
+        datasets: [{
+            data: platData.map(p => p.count),
+            backgroundColor: ['#4ade80', '#60a5fa'],
+            borderWidth: 0,
+            hoverOffset: 8,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 10 } }
+        }
+    }
+});
+
+// 6. Registration Breakdown
+var regData = {{ reg_breakdown|safe }};
+new Chart(document.getElementById('regChart'), {
+    type: 'doughnut',
+    data: {
+        labels: regData.map(r => r.type),
+        datasets: [{
+            data: regData.map(r => r.count),
+            backgroundColor: ['#22d3ee', '#f59e0b'],
             borderWidth: 0,
             hoverOffset: 8,
         }]
