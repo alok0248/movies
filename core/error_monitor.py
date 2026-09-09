@@ -51,7 +51,8 @@ def _rate_limited(path):
 def _send_alert_email(request, exc_type, exc_value, tb_text):
     """Send an email about a server error using the project's SMTP config."""
     try:
-        from core.models import EmailAddress, EmailSendLog, EmailMessage as CoreEmailMessage
+        from core.models import EmailAddress, EmailSendLog
+        from django.core.mail import EmailMessage as DjangoEmailMessage
         from django.utils import timezone as tz
 
         # Find the configured "from" email address
@@ -95,7 +96,7 @@ def _send_alert_email(request, exc_type, exc_value, tb_text):
         )
 
         # Send via SMTP using the project's email backend
-        msg = CoreEmailMessage(
+        msg = DjangoEmailMessage(
             subject=subject,
             body=body,
             from_email=smtp_addr.email,
