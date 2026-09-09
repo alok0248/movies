@@ -2488,6 +2488,16 @@ def email_settings(request):
     })
 
 
+def _safe_sent_by(log):
+    """Return the sender name from an EmailSendLog, handling missing User."""
+    if not log.sent_by_id:
+        return 'System'
+    try:
+        return str(log.sent_by)
+    except Exception:
+        return f'User #{log.sent_by_id}'
+
+
 def _email_purpose_stats():
     """Per-purpose delivery summary for the email dashboard. Mirrors the SMTP
     lookup chain in core/auth.send_configured_email so each card shows exactly
@@ -2553,7 +2563,7 @@ def ajax_email_logs(request):
             'source': log.get_source_display(),
             'address': (log.address.email if log.address_id and log.address else None),
             'error': log.error_message or '',
-            'sent_by': str(log.sent_by) if log.sent_by_id else 'System',
+            'sent_by': _safe_sent_by(log),
             'time': log.created_at.strftime('%b %d, %H:%M:%S'),
         })
 
