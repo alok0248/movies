@@ -376,6 +376,9 @@
 
         <div class="sb-section">
             <div class="sb-section-title">Content</div>
+            <a href="{% url 'admin_content_list' %}" class="sb-item {% if 'admin-dashboard/content' in request.path and 'content-rows' not in request.path %}active{% endif %}">
+                <i class="fas fa-film"></i> Movies & TV
+            </a>
             <a href="{% url 'content_row_list' %}" class="sb-item {% if 'content-rows' in request.path %}active{% endif %}">
                 <i class="fas fa-th-large"></i> Content Rows
             </a>

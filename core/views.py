@@ -9945,6 +9945,258 @@ def bulk_delete_users(request):
 import json as json_mod  # ensure json is available
 
 
+# ---------------------------------------------------------------------------
+# Content Management — Admin can add/edit/remove movies & TV shows directly
+# ---------------------------------------------------------------------------
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_content_list(request):
+    """List all movies and TV shows with search, filter, and pagination."""
+    from .models import TMDBMovie, TMDBTV
+    from django.core.paginator import Paginator
+
+    content_type = request.GET.get('type', 'all')  # all, movie, tv
+    search = request.GET.get('q', '').strip()
+    sort = request.GET.get('sort', '-popularity')
+
+    movies = TMDBMovie.objects.all()
+    tv_shows = TMDBTV.objects.all()
+
+    if search:
+        movies = movies.filter(
+            Q(title__icontains=search) | Q(original_title__icontains=search) | Q(overview__icontains=search)
+        )
+        tv_shows = tv_shows.filter(
+            Q(name__icontains=search) | Q(original_name__icontains=search) | Q(overview__icontains=search)
+        )
+
+    # Combine into a unified list
+    items = []
+    if content_type in ('all', 'movie'):
+        for m in movies:
+            items.append({
+                'id': m.id, 'type': 'movie', 'title': m.title,
+                'poster': m.poster_path, 'overview': (m.overview or '')[:150],
+                'rating': m.vote_average, 'year': (m.release_date or '')[:4],
+                'popularity': m.popularity or 0,
+                'status': m.status or '',
+            })
+    if content_type in ('all', 'tv'):
+        for t in tv_shows:
+            items.append({
+                'id': t.id, 'type': 'tv', 'title': t.name,
+                'poster': t.poster_path, 'overview': (t.overview or '')[:150],
+                'rating': t.vote_average, 'year': (t.first_air_date or '')[:4],
+                'popularity': t.popularity or 0,
+                'status': t.status or '',
+            })
+
+    # Sort
+    if sort == '-popularity':
+        items.sort(key=lambda x: x['popularity'], reverse=True)
+    elif sort == 'popularity':
+        items.sort(key=lambda x: x['popularity'])
+    elif sort == '-rating':
+        items.sort(key=lambda x: x['rating'] or 0, reverse=True)
+    elif sort == 'title':
+        items.sort(key=lambda x: x['title'].lower())
+    elif sort == '-title':
+        items.sort(key=lambda x: x['title'].lower(), reverse=True)
+
+    total_movies = TMDBMovie.objects.count()
+    total_tv = TMDBTV.objects.count()
+
+    paginator = Paginator(items, 24)
+    page = request.GET.get('page', 1)
+    try:
+        items = paginator.page(page)
+    except Exception:
+        items = paginator.page(1)
+
+    return render(request, 'core/admin_content_list.html', {
+        'items': items,
+        'content_type': content_type,
+        'search': search,
+        'sort': sort,
+        'total_movies': total_movies,
+        'total_tv': total_tv,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_content_add(request):
+    """Add a new movie or TV show directly."""
+    from .models import TMDBMovie, TMDBTV, TMDBGenre
+
+    if request.method == 'POST':
+        content_type = request.POST.get('content_type', 'movie')
+        title = request.POST.get('title', '').strip()
+        if not title:
+            messages.error(request, 'Title is required.')
+            return render(request, 'core/admin_content_form.html', {
+                'editing': False, 'content_type': content_type,
+            })
+
+        # Generate a unique negative ID to avoid TMDB ID conflicts
+        import time
+        custom_id = -int(time.time() * 1000) % 2147483647
+
+        if content_type == 'tv':
+            obj = TMDBTV.objects.create(
+                id=custom_id,
+                name=title,
+                original_name=request.POST.get('original_name', title),
+                overview=request.POST.get('overview', ''),
+                poster_path=request.POST.get('poster_path', ''),
+                backdrop_path=request.POST.get('backdrop_path', ''),
+                first_air_date=request.POST.get('release_date', ''),
+                genres=_parse_genres(request.POST.get('genres', '')),
+                vote_average=_safe_float(request.POST.get('vote_average', '0')),
+                vote_count=_safe_int(request.POST.get('vote_count', '0')),
+                popularity=_safe_float(request.POST.get('popularity', '0')),
+                status=request.POST.get('status', 'Returning Series'),
+                tagline=request.POST.get('tagline', ''),
+                homepage=request.POST.get('homepage', ''),
+                original_language=request.POST.get('original_language', 'en'),
+                number_of_seasons=_safe_int(request.POST.get('number_of_seasons', '0')),
+                number_of_episodes=_safe_int(request.POST.get('number_of_episodes', '0')),
+                type=request.POST.get('show_type', 'Scripted'),
+            )
+            messages.success(request, f'TV show "{title}" created successfully.')
+            return redirect('admin_content_edit', content_type='tv', content_id=obj.id)
+        else:
+            obj = TMDBMovie.objects.create(
+                id=custom_id,
+                title=title,
+                original_title=request.POST.get('original_name', title),
+                overview=request.POST.get('overview', ''),
+                poster_path=request.POST.get('poster_path', ''),
+                backdrop_path=request.POST.get('backdrop_path', ''),
+                release_date=request.POST.get('release_date', ''),
+                genres=_parse_genres(request.POST.get('genres', '')),
+                vote_average=_safe_float(request.POST.get('vote_average', '0')),
+                vote_count=_safe_int(request.POST.get('vote_count', '0')),
+                popularity=_safe_float(request.POST.get('popularity', '0')),
+                status=request.POST.get('status', 'Released'),
+                tagline=request.POST.get('tagline', ''),
+                homepage=request.POST.get('homepage', ''),
+                original_language=request.POST.get('original_language', 'en'),
+                runtime=_safe_int(request.POST.get('runtime', '0')),
+                budget=_safe_int(request.POST.get('budget', '0')),
+                revenue=_safe_int(request.POST.get('revenue', '0')),
+            )
+            messages.success(request, f'Movie "{title}" created successfully.')
+            return redirect('admin_content_edit', content_type='movie', content_id=obj.id)
+
+    content_type = request.GET.get('type', 'movie')
+    return render(request, 'core/admin_content_form.html', {
+        'editing': False, 'content_type': content_type,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_content_edit(request, content_type, content_id):
+    """Edit an existing movie or TV show."""
+    from .models import TMDBMovie, TMDBTV
+
+    if content_type == 'tv':
+        obj = get_object_or_404(TMDBTV, id=content_id)
+    else:
+        obj = get_object_or_404(TMDBMovie, id=content_id)
+
+    if request.method == 'POST':
+        if content_type == 'tv':
+            obj.name = request.POST.get('name', obj.name)
+            obj.original_name = request.POST.get('original_name', obj.original_name)
+            obj.overview = request.POST.get('overview', obj.overview)
+            obj.poster_path = request.POST.get('poster_path', obj.poster_path)
+            obj.backdrop_path = request.POST.get('backdrop_path', obj.backdrop_path)
+            obj.first_air_date = request.POST.get('release_date', obj.first_air_date)
+            obj.genres = _parse_genres(request.POST.get('genres', ''))
+            obj.vote_average = _safe_float(request.POST.get('vote_average', str(obj.vote_average)))
+            obj.vote_count = _safe_int(request.POST.get('vote_count', str(obj.vote_count)))
+            obj.popularity = _safe_float(request.POST.get('popularity', str(obj.popularity)))
+            obj.status = request.POST.get('status', obj.status)
+            obj.tagline = request.POST.get('tagline', obj.tagline)
+            obj.homepage = request.POST.get('homepage', obj.homepage)
+            obj.original_language = request.POST.get('original_language', obj.original_language)
+            obj.number_of_seasons = _safe_int(request.POST.get('number_of_seasons', str(obj.number_of_seasons or 0)))
+            obj.number_of_episodes = _safe_int(request.POST.get('number_of_episodes', str(obj.number_of_episodes or 0)))
+            obj.type = request.POST.get('show_type', obj.type)
+            obj.save()
+            messages.success(request, f'TV show "{obj.name}" updated.')
+        else:
+            obj.title = request.POST.get('name', obj.title)
+            obj.original_title = request.POST.get('original_name', obj.original_title)
+            obj.overview = request.POST.get('overview', obj.overview)
+            obj.poster_path = request.POST.get('poster_path', obj.poster_path)
+            obj.backdrop_path = request.POST.get('backdrop_path', obj.backdrop_path)
+            obj.release_date = request.POST.get('release_date', obj.release_date)
+            obj.genres = _parse_genres(request.POST.get('genres', ''))
+            obj.vote_average = _safe_float(request.POST.get('vote_average', str(obj.vote_average)))
+            obj.vote_count = _safe_int(request.POST.get('vote_count', str(obj.vote_count)))
+            obj.popularity = _safe_float(request.POST.get('popularity', str(obj.popularity)))
+            obj.status = request.POST.get('status', obj.status)
+            obj.tagline = request.POST.get('tagline', obj.tagline)
+            obj.homepage = request.POST.get('homepage', obj.homepage)
+            obj.original_language = request.POST.get('original_language', obj.original_language)
+            obj.runtime = _safe_int(request.POST.get('runtime', str(obj.runtime or 0)))
+            obj.budget = _safe_int(request.POST.get('budget', str(obj.budget or 0)))
+            obj.revenue = _safe_int(request.POST.get('revenue', str(obj.revenue or 0)))
+            obj.save()
+            messages.success(request, f'Movie "{obj.title}" updated.')
+
+        return redirect('admin_content_edit', content_type=content_type, content_id=obj.id)
+
+    return render(request, 'core/admin_content_form.html', {
+        'editing': True, 'obj': obj, 'content_type': content_type,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def admin_content_delete(request, content_type, content_id):
+    """Delete a movie or TV show."""
+    from .models import TMDBMovie, TMDBTV
+
+    if content_type == 'tv':
+        obj = get_object_or_404(TMDBTV, id=content_id)
+        name = obj.name
+        obj.delete()
+    else:
+        obj = get_object_or_404(TMDBMovie, id=content_id)
+        name = obj.title
+        obj.delete()
+
+    messages.success(request, f'{content_type.upper()} "{name}" deleted.')
+    return redirect('admin_content_list')
+
+
+def _parse_genres(genre_str):
+    """Parse comma-separated genre names into a JSON list."""
+    if not genre_str:
+        return []
+    return [{'name': g.strip()} for g in genre_str.split(',') if g.strip()]
+
+
+def _safe_float(val):
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _safe_int(val):
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return 0
+
+
 def _admin_cloud_entry(item):
     """Normalize a raw cloud-data entry (dict / int / string) so templates never
     crash on a missing key (e.g. dicts that have 'mediaId' but no 'id').

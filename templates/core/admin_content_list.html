@@ -1,0 +1,194 @@
+{% extends 'core/admin_base.html' %}
+
+{% block admin_content %}
+<style>
+    .content-card {
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 14px;
+        overflow: hidden;
+        transition: all .25s;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .content-card:hover { border-color: rgba(255,255,255,.15); transform: translateY(-2px); }
+    .content-poster {
+        width: 100%;
+        aspect-ratio: 2/3;
+        object-fit: cover;
+        background: rgba(255,255,255,.05);
+    }
+    .content-info { padding: 1rem; flex: 1; display: flex; flex-direction: column; }
+    .content-title {
+        font-size: .85rem; font-weight: 700;
+        color: #fff;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: .25rem;
+    }
+    .content-meta {
+        font-size: .7rem; color: rgba(255,255,255,.4);
+        display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem;
+    }
+    .content-overview {
+        font-size: .72rem; color: rgba(255,255,255,.35);
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex: 1;
+    }
+    .content-actions {
+        display: flex; gap: .5rem; margin-top: .75rem;
+    }
+    .content-actions a, .content-actions button { flex: 1; font-size: .72rem; }
+    .type-badge {
+        display: inline-block; padding: .15rem .5rem; border-radius: 6px;
+        font-size: .65rem; font-weight: 700; text-transform: uppercase;
+    }
+    .type-badge.movie { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .type-badge.tv { background: rgba(168,85,247,.15); color: #c084fc; }
+    .rating-badge {
+        display: inline-flex; align-items: center; gap: .2rem;
+        font-size: .7rem; font-weight: 700; color: #fbbf24;
+    }
+    .filter-pills { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .filter-pills a {
+        padding: .4rem 1rem; border-radius: 8px; font-size: .78rem; font-weight: 600;
+        color: rgba(255,255,255,.5); text-decoration: none;
+        border: 1px solid rgba(255,255,255,.1); transition: all .2s;
+    }
+    .filter-pills a:hover { color: rgba(255,255,255,.8); border-color: rgba(255,255,255,.2); }
+    .filter-pills a.active { background: rgba(99,102,241,.2); color: #818cf8; border-color: rgba(99,102,241,.3); }
+    html[data-theme="light"] .content-card { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .content-title { color: #000; }
+    html[data-theme="light"] .content-meta { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .content-overview { color: rgba(0,0,0,.4); }
+</style>
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">
+            <i class="fas fa-film me-2" style="background:linear-gradient(135deg,#60a5fa,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>Movies & TV Shows
+        </h1>
+        <small class="text-secondary">{{ total_movies }} movies &middot; {{ total_tv }} TV shows</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'admin_content_add' %}?type=movie" class="btn btn-sm btn-primary">
+            <i class="fas fa-plus me-1"></i>Add Movie
+        </a>
+        <a href="{% url 'admin_content_add' %}?type=tv" class="btn btn-sm btn-purple" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border:none;">
+            <i class="fas fa-plus me-1"></i>Add TV Show
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div class="filter-pills">
+        <a href="?type=all&q={{ search }}&sort={{ sort }}" class="{% if content_type == 'all' %}active{% endif %}">All</a>
+        <a href="?type=movie&q={{ search }}&sort={{ sort }}" class="{% if content_type == 'movie' %}active{% endif %}">🎬 Movies</a>
+        <a href="?type=tv&q={{ search }}&sort={{ sort }}" class="{% if content_type == 'tv' %}active{% endif %}">📺 TV Shows</a>
+    </div>
+    <form class="d-flex gap-2" method="GET">
+        <input type="hidden" name="type" value="{{ content_type }}">
+        <input type="text" name="q" value="{{ search }}" placeholder="Search titles..." class="form-control form-control-sm bg-dark text-white border-secondary" style="width:200px;">
+        <select name="sort" class="form-select form-select-sm bg-dark text-white border-secondary" style="width:150px;" onchange="this.form.submit()">
+            <option value="-popularity" {% if sort == '-popularity' %}selected{% endif %}>Most Popular</option>
+            <option value="-rating" {% if sort == '-rating' %}selected{% endif %}>Highest Rated</option>
+            <option value="title" {% if sort == 'title' %}selected{% endif %}>Title A-Z</option>
+            <option value="-title" {% if sort == '-title' %}selected{% endif %}>Title Z-A</option>
+        </select>
+        <button class="btn btn-sm btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
+    </form>
+</div>
+
+<!-- Content Grid -->
+<div class="row g-3">
+    {% for item in items %}
+    <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+        <div class="content-card">
+            {% if item.poster %}
+                <img src="https://image.tmdb.org/t/p/w500{{ item.poster }}" class="content-poster" alt="{{ item.title }}" loading="lazy">
+            {% else %}
+                <div class="content-poster d-flex align-items-center justify-content-center" style="background:linear-gradient(135deg,rgba(99,102,241,.2),rgba(139,92,246,.15));">
+                    <i class="fas fa-{% if item.type == 'tv' %}tv{% else %}film{% endif %}" style="font-size:2rem;opacity:.3;"></i>
+                </div>
+            {% endif %}
+            <div class="content-info">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="type-badge {{ item.type }}">{{ item.type }}</span>
+                    {% if item.rating %}
+                        <span class="rating-badge"><i class="fas fa-star" style="font-size:.6rem;"></i>{{ item.rating|floatformat:1 }}</span>
+                    {% endif %}
+                </div>
+                <div class="content-title">{{ item.title }}</div>
+                <div class="content-meta">
+                    {% if item.year %}<span>{{ item.year }}</span>{% endif %}
+                    {% if item.status %}<span>{{ item.status }}</span>{% endif %}
+                </div>
+                <div class="content-overview">{{ item.overview|default:"No description" }}</div>
+                <div class="content-actions">
+                    <a href="{% url 'admin_content_edit' content_type=item.type content_id=item.id %}" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-edit me-1"></i>Edit
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteContent('{{ item.type }}', {{ item.id }}, '{{ item.title|escapejs }}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+        <i class="fas fa-film fa-3x mb-3" style="opacity:.2;"></i>
+        <div class="text-secondary">No content found</div>
+        <a href="{% url 'admin_content_add' %}" class="btn btn-sm btn-primary mt-3">
+            <i class="fas fa-plus me-1"></i>Add your first movie or TV show
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if items.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination pagination-sm justify-content-center">
+        {% if items.has_previous %}
+            <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ items.previous_page_number }}&type={{ content_type }}&q={{ search }}&sort={{ sort }}">&laquo;</a></li>
+        {% endif %}
+        {% for num in items.paginator.page_range %}
+            {% if items.number == num %}
+                <li class="page-item active"><span class="page-link" style="background:#4f46e5;border-color:#4f46e5;">{{ num }}</span></li>
+            {% elif num > items.number|add:'-3' and num < items.number|add:'3' %}
+                <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ num }}&type={{ content_type }}&q={{ search }}&sort={{ sort }}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+        {% if items.has_next %}
+            <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ items.next_page_number }}&type={{ content_type }}&q={{ search }}&sort={{ sort }}">&raquo;</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<script>
+function getCsrfToken() {
+    var c = document.cookie.match('(^|;)\\s*csrftoken=([^;]*)');
+    return c ? decodeURIComponent(c[2]) : '';
+}
+
+function deleteContent(type, id, title) {
+    if (!confirm('Delete "' + title + '"? This cannot be undone.')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/admin-dashboard/content/' + type + '/' + id + '/delete/';
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrfmiddlewaretoken';
+    csrf.value = getCsrfToken();
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}
