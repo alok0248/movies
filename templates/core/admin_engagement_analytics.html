@@ -1,0 +1,318 @@
+{% extends 'core/admin_base.html' %}
+
+{% block admin_content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<style>
+    .eng-hero {
+        background: linear-gradient(135deg, rgba(251,191,36,.12), rgba(249,115,22,.08));
+        border: 1px solid rgba(251,191,36,.2);
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .eng-stat-card {
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 14px;
+        padding: 1.2rem;
+        text-align: center;
+    }
+    .eng-stat-card:hover { border-color: rgba(255,255,255,.12); transform: translateY(-2px); }
+    .eng-stat-num { font-size: 1.8rem; font-weight: 800; line-height: 1.1; }
+    .eng-stat-label { font-size: .72rem; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .05em; margin-top: .25rem; }
+    .chart-card {
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .chart-card h6 { font-size: .85rem; font-weight: 700; margin-bottom: 1rem; }
+    .chart-container { position: relative; width: 100%; }
+    .chart-container canvas { width: 100% !important; }
+    .retention-bar {
+        display: flex; align-items: center; gap: .75rem;
+        padding: .6rem 0; border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .retention-bar:last-child { border-bottom: none; }
+    .retention-label { width: 60px; font-size: .78rem; color: rgba(255,255,255,.6); font-weight: 600; }
+    .retention-track { flex: 1; height: 8px; background: rgba(255,255,255,.06); border-radius: 4px; overflow: hidden; }
+    .retention-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+    .retention-pct { width: 50px; text-align: right; font-size: .78rem; font-weight: 700; }
+    .watched-item {
+        display: flex; align-items: center; gap: .75rem;
+        padding: .6rem 0; border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .watched-item:last-child { border-bottom: none; }
+    .watched-rank {
+        width: 28px; height: 28px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: .72rem; font-weight: 800;
+        background: rgba(255,255,255,.06); color: rgba(255,255,255,.5);
+    }
+    .watched-rank.top3 { background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; }
+    .watched-title { font-size: .82rem; font-weight: 600; }
+    .watched-meta { font-size: .7rem; color: rgba(255,255,255,.35); }
+    .watched-count { margin-left: auto; font-size: .82rem; font-weight: 700; color: #fbbf24; }
+    .time-filter {
+        display: inline-flex; border-radius: 8px; overflow: hidden;
+        border: 1px solid rgba(255,255,255,.1);
+    }
+    .time-filter a {
+        padding: .35rem .75rem; font-size: .72rem; font-weight: 600;
+        color: rgba(255,255,255,.5); text-decoration: none; transition: all .2s;
+    }
+    .time-filter a:hover { color: rgba(255,255,255,.8); background: rgba(255,255,255,.05); }
+    .time-filter a.active { background: rgba(251,191,36,.2); color: #fbbf24; }
+    html[data-theme="light"] .eng-stat-card, html[data-theme="light"] .chart-card {
+        background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08);
+    }
+    html[data-theme="light"] .eng-stat-label, html[data-theme="light"] .watched-meta { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .watched-rank { background: rgba(0,0,0,.06); color: rgba(0,0,0,.5); }
+    html[data-theme="light"] .retention-track { background: rgba(0,0,0,.06); }
+</style>
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">
+            <i class="fas fa-fire me-2" style="background:linear-gradient(135deg,#f59e0b,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>User Engagement
+        </h1>
+        <small class="text-secondary">Content popularity, viewing patterns, and retention</small>
+    </div>
+    <div class="time-filter">
+        {% for d in "7,14,30" %}
+        {% endfor %}
+        <a href="?days=7" class="{% if days == 7 %}active{% endif %}">7D</a>
+        <a href="?days=14" class="{% if days == 14 %}active{% endif %}">14D</a>
+        <a href="?days=30" class="{% if days == 30 %}active{% endif %}">30D</a>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="eng-stat-card">
+            <div class="eng-stat-num" style="color:#fbbf24;">{{ total_plays }}</div>
+            <div class="eng-stat-label">Total Plays</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="eng-stat-card">
+            <div class="eng-stat-num" style="color:#4ade80;">{{ unique_watching_users }}</div>
+            <div class="eng-stat-label">Active Viewers</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="eng-stat-card">
+            <div class="eng-stat-num" style="color:#60a5fa;">{{ avg_plays_per_user }}</div>
+            <div class="eng-stat-label">Plays / User</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="eng-stat-card">
+            <div class="eng-stat-num" style="color:#a78bfa;">{{ avg_session }}<small style="font-size:.5em;opacity:.5;">s</small></div>
+            <div class="eng-stat-label">Avg Session</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1: DAU + Daily Plays -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="chart-card">
+            <h6><i class="fas fa-users me-2" style="color:#4ade80;"></i>Daily Active Users</h6>
+            <div class="chart-container" style="height:280px;">
+                <canvas id="dauChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="chart-card">
+            <h6><i class="fas fa-pie-chart me-2" style="color:#a78bfa;"></i>Content Type</h6>
+            <div class="chart-container" style="height:280px;">
+                <canvas id="contentTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2: Peak Hours + Daily Plays -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h6><i class="fas fa-clock me-2" style="color:#f472b6;"></i>Peak Viewing Hours</h6>
+            <div class="chart-container" style="height:250px;">
+                <canvas id="peakHoursChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h6><i class="fas fa-play-circle me-2" style="color:#60a5fa;"></i>Daily Plays</h6>
+            <div class="chart-container" style="height:250px;">
+                <canvas id="dailyPlaysChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Most Watched + Retention -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-7">
+        <div class="chart-card">
+            <h6><i class="fas fa-trophy me-2" style="color:#fbbf24;"></i>Most Watched Content</h6>
+            <div id="mostWatchedList">
+                {% for item in most_watched %}
+                <div class="watched-item">
+                    <div class="watched-rank {% if forloop.counter <= 3 %}top3{% endif %}">{{ forloop.counter }}</div>
+                    <div>
+                        <div class="watched-title">{{ item.title|default:"Unknown" }}</div>
+                        <div class="watched-meta">
+                            {% if item.media_type == 'tv' %}📺 TV Show{% else %}🎬 Movie{% endif %}
+                            &middot; {{ item.unique_users }} user{{ item.unique_users|pluralize }}
+                        </div>
+                    </div>
+                    <div class="watched-count">{{ item.watches }} <small style="opacity:.5;">plays</small></div>
+                </div>
+                {% empty %}
+                <div class="text-center py-4 text-secondary" style="font-size:.82rem;">No watch data for this period</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="chart-card">
+            <h6><i class="fas fa-redo me-2" style="color:#22d3ee;"></i>User Retention</h6>
+            <p class="text-secondary small mb-3">Day-over-day return rate</p>
+            {% for r in retention_data %}
+            <div class="retention-bar">
+                <div class="retention-label">{{ r.label }}</div>
+                <div class="retention-track">
+                    <div class="retention-fill" style="width:{{ r.rate }}%;background:{% if r.rate > 50 %}#4ade80{% elif r.rate > 25 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                </div>
+                <div class="retention-pct" style="color:{% if r.rate > 50 %}#4ade80{% elif r.rate > 25 %}#fbbf24{% else %}#f87171{% endif %};">{{ r.rate }}%</div>
+            </div>
+            {% empty %}
+            <div class="text-center py-4 text-secondary" style="font-size:.82rem;">Not enough data</div>
+            {% endfor %}
+            <div class="mt-3 text-center">
+                <small class="text-secondary">Cohort: users active {{ days }} days ago</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Chart.js defaults
+Chart.defaults.color = 'rgba(255,255,255,.5)';
+Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+Chart.defaults.font.size = 11;
+
+// 1. Daily Active Users
+new Chart(document.getElementById('dauChart'), {
+    type: 'line',
+    data: {
+        labels: {{ dau_data|safe }}.map(d => { var dt = new Date(d.date); return (dt.getMonth()+1) + '/' + dt.getDate(); }),
+        datasets: [{
+            label: 'DAU',
+            data: {{ dau_data|safe }}.map(d => d.dau),
+            borderColor: '#4ade80',
+            backgroundColor: 'rgba(74,222,128,.1)',
+            fill: true,
+            tension: .4,
+            pointRadius: 2,
+            pointHoverRadius: 6,
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.04)' } }
+        }
+    }
+});
+
+// 2. Peak Viewing Hours
+new Chart(document.getElementById('peakHoursChart'), {
+    type: 'bar',
+    data: {
+        labels: Array.from({length: 24}, (_, i) => i + ':00'),
+        datasets: [{
+            label: 'Plays',
+            data: {{ hourly_plays|safe }},
+            backgroundColor: function(ctx) {
+                var v = ctx.raw || 0;
+                var max = Math.max(...{{ hourly_plays|safe }}, 1);
+                var opacity = 0.3 + (v / max) * 0.7;
+                return 'rgba(244,114,182,' + opacity + ')';
+            },
+            borderRadius: 4,
+            borderSkipped: false,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.04)' } }
+        }
+    }
+});
+
+// 3. Daily Plays
+new Chart(document.getElementById('dailyPlaysChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ daily_plays|safe }}.map(d => { var dt = new Date(d.date); return (dt.getMonth()+1) + '/' + dt.getDate(); }),
+        datasets: [{
+            label: 'Plays',
+            data: {{ daily_plays|safe }}.map(d => d.plays),
+            backgroundColor: 'rgba(96,165,250,.6)',
+            borderRadius: 4,
+            borderSkipped: false,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.04)' } }
+        }
+    }
+});
+
+// 4. Content Type Pie
+var ctData = {{ content_types|safe }};
+var ctLabels = ctData.map(c => c.media_type === 'tv' ? 'TV Shows' : 'Movies');
+var ctValues = ctData.map(c => c.count);
+var ctColors = ['#a78bfa', '#60a5fa', '#fbbf24', '#4ade80'];
+new Chart(document.getElementById('contentTypeChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ctLabels,
+        datasets: [{
+            data: ctValues,
+            backgroundColor: ctColors.slice(0, ctValues.length),
+            borderWidth: 0,
+            hoverOffset: 8,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 10 } }
+        }
+    }
+});
+</script>
+
+{% endblock %}

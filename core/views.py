@@ -9237,6 +9237,157 @@ def admin_analytics(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def admin_engagement_analytics(request):
+    """User engagement analytics with Chart.js — daily active users, peak hours,
+    most watched content, retention metrics."""
+    from .models import UserPageView, UserSession, PlayHistory, WebsiteVisitor
+    from django.db.models import Sum, Count, Avg, Q, F
+    from django.contrib.auth.models import User
+    from django.utils import timezone
+    from django.db import connection
+
+    days = int(request.GET.get('days', 30))
+    since = timezone.now() - timezone.timedelta(days=days)
+    today = timezone.now().date()
+
+    # Determine DB alias
+    user_db = 'default'
+    try:
+        from .models import DBRoutingConfig
+        cfg = DBRoutingConfig.get_config()
+        if cfg.use_external_db and cfg.external_db_ready:
+            user_db = 'external'
+    except Exception:
+        pass
+
+    def _ph_qs(**extra):
+        qs = PlayHistory.objects.all()
+        for db in ([user_db, 'default'] if user_db != 'default' else ['default']):
+            try:
+                qs = qs.using(db)
+                break
+            except Exception:
+                continue
+        return qs.filter(**extra)
+
+    # --- 1. Daily Active Users (DAU) chart ---
+    dau_data = []
+    for i in range(min(days, 60)):
+        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        dau = UserPageView.objects.filter(viewed_at__date=d, user__isnull=False).values('user').distinct().count()
+        dau_data.append({'date': d.isoformat(), 'dau': dau})
+    dau_data.reverse()
+
+    # --- 2. Peak Viewing Hours (play history by hour) ---
+    hourly_plays = [0] * 24
+    try:
+        play_qs = _ph_qs(last_played_at__gte=since)
+        for row in play_qs.extra(select={'hour': 'strftime("%%H", last_played_at)'}).values('hour').annotate(cnt=Count('id')):
+            h = int(row['hour'])
+            if 0 <= h < 24:
+                hourly_plays[h] = row['cnt']
+    except Exception:
+        pass
+
+    # --- 3. Most Watched Content ---
+    most_watched = []
+    try:
+        play_qs = _ph_qs(last_played_at__gte=since)
+        most_watched = list(
+            play_qs.exclude(tmdb_id__lte=0)
+                   .values('tmdb_id', 'title', 'media_type', 'poster_path')
+                   .annotate(watches=Count('id'), unique_users=Count('user', distinct=True))
+                   .order_by('-watches')[:15]
+        )
+    except Exception:
+        pass
+
+    # --- 4. Content Type Distribution (movie vs tv) ---
+    content_types = []
+    try:
+        play_qs = _ph_qs(last_played_at__gte=since)
+        content_types = list(
+            play_qs.values('media_type')
+                   .annotate(count=Count('id'))
+                   .order_by('-count')
+        )
+    except Exception:
+        pass
+
+    # --- 5. Retention: users who returned after N days ---
+    retention_data = []
+    for back in [1, 3, 7, 14, 30]:
+        day_a = today - timezone.timedelta(days=back)
+        day_b = today - timezone.timedelta(days=back - 1)
+        try:
+            day_a_users = set(
+                UserPageView.objects.filter(viewed_at__date=day_a, user__isnull=False)
+                    .values_list('user', flat=True).distinct()
+            )
+            day_b_users = set(
+                UserPageView.objects.filter(viewed_at__date=day_b, user__isnull=False)
+                    .values_list('user', flat=True).distinct()
+            )
+            returned = len(day_a_users & day_b_users)
+            rate = (returned / len(day_a_users) * 100) if day_a_users else 0
+            retention_data.append({
+                'label': f'{back}d→{back-1}d',
+                'cohort_size': len(day_a_users),
+                'returned': returned,
+                'rate': round(rate, 1),
+            })
+        except Exception:
+            retention_data.append({'label': f'{back}d→{back-1}d', 'cohort_size': 0, 'returned': 0, 'rate': 0})
+
+    # --- 6. Daily plays chart ---
+    daily_plays = []
+    for i in range(min(days, 60)):
+        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        try:
+            cnt = _ph_qs(last_played_at__date=d).count()
+        except Exception:
+            cnt = 0
+        daily_plays.append({'date': d.isoformat(), 'plays': cnt})
+    daily_plays.reverse()
+
+    # --- 7. Summary stats ---
+    total_plays = 0
+    unique_watching_users = 0
+    avg_plays_per_user = 0
+    try:
+        play_qs = _ph_qs(last_played_at__gte=since)
+        total_plays = play_qs.count()
+        unique_watching_users = play_qs.values('user').distinct().count()
+        avg_plays_per_user = round(total_plays / unique_watching_users, 1) if unique_watching_users else 0
+    except Exception:
+        pass
+
+    # Avg session duration
+    avg_session = 0
+    try:
+        avg_session = UserPageView.objects.filter(viewed_at__gte=since).aggregate(
+            avg=Avg('time_spent_seconds'))['avg'] or 0
+        avg_session = round(avg_session)
+    except Exception:
+        pass
+
+    return render(request, 'core/admin_engagement_analytics.html', {
+        'days': days,
+        'total_plays': total_plays,
+        'unique_watching_users': unique_watching_users,
+        'avg_plays_per_user': avg_plays_per_user,
+        'avg_session': avg_session,
+        'dau_data': dau_data,
+        'hourly_plays': hourly_plays,
+        'most_watched': most_watched,
+        'content_types': content_types,
+        'retention_data': retention_data,
+        'daily_plays': daily_plays,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_user_analytics_detail(request, user_id):
     """Detailed analytics for a single user."""
     from .models import UserPageView, UserSession
