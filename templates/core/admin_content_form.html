@@ -1,0 +1,293 @@
+{% extends 'core/admin_base.html' %}
+
+{% block admin_content %}
+<style>
+    .form-card {
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+        border-radius: 16px;
+        padding: 2rem;
+    }
+    .form-section {
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .form-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .form-section h6 {
+        font-size: .8rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .08em; color: rgba(255,255,255,.4); margin-bottom: 1rem;
+    }
+    .form-label { font-size: .78rem; font-weight: 600; color: rgba(255,255,255,.6); margin-bottom: .35rem; }
+    .form-control, .form-select {
+        background: rgba(255,255,255,.04) !important;
+        border: 1px solid rgba(255,255,255,.1) !important;
+        color: #fff !important;
+        border-radius: 10px !important;
+        font-size: .85rem;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: rgba(99,102,241,.5) !important;
+        box-shadow: 0 0 0 3px rgba(99,102,241,.15) !important;
+    }
+    .form-control::placeholder { color: rgba(255,255,255,.25); }
+    textarea.form-control { min-height: 100px; resize: vertical; }
+    .poster-preview {
+        width: 150px; aspect-ratio: 2/3; border-radius: 10px;
+        object-fit: cover; background: rgba(255,255,255,.05);
+        border: 1px dashed rgba(255,255,255,.15);
+    }
+    .poster-preview.has-poster { border-style: solid; border-color: rgba(255,255,255,.15); }
+    html[data-theme="light"] .form-card { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .form-control, html[data-theme="light"] .form-select {
+        background: rgba(255,255,255,.8) !important; color: #000 !important;
+        border-color: rgba(0,0,0,.15) !important;
+    }
+    html[data-theme="light"] .form-control::placeholder { color: rgba(0,0,0,.3); }
+    html[data-theme="light"] .form-label { color: rgba(0,0,0,.6); }
+    html[data-theme="light"] .form-section h6 { color: rgba(0,0,0,.4); }
+</style>
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <a href="{% url 'admin_content_list' %}" class="text-decoration-none" style="color:#60a5fa;">
+            <i class="fas fa-arrow-left me-1"></i> Back to Content
+        </a>
+        <h2 class="text-white mt-2 mb-0">
+            <i class="fas fa-{% if content_type == 'tv' %}tv{% else %}film{% endif %} me-2"></i>
+            {% if editing %}Edit {{ content_type|upper }}{% else %}Add New {{ content_type|upper }}{% endif %}
+        </h2>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="form-card">
+            <form method="POST">
+                {% csrf_token %}
+
+                {% if not editing %}
+                <input type="hidden" name="content_type" value="{{ content_type }}">
+                {% endif %}
+
+                <!-- Basic Info -->
+                <div class="form-section">
+                    <h6>Basic Information</h6>
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Title {% if not editing %}*{% endif %}</label>
+                            <input type="text" name="{% if content_type == 'tv' %}name{% else %}name{% endif %}" class="form-control"
+                                   value="{% if editing %}{% if content_type == 'tv' %}{{ obj.name|default:'' }}{% else %}{{ obj.title|default:'' }}{% endif %}{% endif %}"
+                                   placeholder="Enter title..." required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Original Title</label>
+                            <input type="text" name="original_name" class="form-control"
+                                   value="{% if editing %}{% if content_type == 'tv' %}{{ obj.original_name|default:'' }}{% else %}{{ obj.original_title|default:'' }}{% endif %}{% endif %}"
+                                   placeholder="Original title...">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Overview / Description</label>
+                            <textarea name="overview" class="form-control" rows="4"
+                                      placeholder="Enter description...">{% if editing %}{{ obj.overview|default:'' }}{% endif %}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tagline</label>
+                            <input type="text" name="tagline" class="form-control"
+                                   value="{% if editing %}{{ obj.tagline|default:'' }}{% endif %}"
+                                   placeholder="Enter tagline...">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Homepage URL</label>
+                            <input type="url" name="homepage" class="form-control"
+                                   value="{% if editing %}{{ obj.homepage|default:'' }}{% endif %}"
+                                   placeholder="https://...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Media Info -->
+                <div class="form-section">
+                    <h6>Media Details</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Release Date</label>
+                            <input type="text" name="release_date" class="form-control"
+                                   value="{% if editing %}{% if content_type == 'tv' %}{{ obj.first_air_date|default:'' }}{% else %}{{ obj.release_date|default:'' }}{% endif %}{% endif %}"
+                                   placeholder="YYYY-MM-DD">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                {% if content_type == 'tv' %}
+                                    <option value="Returning Series" {% if editing and obj.status == 'Returning Series' %}selected{% endif %}>Returning Series</option>
+                                    <option value="Ended" {% if editing and obj.status == 'Ended' %}selected{% endif %}>Ended</option>
+                                    <option value="Canceled" {% if editing and obj.status == 'Canceled' %}selected{% endif %}>Canceled</option>
+                                    <option value="In Production" {% if editing and obj.status == 'In Production' %}selected{% endif %}>In Production</option>
+                                    <option value="Planned" {% if editing and obj.status == 'Planned' %}selected{% endif %}>Planned</option>
+                                {% else %}
+                                    <option value="Released" {% if editing and obj.status == 'Released' %}selected{% endif %}>Released</option>
+                                    <option value="Production" {% if editing and obj.status == 'Production' %}selected{% endif %}>In Production</option>
+                                    <option value="Post-Production" {% if editing and obj.status == 'Post-Production' %}selected{% endif %}>Post-Production</option>
+                                    <option value="Canceled" {% if editing and obj.status == 'Canceled' %}selected{% endif %}>Canceled</option>
+                                    <option value="Rumored" {% if editing and obj.status == 'Rumored' %}selected{% endif %}>Rumored</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Language</label>
+                            <input type="text" name="original_language" class="form-control"
+                                   value="{% if editing %}{{ obj.original_language|default:'en' }}{% else %}en{% endif %}"
+                                   placeholder="en">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Genres (comma-separated)</label>
+                            <input type="text" name="genres" class="form-control"
+                                   value="{% if editing %}{% for g in obj.genres %}{% if forloop.first %}{% endif %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}"
+                                   placeholder="Action, Comedy, Drama...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Rating (0-10)</label>
+                            <input type="number" name="vote_average" class="form-control" step="0.1" min="0" max="10"
+                                   value="{% if editing %}{{ obj.vote_average|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Popularity</label>
+                            <input type="number" name="popularity" class="form-control" step="0.1" min="0"
+                                   value="{% if editing %}{{ obj.popularity|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+
+                        {% if content_type == 'tv' %}
+                        <div class="col-md-4">
+                            <label class="form-label">Seasons</label>
+                            <input type="number" name="number_of_seasons" class="form-control" min="0"
+                                   value="{% if editing %}{{ obj.number_of_seasons|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Episodes</label>
+                            <input type="number" name="number_of_episodes" class="form-control" min="0"
+                                   value="{% if editing %}{{ obj.number_of_episodes|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Show Type</label>
+                            <select name="show_type" class="form-select">
+                                <option value="Scripted" {% if editing and obj.type == 'Scripted' %}selected{% endif %}>Scripted</option>
+                                <option value="Reality" {% if editing and obj.type == 'Reality' %}selected{% endif %}>Reality</option>
+                                <option value="Documentary" {% if editing and obj.type == 'Documentary' %}selected{% endif %}>Documentary</option>
+                                <option value="Animation" {% if editing and obj.type == 'Animation' %}selected{% endif %}>Animation</option>
+                                <option value="Talk Show" {% if editing and obj.type == 'Talk Show' %}selected{% endif %}>Talk Show</option>
+                            </select>
+                        </div>
+                        {% else %}
+                        <div class="col-md-4">
+                            <label class="form-label">Runtime (minutes)</label>
+                            <input type="number" name="runtime" class="form-control" min="0"
+                                   value="{% if editing %}{{ obj.runtime|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Budget ($)</label>
+                            <input type="number" name="budget" class="form-control" min="0"
+                                   value="{% if editing %}{{ obj.budget|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Revenue ($)</label>
+                            <input type="number" name="revenue" class="form-control" min="0"
+                                   value="{% if editing %}{{ obj.revenue|default:'0' }}{% else %}0{% endif %}">
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Images -->
+                <div class="form-section">
+                    <h6>Images</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Poster Path</label>
+                            <input type="text" name="poster_path" id="posterPathInput" class="form-control"
+                                   value="{% if editing %}{{ obj.poster_path|default:'' }}{% endif %}"
+                                   placeholder="/path/to/poster.jpg" oninput="previewPoster(this.value)">
+                            <small class="text-secondary">TMDB path (e.g. /abc123.jpg) or full URL</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Backdrop Path</label>
+                            <input type="text" name="backdrop_path" class="form-control"
+                                   value="{% if editing %}{{ obj.backdrop_path|default:'' }}{% endif %}"
+                                   placeholder="/path/to/backdrop.jpg">
+                            <small class="text-secondary">TMDB path (e.g. /abc123.jpg) or full URL</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="fas fa-save me-1"></i>{% if editing %}Save Changes{% else %}Create{% endif %}
+                    </button>
+                    <a href="{% url 'admin_content_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    {% if editing %}
+                    <button type="button" class="btn btn-outline-danger ms-auto" onclick="deleteContent('{{ content_type }}', {{ obj.id }}, '{{ obj.name|default:obj.title|escapejs }}')">
+                        <i class="fas fa-trash me-1"></i>Delete
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sidebar: Preview -->
+    <div class="col-lg-4">
+        <div class="form-card">
+            <h6 style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.4);margin-bottom:1rem;">Poster Preview</h6>
+            <div class="text-center">
+                {% if editing and obj.poster_path %}
+                    {% if obj.poster_path|slice:":1" == "/" %}
+                        <img id="posterPreview" src="https://image.tmdb.org/t/p/w500{{ obj.poster_path }}" class="poster-preview has-poster" alt="Poster">
+                    {% else %}
+                        <img id="posterPreview" src="{{ obj.poster_path }}" class="poster-preview has-poster" alt="Poster">
+                    {% endif %}
+                {% else %}
+                    <div id="posterPreview" class="poster-preview d-flex align-items-center justify-content-center">
+                        <i class="fas fa-image" style="font-size:2rem;opacity:.2;"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="mt-3 text-center">
+                <small class="text-secondary">Enter a poster path above to see preview</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function previewPoster(path) {
+    var el = document.getElementById('posterPreview');
+    if (!path) {
+        el.outerHTML = '<div id="posterPreview" class="poster-preview d-flex align-items-center justify-content-center"><i class="fas fa-image" style="font-size:2rem;opacity:.2;"></i></div>';
+        return;
+    }
+    var url = path.startsWith('/') ? 'https://image.tmdb.org/t/p/w500' + path : path;
+    el.outerHTML = '<img id="posterPreview" src="' + url + '" class="poster-preview has-poster" alt="Poster" onerror="this.style.display=\'none\'">';
+}
+
+function getCsrfToken() {
+    var c = document.cookie.match('(^|;)\\s*csrftoken=([^;]*)');
+    return c ? decodeURIComponent(c[2]) : '';
+}
+
+function deleteContent(type, id, title) {
+    if (!confirm('Delete "' + title + '"? This cannot be undone.')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/admin-dashboard/content/' + type + '/' + id + '/delete/';
+    var csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrfmiddlewaretoken';
+    csrf.value = getCsrfToken();
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}
