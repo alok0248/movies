@@ -1340,10 +1340,27 @@ function updatePlayerUrl() {
     while (container.firstChild) container.removeChild(container.firstChild);
     showPlayerLoading(container);
 
+    /* The transparent click catcher must not block the player's own controls:
+       embeds bring their own control bar (blocking them made play/pause dead in
+       normal mode — it only worked in fullscreen where the catcher vanishes).
+       The series custom bar (z-16) already sits above the catcher, so only the
+       embed mode needs click pass-through. */
+    function setCatcher(mode) {
+        var c = document.getElementById('playerClickCatcher');
+        if (!c) return;
+        c.setAttribute('data-mode', mode);
+        if (mode === 'embed') {
+            c.style.pointerEvents = 'none';
+        } else {
+            c.style.pointerEvents = 'auto';
+        }
+    }
+
     /* Server 0 (Extractor): fetch sources and play with source selection */
     if (cfg.isExtractor) {
         var apiUrl = { tmdbId: SERIES_TMDB_ID, mediaType: 'tv', season: currentSeason, episode: currentEpisode };
         _buildVideasyPlayer(container, apiUrl, updatePlayerUrl);
+        setCatcher('video');
     } else {
         var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
         if (content.type === 'html') {
@@ -1368,13 +1385,14 @@ function updatePlayerUrl() {
                that fire during playback are still blocked. */
             iframe.onload = function() {
                 setTimeout(function() {
-                    try { iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation allow-fullscreen'); } catch (e) {}
+                    try { iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation'); } catch (e) {}
                 }, 1200);
             };
             iframe.src = content.content;
             container.appendChild(iframe);
             setTimeout(function() { hidePlayerLoading(); }, 5000);
         }
+        setCatcher('embed');
     }
     playerLoaded = true;
     updateServerButtons();
@@ -1895,6 +1913,8 @@ setTimeout(function() {
         var overlay = document.getElementById('pauseOverlay');
         if (overlay && overlay.classList.contains('visible')) {
             catcher.style.pointerEvents = 'none';
+        } else if (catcher.getAttribute('data-mode') === 'embed') {
+            catcher.style.pointerEvents = 'none'; /* embed has its own controls */
         } else {
             catcher.style.pointerEvents = 'auto';
         }
