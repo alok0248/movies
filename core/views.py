@@ -9844,6 +9844,107 @@ def admin_user_delete(request, user_id):
     return redirect('admin_user_list')
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+@csrf_exempt
+def bulk_send_email(request):
+    """Send email to multiple users at once."""
+    try:
+        data = json.loads(request.body)
+        ids = data.get('ids', [])
+        subject = data.get('subject', '').strip()
+        body = data.get('body', '').strip()
+        if not ids or not subject or not body:
+            return JsonResponse({'data': {'success': False, 'message': 'Missing ids, subject, or body'}})
+        users = User.objects.filter(id__in=ids, email__isnull=False).exclude(email='')
+        sent = 0
+        failed = 0
+        from core.models import EmailAddress
+        smtp_addr = EmailAddress.objects.filter(is_active=True).first()
+        for u in users:
+            try:
+                msg = DjangoEmailMessage(
+                    subject=subject, body=body,
+                    from_email=smtp_addr.email if smtp_addr else settings.DEFAULT_FROM_EMAIL,
+                    to=[u.email],
+                )
+                if smtp_addr:
+                    msg.connection = smtp_addr.get_backend()
+                msg.send(fail_silently=True)
+                sent += 1
+            except Exception:
+                failed += 1
+        return JsonResponse({'data': {'success': True, 'message': f'Email sent to {sent} user(s)' + (f', {failed} failed' if failed else '')}})
+    except Exception as e:
+        return JsonResponse({'data': {'success': False, 'message': str(e)}})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+@csrf_exempt
+def bulk_change_plan(request):
+    """Change subscription plan for multiple users."""
+    try:
+        data = json.loads(request.body)
+        ids = data.get('ids', [])
+        plan = data.get('plan', '').strip()
+        if not ids or not plan:
+            return JsonResponse({'data': {'success': False, 'message': 'Missing ids or plan'}})
+        updated = 0
+        for uid in ids:
+            try:
+                u = User.objects.get(id=uid)
+                synced = SyncedUser.objects.filter(user=u).first()
+                if not synced and u.email:
+                    synced = SyncedUser.objects.filter(email=u.email).first()
+                if synced:
+                    synced.is_subscribed = plan.lower() != 'standard free' and plan.lower() != 'free'
+                    synced.plan = plan
+                    synced.save(update_fields=['is_subscribed', 'plan'])
+                    updated += 1
+                else:
+                    SyncedUser.objects.create(
+                        user=u, email=u.email or '',
+                        is_subscribed=plan.lower() != 'standard free' and plan.lower() != 'free',
+                        plan=plan,
+                    )
+                    updated += 1
+            except Exception:
+                continue
+        return JsonResponse({'data': {'success': True, 'message': f'Plan updated for {updated} user(s)'}})
+    except Exception as e:
+        return JsonResponse({'data': {'success': False, 'message': str(e)}})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+@csrf_exempt
+def bulk_delete_users(request):
+    """Delete multiple users and all linked data."""
+    try:
+        data = json.loads(request.body)
+        ids = data.get('ids', [])
+        if not ids:
+            return JsonResponse({'data': {'success': False, 'message': 'No users selected'}})
+        deleted = 0
+        for uid in ids:
+            try:
+                u = User.objects.get(id=uid)
+                _permanently_delete_user(u)
+                deleted += 1
+            except Exception:
+                continue
+        return JsonResponse({'data': {'success': True, 'message': f'Deleted {deleted} user(s)'}})
+    except Exception as e:
+        return JsonResponse({'data': {'success': False, 'message': str(e)}})
+
+
+import json as json_mod  # ensure json is available
+
+
 def _admin_cloud_entry(item):
     """Normalize a raw cloud-data entry (dict / int / string) so templates never
     crash on a missing key (e.g. dicts that have 'mediaId' but no 'id').
