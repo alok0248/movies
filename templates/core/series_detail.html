@@ -1174,6 +1174,22 @@ Object.keys(playerConfigs).forEach(function(id) {
                       c.customIframeHtml || c.customMovieIframeHtml || c.customTvIframeHtml);
 });
 
+/* Popup shield: only allow window.open during a real user gesture.
+   Timed / ad-driven popups from the page or embeds get blocked, while
+   user clicks (Pop button, admin edit, open stream) still work. */
+(function() {
+    var realOpen = window.open;
+    window.open = function(url, name, features) {
+        var ok = false;
+        try { ok = !!(navigator.userActivation && navigator.userActivation.isActive); } catch (e) { ok = true; }
+        if (!ok) {
+            try { console.log('[shield] blocked popup:', String(url).slice(0, 120)); } catch (e) {}
+            return null;
+        }
+        return realOpen.apply(window, arguments);
+    };
+})();
+
 const SERIES_TMDB_ID = {{ series_id }};
 const SERIES_IMDB_ID = "{{ series.imdb_id|default:''|escapejs }}";
 const seriesTitle = "{{ series.title|escapejs }}";
@@ -1331,12 +1347,30 @@ function updatePlayerUrl() {
     } else {
         var content = getPlayerContent(cfg, 'tv', SERIES_TMDB_ID, currentSeason, currentEpisode, SERIES_IMDB_ID);
         if (content.type === 'html') {
-            container.innerHTML = content.content;
+            /* Inject raw HTML inside a sandboxed srcdoc iframe so its scripts
+               can't popup, navigate, or touch the parent page. */
+            var sdoc = document.createElement('iframe');
+            sdoc.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+            sdoc.sandbox = 'allow-scripts allow-same-origin allow-forms allow-presentation';
+            sdoc.referrerPolicy = 'no-referrer';
+            sdoc.srcdoc = content.content;
+            container.appendChild(sdoc);
             setTimeout(function() { hidePlayerLoading(); }, 5000);
         } else {
             var iframe = document.createElement('iframe');
             iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
-            iframe.allow = 'autoplay; fullscreen; picture-in-player';
+            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+            /* no-referrer stops ad networks tracking us. */
+            iframe.referrerPolicy = 'no-referrer';
+            /* Some embed hosts refuse to run when sandbox is set at load time.
+               Apply the sandbox right AFTER load: the player's check passes,
+               then popups / new tabs / downloads / top-navigation from ads
+               that fire during playback are still blocked. */
+            iframe.onload = function() {
+                setTimeout(function() {
+                    try { iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation allow-fullscreen'); } catch (e) {}
+                }, 1200);
+            };
             iframe.src = content.content;
             container.appendChild(iframe);
             setTimeout(function() { hidePlayerLoading(); }, 5000);
