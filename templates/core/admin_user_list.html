@@ -118,6 +118,33 @@
         </div>
     </div>
 
+    <!-- Bulk Action Bar (hidden by default) -->
+    <div id="bulkBar" class="card border-secondary mb-3" style="display:none;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.08));border-color:rgba(99,102,241,.3) !important;">
+        <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-white fw-bold small"><span id="selectedCount">0</span> selected</span>
+                <button class="btn btn-sm btn-outline-info" onclick="bulkAction('email')" title="Send email to selected users">
+                    <i class="fas fa-envelope me-1"></i>Send Email
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="bulkAction('export')" title="Export selected users as CSV">
+                    <i class="fas fa-file-csv me-1"></i>Export CSV
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="bulkAction('plan')" title="Change plan for selected users">
+                    <i class="fas fa-crown me-1"></i>Change Plan
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="bulkAction('delete')" title="Delete selected users">
+                    <i class="fas fa-trash me-1"></i>Delete
+                </button>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">
+                <i class="fas fa-times me-1"></i>Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Bulk Action Result -->
+    <div id="bulkResult" class="alert alert-dismissible" style="display:none;"></div>
+
     <!-- User Table -->
     <div class="card bg-dark border-secondary">
         <div class="card-body p-0">
@@ -125,6 +152,9 @@
                 <table class="table table-dark table-hover mb-0">
                     <thead>
                         <tr>
+                            <th style="width:40px">
+                                <input type="checkbox" id="selectAll" class="form-check-input" onclick="toggleSelectAll(this)" title="Select all">
+                            </th>
                             <th style="width:50px">#</th>
                             <th>User</th>
                             <th>Email</th>
@@ -140,6 +170,9 @@
                     <tbody>
                         {% for u in users %}
                         <tr id="user-row-{{ u.id }}">
+                            <td>
+                                <input type="checkbox" class="form-check-input user-cb" value="{{ u.id }}" data-email="{{ u.email|default:'' }}" data-username="{{ u.username }}" onchange="updateBulkBar()">
+                            </td>
                             <td class="text-secondary">{{ u.id }}</td>
                             <td>
                                 <a href="{% url 'admin_user_detail' u.id %}" class="text-decoration-none d-flex align-items-center gap-2">
@@ -277,6 +310,125 @@ function getCsrfToken() {
     return c ? decodeURIComponent(c[2]) : '';
 }
 
+// === Bulk Selection ===
+function toggleSelectAll(el) {
+    document.querySelectorAll('.user-cb').forEach(function(cb) {
+        cb.checked = el.checked;
+    });
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    var checked = document.querySelectorAll('.user-cb:checked');
+    var count = checked.length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('bulkBar').style.display = count > 0 ? 'block' : 'none';
+}
+
+function clearSelection() {
+    document.querySelectorAll('.user-cb').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('selectAll').checked = false;
+    updateBulkBar();
+}
+
+function getSelectedIds() {
+    var ids = [];
+    document.querySelectorAll('.user-cb:checked').forEach(function(cb) {
+        ids.push(parseInt(cb.value));
+    });
+    return ids;
+}
+
+// === Bulk Actions ===
+async function bulkAction(action) {
+    var ids = getSelectedIds();
+    if (ids.length === 0) return alert('No users selected');
+    var resultEl = document.getElementById('bulkResult');
+    resultEl.style.display = 'none';
+
+    // Export CSV — client-side, no server call needed
+    if (action === 'export') {
+        var rows = [['ID', 'Username', 'Email', 'Status', 'Plan']];
+        document.querySelectorAll('.user-cb:checked').forEach(function(cb) {
+            var tr = cb.closest('tr');
+            var tds = tr.querySelectorAll('td');
+            rows.push([
+                cb.value,
+                cb.dataset.username,
+                cb.dataset.email,
+                tr.querySelector('.badge.bg-success') ? 'Active' : 'Blocked',
+                tr.querySelector('.badge[style*="crown"]') ? 'Subscribed' : 'Free'
+            ]);
+        });
+        var csv = rows.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+        var blob = new Blob([csv], {type: 'text/csv'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'users_export_' + new Date().toISOString().slice(0,10) + '.csv';
+        a.click();
+        showResult(resultEl, 'success', 'Exported ' + ids.length + ' users as CSV');
+        return;
+    }
+
+    // Send Email — prompt for subject + body
+    if (action === 'email') {
+        var subject = prompt('Email subject:');
+        if (!subject) return;
+        var body = prompt('Email body:');
+        if (!body) return;
+        try {
+            var resp = await fetch('/admin-dashboard/users/bulk/email/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+                body: JSON.stringify({ids: ids, subject: subject, body: body})
+            });
+            var data = (await readJson(resp)).data;
+            showResult(resultEl, data.success ? 'success' : 'danger', data.message);
+        } catch(e) { showResult(resultEl, 'danger', 'Network error'); }
+        return;
+    }
+
+    // Change Plan — prompt for plan name
+    if (action === 'plan') {
+        var plan = prompt('Enter plan name (e.g. Premium, Standard Free):');
+        if (!plan) return;
+        try {
+            var resp = await fetch('/admin-dashboard/users/bulk/plan/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+                body: JSON.stringify({ids: ids, plan: plan})
+            });
+            var data = (await readJson(resp)).data;
+            showResult(resultEl, data.success ? 'success' : 'danger', data.message);
+            if (data.success) setTimeout(function() { location.reload(); }, 1500);
+        } catch(e) { showResult(resultEl, 'danger', 'Network error'); }
+        return;
+    }
+
+    // Delete — confirm then delete
+    if (action === 'delete') {
+        if (!confirm('Delete ' + ids.length + ' users? This cannot be undone!')) return;
+        try {
+            var resp = await fetch('/admin-dashboard/users/bulk/delete/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+                body: JSON.stringify({ids: ids})
+            });
+            var data = (await readJson(resp)).data;
+            showResult(resultEl, data.success ? 'success' : 'danger', data.message);
+            if (data.success) setTimeout(function() { location.reload(); }, 1500);
+        } catch(e) { showResult(resultEl, 'danger', 'Network error'); }
+        return;
+    }
+}
+
+function showResult(el, type, msg) {
+    el.className = 'alert alert-' + type + ' alert-dismissible py-2 px-3 mb-0';
+    el.innerHTML = msg + '<button type="button" class="btn-close btn-close-white" onclick="this.parentElement.style.display=\"none\""></button>';
+    el.style.display = 'block';
+}
+
+// === Single User Actions ===
 async function toggleBlock(userId, btn) {
     try {
         const resp = await fetch(`/admin-dashboard/users/${userId}/block/`, {
