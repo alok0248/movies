@@ -52,6 +52,37 @@
 /* Servers */
 .det-servers{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin-bottom:.5rem}
 .det-servers-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.25);font-weight:700;margin-right:.3rem}
+/* Server dropdown (floating, top-left of player) */
+.srv-dd{position:absolute;top:12px;left:12px;z-index:26;display:inline-block}
+.srv-dd-btn{display:inline-flex;align-items:center;gap:.45rem;padding:7px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:rgba(10,10,18,.78);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);color:rgba(255,255,255,.92);font-size:.74rem;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 18px rgba(0,0,0,.35);line-height:1}
+.srv-dd.armed .srv-dd-btn,.det-player-left:hover .srv-dd-btn{border-color:rgba(255,255,255,.3)}
+.srv-dd-btn:hover{background:rgba(24,18,40,.92);border-color:rgba(255,255,255,.28)}
+.srv-dd-btn .srv-dot{width:7px;height:7px;border-radius:50%;background:var(--brand,#e50914);box-shadow:0 0 8px rgba(229,9,20,.8);flex-shrink:0}
+.srv-dd-btn .srv-caret{font-size:.55rem;opacity:.65;transition:transform .2s}
+.srv-dd.open .srv-dd-btn .srv-caret{transform:rotate(180deg)}
+.srv-dd-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:210px;max-height:280px;overflow-y:auto;background:rgba(16,16,26,.97);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px;box-shadow:0 16px 48px rgba(0,0,0,.7);backdrop-filter:blur(16px);display:none;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.srv-dd.open .srv-dd-menu{display:block;animation:srvPop .18s ease}
+@keyframes srvPop{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.srv-dd-head{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35);font-weight:800;padding:6px 10px 4px}
+.srv-dd-opt{padding:8px 11px;border-radius:8px;color:rgba(255,255,255,.85);font-size:.75rem;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:.55rem}
+.srv-dd-opt:hover{background:rgba(255,255,255,.1);color:#fff}
+.srv-dd-opt.chosen{background:rgba(229,9,20,.14);color:#fff}
+.srv-dd-opt .srv-opt-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);flex-shrink:0;transition:all .2s}
+.srv-dd-opt.chosen .srv-opt-dot{background:var(--brand,#e50914);box-shadow:0 0 8px rgba(229,9,20,.9)}
+.srv-dd-opt .srv-check{margin-left:auto;font-size:.65rem;color:var(--brand,#e50914);display:none}
+.srv-dd-opt.chosen .srv-check{display:inline}
+.srv-dd-opt .srv-type{margin-left:auto;font-size:.58rem;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.04em}
+.srv-dd-opt.chosen .srv-type{display:none}
+.det-player-left:fullscreen .srv-dd{top:20px;left:20px}
+html[data-theme="light"] .srv-dd-btn{background:rgba(255,255,255,.92);border-color:rgba(0,0,0,.12);color:#1a1a2e;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+html[data-theme="light"] .srv-dd-btn:hover{background:#fff;border-color:rgba(0,0,0,.22)}
+html[data-theme="light"] .srv-dd-menu{background:rgba(255,255,255,.98);border-color:rgba(0,0,0,.1);box-shadow:0 16px 48px rgba(0,0,0,.2)}
+html[data-theme="light"] .srv-dd-head{color:rgba(26,26,46,.4)}
+html[data-theme="light"] .srv-dd-opt{color:rgba(26,26,46,.85)}
+html[data-theme="light"] .srv-dd-opt:hover{background:rgba(0,0,0,.06);color:#1a1a2e}
+html[data-theme="light"] .srv-dd-opt.chosen{background:rgba(229,9,20,.08)}
+html[data-theme="light"] .srv-dd-opt .srv-opt-dot{background:rgba(26,26,46,.25)}
+html[data-theme="light"] .srv-dd-opt .srv-type{background:rgba(0,0,0,.06);color:rgba(26,26,46,.5)}
 .det-server-pill{padding:7px 16px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:.78rem;font-weight:700;cursor:pointer;transition:all .2s;user-select:none}
 .det-server-pill:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.8)}
 .det-server-pill.active{background:var(--brand,#e50914);color:#fff;border-color:var(--brand,#e50914)}
@@ -677,6 +708,18 @@ body.player-netflix .dual-panel{display:none!important}
             <div style="margin-left:auto;color:#666;font-size:.75rem;"><i class="fas fa-times"></i></div>
         </div>
         <div style="position:relative;">
+            <!-- Server selector dropdown -->
+            <div class="srv-dd" id="srvDropdown">
+                <button class="srv-dd-btn" id="srvDropdownBtn" type="button" title="Change server">
+                    <span class="srv-dot"></span>
+                    <span id="srvCurrentName">Server</span>
+                    <span class="srv-caret">▼</span>
+                </button>
+                <div class="srv-dd-menu" id="srvDropdownMenu">
+                    <div class="srv-dd-head">Select server</div>
+                    <div id="srvOptions"></div>
+                </div>
+            </div>
             <div class="det-player-box" id="player-container"></div>
             <!-- Transparent click catcher for iframe players -->
             <div id="playerClickCatcher" style="position:absolute;inset:0;z-index:12;cursor:pointer;"></div>
@@ -1101,9 +1144,8 @@ window.addEventListener('message',function(ev){
     else document.body.classList.add('player-classic');
 })();
 
-// ===== Player configurations =====
+// ===== Player configurations (only ACTIVE players from Player Configuration Management) =====
 const playerConfigs = {
-    0: { name: 'Extractor', isExtractor: true },
     {% for player in all_players %}
     {{ player.id }}: {
         name: "{{ player.name|escapejs }}",
@@ -1124,6 +1166,14 @@ const playerConfigs = {
     {% endfor %}
 };
 
+/* A player with no custom embed configured acts as the browser-extraction
+   player; players with a custom URL/HTML load as embed iframes. */
+Object.keys(playerConfigs).forEach(function(id) {
+    var c = playerConfigs[id];
+    c.isExtractor = !(c.customMovieIframeUrl || c.customTvIframeUrl || c.customIframeUrl ||
+                      c.customIframeHtml || c.customMovieIframeHtml || c.customTvIframeHtml);
+});
+
 const SERIES_TMDB_ID = {{ series_id }};
 const SERIES_IMDB_ID = "{{ series.imdb_id|default:''|escapejs }}";
 const seriesTitle = "{{ series.title|escapejs }}";
@@ -1136,7 +1186,7 @@ let currentEpisode = {{ current_episode }};
 let playerLoaded = false;
 let wikipediaLoaded = false;
 let currentEpisodesData = [];
-let currentPlayerId = 0;
+let currentPlayerId = Object.keys(playerConfigs)[0] || null;
 
 function getPlayerUrl(cfg, mediaType, mediaId, season, episode, imdbId) {
     imdbId = imdbId || '';
@@ -1187,7 +1237,69 @@ function updateServerButtons() {
         var active = String(btn.getAttribute('data-player-id')) === String(currentPlayerId);
         btn.classList.toggle('active', active);
     });
+    /* Keep the server dropdown in sync */
+    var cfg = playerConfigs[currentPlayerId];
+    var nameEl = document.getElementById('srvCurrentName');
+    if (nameEl && cfg) nameEl.textContent = cfg.name || 'Server';
+    document.querySelectorAll('.srv-dd-opt').forEach(function(opt) {
+        opt.classList.toggle('chosen', String(opt.getAttribute('data-player-id')) === String(currentPlayerId));
+    });
 }
+
+/* Build the server dropdown options from playerConfigs */
+(function() {
+    var wrap = document.getElementById('srvOptions');
+    if (!wrap) return;
+    var ids = Object.keys(playerConfigs);
+    ids.forEach(function(id) {
+        var cfg = playerConfigs[id];
+        if (!cfg) return;
+        var opt = document.createElement('div');
+        opt.className = 'srv-dd-opt';
+        opt.setAttribute('data-player-id', id);
+        opt.innerHTML = '<span class="srv-opt-dot"></span><span>' + (cfg.name || 'Server ' + id).replace(/[<>&]/g, '') + '</span>' +
+            '<span class="srv-type">' + (cfg.isExtractor ? 'EXTRACT' : 'EMBED') + '</span>' +
+            '<span class="srv-check"><i class="fas fa-check"></i></span>';
+        opt.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (String(currentPlayerId) === String(id)) { closeSrvMenu(); return; }
+            currentPlayerId = id;
+            updateServerButtons();
+            closeSrvMenu();
+            if (playerLoaded) updatePlayerUrl();
+            try { localStorage.setItem('nm_server', id); } catch (err) {}
+        });
+        if (isAdminUser) {
+            opt.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                window.open('/admin-dashboard/players/' + id + '/edit/', '_blank');
+            });
+        }
+        wrap.appendChild(opt);
+    });
+    /* Remember the last server the user picked */
+    var saved = null;
+    try { saved = localStorage.getItem('nm_server'); } catch (err) {}
+    if (saved && playerConfigs[saved]) currentPlayerId = saved;
+})();
+
+/* Dropdown open/close behaviour */
+(function() {
+    var dd = document.getElementById('srvDropdown');
+    var btn = document.getElementById('srvDropdownBtn');
+    if (!dd || !btn) return;
+    window.closeSrvMenu = function() { dd.classList.remove('open'); };
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dd.classList.toggle('open');
+    });
+    document.addEventListener('click', function(e) {
+        if (!dd.contains(e.target)) dd.classList.remove('open');
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') dd.classList.remove('open');
+    });
+})();
 
 function showPlayerLoading(container) {
     container.innerHTML = '<div class="player-loading-overlay" id="playerLoader"><div class="player-loading-spinner"></div><div class="player-loading-text">Loading player<span class="player-loading-dots"><span>.</span><span>.</span><span>.</span></span></div><div class="player-loading-subtext">Fetching playable stream</div></div>';
@@ -1667,7 +1779,7 @@ if (_pc) _poObserver.observe(_pc, {childList: true, subtree: true});
 
 // URL stays constant — no popstate needed
 
-// Server buttons
+// Server buttons (legacy pills — dropdown above is the primary selector)
 document.querySelectorAll('.det-server-pill').forEach(function(btn) {
     btn.addEventListener('click', function() {
         currentPlayerId = this.getAttribute('data-player-id');
