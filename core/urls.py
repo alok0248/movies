@@ -12,6 +12,7 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('upcoming/', views.upcoming, name='upcoming'),
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('ajax/dashboard-stats/', views.ajax_dashboard_stats, name='ajax_dashboard_stats'),
     path('admin-dashboard/edit-settings/', views.edit_settings, name='edit_settings'),
     path('admin-dashboard/settings/branding/', views.branding_settings, name='branding_settings'),
     path('admin-dashboard/settings/display/', views.display_settings, name='display_settings'),
