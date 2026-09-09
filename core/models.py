@@ -408,10 +408,12 @@ class UserActivity(models.Model):
         ]
     
     def __str__(self):
-        if self.user:
-            return f"Activity for {self.user.username} on {self.activity_date}"
-        else:
-            return f"Activity for IP {self.ip_address} on {self.activity_date}"
+        try:
+            if self.user:
+                return f"Activity for {self.user.username} on {self.activity_date}"
+        except Exception:
+            pass
+        return f"Activity for IP {self.ip_address} on {self.activity_date}"
 
 
 class WatchList(models.Model):
@@ -432,7 +434,11 @@ class WatchList(models.Model):
         ordering = ('-added_at',)
 
     def __str__(self):
-        return f"{self.user.username} - {self.title} ({self.get_media_type_display()})"
+        try:
+            name = self.user.username
+        except Exception:
+            name = f'User #{self.user_id}'
+        return f"{name} - {self.title} ({self.get_media_type_display()})"
 
 
 class TMDBGenre(models.Model):
@@ -1238,7 +1244,11 @@ class EmailVerification(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.email} - {'verified' if self.verified else 'pending'}"
+        try:
+            email = self.user.email
+        except Exception:
+            email = f'User #{self.user_id}'
+        return f"{email} - {'verified' if self.verified else 'pending'}"
 
     @property
     def is_expired(self):
@@ -1263,7 +1273,11 @@ class PasswordResetOTP(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.email} - {'used' if self.used else self.otp}"
+        try:
+            email = self.user.email
+        except Exception:
+            email = f'User #{self.user_id}'
+        return f"{email} - {'used' if self.used else self.otp}"
 
     @property
     def is_expired(self):
@@ -1356,7 +1370,10 @@ class UserProfile(models.Model):
         verbose_name_plural = 'User Profiles'
 
     def __str__(self):
-        return f'Profile: {self.user.username}'
+        try:
+            return f'Profile: {self.user.username}'
+        except Exception:
+            return f'Profile: User #{self.user_id}'
 
     @property
     def photo_url(self):
@@ -1396,7 +1413,10 @@ class UserCloudData(models.Model):
         verbose_name_plural = 'User Cloud Data'
 
     def __str__(self):
-        return f"CloudData: {self.user.username}"
+        try:
+            return f"CloudData: {self.user.username}"
+        except Exception:
+            return f"CloudData: User #{self.user_id}"
 
     def get_cloud_payload(self):
         return {
@@ -1854,7 +1874,11 @@ class UserSession(models.Model):
 
     def __str__(self):
         status = 'Active' if self.is_active else 'Offline'
-        return f"{self.user.username} — {self.source} ({status})"
+        try:
+            name = self.user.username
+        except Exception:
+            name = f'User #{self.user_id}'
+        return f"{name} — {self.source} ({status})"
 
     def mark_logout(self):
         from django.utils import timezone
@@ -1910,7 +1934,10 @@ class UserPageView(models.Model):
         verbose_name_plural = 'Page Views'
 
     def __str__(self):
-        user_str = self.user.username if self.user else self.visitor_id[:8]
+        try:
+            user_str = self.user.username if self.user else self.visitor_id[:8]
+        except Exception:
+            user_str = self.visitor_id[:8] if self.visitor_id else f'User #{self.user_id}'
         return f"{user_str} → {self.path} ({self.time_spent_seconds}s)"
 
     @classmethod
