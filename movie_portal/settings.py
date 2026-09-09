@@ -66,6 +66,7 @@ MIDDLEWARE = [
     'core.middleware.URLBlockMiddleware',
     'core.middleware.WebsiteVisitorTrackingMiddleware',
     'core.browser_cache.BrowserCacheMiddleware',
+    'core.error_monitor.ErrorMonitoringMiddleware',
 ]
 
 ROOT_URLCONF = 'movie_portal.urls'
@@ -221,15 +222,36 @@ if ENV == 'prod':
     LOGGING = {
         'version': 1,
         'disable_existing_loggers': False,
+        'formatters': {
+            'verbose': {
+                'format': '{asctime} {levelname} {name} {message}',
+                'style': '{',
+            },
+        },
         'handlers': {
             'console': {
                 'class': 'logging.StreamHandler',
+                'formatter': 'verbose',
+            },
+            'mail_admins': {
+                'level': 'ERROR',
+                'class': 'django.utils.log.AdminEmailHandler',
+                'include_html': False,
             },
         },
         'loggers': {
             'django': {
                 'handlers': ['console'],
                 'level': 'WARNING',
+            },
+            'django.request': {
+                'handlers': ['console', 'mail_admins'],
+                'level': 'ERROR',
+                'propagate': True,
+            },
+            'error_monitor': {
+                'handlers': ['console'],
+                'level': 'INFO',
             },
         },
     }
