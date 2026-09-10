@@ -238,5 +238,22 @@ urlpatterns = [
 
     # CinePlayer - browser-based TMDB player
     path('cineplayer/', cineplayer_views.cineplayer_index, name='cineplayer_index'),
+    # CinePlayer relay API endpoints (fallback when gateway is unreachable)
+    path('cineplayer/api/whoami/', cineplayer_views.api_whoami, name='cineplayer_whoami'),
+    path('cineplayer/api/whoami', cineplayer_views.api_whoami),
+    path('cineplayer/api/resolve/tmdb/<str:tmdb_id>/', cineplayer_views.api_resolve_tmdb, name='cineplayer_resolve_tmdb'),
+    path('cineplayer/api/resolve/tmdb/<str:tmdb_id>', cineplayer_views.api_resolve_tmdb),
+    path('cineplayer/api/title/<str:vod_id>/', cineplayer_views.api_title, name='cineplayer_title'),
+    path('cineplayer/api/title/<str:vod_id>', cineplayer_views.api_title),
+    path('cineplayer/api/browse/', cineplayer_views.api_browse, name='cineplayer_browse'),
+    path('cineplayer/api/browse', cineplayer_views.api_browse),
+    path('cineplayer/api/audio/<str:vod_id>/', cineplayer_views.api_audio, name='cineplayer_audio'),
+    path('cineplayer/api/audio/<str:vod_id>', cineplayer_views.api_audio),
+    path('cineplayer/api/tracks/<str:vod_id>/', cineplayer_views.api_tracks, name='cineplayer_tracks'),
+    path('cineplayer/api/tracks/<str:vod_id>', cineplayer_views.api_tracks),
+    path('cineplayer/api/meta/<str:vod_id>/', cineplayer_views.api_meta, name='cineplayer_meta'),
+    path('cineplayer/api/meta/<str:vod_id>', cineplayer_views.api_meta),
+    path('cineplayer/subs/<str:vod_id>.vtt/', cineplayer_views.api_subs_vtt, name='cineplayer_subs'),
+    path('cineplayer/subs/<str:vod_id>.vtt', cineplayer_views.api_subs_vtt),
 
 ]
