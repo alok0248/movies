@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinePlayer</title>
+<!-- Register browser proxy service worker — handles CORS in-browser, no server proxy -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw-proxy.js').catch(function(){});
+}
+</script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#e5e5e5}
+.player-root{width:100%;height:100%;display:flex;flex-direction:column;position:relative}
+
+/* Video area */
+.video-wrap{flex:1;position:relative;background:#000;min-height:0;display:flex;align-items:center;justify-content:center}
+.video-wrap video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+.video-wrap::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(0,0,0,.3) 0%,transparent 15%,transparent 85%,rgba(0,0,0,.6) 100%)}
+
+/* Title overlay */
+.title-overlay{position:absolute;top:20px;left:20px;z-index:50;pointer-events:none;opacity:0;transform:translateY(-10px);transition:opacity .6s ease,transform .6s ease}
+.title-overlay.show{opacity:1;transform:translateY(0)}
+.title-main{font-size:1.5rem;font-weight:800;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.8);line-height:1.2}
+.title-sub{font-size:.8rem;color:rgba(255,255,255,.6);margin-top:.3rem;font-weight:500}
+
+/* Control bar */
+.ctrl-bar{background:linear-gradient(to top,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 80%,rgba(0,0,0,.7) 100%);padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.06)}
+.ctrl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* Selectors */
+.sel{position:relative;display:inline-flex;align-items:center;gap:4px}
+.sel-btn{padding:5px 28px 5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#ccc;font-size:.75rem;font-weight:500;cursor:pointer;white-space:nowrap;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:all .15s}
+.sel-btn:hover{border-color:rgba(255,255,255,.3);color:#fff}
+.sel-btn.active{border-color:#e50914;color:#e50914}
+.sel-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.3);font-weight:600}
+.sel-menu{position:absolute;bottom:calc(100% + 6px);left:0;min-width:160px;max-height:200px;overflow-y:auto;background:rgba(20,20,20,.97);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:4px;z-index:100;display:none;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.6)}
+.sel-menu.open{display:block}
+.sel-opt{padding:7px 12px;border-radius:4px;font-size:.73rem;color:rgba(255,255,255,.7);cursor:pointer;transition:all .1s;white-space:nowrap}
+.sel-opt:hover{background:rgba(255,255,255,.08);color:#fff}
+.sel-opt.chosen{color:#e50914;font-weight:600}
+
+/* Resolution badge */
+.res-badge{background:linear-gradient(135deg,#6c5ce7,#a855f7);color:#fff;font-size:.65rem;font-weight:800;padding:3px 10px;border-radius:10px;white-space:nowrap;letter-spacing:.02em}
+
+/* Season row */
+.season-row{display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none;-ms-overflow-style:none}
+.season-row::-webkit-scrollbar{display:none}
+.season-btn{padding:5px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#ccc;font-size:.75rem;cursor:pointer;white-space:nowrap;transition:all .15s;font-weight:500}
+.season-btn:hover{border-color:rgba(255,255,255,.3);color:#fff;background:rgba(255,255,255,.05)}
+.season-btn.active{background:#e50914;border-color:#e50914;color:#fff}
+
+/* Episode grid */
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:6px 0;max-height:150px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.ep-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 10px;cursor:pointer;transition:all .15s}
+.ep-card:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.08);transform:translateY(-1px)}
+.ep-card.active{border-color:#e50914;background:rgba(229,9,20,.12)}
+.ep-card .ep-num{color:#e50914;font-weight:700;font-size:.8rem}
+.ep-card .ep-title{color:rgba(255,255,255,.5);font-size:.7rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ep-card .ep-dur{color:rgba(255,255,255,.35);font-size:.65rem;margin-top:2px}
+
+/* Loading spinner */
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.85);z-index:200;flex-direction:column;gap:12px}
+.loading .spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,.15);border-top-color:#e50914;border-radius:50%;animation:spin .8s linear infinite}
+.loading .text{font-size:.8rem;color:rgba(255,255,255,.5)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Error */
+.error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.92);z-index:200;flex-direction:column;gap:12px;padding:20px;text-align:center}
+.error .msg{color:#e50914;font-size:1.1rem;font-weight:700}
+.error .sub{color:rgba(255,255,255,.5);font-size:.85rem;max-width:400px;line-height:1.5}
+
+/* Next episode button */
+.next-btn{position:absolute;right:24px;bottom:100px;background:linear-gradient(135deg,#e50914,#b20710);color:#fff;border:0;border-radius:24px;padding:10px 20px;font-size:.85rem;font-weight:700;cursor:pointer;z-index:30;display:none;transition:all .2s;box-shadow:0 4px 20px rgba(229,9,20,.3)}
+.next-btn:hover{transform:scale(1.05);box-shadow:0 6px 24px rgba(229,9,20,.5)}
+</style>
+</head>
+<body>
+<div class="player-root" id="playerRoot">
+  <!-- Loading -->
+  <div class="loading" id="loading"><div class="spinner"></div><div class="text">Loading...</div></div>
+
+  <!-- Error -->
+  <div class="error" id="error" style="display:none">
+    <div class="msg" id="errorMsg">Error loading video</div>
+    <div class="sub" id="errorSub"></div>
+  </div>
+
+  <!-- Video -->
+  <div class="video-wrap" id="videoWrap">
+    <video id="vid" controls playsinline crossorigin="anonymous"></video>
+    <div class="title-overlay" id="titleOverlay">
+      <div class="title-main" id="titleMain"></div>
+      <div class="title-sub" id="titleSub"></div>
+    </div>
+  </div>
+
+  <!-- Next Episode -->
+  <button class="next-btn" id="nextBtn" onclick="playNextEp()">Next Episode ▶</button>
+
+  <!-- Control Bar -->
+  <div class="ctrl-bar" id="ctrlBar">
+    <div class="season-row" id="seasonRow" style="display:none"></div>
+    <div class="ep-grid" id="epGrid" style="display:none"></div>
+    <div class="ctrl-row">
+      <div class="sel" id="audioSel" style="display:none">
+        <span class="sel-label">Audio</span>
+        <button class="sel-btn" id="audioBtn" onclick="toggleMenu('audioMenu')"></button>
+        <div class="sel-menu" id="audioMenu"></div>
+      </div>
+      <div class="sel" id="subSel" style="display:none">
+        <span class="sel-label">Subs</span>
+        <button class="sel-btn" id="subBtn" onclick="toggleMenu('subMenu')">Off</button>
+        <div class="sel-menu" id="subMenu"></div>
+      </div>
+      <span class="res-badge" id="resBadge" style="display:none"></span>
+      <span style="flex:1"></span>
+      <span style="font-size:.7rem;color:rgba(255,255,255,.4)" id="epInfo"></span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script>
+// ═══ Config ═══
+const GW = '{{ gateway|default:"http://127.0.0.1:8787" }}';
+// Per-client device identity: each browser gets its own alias (persisted in
+// localStorage) which the gateway maps to a full device_id, so the app's
+// backend sees every client as a separate genuine app install.
+const DID = (function(){try{var k='cinevault.did',d=localStorage.getItem(k);if(!d){d='cv'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);localStorage.setItem(k,d);}return d;}catch(e){return '';}})();
+// Register this client's identity immediately: the gateway maps the alias to a
+// device_id and activates the invite (invited_by) on that SAME device_id before
+// any playback starts.
+try { fetch(GW + '/api/whoami?did=' + encodeURIComponent(DID), { headers: { 'X-Device-Id': DID } }).catch(function(){}); } catch(e) {}
+
+// ═══ State ═══
+let curVod = null, curEp = 0, curTitle = '', curSeasons = [], curAllEps = [];
+let curLang = '', curSub = 'off', hlsInstance = null;
+
+// ═══ Helpers ═══
+function qs() { return new URLSearchParams(window.location.search); }
+
+
+// Build a URL that goes through the browser service worker (no CORS issues)
+function gwUrl(path) {
+  // Gateway has CORS: * — stream URLs work directly in browser
+  return GW + path;
+}
+
+async function api(path) {
+  // Gateway has CORS: * — called directly from the browser, no proxy.
+  // X-Device-Id gives this browser its own device identity at the app backend.
+  try {
+    let r = await fetch(GW + path, { headers: { 'X-Device-Id': DID } });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null;
+}
+
+function showLoading(v) {
+  document.getElementById('loading').style.display = v ? 'flex' : 'none';
+}
+function showError(msg, sub) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('error').style.display = 'flex';
+  document.getElementById('errorMsg').textContent = msg;
+  document.getElementById('errorSub').textContent = sub || '';
+}
+
+// ═══ Resolve & Init ═══
+async function init() {
+  const p = qs();
+  const tmdb = p.get('tmdb_id');
+  const type = p.get('type') || 'movie';
+  const season = parseInt(p.get('season') || '1');
+  const episode = parseInt(p.get('episode') || '1');
+
+  if (!tmdb) {
+    showError('No TMDB ID provided', 'Append ?tmdb_id=ID&type=movie|tv to the URL');
+    return;
+  }
+  showLoading(true);
+
+  // 1. Resolve TMDB → vod_id
+  const data = await api('/api/resolve/tmdb/' + tmdb);
+  if (!data || !data.vod_id) {
+    showError('TMDB ID not found', 'ID: ' + tmdb + (data && data.error ? ' — ' + data.error : ''));
+    return;
+  }
+
+  curVod = data.vod_id;
+  curTitle = data.name || '';
+
+  // 2. Get title info
+  const titleData = await api('/api/title/' + curVod);
+  if (!titleData) { showError('Could not load title info'); return; }
+  const res = titleData.result || titleData;
+  const coll = res.vod_collection || [];
+  const serial = parseInt(res.vod_serial) || 1;
+  const isSeries = serial > 1 && coll.length > 0;
+
+  if (isSeries) {
+    // 3. Find all seasons
+    const seasons = await findSeasons(curVod, res);
+    curSeasons = seasons;
+
+    if (seasons.length > 1) {
+      await loadAllSeasonEps(seasons);
+    } else {
+      curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
+    }
+
+    // 4. Navigate to requested season
+    let seasonVod = curVod;
+    if (seasons.length >= season) {
+      for (const s of seasons) {
+        if (s.n === season) { seasonVod = s.vod_id; break; }
+      }
+    }
+
+    const sr = await api('/api/title/' + seasonVod);
+    if (sr) {
+      const srRes = sr.result || sr;
+      const srColl = srRes.vod_collection || [];
+      for (const g of curAllEps) {
+        if (String(g.vod_id) === String(seasonVod)) { g.eps = srColl; break; }
+      }
+      curVod = String(seasonVod);
+      curTitle = srRes.vod_name || curTitle;
+      curEp = Math.max(0, episode - 1);
+    }
+  } else {
+    curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
+    curEp = 0;
+  }
+
+  showLoading(false);
+  renderSeasonBar();
+  renderEpGrid();
+  await playEp(curEp);
+}
+
+async function findSeasons(vodId, res) {
+  const name = (res.vod_name || '').trim();
+  const m = name.match(/^(.+?)\s*[-–—]\s*Season\s+(\d+)\s*$/i);
+  if (!m) return [];
+  const base = m[1].trim();
+  const items = await api('/browse?kw=' + encodeURIComponent(base));
+  if (!items || !items.length) return [];
+  const seasons = [];
+  for (const it of items) {
+    const nm = (it.name || '').trim();
+    const mm = nm.match(/^(.+?)\s*[-–—]\s*Season\s+(\d+)\s*$/i);
+    if (mm && mm[1].trim().toLowerCase() === base.toLowerCase()) {
+      seasons.push({ n: parseInt(mm[2]), vod_id: it.vod_id || it.id, name: nm });
+    }
+  }
+  seasons.sort((a, b) => a.n - b.n);
+  return seasons;
+}
+
+async function loadAllSeasonEps(seasons) {
+  curAllEps = [];
+  for (let i = 0; i < seasons.length; i += 4) {
+    const batch = seasons.slice(i, i + 4);
+    const results = await Promise.all(batch.map(async (s) => {
+      const d = await api('/api/title/' + s.vod_id);
+      if (!d) return { vod_id: s.vod_id, name: s.name, eps: [] };
+      const r = d.result || d;
+      return { vod_id: s.vod_id, name: s.name, eps: r.vod_collection || [] };
+    }));
+    curAllEps.push(...results);
+  }
+}
+
+// ═══ Render ═══
+function renderSeasonBar() {
+  const row = document.getElementById('seasonRow');
+  if (curSeasons.length <= 1) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  row.innerHTML = curSeasons.map(s =>
+    '<button class="season-btn' + (String(s.vod_id) === String(curVod) ? ' active' : '') +
+    '" onclick="switchSeason(\'' + s.vod_id + '\')">Season ' + s.n + '</button>'
+  ).join('');
+}
+
+function renderEpGrid() {
+  const grid = document.getElementById('epGrid');
+  const curGroup = curAllEps.find(g => String(g.vod_id) === String(curVod));
+  if (!curGroup || curGroup.eps.length <= 1) { grid.style.display = 'none'; return; }
+  grid.style.display = 'grid';
+  grid.innerHTML = curGroup.eps.map((e, i) => {
+    const nn = e.collection || (i + 1);
+    const t = (e.title && String(e.title).trim() !== String(nn)) ? e.title : '';
+    const d = Math.floor((parseInt(e.vod_duration) || 0) / 60);
+    return '<div class="ep-card' + (i === curEp ? ' active' : '') + '" onclick="playEp(' + i + ')">' +
+      '<div class="ep-num">Ep ' + nn + '</div>' +
+      (t ? '<div class="ep-title">' + t + '</div>' : '') +
+      '<div class="ep-dur">' + (d ? d + 'm' : '') + '</div></div>';
+  }).join('');
+}
+
+// ═══ Player ═══
+async function playEp(ep) {
+  curEp = ep;
+  showLoading(true);
+  const v = document.getElementById('vid');
+
+  // Use Django proxy for the stream
+  const streamUrl = gwUrl('/stream/' + curVod + '?ep=' + ep) + '&did=' + encodeURIComponent(DID);
+  v.src = streamUrl;
+
+  // Load tracks from moov atom (actual audio langs + video res + subs)
+  const tracks = await api('/api/tracks/' + curVod + '?ep=' + ep);
+  // Load vod metadata (language, area, quality) as fallback
+  const meta = await api('/api/meta/' + curVod);
+
+  if (tracks && !tracks.error) {
+    // Moov-extracted data — most accurate (real audio tracks + resolution)
+    renderAudioMenu(tracks.audio || {});
+    renderSubMenu(tracks.subs || []);
+    renderResBadge(tracks.video || {});
+  } else if (meta && !meta.error) {
+    // Fallback: vod metadata for audio/resolution/quality
+    renderAudioMenu({
+      langs: (meta.languages || []).map(l => ({code: l.code, name: l.name})),
+      default: (meta.languages || [])[0]?.code || ''
+    });
+    renderResBadge({ label: meta.quality || null });
+  }
+
+  // Update UI
+  const curGroup = curAllEps.find(g => String(g.vod_id) === String(curVod)) || { eps: [] };
+  document.getElementById('epInfo').textContent = curGroup.eps.length > 1 ?
+    'Ep ' + (ep + 1) + ' / ' + curGroup.eps.length : '';
+  document.getElementById('titleMain').textContent = curTitle;
+  document.getElementById('titleSub').textContent = 'Episode ' + (ep + 1);
+
+  const overlay = document.getElementById('titleOverlay');
+  overlay.classList.add('show');
+  setTimeout(() => overlay.classList.remove('show'), 3000);
+
+  document.getElementById('nextBtn').style.display = (ep + 1 < curGroup.eps.length) ? 'block' : 'none';
+
+  renderEpGrid();
+  showLoading(false);
+  v.play().catch(() => {});
+}
+
+function renderAudioMenu(audio) {
+  const langs = audio.langs || [];
+  const sel = document.getElementById('audioSel');
+  const btn = document.getElementById('audioBtn');
+  const menu = document.getElementById('audioMenu');
+  if (!langs.length) { sel.style.display = 'none'; return; }
+  sel.style.display = 'inline-flex';
+  btn.textContent = langs.find(l => l.code === curLang)?.name || langs[0].name;
+  menu.innerHTML = langs.map(l =>
+    '<div class="sel-opt' + (l.code === curLang ? ' chosen' : '') +
+    '" onclick="switchAudio(\'' + l.code + '\',\'' + l.name + '\')">' + l.name + '</div>'
+  ).join('');
+}
+
+function renderSubMenu(subs) {
+  const sel = document.getElementById('subSel');
+  const btn = document.getElementById('subBtn');
+  const menu = document.getElementById('subMenu');
+  sel.style.display = 'inline-flex';
+  btn.textContent = curSub === 'off' ? 'Off' : (subs.find(s => s.code === curSub)?.name || 'Off');
+  menu.innerHTML = '<div class="sel-opt' + (curSub === 'off' ? ' chosen' : '') +
+    '" onclick="switchSub(\'off\',\'Off\')">Off</div>' +
+    subs.map(s => '<div class="sel-opt' + (s.code === curSub ? ' chosen' : '') +
+    '" onclick="switchSub(\'' + s.code + '\',\'' + s.name + '\')">' + s.name + '</div>').join('');
+}
+
+function renderResBadge(video) {
+  const badge = document.getElementById('resBadge');
+  if (video.label) {
+    badge.textContent = video.label;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ═══ Switches ═══
+function switchAudio(code, name) {
+  curLang = code;
+  document.getElementById('audioBtn').textContent = name;
+  closeMenus();
+  const v = document.getElementById('vid');
+  v.src = gwUrl('/stream/' + curVod + '?ep=' + curEp + '&lang=' + code) + '&did=' + encodeURIComponent(DID);
+  v.play().catch(() => {});
+}
+
+function switchSub(code, name) {
+  curSub = code;
+  document.getElementById('subBtn').textContent = name;
+  closeMenus();
+  const v = document.getElementById('vid');
+  const old = document.getElementById('subtrack');
+  if (old) old.remove();
+  if (code !== 'off') {
+    const t = document.createElement('track');
+    t.id = 'subtrack';
+    t.kind = 'subtitles';
+    t.label = name;
+    t.srclang = code;
+    t.default = true;
+    t.src = gwUrl('/subs/' + curVod + '.vtt?ep=' + curEp) + '&did=' + encodeURIComponent(DID);
+    v.appendChild(t);
+  }
+}
+
+async function switchSeason(vodId) {
+  if (String(vodId) === String(curVod)) return;
+  const d = await api('/api/title/' + vodId);
+  if (d) {
+    const r = d.result || d;
+    curVod = String(vodId);
+    curTitle = r.vod_name || curTitle;
+    for (const g of curAllEps) {
+      if (String(g.vod_id) === String(vodId)) { g.eps = r.vod_collection || []; break; }
+    }
+    renderSeasonBar();
+    renderEpGrid();
+    await playEp(0);
+  }
+}
+
+function playNextEp() {
+  const curGroup = curAllEps.find(g => String(g.vod_id) === String(curVod)) || { eps: [] };
+  if (curEp + 1 < curGroup.eps.length) playEp(curEp + 1);
+}
+
+// ═══ UI ═══
+function toggleMenu(id) {
+  const menu = document.getElementById(id);
+  const wasOpen = menu.classList.contains('open');
+  closeMenus();
+  if (!wasOpen) menu.classList.add('open');
+}
+function closeMenus() {
+  document.querySelectorAll('.sel-menu').forEach(m => m.classList.remove('open'));
+}
+document.addEventListener('click', e => { if (!e.target.closest('.sel')) closeMenus(); });
+
+// ═══ Keyboard ═══
+document.addEventListener('keydown', e => {
+  const v = document.getElementById('vid');
+  if (e.key === ' ') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+  if (e.key === 'ArrowRight') v.currentTime += 10;
+  if (e.key === 'ArrowLeft') v.currentTime -= 10;
+  if (e.key === 'f') {
+    const root = document.getElementById('playerRoot');
+    if (document.fullscreenElement) document.exitFullscreen();
+    else root.requestFullscreen();
+  }
+});
+
+// ═══ Auto-advance ═══
+document.getElementById('vid').addEventListener('ended', () => {
+  const curGroup = curAllEps.find(g => String(g.vod_id) === String(curVod)) || { eps: [] };
+  if (curEp + 1 < curGroup.eps.length) playEp(curEp + 1);
+});
+
+// ═══ Start ═══
+init();
+</script>
+</body>
+</html>

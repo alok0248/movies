@@ -3,6 +3,7 @@ from django.views.generic import TemplateView
 from . import views
 from . import local_player
 from . import streaming_views
+from cineplayer import views as cineplayer_views
 
 handler404 = 'core.views.page_not_found_view'
 handler403 = 'core.views.permission_denied_view'
@@ -234,4 +235,8 @@ urlpatterns = [
     path('admin-dashboard/analytics/', views.admin_analytics, name='admin_analytics'),
     path('admin-dashboard/analytics/engagement/', views.admin_engagement_analytics, name='admin_engagement_analytics'),
     path('admin-dashboard/analytics/user/<int:user_id>/', views.admin_user_analytics_detail, name='admin_user_analytics_detail'),
+
+    # CinePlayer - browser-based TMDB player
+    path('cineplayer/', cineplayer_views.cineplayer_index, name='cineplayer_index'),
+
 ]

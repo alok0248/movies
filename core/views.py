@@ -566,16 +566,18 @@ def index(request):
     return render(request, 'core/index.html')
 
 def _strip_videasy_custom_urls(all_players):
-    """Force server 0 (Videasy) to always use extraction — strip any custom URLs from DB."""
+    """Force Videasy Extractor to always use extraction — strip custom URLs from DB.
+    Only affects players named 'Videasy Extractor' (not CinePlayer or others)."""
     players = list(all_players)
-    if players:
-        v = players[0]
-        v.custom_movie_iframe_url = ''
-        v.custom_iframe_url = ''
-        v.custom_iframe_html = ''
-        v.custom_movie_iframe_html = ''
-        v.custom_tv_iframe_url = ''
-        v.custom_tv_iframe_html = ''
+    for v in players:
+        if v.name == 'Videasy Extractor':
+            v.custom_movie_iframe_url = ''
+            v.custom_iframe_url = ''
+            v.custom_iframe_html = ''
+            v.custom_movie_iframe_html = ''
+            v.custom_tv_iframe_url = ''
+            v.custom_tv_iframe_html = ''
+            break
     return players
 
 

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinePlayer — Browser Direct</title>
+<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;font-family:'Segoe UI',system-ui,sans-serif;color:#e5e5e5}
+.root{width:100%;height:100%;display:flex;flex-direction:column}
+.vw{flex:1;position:relative;background:#000;min-height:0;display:flex;align-items:center;justify-content:center}
+.vw video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+.vw::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(0,0,0,.3) 0%,transparent 15%,transparent 85%,rgba(0,0,0,.6) 100%)}
+.to{position:absolute;top:20px;left:20px;z-index:50;pointer-events:none;opacity:0;transform:translateY(-10px);transition:opacity .6s,transform .6s}
+.to.show{opacity:1;transform:none}
+.tm{font-size:1.4rem;font-weight:800;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.8)}
+.ts{font-size:.8rem;color:rgba(255,255,255,.6);margin-top:.3rem}
+.cb{background:linear-gradient(to top,rgba(0,0,0,.95),rgba(0,0,0,.85));padding:10px 14px;display:flex;flex-direction:column;gap:8px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.06)}
+.cr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sel{position:relative;display:inline-flex;align-items:center;gap:4px}
+.sb{padding:5px 28px 5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#ccc;font-size:.75rem;cursor:pointer;white-space:nowrap;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%23888' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.sb:hover{border-color:rgba(255,255,255,.3);color:#fff}
+.sl{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.3);font-weight:600}
+.sm{position:absolute;bottom:calc(100% + 6px);left:0;min-width:160px;max-height:200px;overflow-y:auto;background:rgba(20,20,20,.97);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:4px;z-index:100;display:none;backdrop-filter:blur(12px)}
+.sm.open{display:block}
+.so{padding:7px 12px;border-radius:4px;font-size:.73rem;color:rgba(255,255,255,.7);cursor:pointer;white-space:nowrap}
+.so:hover{background:rgba(255,255,255,.08);color:#fff}
+.so.ch{color:#e50914;font-weight:600}
+.rb{background:linear-gradient(135deg,#6c5ce7,#a855f7);color:#fff;font-size:.65rem;font-weight:800;padding:3px 10px;border-radius:10px}
+.sr{display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none}
+.sr::-webkit-scrollbar{display:none}
+.sbn{padding:5px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#ccc;font-size:.75rem;cursor:pointer;white-space:nowrap;font-weight:500}
+.sbn:hover{border-color:rgba(255,255,255,.3);color:#fff}
+.sbn.ac{background:#e50914;border-color:#e50914;color:#fff}
+.eg{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:6px 0;max-height:150px;overflow-y:auto}
+.ec{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;cursor:pointer;transition:all .15s}
+.ec:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.08)}
+.ec.ac{border-color:#e50914;background:rgba(229,9,20,.12)}
+.ec .en{color:#e50914;font-weight:700;font-size:.8rem}
+.ec .ed{color:rgba(255,255,255,.35);font-size:.65rem;margin-top:2px}
+.ld{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.85);z-index:200;flex-direction:column;gap:12px}
+.sp{width:44px;height:44px;border:3px solid rgba(255,255,255,.15);border-top-color:#e50914;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.er{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.92);z-index:200;flex-direction:column;gap:12px;padding:20px;text-align:center}
+.er .em{color:#e50914;font-size:1.1rem;font-weight:700}
+.er .es{color:rgba(255,255,255,.5);font-size:.85rem;max-width:400px;line-height:1.5}
+.nx{position:absolute;right:24px;bottom:100px;background:linear-gradient(135deg,#e50914,#b20710);color:#fff;border:0;border-radius:24px;padding:10px 20px;font-size:.85rem;font-weight:700;cursor:pointer;z-index:30;display:none}
+.nx:hover{transform:scale(1.05);box-shadow:0 6px 24px rgba(229,9,20,.5)}
+</style>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw-proxy.js').catch(function(){});
+}
+</script>
+</head>
+<body>
+<div class="root" id="R">
+  <div class="ld" id="LD"><div class="sp"></div><div style="font-size:.8rem;color:rgba(255,255,255,.5)">Loading...</div></div>
+  <div class="er" id="ER" style="display:none"><div class="em" id="EM"></div><div class="es" id="ES"></div></div>
+  <div class="vw">
+    <video id="V" controls playsinline></video>
+    <div class="to" id="TO"><div class="tm" id="TN"></div><div class="ts" id="TT"></div></div>
+  </div>
+  <button class="nx" id="NX" onclick="nextEp()">Next Episode ▶</button>
+  <div class="cb">
+    <div class="sr" id="SR" style="display:none"></div>
+    <div class="eg" id="EG" style="display:none"></div>
+    <div class="cr">
+      <div class="sel" id="AS" style="display:none"><span class="sl">Audio</span><button class="sb" id="AB" onclick="tog('AM')"></button><div class="sm" id="AM"></div></div>
+      <div class="sel" id="SS" style="display:none"><span class="sl">Subs</span><button class="sb" id="SB" onclick="tog('SM')">Off</button><div class="sm" id="SM"></div></div>
+      <span class="rb" id="RB" style="display:none"></span>
+      <span style="flex:1"></span>
+      <span style="font-size:.7rem;color:rgba(255,255,255,.4)" id="EI"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Pure JS libraries (no server needed) ═══ -->
+<!-- MD5 -->
+<script>
+var MD5=function(h){function m(a,b){var c=(a&65535)+(b&65535);return((a>>16)+(b>>16)+(c>>16))<<16|c&65535}function n(a,b,c,d,e,f){b=m(m(b,a),m(d,f));return m(b<<e|b>>>32-e,c)}function o(a,b,c,d,e,f,g){return n(b&c|~b&d,a,b,e,f,g)}function p(a,b,c,d,e,f,g){return n(b&d|c&~d,a,b,e,f,g)}function q(a,b,c,d,e,f,g){return n(b^c^d,a,b,e,f,g)}function r(a,b,c,d,e,f,g){return n(c^(b|~d),a,b,e,f,g)}function s(a){var b,c="",d;for(b=0;b<4;b++)d=a>>b*8&255,c+=("0"+d.toString(16)).slice(-2);return c}var c=[],d,e,f,g,b,a,i,j,k,l;h=function(a){a=unescape(encodeURIComponent(a));for(var b=0;b<a.length;b++)c[b]=a.charCodeAt(b);return c.length}(h);i=1732584193;j=4023233417;k=2562383102;f=271733878;for(b=0;b<c.length;b+=16){d=i;e=j;var g=k,x=f,y=a;for(a=0;a<=63;a++)a<16?y=n((j&k)|(~j&f),i,j,5&a,7,0):a<32?y=n((j&f)|(k&~f),i,j,(5*a+1)&15,4,0):a<48?y=n(j^k^f,i,j,(5*a+2)&15,6,0):a<64?y=n(k^(j|~f),i,j,(5*a+3)&15,8,0):y=n((j&k)|(j&f)|(k&f),i,j,(5*a+4)&15,13,0),l=a<16?[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15][a]:a<32?[1,6,11,0,5,10,15,4,9,14,3,8,13,2,7,12][a-16]:a<48?[5,8,11,14,1,4,7,10,13,0,3,6,9,12,15,2][a-32]:[0,7,14,5,12,3,10,1,8,15,6,13,4,11,2,9][a-48],z=[7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21][a],K=[3614090360,3905402710,609937928,3250441966,4118548399,1200080426,2821735955,4249261313,1700485571,2399980690,4294925233,2380461274,4218158354,2734768916,1804603682,4259657740,2792965006,1236535329,4129170786,3225465664,643717713,3921069994,3593408605,38016083,3634488961,3889429448,888471301,1426881987,3434355558,455977729,1163531501,2850285829,4243563512,1735328473,2368359562,4294588738,2272392833,1839030562,4259657740,2763975236,1272893353,4139469664,3200236656,681279174,3936430074,3572445317,76029189,3654602809,3873151461,530742520,995338651,198630844,4402435033,4321797946,640364480,4096336452,2248710350,2750281050,1873313359,4281444218,2734761313,2304583166,4055378488,2154121859,2743569615,2396177923,4107603335,1870068556,1700485571,2005611170,76029189,1473231341,475870388,3461848576,2173295114,2456956037,1873313359,42063,2734761313,4139469664,2368359562,4294925233,2792965006,1839030562,2366199772,1200080426,38016083,3634488961,1700485571,2272392833,4249261313,1804603682,2399980690,4259657740,2763975236,1272893353,3434355558,4096336452,1163531501,2248710350,4218158354,2750281050,1873313359,198630844,4294588738,2154121859,1870068556,2734761313,2396177923,2248710350,76029189][a];if(a<16)e=b;else if(a<32)e=f;else if(a<48)e=k;else e=j;b=x;f=k;k=j;j=m(i,n(a<16?o(a<8?y&z[0]:b&z[0]):a<32?p(a<16?y&z[1]:b&z[1]):a<48?q(a<16?y&z[2]:b&z[2]):r(a<16?y&z[3]:b&z[3]),i,j,e,z[a],K[a],z[a]));i=k;k=j;j=m(j,x)}return(s(i)+s(j)+s(k)+s(f)).toLowerCase()};
+</script>
+
+<!-- pako (gzip inflate) from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako_inflate.min.js"></script>
+
+<!-- Web Crypto AES-CBC -->
+<script>
+const AES_KEY = new TextEncoder().encode('0123456789123456'); // 16 bytes
+const AES_IV  = new TextEncoder().encode('2015030120123456'); // 16 bytes
+
+async function aesDecrypt(base64Body) {
+  // Clean base64
+  const clean = base64Body.replace(/[^A-Za-z0-9+/=]/g, '');
+  const raw = Uint8Array.from(atob(clean), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('raw', AES_KEY, {name:'AES-CBC'}, false, ['decrypt']);
+  const dec = await crypto.subtle.decrypt({name:'AES-CBC', iv: AES_IV}, key, raw);
+  let out = new Uint8Array(dec);
+  // Remove PKCS7 padding
+  const pad = out[out.length - 1];
+  if (pad > 0 && pad <= 16) out = out.slice(0, out.length - pad);
+  // Check gzip header
+  if (out.length >= 2 && out[0] === 0x1f && out[1] === 0x8b) {
+    out = pako.inflate(out);
+  }
+  return new TextDecoder('utf-8', {fatal: false}).decode(out);
+}
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CinePlayer — Pure Browser, No Proxy
+// ═══════════════════════════════════════════════════════
+
+const SALT = '47Q8tBqO4YqrMHf4';
+const DEVICE = 'deb0cc04a6f057f2';
+const BASE = 'https://api.speedracelight.com';
+const ORACLE = 'http://127.0.0.1:17000/control'; // emulator
+
+let token = '';
+let curVod = null, curEp = 0, curTitle = '', curSeasons = [], curAllEps = [];
+let curLang = '', curSub = 'off';
+
+// ── Session headers (sign = MD5(SALT + device + ts)) ──
+function sessionHeaders() {
+  const t = String(Date.now());
+  return {
+    'User-Agent': 'okhttp/4.12.0', 'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate', 'app_id': 'moviein',
+    'package_name': 'com.fvvcl.flickverse', 'version': '40000',
+    'sys_platform': '2', 'mob_mfr': 'google', 'mobmodel': 'SM-S908E',
+    'sysrelease': '9', 'device_id': DEVICE, 'gaid': '',
+    'channel_code': 'moviein_3001', 'androidid': DEVICE,
+    'cur_time': t, 'token': token,
+    'sign': MD5(SALT + DEVICE + t).toUpperCase(),
+    'is_vvv': '1', 'is_language': '0', 'is_display': '0',
+    'app_language': 'en', 'en_al': '0',
+    'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
+  };
+}
+
+// ── API call (direct to movie server) ──
+async function apiCall(path, fields) {
+  // Try direct fetch (speedracelight has CORS: *)
+  try {
+    const body = new URLSearchParams(fields).toString();
+    const r = await fetch(BASE + path, {
+      method: 'POST', headers: sessionHeaders(), body
+    });
+    let raw = await r.text();
+    const bytes = new TextEncoder().encode(raw);
+    if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      raw = new TextDecoder().decode(pako.inflate(bytes));
+    }
+    try {
+      const decrypted = await aesDecrypt(raw);
+      return JSON.parse(decrypted);
+    } catch {
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+  } catch (e) {
+    console.warn('[api] direct fetch failed, trying service worker proxy:', e);
+    try {
+      const body = new URLSearchParams(fields).toString();
+      const r = await fetch('/proxy/' + BASE.replace('https://', '') + path, {
+        method: 'POST', headers: sessionHeaders(), body
+      });
+      return await r.json();
+    } catch { return null; }
+  }
+}
+
+// ── Get oracle play sign (direct to emulator, no proxy) ──
+async function oracleSign(vodId) {
+  const ts = String(Date.now());
+  try {
+    const r = await fetch(`${ORACLE}?msg=verify&device_id=${DEVICE}${vodId}&ts=${ts}`);
+    const sign = (await r.text()).trim();
+    return { ts, sign };
+  } catch(e) {
+    throw new Error('Oracle unreachable. Start the emulator: adb forward tcp:17000 tcp:7000');
+  }
+}
+
+// ── Get play info via info_new (needs oracle sign) ──
+async function getPlayInfo(vodId) {
+  const { ts, sign } = await oracleSign(vodId);
+  const data = await apiCall('api/vod/info_new', {
+    vod_id: vodId, cur_time: ts, sign, audio_type: '1'
+  });
+  return (data && data.result) || null;
+}
+
+// ── Init session ──
+async function initSession() {
+  const data = await apiCall('api/public/init', {
+    invited_by: '', is_install: '1', fb_attribution: ''
+  });
+  const ui = (data?.result?.user_info) || {};
+  token = ui.token || '';
+  console.log('[session] init ok, token_len=' + token.length);
+}
+
+// ── Browse (search screen) ──
+async function browse(typeId, pn) {
+  return await apiCall('api/search/screen', {
+    type_id: typeId || '', type: '', area: '', year: '', sort: '', pn: pn || '1'
+  });
+}
+
+// ── Search by keyword ──
+async function search(kw) {
+  return await apiCall('api/search/result', {
+    kw, pn: '1', page_size: '30'
+  });
+}
+
+// ── URL parsing ──
+function qs() { return new URLSearchParams(window.location.search); }
+
+// ── UI helpers ──
+function showLD(v) { document.getElementById('LD').style.display = v ? 'flex' : 'none'; }
+function showER(msg, sub) {
+  document.getElementById('LD').style.display = 'none';
+  document.getElementById('ER').style.display = 'flex';
+  document.getElementById('EM').textContent = msg;
+  document.getElementById('ES').textContent = sub || '';
+}
+
+// ═══════════════════════════════════════════════════════
+// MAIN FLOW
+// ═══════════════════════════════════════════════════════
+async function init() {
+  const p = qs();
+  const vodId = p.get('vod') || p.get('id');
+  const epParam = parseInt(p.get('ep') || '0');
+  const searchQ = p.get('q') || p.get('search');
+
+  showLD(true);
+
+  // 1. Init session (requires CORS extension — e.g. 'Allow CORS' in Chrome)
+  try { await initSession(); }
+  catch(e) {
+    if (e.message && e.message.includes('Failed to fetch')) {
+      showER('CORS blocked', 'Install a CORS extension (e.g. "Allow CORS" or "CORS Unblock") and reload.\nOr start Chrome with: chrome.exe --disable-web-security --user-data-dir=C:\\temp');
+    } else {
+      showER('Session init failed', e.message);
+    }
+    return;
+  }
+
+  let vodToPlay = vodId;
+
+  // 2. If search query, search and pick first result
+  if (!vodToPlay && searchQ) {
+    const results = await search(searchQ);
+    const items = results?.result || [];
+    if (!items.length) { showER('No results for "' + searchQ + '"'); return; }
+    vodToPlay = String(items[0].id || items[0].vod_id || items[0].netCineVarId);
+    console.log('[search] found:', items[0].vod_name || items[0].netCineVarVod_name, vodToPlay);
+  }
+
+  if (!vodToPlay) {
+    showER('No vod ID', 'Add ?vod=ID or ?q=search_term to the URL');
+    return;
+  }
+
+  curVod = vodToPlay;
+
+  // 3. Get play info (needs oracle)
+  let info;
+  try {
+    info = await getPlayInfo(curVod);
+  } catch(e) {
+    showER('Oracle sign failed', e.message);
+    return;
+  }
+  if (!info) { showER('No play info'); return; }
+
+  const coll = info.vod_collection || [];
+  const serial = parseInt(info.vod_serial) || 1;
+  curTitle = info.vod_name || '';
+  const isSeries = serial > 1 && coll.length > 0;
+
+  if (isSeries) {
+    curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
+    curEp = Math.max(0, Math.min(epParam, coll.length - 1));
+  } else {
+    curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
+    curEp = 0;
+  }
+
+  showLD(false);
+  renderEpGrid();
+  playEp(curEp);
+}
+
+// ═══════════════════════════════════════════════════════
+// PLAY
+// ═══════════════════════════════════════════════════════
+function playEp(ep) {
+  curEp = ep;
+  const g = curAllEps[0];
+  if (!g || !g.eps[ep]) return;
+  const url = g.eps[ep].vod_url;
+  if (!url) { showER('No playable URL for Ep ' + (ep+1)); return; }
+
+  const v = document.getElementById('V');
+  v.src = url;
+  document.getElementById('TN').textContent = curTitle;
+  document.getElementById('TT').textContent = isSeries() ? ('Episode ' + (ep+1)) : '';
+  document.getElementById('EI').textContent = g.eps.length > 1 ? 'Ep ' + (ep+1) + ' / ' + g.eps.length : '';
+  document.getElementById('NX').style.display = (ep+1 < g.eps.length) ? 'block' : 'none';
+
+  const to = document.getElementById('TO');
+  to.classList.add('show');
+  setTimeout(() => to.classList.remove('show'), 3000);
+
+  renderEpGrid();
+  v.play().catch(() => {});
+}
+
+function isSeries() { return curAllEps.some(g => g.eps.length > 1); }
+
+function nextEp() {
+  const g = curAllEps[0];
+  if (curEp + 1 < g.eps.length) playEp(curEp + 1);
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function renderEpGrid() {
+  const g = curAllEps[0];
+  const eg = document.getElementById('EG');
+  if (!g || g.eps.length <= 1) { eg.style.display = 'none'; return; }
+  eg.style.display = 'grid';
+  eg.innerHTML = g.eps.map((e, i) => {
+    const nn = e.collection || (i + 1);
+    const t = (e.title && String(e.title).trim() !== String(nn)) ? e.title : '';
+    const d = Math.floor((parseInt(e.vod_duration) || 0) / 60);
+    return '<div class="ec' + (i === curEp ? ' ac' : '') + '" onclick="playEp(' + i + ')">' +
+      '<div class="en">Ep ' + nn + '</div>' +
+      (t ? '<div style="color:rgba(255,255,255,.5);font-size:.7rem;margin-top:2px">' + t + '</div>' : '') +
+      '<div class="ed">' + (d ? d + 'm' : '') + '</div></div>';
+  }).join('');
+}
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  const v = document.getElementById('V');
+  if (e.key === ' ') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+  if (e.key === 'ArrowRight') v.currentTime += 10;
+  if (e.key === 'ArrowLeft') v.currentTime -= 10;
+  if (e.key === 'f') {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.getElementById('R').requestFullscreen();
+  }
+});
+
+// ── Auto-advance ──
+document.getElementById('V').addEventListener('ended', nextEp);
+
+// ── Menu toggles ──
+function tog(id) { const m = document.getElementById(id); m.classList.toggle('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('.sel')) document.querySelectorAll('.sm').forEach(m => m.classList.remove('open')); });
+
+// ═══ START ═══
+init();
+</script>
+</body>
+</html>

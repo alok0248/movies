@@ -741,21 +741,14 @@ function toggleDualMode() {
 
 /* ===== Client-side source extraction (browser only, no server) ===== */
 function _fetchClientSources(container, params, vid) {
-  if (typeof ClientExtract === 'undefined' || !ClientExtract.extractSources) {
-    _showPlayerMsg(container, {
-      icon: 'fa-unlink',
-      title: 'Browser extractor unavailable',
-      detail: 'The client-side stream extractor did not load. Hard-refresh the page (Ctrl/Cmd+Shift+R) and try again.',
-      retry: true
-    });
-    return;
-  }
   var tmdbId = params.tmdb_id || params.tmdbId;
   var mediaType = params.type || params.mediaType || params.media_type || 'movie';
   var season = params.season || params.season_id || '';
   var episode = params.episode || params.episode_id || '';
   _curMedia = { tmdbId: String(tmdbId || ''), type: mediaType, season: String(season || ''), episode: String(episode || '') };
   var startedPlay = false;
+  var extractorsDone = 0;
+  var totalExtractors = 0;
   console.log('[Player] Extracting sources in-browser:', mediaType, tmdbId, season ? 'S' + season : '', episode ? 'E' + episode : '');
 
   function setStatus(t) {
@@ -763,42 +756,82 @@ function _fetchClientSources(container, params, vid) {
     if (el) el.textContent = t || '';
   }
 
-  ClientExtract.extractSources(tmdbId, mediaType, season, episode, {
-    onStatus: function(t) { setStatus(t); },
-    onSource: function(src) {
-      _addSource(src);
-      /* Start playing the first usable stream right away; the rest keep arriving. */
-      if (!startedPlay && !_startedPlay) {
-        startedPlay = true;
-        _startedPlay = true;
-        _playerPlaying = true;
-        hidePlayerLoading();
-        _playHls(src.url, vid);
-      }
-    },
-    onSubtitles: function(sub) {
-      if (!sub || !sub.url) return;
-      for (var si = 0; si < _allSubs.length; si++) {
-        if (_allSubs[si].url === sub.url) return;
-      }
-      var code = String(sub.lang || sub.language || sub.lang_name || 'en').substring(0, 2);
-      var name = sub.language || sub.lang_name || sub.lang || 'Subtitle';
-      _allSubs.push({ url: sub.url, lang: code, lang_name: name, label: name, source: 'stream' });
-      if (typeof _pcRefreshSources === 'function') _pcRefreshSources();
-    },
-    onDone: function(err) {
-      setStatus('');
-      if (_allSources.length) return;
+  function onSource(src) {
+    _addSource(src);
+    if (!startedPlay && !_startedPlay) {
+      startedPlay = true;
+      _startedPlay = true;
+      _playerPlaying = true;
+      hidePlayerLoading();
+      _playHls(src.url, vid);
+    }
+  }
+
+  function onSub(sub) {
+    if (!sub || !sub.url) return;
+    for (var si = 0; si < _allSubs.length; si++) {
+      if (_allSubs[si].url === sub.url) return;
+    }
+    var code = String(sub.lang || sub.language || sub.lang_name || 'en').substring(0, 2);
+    var name = sub.language || sub.lang_name || sub.lang || 'Subtitle';
+    _allSubs.push({ url: sub.url, lang: code, lang_name: name, label: name, source: sub.source || 'stream' });
+    if (typeof _pcRefreshSources === 'function') _pcRefreshSources();
+  }
+
+  function onAllDone() {
+    extractorsDone++;
+    setStatus('');
+    if (extractorsDone >= totalExtractors && !_allSources.length) {
       _showPlayerMsg(container, {
-        icon: err ? 'fa-unlink' : 'fa-film',
-        title: err ? 'Stream lookup failed' : 'No streams found for this title',
-        detail: err
-          ? String(err) + ' Streams are now searched straight from your browser (no server involved), so a network or CORS block on the source API can cause this. Try again, or use another server button / official embed below.'
-          : 'No server returned a playable stream for this ' + (mediaType === 'tv' ? 'episode' : 'title') + '. Try again later, or use another server button / official embed below.',
+        icon: 'fa-unlink',
+        title: 'No streams found',
+        detail: 'All browser extractors returned no playable streams for this ' + (mediaType === 'tv' ? 'episode' : 'title') + '. Try another server from the dropdown, or try again later.',
         retry: true
       });
     }
-  });
+  }
+
+  /* ── Run both extractors in parallel for maximum coverage ── */
+  totalExtractors = 2;
+
+  /* 1. Speedracelight (existing cipher-based extractor) */
+  if (typeof ClientExtract !== 'undefined' && ClientExtract.extractSources) {
+    ClientExtract.extractSources(tmdbId, mediaType, season, episode, {
+      onStatus: function(t) { setStatus(t); },
+      onSource: onSource,
+      onSubtitles: onSub,
+      onDone: function(err) {
+        console.log('[Player] Speedracelight extractor done.', err ? err : 'ok');
+        onAllDone();
+      }
+    });
+  } else {
+    totalExtractors--;
+  }
+
+  /* 2. MovieIn (cineplayer-style AES-CBC + MD5 browser extractor) */
+  if (typeof MovieInExtract !== 'undefined' && MovieInExtract.extract) {
+    MovieInExtract.extract(tmdbId, mediaType, season, episode, {
+      onStatus: function(t) { if (!startedPlay) setStatus(t); },
+      onSource: onSource,
+      onSubtitles: onSub,
+      onDone: function(err) {
+        console.log('[Player] MovieIn extractor done.', err ? err : 'ok');
+        onAllDone();
+      }
+    });
+  } else {
+    totalExtractors--;
+  }
+
+  if (totalExtractors === 0) {
+    _showPlayerMsg(container, {
+      icon: 'fa-unlink',
+      title: 'Browser extractors unavailable',
+      detail: 'No client-side stream extractors loaded. Hard-refresh the page (Ctrl/Cmd+Shift+R) and try again.',
+      retry: true
+    });
+  }
 }
 
 /* ===== Main Player Builder ===== */
