@@ -24,6 +24,8 @@ var MovieInExtract = (function () {
       return d;
     } catch (e) { return 'deb0cc04a6f057f2'; }
   })();
+  var INVITE_CODE = '209173008';
+  var SHARE_URL = 'https://c53l.1zor.com/sharex/moviein/index_fb3000.html?invited_by=' + INVITE_CODE;
   var BASE = 'https://api.speedracelight.com';
   var AES_KEY = new TextEncoder().encode('0123456789123456');
   var AES_IV  = new TextEncoder().encode('2015030120123456');
@@ -152,16 +154,36 @@ var MovieInExtract = (function () {
     }
   }
 
+  /** Activate invite on first visit (same machine id as playback) */
+  function activateInvite() {
+    try {
+      var k = 'moviein.invite_activated';
+      if (localStorage.getItem(k)) return;
+      fetch(SHARE_URL, {
+        mode: 'no-cors',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 9; SM-S908E) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/98.0.4758.101 Mobile Safari/537.36',
+          'Referer': 'https://moviein.ajfysu.com/'
+        }
+      }).then(function() {
+        localStorage.setItem(k, '1');
+        console.log('[MovieIn] invite activation done for', DEVICE);
+      }).catch(function() {});
+    } catch (e) {}
+  }
+
   /** Init session (fetches token from speedracelight) */
   async function initSession() {
     if (_sessionReady && _token) return;
     var data = await apiCall('api/public/init', {
-      invited_by: '', is_install: '1', fb_attribution: ''
+      invited_by: INVITE_CODE, is_install: '1', fb_attribution: ''
     });
     var ui = (data && data.result && data.result.user_info) || {};
     _token = ui.token || '';
     _sessionReady = true;
     console.log('[MovieIn] session init ok, token_len=' + _token.length);
+    // Activate invite on first session for this device
+    activateInvite();
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -180,12 +202,31 @@ var MovieInExtract = (function () {
     });
   }
 
-  /** Resolve a TMDB ID to a vod_id by searching for the title via TMDB metadata */
+  /** Resolve a TMDB ID to a vod_id via Django relay (uses project's TMDB key) */
   async function resolveTmdbId(tmdbId, mediaType) {
-    /* Fetch title name from TMDB API (CORS-open) */
+    /* Use Django relay endpoint which has the TMDB API key */
+    var relayUrl = '/cineplayer/api/resolve/tmdb/' + tmdbId + '/';
+    var relayResult = null;
+    try {
+      var r = await fetch(relayUrl, { headers: { 'X-Device-Id': DEVICE } });
+      if (r.ok) relayResult = await r.json();
+    } catch (e) {
+      console.warn('[MovieIn] relay resolve failed:', e);
+    }
+
+    if (relayResult && relayResult.vod_id) {
+      return {
+        vod_name: relayResult.name || '',
+        vod_id: relayResult.vod_id,
+        vod_url: '',
+        source: 'relay'
+      };
+    }
+
+    /* Fallback: direct TMDB API (if CORS-open key available) */
     var tmdbUrl = 'https://api.themoviedb.org/3/' +
       (mediaType === 'tv' ? 'tv' : 'movie') + '/' + tmdbId +
-      '?api_key=2dca580c2a1376d2d29e8df848a47b75&language=en-US';
+      '?language=en-US';
     var title = '';
     try {
       var tmdbR = await fetch(tmdbUrl);
@@ -325,6 +366,23 @@ var MovieInExtract = (function () {
       }
       status('Extracting streams…');
 
+      /* If relay returned a vod_id, search for its playable URL */
+      if (item.source === 'relay' && item.vod_id && !item.vod_url) {
+        return search(item.vod_name || item.vod_id).then(function(results) {
+          var items = (results && results.result) || [];
+          var best = null;
+          for (var i = 0; i < items.length; i++) {
+            var nm = (items[i].vod_name || items[i].name || '').toLowerCase();
+            if (nm === (item.vod_name || '').toLowerCase() || String(items[i].vod_id) === String(item.vod_id)) {
+              best = items[i]; break;
+            }
+          }
+          if (!best && items.length) best = items[0];
+          return best || item;
+        });
+      }
+      return item;
+
       /* Extract sources from search result metadata */
       var sources = extractFromResult(item);
       for (var i = 0; i < sources.length; i++) {
@@ -344,6 +402,15 @@ var MovieInExtract = (function () {
         '. Try another server, or the extractor will still search other sources.');
     });
   }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     Auto-register identity on page load (like cineplayer.html)
+     ═══════════════════════════════════════════════════════════════════ */
+  try {
+    fetch('/cineplayer/api/whoami/?did=' + encodeURIComponent(DEVICE), {
+      headers: { 'X-Device-Id': DEVICE }
+    }).catch(function() {});
+  } catch (e) {}
 
   /* ═══════════════════════════════════════════════════════════════════
      Public API

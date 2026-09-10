@@ -127,6 +127,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;font-family:
 <script>
 // ═══ Config ═══
 const GW = '{{ gateway|default:"http://127.0.0.1:8787" }}';
+// Fallback: if gateway is unreachable, try same-origin relay (Django views)
+const GW_RELAY = '/cineplayer/api/';
 // Per-client device identity: each browser gets its own alias (persisted in
 // localStorage) which the gateway maps to a full device_id, so the app's
 // backend sees every client as a separate genuine app install.
@@ -151,11 +153,15 @@ function gwUrl(path) {
 }
 
 async function api(path) {
-  // Gateway has CORS: * — called directly from the browser, no proxy.
-  // X-Device-Id gives this browser its own device identity at the app backend.
+  // Try gateway first (CORS: *), fall back to Django relay
   try {
     let r = await fetch(GW + path, { headers: { 'X-Device-Id': DID } });
     if (r.ok) return await r.json();
+  } catch {}
+  // Fallback: Django relay endpoints (same-origin, no CORS)
+  try {
+    let r2 = await fetch(GW_RELAY + path.replace(/^\//, ''), { headers: { 'X-Device-Id': DID } });
+    if (r2.ok) return await r2.json();
   } catch {}
   return null;
 }
