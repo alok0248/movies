@@ -815,9 +815,10 @@ window.addEventListener('message',function(ev){
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="/static/js/client-extract.js?v=1788464000"></script>
-<script src="/static/js/player-core.js?v=1788465900"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script><script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako_inflate.min.js"></script>
+  <script src="/static/js/client-extract.js?v=1788464000"></script>
+  <script src="/static/js/moviein-extract.js?v=1788467000"></script>
+  <script src="/static/js/player-core.js?v=1788466000"></script>
 <script src="/static/js/tracks-ui.js?v=1788465900"></script>
 <script>
 // ===== Player UI Style =====
@@ -1041,8 +1042,15 @@ function loadMoviePlayer() {
         _buildVideasyPlayer(container, apiUrl, loadMoviePlayer);
         setCatcher('video');
     } else {
-        /* Other servers: load iframe */
+        /* Other servers: load iframe AND also run Videasy extraction
+           in the background to populate the source list */
         var content = getPlayerContent(cfg, 'movie', movieId, null, null, movieImdbId);
+        /* Background extraction: fetch sources so they appear in the source list */
+        if (typeof _fetchClientSources === 'function' && movieId) {
+            _allSources = []; _allSubs = [];
+            _fetchClientSources(container, { tmdbId: movieId, mediaType: 'movie' },
+                document.getElementById('mainVideo') || document.createElement('video'));
+        }
         if (content.type === 'html') {
             /* Inject raw HTML inside a sandboxed srcdoc iframe so its scripts
                can't popup, navigate, or touch the parent page. */
