@@ -405,9 +405,13 @@ var MovieInExtract = (function () {
 
   /* ═══════════════════════════════════════════════════════════════════
      Auto-register identity on page load (like cineplayer.html)
+     If user is logged in, link machine ID to their email
      ═══════════════════════════════════════════════════════════════════ */
   try {
-    fetch('/cineplayer/api/whoami/?did=' + encodeURIComponent(DEVICE), {
+    var email = (typeof userEmail !== 'undefined' && userEmail) ? userEmail : '';
+    var url = '/cineplayer/api/whoami/?did=' + encodeURIComponent(DEVICE);
+    if (email) url += '&email=' + encodeURIComponent(email);
+    fetch(url, {
       headers: { 'X-Device-Id': DEVICE }
     }).catch(function() {});
   } catch (e) {}

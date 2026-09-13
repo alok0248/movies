@@ -1,0 +1,211 @@
+{% extends 'core/admin_base.html' %}
+{% load static %}
+
+{% block admin_content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-play-circle"></i> CinePlayer Settings</h1>
+        <div>
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-secondary">&larr; Back to Dashboard</a>
+            <a href="{% url 'cineplayer_index' %}" class="btn btn-info" target="_blank">
+                <i class="fas fa-external-link-alt"></i> Open CinePlayer
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Status Card -->
+    <div class="card bg-dark border-{% if config.enabled %}success{% else %}danger{% endif %} mb-4">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-1">
+                    CinePlayer is <span class="text-{% if config.enabled %}success{% else %}danger{% endif %}">{% if config.enabled %}ENABLED{% else %}DISABLED{% endif %}</span>
+                </h5>
+                <p class="card-text text-muted mb-0">
+                    {% if config.enabled %}Users can select CinePlayer as a server option on movie/series pages.{% else %}CinePlayer is hidden from the server dropdown.{% endif %}
+                </p>
+            </div>
+            <form method="post" action="{% url 'cineplayer_toggle' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-{% if config.enabled %}danger{% else %}success{% endif %} btn-lg">
+                    {% if config.enabled %}<i class="fas fa-power-off"></i> Disable{% else %}<i class="fas fa-power-off"></i> Enable{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save">
+
+        <!-- Gateway Settings -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-server"></i> Gateway Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Gateway URL</label>
+                        <input type="url" name="gateway_url" class="form-control bg-dark text-white border-secondary"
+                               value="{{ config.gateway_url }}" placeholder="http://127.0.0.1:8787">
+                        <div class="form-text text-muted">The cinevault gateway server URL (port 8787)</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Invite Code</label>
+                        <input type="text" name="invite_code" class="form-control bg-dark text-white border-secondary"
+                               value="{{ config.invite_code }}" placeholder="209173008">
+                        <div class="form-text text-muted">Referral code for new device registrations</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Share/Invite URL</label>
+                    <input type="url" name="share_url" class="form-control bg-dark text-white border-secondary"
+                           value="{{ config.share_url }}">
+                    <div class="form-text text-muted">Landing URL fired on first device visit (share link)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Referrer Links -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-link"></i> Referrer Links</h5>
+                <span class="badge bg-info">{{ config.referrer_links|length }} links</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Referrer URLs used when activating devices. The system cycles through these when users register.
+                    Add new referrers below or remove old ones.
+                </p>
+
+                <!-- Existing referrers -->
+                {% if config.referrer_links %}
+                <div class="table-responsive mb-3">
+                    <table class="table table-dark table-sm">
+                        <thead>
+                            <tr>
+                                <th width="50">#</th>
+                                <th>URL</th>
+                                <th width="100">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for link in config.referrer_links %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td><code>{{ link }}</code></td>
+                                <td>
+                                    <form method="post" action="{% url 'cineplayer_settings' %}" style="display:inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="remove_referrer">
+                                        <input type="hidden" name="index" value="{{ forloop.counter0 }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Remove">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-secondary mb-3">
+                    <i class="fas fa-info-circle"></i> No referrer links configured. Add one below.
+                </div>
+                {% endif %}
+
+                <!-- Add new referrer -->
+                <div class="input-group">
+                    <input type="url" name="new_referrer" class="form-control bg-dark text-white border-secondary"
+                           placeholder="https://example.com/referrer">
+                    <input type="hidden" name="action" value="add_referrer">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Add Referrer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Display Settings -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-palette"></i> Display Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Page Title</label>
+                        <input type="text" name="site_title" class="form-control bg-dark text-white border-secondary"
+                               value="{{ config.site_title }}" placeholder="CinePlayer">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Subtitle / Tagline</label>
+                        <input type="text" name="site_subtitle" class="form-control bg-dark text-white border-secondary"
+                               value="{{ config.site_subtitle }}" placeholder="Stream movies and series in your browser">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Default Poster URL</label>
+                    <input type="url" name="poster_url" class="form-control bg-dark text-white border-secondary"
+                           value="{{ config.poster_url }}" placeholder="https://image.tmdb.org/t/p/w500/...">
+                    <div class="form-text text-muted">Fallback poster for unresolved titles</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description / Admin Note</label>
+                    <textarea name="description" class="form-control bg-dark text-white border-secondary" rows="3"
+                              placeholder="Admin note about this CinePlayer instance">{{ config.description }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Playback Settings -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-play"></i> Playback Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="enabled" class="form-check-input" id="enabledCheck"
+                                   {% if config.enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="enabledCheck">Enable CinePlayer</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="auto_play" class="form-check-input" id="autoPlayCheck"
+                                   {% if config.auto_play %}checked{% endif %}>
+                            <label class="form-check-label" for="autoPlayCheck">Auto-play on load</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="show_next_episode" class="form-check-input" id="nextEpCheck"
+                                   {% if config.show_next_episode %}checked{% endif %}>
+                            <label class="form-check-label" for="nextEpCheck">Show Next Episode button</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="d-flex justify-content-end mb-5">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save"></i> Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

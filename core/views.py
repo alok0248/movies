@@ -1883,6 +1883,14 @@ def movie_detail_by_id(request, movie_id):
         is_active=True
     ).order_by('order', 'id')
     all_players = _strip_videasy_custom_urls(all_players)
+    # Include CinePlayer config if enabled
+    try:
+        from core.models import CinePlayerConfig
+        _cp_cfg = CinePlayerConfig.get_config()
+        cineplayer_enabled = _cp_cfg.enabled
+    except Exception:
+        cineplayer_enabled = False
+
     return render(request, 'core/movie_detail.html', {
         'movie': processed_movie,
         'more_movies': more_movies,
@@ -1897,6 +1905,7 @@ def movie_detail_by_id(request, movie_id):
         'trailers': tmdb_extra.get('trailers', []),
         'collection': tmdb_extra.get('collection'),
         'collection_movies': tmdb_extra.get('collection_movies', []),
+        'cineplayer_enabled': cineplayer_enabled,
     })
 
 @cache_control(private=True, max_age=0, must_revalidate=True)
@@ -1973,6 +1982,12 @@ def movie_detail(request, movie_slug):
         is_active=True
     ).order_by('order', 'id')
     all_players = _strip_videasy_custom_urls(all_players)
+    try:
+        from core.models import CinePlayerConfig
+        _cp_cfg2 = CinePlayerConfig.get_config()
+        cineplayer_enabled = _cp_cfg2.enabled
+    except Exception:
+        cineplayer_enabled = False
     return render(request, 'core/movie_detail.html', {
         'movie': processed_movie,
         'more_movies': more_movies,
@@ -1987,6 +2002,7 @@ def movie_detail(request, movie_slug):
         'trailers': tmdb_extra.get('trailers', []),
         'collection': tmdb_extra.get('collection'),
         'collection_movies': tmdb_extra.get('collection_movies', []),
+        'cineplayer_enabled': cineplayer_enabled,
     })
 
 
@@ -2053,6 +2069,12 @@ def series_detail_by_id(request, series_id):
         is_active=True
     ).order_by('order', 'id')
     all_players = _strip_videasy_custom_urls(all_players)
+    try:
+        from core.models import CinePlayerConfig
+        _cp_cfg3 = CinePlayerConfig.get_config()
+        cineplayer_enabled = _cp_cfg3.enabled
+    except Exception:
+        cineplayer_enabled = False
     return render(request, 'core/series_detail.html', {
         'series': processed_series,
         'seasons': seasons,
@@ -2069,6 +2091,7 @@ def series_detail_by_id(request, series_id):
         'cast_list': tmdb_extra.get('cast', []),
         'crew_list': tmdb_extra.get('crew', []),
         'trailers': tmdb_extra.get('trailers', []),
+        'cineplayer_enabled': cineplayer_enabled,
     })
 
 def series_season_episodes(request, series_id, season_number):
@@ -2200,6 +2223,12 @@ def series_detail(request, series_slug):
         is_active=True
     ).order_by('order', 'id')
     all_players = _strip_videasy_custom_urls(all_players)
+    try:
+        from core.models import CinePlayerConfig
+        _cp_cfg4 = CinePlayerConfig.get_config()
+        cineplayer_enabled = _cp_cfg4.enabled
+    except Exception:
+        cineplayer_enabled = False
     return render(request, 'core/series_detail.html', {
         'series': processed_series,
         'seasons': seasons,
@@ -2216,6 +2245,7 @@ def series_detail(request, series_slug):
         'cast_list': tmdb_extra.get('cast', []),
         'crew_list': tmdb_extra.get('crew', []),
         'trailers': tmdb_extra.get('trailers', []),
+        'cineplayer_enabled': cineplayer_enabled,
     })
 
 
@@ -6316,11 +6346,79 @@ def proxy_embed(request):
         return HttpResponse(f'Proxy error: {e}', status=500)
 @login_required
 @user_passes_test(is_staff_or_superuser)
-
-
 def player_list(request):
     players = PlayerConfiguration.objects.all().order_by('order', 'id')
     return render(request, 'core/player_list.html', {'players': players})
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CinePlayer Admin Settings
+# ═══════════════════════════════════════════════════════════════════
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def cineplayer_settings(request):
+    """Admin settings page for CinePlayer configuration."""
+    from django.contrib import messages
+    from core.models import CinePlayerConfig
+    config = CinePlayerConfig.get_config()
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'save':
+            config.enabled = request.POST.get('enabled') == 'on'
+            config.gateway_url = request.POST.get('gateway_url', config.gateway_url)
+            config.invite_code = request.POST.get('invite_code', config.invite_code)
+            config.share_url = request.POST.get('share_url', config.share_url)
+            config.site_title = request.POST.get('site_title', config.site_title)
+            config.site_subtitle = request.POST.get('site_subtitle', config.site_subtitle)
+            config.poster_url = request.POST.get('poster_url', config.poster_url)
+            config.auto_play = request.POST.get('auto_play') == 'on'
+            config.show_next_episode = request.POST.get('show_next_episode') == 'on'
+            config.description = request.POST.get('description', config.description)
+            config.save()
+            messages.success(request, 'CinePlayer settings saved.')
+            return redirect('cineplayer_settings')
+
+        elif action == 'add_referrer':
+            new_url = request.POST.get('new_referrer', '').strip()
+            if new_url:
+                links = config.referrer_links or []
+                if new_url not in links:
+                    links.append(new_url)
+                    config.referrer_links = links
+                    config.save()
+                    messages.success(request, f'Referrer added: {new_url}')
+                else:
+                    messages.warning(request, 'This referrer already exists.')
+            return redirect('cineplayer_settings')
+
+        elif action == 'remove_referrer':
+            idx = int(request.POST.get('index', -1))
+            links = config.referrer_links or []
+            if 0 <= idx < len(links):
+                removed = links.pop(idx)
+                config.referrer_links = links
+                config.save()
+                messages.success(request, f'Referrer removed: {removed}')
+            return redirect('cineplayer_settings')
+
+    return render(request, 'core/cineplayer_settings.html', {'config': config})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def cineplayer_toggle(request):
+    """Quick toggle CinePlayer on/off."""
+    from core.models import CinePlayerConfig
+    config = CinePlayerConfig.get_config()
+    config.enabled = not config.enabled
+    config.save()
+    status = 'enabled' if config.enabled else 'disabled'
+    from django.contrib import messages
+    messages.success(request, f'CinePlayer {status}.')
+    return redirect('cineplayer_settings')
 
 
 @login_required

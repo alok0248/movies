@@ -382,8 +382,11 @@
             <a href="{% url 'content_row_list' %}" class="sb-item {% if 'content-rows' in request.path %}active{% endif %}">
                 <i class="fas fa-th-large"></i> Content Rows
             </a>
-            <a href="{% url 'player_list' %}" class="sb-item {% if 'players' in request.path %}active{% endif %}">
+            <a href="{% url 'player_list' %}" class="sb-item {% if 'players' in request.path and 'cineplayer' not in request.path %}active{% endif %}">
                 <i class="fas fa-gamepad"></i> Players
+            </a>
+            <a href="{% url 'cineplayer_settings' %}" class="sb-item {% if 'cineplayer' in request.path %}active{% endif %}">
+                <i class="fas fa-play-circle"></i> CinePlayer
             </a>
             <a href="{% url 'provider_item_list' %}" class="sb-item {% if 'providers' in request.path %}active{% endif %}">
                 <i class="fas fa-plug"></i> Providers

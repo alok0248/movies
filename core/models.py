@@ -2244,3 +2244,112 @@ class EmailSendLog(models.Model):
 
     def __str__(self):
         return f"{self.status}: {self.subject} → {self.recipient} ({self.created_at})"
+
+
+class CinePlayerConfig(models.Model):
+    """Global settings for the CinePlayer browser-based extractor."""
+    enabled = models.BooleanField(default=True, help_text='Enable CinePlayer as a server option')
+    gateway_url = models.URLField(
+        default='http://127.0.0.1:8787',
+        help_text='Cinevault gateway URL (port 8787)'
+    )
+    invite_code = models.CharField(
+        max_length=50, default='209173008',
+        help_text='Referral invite code for new device registrations'
+    )
+    share_url = models.URLField(
+        default='https://c53l.1zor.com/sharex/moviein/index_fb3000.html',
+        help_text='Share/invite landing URL (fired on first device visit)'
+    )
+    referrer_links = models.JSONField(
+        default=list, blank=True,
+        help_text='List of referrer URLs for the share link (cycle through these)'
+    )
+    description = models.TextField(
+        blank=True, default='',
+        help_text='Admin note describing this CinePlayer instance'
+ )
+    # SEO / content
+    site_title = models.CharField(max_length=200, default='CinePlayer', help_text='Title shown on the CinePlayer page')
+    site_subtitle = models.CharField(max_length=300, blank=True, default='', help_text='Subtitle/tagline')
+    poster_url = models.URLField(blank=True, default='', help_text='Default poster for unresolved titles')
+    # Playback settings
+    auto_play = models.BooleanField(default=True, help_text='Auto-play on page load')
+    show_next_episode = models.BooleanField(default=True, help_text='Show Next Episode button for series')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'CinePlayer Configuration'
+        verbose_name_plural = 'CinePlayer Configuration'
+
+    def __str__(self):
+        return f"CinePlayer ({'Enabled' if self.enabled else 'Disabled'})"
+
+    @classmethod
+    def get_config(cls):
+        """Return the singleton config, creating it if needed."""
+        config, _ = cls.objects.get_or_create(
+            id=1,
+            defaults={
+                'enabled': True,
+                'gateway_url': 'http://127.0.0.1:8787',
+                'invite_code': '209173008',
+                'share_url': 'https://c53l.1zor.com/sharex/moviein/index_fb3000.html',
+                'referrer_links': [
+                    'https://moviein.ajfysu.com/',
+                    'https://c53l.1zor.com/sharex/moviein/',
+                ],
+                'site_title': 'CinePlayer',
+                'site_subtitle': 'Stream movies and series in your browser',
+            }
+        )
+        return config
+
+
+class DeviceIdentity(models.Model):
+    """Link a user's email to their browser machine ID for cineplayer playback.
+
+    When a registered user visits the cineplayer or movie detail pages,
+    their browser generates a machine ID (cinevault.did in localStorage).
+    This model stores the mapping so the same device identity is reused
+    across sessions and the user's play history is linked to their account.
+    """
+    email = models.EmailField(db_index=True)
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='device_identities', db_constraint=False
+    )
+    machine_id = models.CharField(
+        max_length=100, unique=True,
+        help_text='Browser alias (cinevault.did localStorage value)'
+    )
+    device_id = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='16-hex device_id mapped by the cinevault gateway'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_seen_at']
+        indexes = [
+            models.Index(fields=['email', 'last_seen_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.email} ↔ {self.machine_id}"
+
+    @classmethod
+    def link(cls, email, machine_id, device_id=''):
+        """Link or update a machine ID to an email."""
+        user = User.objects.filter(email=email).first()
+        obj, created = cls.objects.update_or_create(
+            machine_id=machine_id,
+            defaults={
+                'email': email,
+                'user': user,
+                'device_id': device_id,
+            }
+        )
+        return obj

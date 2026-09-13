@@ -1135,7 +1135,7 @@ window.addEventListener('message',function(ev){
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script><script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako_inflate.min.js"></script>
   <script src="/static/js/client-extract.js?v=1788464000"></script>
   <script src="/static/js/moviein-extract.js?v=1788467000"></script>
-  <script src="/static/js/player-core.js?v=1788466000"></script>
+  <script src="/static/js/player-core.js?v=1788560000"></script>
 <script src="/static/js/tracks-ui.js?v=1788465900"></script>
 <script>
 // ===== Player UI Style =====
@@ -1173,22 +1173,16 @@ Object.keys(playerConfigs).forEach(function(id) {
     var c = playerConfigs[id];
     c.isExtractor = !(c.customMovieIframeUrl || c.customTvIframeUrl || c.customIframeUrl ||
                       c.customIframeHtml || c.customMovieIframeHtml || c.customTvIframeHtml);
+    /* Detect CinePlayer by name or URL pattern */
+    var nm = (c.name || '').toLowerCase();
+    var cu = (c.customMovieIframeUrl || c.customTvIframeUrl || c.customIframeUrl || '').toLowerCase();
+    c.isCinePlayer = (nm.indexOf('cine') >= 0) || (cu.indexOf('cineplayer') >= 0);
 });
 
-/* Popup shield: only allow window.open during a real user gesture.
-   Timed / ad-driven popups from the page or embeds get blocked, while
-   user clicks (Pop button, admin edit, open stream) still work. */
+/* Popup shield: block ALL window.open calls silently.
+   No new tabs, no popups, no redirects — everything stays invisible. */
 (function() {
-    var realOpen = window.open;
-    window.open = function(url, name, features) {
-        var ok = false;
-        try { ok = !!(navigator.userActivation && navigator.userActivation.isActive); } catch (e) { ok = true; }
-        if (!ok) {
-            try { console.log('[shield] blocked popup:', String(url).slice(0, 120)); } catch (e) {}
-            return null;
-        }
-        return realOpen.apply(window, arguments);
-    };
+    window.open = function() { return null; };
 })();
 
 const SERIES_TMDB_ID = {{ series_id }};
@@ -1197,6 +1191,7 @@ const seriesTitle = "{{ series.title|escapejs }}";
 const SERIES_POSTER_PATH = "{{ series.poster_path|default:""|escapejs }}";
 const SERIES_BACKDROP_PATH = "{{ series.backdrop_path|default:""|escapejs }}";
 const isAdminUser = {% if request.user.is_staff or request.user.is_superuser %}true{% else %}false{% endif %};
+const userEmail = {% if request.user.is_authenticated %}'{{ request.user.email|escapejs }}'{% else %}''{% endif %};
 
 let currentSeason = {{ current_season }};
 let currentEpisode = {{ current_episode }};
@@ -1222,6 +1217,7 @@ function getPlayerUrl(cfg, mediaType, mediaId, season, episode, imdbId) {
         url = url.replace(/\{content_id\}/g, sel || '');
         url = url.replace(/\{season\}/g, String(season || 1));
         url = url.replace(/\{episode\}/g, String(episode || 1));
+        url = url.replace(/\{media_type\}/g, mediaType || 'tv');
         return url;
     }
     return '/api/player/?tmdb_id=' + (mediaId || '') + '&type=tv&season=' + (season || 1) + '&episode=' + (episode || 1);
@@ -1358,6 +1354,27 @@ function updatePlayerUrl() {
     }
 
     /* Server 0 (Extractor): fetch sources and play with source selection */
+    if (cfg.isCinePlayer) {
+        var cineUrl = '/cineplayer/?tmdb_id=' + (SERIES_TMDB_ID || '') + '&type=tv';
+        if (currentSeason) cineUrl += '&season=' + currentSeason;
+        if (currentEpisode) cineUrl += '&episode=' + currentEpisode;
+        var iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
+        iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+        iframe.referrerPolicy = 'no-referrer';
+        iframe.onload = function() {
+            setTimeout(function() {
+                try { iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation'); } catch (e) {}
+            }, 1200);
+        };
+        iframe.src = cineUrl;
+        container.appendChild(iframe);
+        setTimeout(function() { hidePlayerLoading(); }, 5000);
+        setCatcher('embed');
+        playerLoaded = true;
+        updateServerButtons();
+        return;
+    }
     if (cfg.isExtractor) {
         var apiUrl = { tmdbId: SERIES_TMDB_ID, mediaType: 'tv', season: currentSeason, episode: currentEpisode };
         _buildVideasyPlayer(container, apiUrl, updatePlayerUrl);
@@ -1897,6 +1914,12 @@ setTimeout(function() {
         ev.preventDefault();
         ev.stopPropagation();
         if (clickTimeout) { clearTimeout(clickTimeout); clickTimeout = null; }
+        /* Extractor (in-page <video>) player: fullscreen its own video wrap —
+           the shared player-core helper keeps F / double-click / button in sync. */
+        if (document.getElementById('mainVideo') && window._vpToggleFullscreen) {
+            window._vpToggleFullscreen();
+            return;
+        }
         var playerBox = document.getElementById('player-container');
         if (!playerBox) return;
         if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -1930,6 +1953,10 @@ setTimeout(function() {
             ev.stopPropagation();
             var playerBox = document.getElementById('player-container');
             if (!playerBox) return;
+            if (document.getElementById('mainVideo') && window._vpToggleFullscreen) {
+                window._vpToggleFullscreen();
+                return;
+            }
             if (document.fullscreenElement || document.webkitFullscreenElement) {
                 (document.exitFullscreen || document.webkitExitFullscreen).call(document);
             } else {
@@ -1945,6 +1972,11 @@ setTimeout(function() {
             if (ev.target.closest('button, a, select')) return;
             ev.preventDefault();
             ev.stopPropagation();
+            /* Extractor player: fullscreen its video wrap (see catcher dblclick) */
+            if (document.getElementById('mainVideo') && window._vpToggleFullscreen) {
+                window._vpToggleFullscreen();
+                return;
+            }
             if (document.fullscreenElement || document.webkitFullscreenElement) {
                 (document.exitFullscreen || document.webkitExitFullscreen).call(document);
             } else {
@@ -2052,6 +2084,9 @@ setTimeout(function() {
         // --- F: Toggle fullscreen ---
         if (key === 'f' || key === 'F') {
             ev.preventDefault();
+            /* Extractor mode: player-core's shared F handler already toggled
+               the in-page player's fullscreen — only handle embed mode here. */
+            if (v && window._vpToggleFullscreen) return;
             var playerBox = document.getElementById('player-container');
             if (!playerBox) return;
             if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -2555,6 +2590,9 @@ document.addEventListener('keydown', function(e) {
 
     // --- Fullscreen ---
     fsBtn.addEventListener('click', function() {
+        /* Extractor player: use the shared helper so F key / double-click /
+           this button all toggle the SAME fullscreen surface. */
+        if (getVid() && window._vpToggleFullscreen) { window._vpToggleFullscreen(); return; }
         var pb = document.getElementById('player-container');
         if (!pb) return;
         if (document.fullscreenElement || document.webkitFullscreenElement) {

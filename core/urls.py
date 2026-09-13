@@ -36,6 +36,9 @@ urlpatterns = [
     path('admin-dashboard/players/<int:player_id>/edit/', views.player_edit, name='player_edit'),
     path('admin-dashboard/players/<int:player_id>/delete/', views.player_delete, name='player_delete'),
     path('admin-dashboard/players/<int:player_id>/toggle/', views.toggle_player, name='toggle_player'),
+    # CinePlayer admin settings
+    path('admin-dashboard/cineplayer/', views.cineplayer_settings, name='cineplayer_settings'),
+    path('admin-dashboard/cineplayer/toggle/', views.cineplayer_toggle, name='cineplayer_toggle'),
     path('admin-dashboard/ads/', views.ad_list, name='ad_list'),
     path('admin-dashboard/ads/create/', views.ad_create, name='ad_create'),
     path('admin-dashboard/ads/<int:ad_id>/edit/', views.ad_edit, name='ad_edit'),
@@ -255,5 +258,7 @@ urlpatterns = [
     path('cineplayer/api/meta/<str:vod_id>', cineplayer_views.api_meta),
     path('cineplayer/subs/<str:vod_id>.vtt/', cineplayer_views.api_subs_vtt, name='cineplayer_subs'),
     path('cineplayer/subs/<str:vod_id>.vtt', cineplayer_views.api_subs_vtt),
+    path('cineplayer/api/stream/<str:vod_id>/', cineplayer_views.api_stream, name='cineplayer_stream'),
+    path('cineplayer/api/stream/<str:vod_id>', cineplayer_views.api_stream),
 
 ]
