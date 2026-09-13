@@ -57,6 +57,15 @@
   /* ===== Toast ===== */
   .toast{position:fixed;top:12px;right:12px;background:#27ae60;color:#fff;padding:6px 14px;border-radius:6px;font-size:.7rem;z-index:999;animation:fadeToast 2s forwards}
   @keyframes fadeToast{0%,70%{opacity:1}100%{opacity:0}}
+
+  /* ===== Fullscreen: the whole player (video + pause overlay) goes full-bleed;
+          the control bar stays available via Esc/exit, chrome is hidden ===== */
+  #playerWrap:fullscreen{width:100vw;height:100vh;background:#000}
+  #playerWrap:-webkit-full-screen{width:100vw;height:100vh;background:#000}
+  #playerWrap:fullscreen .player-title-overlay{top:26px;left:26px}
+  #playerWrap:-webkit-full-screen .player-title-overlay{top:26px;left:26px}
+  html:fullscreen{width:100%;height:100%}
+  html:-webkit-full-screen{width:100%;height:100%}
 </style>
 
 </head>
@@ -119,7 +128,7 @@
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="{% static 'js/player-core.js' %}?v=1788465900"></script>
+<script src="{% static 'js/player-core.js' %}?v=1788560000"></script>
 <script src="{% static 'js/tracks-ui.js' %}?v=1788465900"></script>
 <script>
 /* =====================================================================
@@ -365,6 +374,42 @@
   function currentSourceUrl() {
     return (typeof _activeSrcUrl !== 'undefined' && _activeSrcUrl) ? _activeSrcUrl : '';
   }
+
+  /* ===== Fullscreen (F key / double-click on the video) =====
+     The in-page extractor player has no fullscreen of its own, so the page
+     provides it: fullscreen the video wrap, and hide the control bar while
+     fullscreen (Esc or double-click again leaves). */
+  function fsWrap() { return document.getElementById('playerWrap'); }
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function toggleFullscreen() {
+    var w = fsWrap();
+    if (!w) return;
+    if (fsElement()) {
+      var exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    } else {
+      var req = w.requestFullscreen || w.webkitRequestFullscreen;
+      if (req) { try { req.call(w); } catch (e) {} }
+    }
+  }
+  function syncFsBar() {
+    var bar = document.querySelector('.ctrl-bar');
+    if (bar) bar.style.display = fsElement() ? 'none' : '';
+  }
+  document.addEventListener('fullscreenchange', syncFsBar);
+  document.addEventListener('webkitfullscreenchange', syncFsBar);
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'f' && e.key !== 'F') return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    /* player-core's shared F handler already toggles fullscreen when the
+       in-page extractor player is mounted — don't double-toggle. */
+    if (document.getElementById('mainVideo')) return;
+    e.preventDefault();
+    toggleFullscreen();
+  });
+  /* Double-click on the video in extractor mode is handled by player-core's
+     shared handler, so there is nothing extra to wire here. */
   window.openPopPlayer = function() {
     var url = currentSourceUrl();
     if (!url) return;

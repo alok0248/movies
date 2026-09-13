@@ -72,6 +72,82 @@ function _makeProxyUrl(url) {
   try { var u = new URL(url); return location.origin + '/proxy/' + u.hostname + u.pathname + u.search; } catch(e) { return url; }
 }
 
+/* ===== Fullscreen for the in-page (Videasy extractor) player =====
+   The extractor player is a plain <video> — it has no fullscreen button of
+   its own, and the old pages only wired fullscreen for their native bars or
+   for iframe embeds, so Server 0 had no way to go fullscreen. This shared
+   helper gives every page that mounts _buildVideasyPlayer the same
+   fullscreen behaviour: F key, double-click, and a small on-screen button. */
+function _vpFsTarget() {
+  var v = document.getElementById('mainVideo');
+  return (v && v.closest && v.closest('.player-video-wrap')) || v;
+}
+function _vpFsElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+function _vpToggleFullscreen() {
+  var el = _vpFsTarget();
+  if (!el) return;
+  if (_vpFsElement()) {
+    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  } else {
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) { try { req.call(el); } catch (e) {} }
+  }
+}
+/* Fullscreen chrome: fill the screen (no 16:9 aspect box), hide the Tracks
+   chip auto-hide so it stays reachable, and letterbox via object-fit:contain. */
+(function() {
+  if (document.getElementById('vpFsStyle')) return;
+  var st = document.createElement('style'); st.id = 'vpFsStyle';
+  st.textContent = [
+    '.player-video-wrap:fullscreen{width:100vw;height:100vh;background:#000;display:flex;align-items:center;justify-content:center}',
+    '.player-video-wrap:-webkit-full-screen{width:100vw;height:100vh;background:#000;display:flex;align-items:center;justify-content:center}',
+    '.player-video-wrap:fullscreen video{width:100%;height:100%;aspect-ratio:auto;object-fit:contain;border-radius:0;background:#000}',
+    '.player-video-wrap:-webkit-full-screen video{width:100%;height:100%;aspect-ratio:auto;object-fit:contain;border-radius:0;background:#000}',
+    '.player-video-wrap:fullscreen .player-msg-panel,.player-video-wrap:-webkit-full-screen .player-msg-panel{border-radius:0}',
+    /* On-screen fullscreen button (top-right, beside the Tracks chip) */
+    '.vp-fs-btn{position:absolute;top:10px;right:56px;z-index:30;width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(10,10,18,.72);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease,background .15s;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 18px rgba(0,0,0,.35);padding:0}',
+    '.vp-fs-btn.show{opacity:1;pointer-events:auto;transform:translateY(0)}',
+    '.vp-fs-btn:hover{background:rgba(30,30,48,.88);border-color:var(--brand,#e50914)}',
+    '.vp-fs-btn svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}',
+    'html[data-theme="light"] .vp-fs-btn{background:rgba(255,255,255,.85);border-color:rgba(0,0,0,.12)}',
+    'html[data-theme="light"] .vp-fs-btn svg{stroke:#1a1a2e}'
+  ].join('\n');
+  document.head.appendChild(st);
+})();
+/* Double-click the video = fullscreen. Click-through pages (detail pages)
+   already forward dblclick to _vpToggleFullscreen; this catches standalone
+   pages and any surface that does not sit under a catcher. A click-timeout
+   keeps the double-click from also toggling play/pause. */
+(function() {
+  var _lastVpClick = 0;
+  document.addEventListener('click', function(e) {
+    var v = e.target && e.target.closest ? e.target.closest('video#mainVideo') : null;
+    if (!v) return;
+    var now = Date.now();
+    if (now - _lastVpClick < 320) {
+      _lastVpClick = 0;
+      e.preventDefault(); e.stopPropagation();
+      _vpToggleFullscreen();
+    } else {
+      _lastVpClick = now;
+      setTimeout(function() { if (_lastVpClick === now) _lastVpClick = 0; }, 340);
+    }
+  }, true);
+  /* F toggles fullscreen when a Videasy player exists on the page and the
+     user is not typing in a form control. */
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'f' && e.key !== 'F') return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (!document.getElementById('mainVideo')) return;
+    e.preventDefault();
+    _vpToggleFullscreen();
+  });
+})();
+
 function _looksHls(url) { return !!(url && url.indexOf('.m3u8') > -1); }
 function _hlsJsUsable() { return !!(window.Hls && window.Hls.isSupported()); }
 
@@ -845,6 +921,28 @@ function _buildVideasyPlayer(container, apiUrl, retryFn) {
   var vid = document.createElement('video'); vid.id = 'mainVideo'; vid.controls = false; vid.autoplay = true; vid.playsInline = true;
   vid.style.cssText = 'width:100%;aspect-ratio:16/9;background:#000;display:block;border-radius:16px 16px 0 0;object-fit:contain;';
   vw.appendChild(vid); _initBufEvents(vid);
+  /* Fullscreen affordance for the extractor player: a small button that
+     mirrors the Tracks chip's hover/auto-hide behaviour. */
+  (function() {
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'vp-fs-btn'; btn.title = 'Fullscreen (F)';
+    btn.setAttribute('aria-label', 'Toggle fullscreen');
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+    btn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); _vpToggleFullscreen(); });
+    var hideTimer = null;
+    function poke() {
+      btn.classList.add('show');
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(function() { if (vid.paused) return; btn.classList.remove('show'); }, 2600);
+    }
+    vw.addEventListener('mousemove', poke);
+    vw.addEventListener('mouseenter', poke);
+    vw.addEventListener('mouseleave', function() { if (!vid.paused) setTimeout(function() { btn.classList.remove('show'); }, 400); });
+    vw.addEventListener('touchstart', poke, { passive: true });
+    vid.addEventListener('pause', poke);
+    vw.appendChild(btn);
+    poke();
+  })();
   function _syncAudioToVideo() {
     if (!_dualMode || !_audioEl) return;
     vid.addEventListener('pause', function() { if (_audioEl && !_audioEl.paused) _audioEl.pause(); });
@@ -884,6 +982,13 @@ function _buildVideasyPlayer(container, apiUrl, retryFn) {
   vid.addEventListener('canplay', function() { hidePlayerLoading(); }, {once:true});
   vid.addEventListener('error', function() { hidePlayerLoading(); }, {once:true});
 }
+
+/* Fullscreen target for the current in-page player. Used by the detail pages
+   and the standalone /api/player/ page so F / double-click / the fullscreen
+   button all act on the extractor player's video wrap. */
+window._vpToggleFullscreen = _vpToggleFullscreen;
+window._vpFsTarget = _vpFsTarget;
+window._vpFsElement = _vpFsElement;
 
 var _retryFn = null;
 

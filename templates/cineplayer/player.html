@@ -128,19 +128,26 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;font-family:
 // ═══ Config ═══
 const GW = '{{ gateway|default:"http://127.0.0.1:8787" }}';
 // Fallback: if gateway is unreachable, try same-origin relay (Django views)
-const GW_RELAY = '/cineplayer/api/';
+const GW_RELAY = '/cineplayer/'
 // Per-client device identity: each browser gets its own alias (persisted in
 // localStorage) which the gateway maps to a full device_id, so the app's
 // backend sees every client as a separate genuine app install.
 const DID = (function(){try{var k='cinevault.did',d=localStorage.getItem(k);if(!d){d='cv'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);localStorage.setItem(k,d);}return d;}catch(e){return '';}})();
+const userEmail = '{{ user.email|default:""|escapejs }}';
 // Register this client's identity immediately: the gateway maps the alias to a
 // device_id and activates the invite (invited_by) on that SAME device_id before
 // any playback starts.
-try { fetch(GW + '/api/whoami?did=' + encodeURIComponent(DID), { headers: { 'X-Device-Id': DID } }).catch(function(){}); } catch(e) {}
+try {
+  var whoamiUrl = GW + '/api/whoami?did=' + encodeURIComponent(DID);
+  var cineEmail = (typeof userEmail !== 'undefined' && userEmail) ? userEmail : '';
+  if (cineEmail) whoamiUrl += '&email=' + encodeURIComponent(cineEmail);
+  fetch(whoamiUrl, { headers: { 'X-Device-Id': DID } }).catch(function(){});
+} catch(e) {}
 
 // ═══ State ═══
 let curVod = null, curEp = 0, curTitle = '', curSeasons = [], curAllEps = [];
 let curLang = '', curSub = 'off', hlsInstance = null;
+let curTmdb = '', curType = 'movie', curSeason = 1, curEpisode = 1;
 
 // ═══ Helpers ═══
 function qs() { return new URLSearchParams(window.location.search); }
@@ -152,11 +159,19 @@ function gwUrl(path) {
   return GW + path;
 }
 
-async function api(path) {
+async function api(path, opts) {
+  opts = opts || {};
   // Try gateway first (CORS: *), fall back to Django relay
   try {
     let r = await fetch(GW + path, { headers: { 'X-Device-Id': DID } });
-    if (r.ok) return await r.json();
+    if (r.ok) {
+      const j = await r.json();
+      // A 200 can still be a lookup MISS (e.g. {vod_id: null, method: 'not_found'}) —
+      // treat it as failure so the Django relay (which can search TMDB by title)
+      // gets its chance, unless the caller wants the raw gateway answer anyway.
+      if (opts.acceptMiss || !(j && j.vod_id === null)) return j;
+      throw new Error('gateway miss');
+    }
   } catch {}
   // Fallback: Django relay endpoints (same-origin, no CORS)
   try {
@@ -188,9 +203,11 @@ async function init() {
     showError('No TMDB ID provided', 'Append ?tmdb_id=ID&type=movie|tv to the URL');
     return;
   }
+  curTmdb = tmdb; curType = type; curSeason = season; curEpisode = episode;
   showLoading(true);
 
-  // 1. Resolve TMDB → vod_id
+  // 1. Resolve TMDB → vod_id (gateway miss falls through to the Django relay,
+  //    which searches by title — it knows many more IDs than the gateway cache)
   const data = await api('/api/resolve/tmdb/' + tmdb);
   if (!data || !data.vod_id) {
     showError('TMDB ID not found', 'ID: ' + tmdb + (data && data.error ? ' — ' + data.error : ''));
@@ -200,15 +217,33 @@ async function init() {
   curVod = data.vod_id;
   curTitle = data.name || '';
 
-  // 2. Get title info
-  const titleData = await api('/api/title/' + curVod);
-  if (!titleData) { showError('Could not load title info'); return; }
-  const res = titleData.result || titleData;
-  const coll = res.vod_collection || [];
-  const serial = parseInt(res.vod_serial) || 1;
-  const isSeries = serial > 1 && coll.length > 0;
+  // 2. Get title info (may fail if oracle is down)
+  let titleData = await api('/api/title/' + curVod);
+  let res = {};
+  let coll = [];
+  let isSeries = false;
+  let serial = 1;
 
-  if (isSeries) {
+  if (titleData && !titleData.error) {
+    res = titleData.result || titleData;
+    coll = res.vod_collection || [];
+    serial = parseInt(res.vod_serial) || 1;
+    isSeries = serial > 1 && coll.length > 0;
+  } else {
+    // Oracle is down — treat as single-episode movie by default
+    // Will fall back to speedracelight API for playback
+    console.warn('[CinePlayer] Title info unavailable (oracle down), will try speedracelight fallback');
+    // Try to get title from TMDB API for display
+    try {
+      const tmdbResp = await fetch('https://api.themoviedb.org/3/' + (type === 'tv' ? 'tv' : 'movie') + '/' + tmdb + '?language=en-US');
+      if (tmdbResp.ok) {
+        const tmdbData = await tmdbResp.json();
+        curTitle = tmdbData.title || tmdbData.name || curTitle;
+      }
+    } catch (e) {}
+  }
+
+  if (isSeries && coll.length > 0) {
     // 3. Find all seasons
     const seasons = await findSeasons(curVod, res);
     curSeasons = seasons;
@@ -228,7 +263,7 @@ async function init() {
     }
 
     const sr = await api('/api/title/' + seasonVod);
-    if (sr) {
+    if (sr && !sr.error) {
       const srRes = sr.result || sr;
       const srColl = srRes.vod_collection || [];
       for (const g of curAllEps) {
@@ -254,7 +289,7 @@ async function findSeasons(vodId, res) {
   const m = name.match(/^(.+?)\s*[-–—]\s*Season\s+(\d+)\s*$/i);
   if (!m) return [];
   const base = m[1].trim();
-  const items = await api('/browse?kw=' + encodeURIComponent(base));
+  const items = await api('/api/browse?kw=' + encodeURIComponent(base));
   if (!items || !items.length) return [];
   const seasons = [];
   for (const it of items) {
@@ -310,14 +345,131 @@ function renderEpGrid() {
 }
 
 // ═══ Player ═══
+// hls.js instance for extractor sources (m3u8 needs MSE when the CDN blocks
+// the browser's Origin header — hls.js + the /proxy/ service worker handle it)
+let extractorHls = null;
+
+function playOnVideo(el, url) {
+  // Tear down any previous extractor HLS session
+  if (extractorHls) { try { extractorHls.destroy(); } catch (e) {} extractorHls = null; }
+
+  const isHls = url.indexOf('.m3u8') > -1;
+  const hlsJsReady = window.Hls && Hls.isSupported();
+
+  // Extractor sources: always route through hls.js so segments go through
+  // MSE (no browser Origin header leaks to the CDN) with the SW-proxy as
+  // fallback. Gateway/relay streams keep plain <video> playback.
+  if (isHls && hlsJsReady && window._cineExtractorSources &&
+      window._cineExtractorSources.some(s => s.url === url)) {
+    const h = new Hls({
+      enableWorker: true, maxBufferLength: 1200, maxMaxBufferLength: 2400,
+      backBufferLength: 240, fragLoadingTimeOut: 60000, fragLoadingMaxRetry: 12,
+      startFragPrefetch: true, maxBufferSize: 524288000, startLevel: -1, maxBufferHole: 0.5
+    });
+    h.on(Hls.Events.ERROR, function(evt, data) {
+      if (!data.fatal) return;
+      // Manifest unreachable directly (CORS/403)? Retry through the browser proxy SW.
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        if (h.retryProxyDone) { try { h.destroy(); } catch (e) {} extractorHls = null; return; }
+        h.retryProxyDone = true;
+        const px = '/proxy/' + url.replace(/^https?:\/\//, '');
+        fetch(px).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+          .then(text => {
+            // Rewrite child URLs through the proxy, then feed hls.js a blob manifest
+            const base = url.substring(0, url.lastIndexOf('/') + 1);
+            const rewritten = text.split('\n').map(line => {
+              const t = line.trim();
+              if (!t || t.charAt(0) === '#') return line;
+              const full = t.indexOf('http') === 0 ? t : base + t;
+              return '/proxy/' + full.replace(/^https?:\/\//, '');
+            }).join('\n');
+            const blobUrl = URL.createObjectURL(new Blob([rewritten], { type: 'application/vnd.apple.mpegurl' }));
+            h.destroy();
+            const h2 = new Hls({ enableWorker: true, maxBufferLength: 1200, startLevel: -1 });
+            extractorHls = h2;
+            h2.loadSource(blobUrl); h2.attachMedia(el);
+            h2.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+          }).catch(() => { try { h.destroy(); } catch (e) {} extractorHls = null; });
+        return;
+      }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { try { h.recoverMediaError(); } catch (e) {} }
+    });
+    h.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+    extractorHls = h;
+    h.loadSource(url); h.attachMedia(el);
+    return;
+  }
+
+  // Plain playback (gateway/relay MP4/HLS — native HLS on Safari)
+  if (isHls && !hlsJsReady && el.canPlayType && el.canPlayType('application/vnd.apple.mpegurl')) {
+    el.src = url; el.play().catch(() => {}); return;
+  }
+  el.src = url;
+  el.play().catch(() => {});
+}
+
+// Last-resort stream lookup: ask Django's videasy extractor (server-side,
+// no oracle needed) for fresh sources for this title and play the first one
+// that responds. Bypasses the gateway/oracle entirely.
+async function findExtractorStream() {
+  const type = curType === 'tv' ? 'tv' : 'movie';
+  let url = '/ajax/player-sources/?tmdb_id=' + encodeURIComponent(curTmdb) + '&type=' + type;
+  if (type === 'tv') url += '&season=' + curSeason + '&episode=' + curEpisode;
+  try {
+    const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!d.success || !Array.isArray(d.results)) return null;
+    return d.results.filter(s => s && s.url);
+  } catch (e) { return null; }
+}
+
 async function playEp(ep) {
   curEp = ep;
   showLoading(true);
   const v = document.getElementById('vid');
 
-  // Use Django proxy for the stream
-  const streamUrl = gwUrl('/stream/' + curVod + '?ep=' + ep) + '&did=' + encodeURIComponent(DID);
-  v.src = streamUrl;
+  // Fallback chain: gateway stream → Django relay stream → videasy extractor
+  let streamUrl = gwUrl('/stream/' + curVod + '?ep=' + ep) + '&did=' + encodeURIComponent(DID);
+  let gatewayOk = false;
+  try {
+    const testResp = await fetch(streamUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+    gatewayOk = testResp.ok;
+  } catch (e) { gatewayOk = false; }
+
+  if (gatewayOk) {
+    console.log('[CinePlayer] Using gateway stream');
+  } else {
+    console.warn('[CinePlayer] Gateway stream unavailable, trying relay...');
+    let relayUrl = null;
+    try {
+      const relayResp = await fetch(GW_RELAY + 'api/stream/' + curVod + '?ep=' + ep, {
+        headers: { 'X-Device-Id': DID }
+      });
+      if (relayResp.ok) {
+        const relayData = await relayResp.json();
+        if (relayData.url) relayUrl = relayData.url;
+      }
+    } catch (e2) { console.warn('[CinePlayer] Relay stream failed:', e2); }
+
+    if (relayUrl) {
+      console.log('[CinePlayer] Using relay stream');
+      streamUrl = relayUrl;
+    } else {
+      // Oracle/gateway dead — extract sources via Django and play them directly
+      console.warn('[CinePlayer] Relay stream unavailable, trying videasy extractor...');
+      const sources = await findExtractorStream();
+      if (sources && sources.length) {
+        window._cineExtractorSources = sources;
+        streamUrl = sources[0].url;
+        console.log('[CinePlayer] Using extractor source:', sources[0].server, sources[0].quality);
+      } else {
+        showError('No stream available', 'The stream backend (oracle) is offline and no extractor source could be found for this title. Try again later.');
+        return;
+      }
+    }
+  }
+  playOnVideo(v, streamUrl);
 
   // Load tracks from moov atom (actual audio langs + video res + subs)
   const tracks = await api('/api/tracks/' + curVod + '?ep=' + ep);

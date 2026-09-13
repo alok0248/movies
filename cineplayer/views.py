@@ -26,8 +26,40 @@ GATEWAY = os.environ.get('CINEPLAYER_GATEWAY', 'http://127.0.0.1:8787')
 
 # MovieIn API constants (from oracle_play.py)
 SALT = '47Q8tBqO4YqrMHf4'
-BASE = 'https://api.speedracelight.com'
+BASE = 'https://moviein.ajfysu.com/'
 TMDB_KEY = os.environ.get('TMDB_API_KEY', '')
+
+# AES decryption for encrypted API responses
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.backends import default_backend
+    _AES_KEY = b'0123456789123456'
+    _AES_IV = b'2015030120123456'
+    _HAS_AES = True
+except ImportError:
+    _HAS_AES = False
+import base64 as _b64
+import gzip as _gzip
+import re as _re
+
+
+def _decrypt(body):
+    """Decrypt AES-CBC encrypted API response body."""
+    if not _HAS_AES:
+        return body
+    try:
+        clean = _re.sub(r'[^A-Za-z0-9+/=]', '', body)
+        raw = _b64.b64decode(clean)
+        cipher = Cipher(algorithms.AES(_AES_KEY), modes.CBC(_AES_IV), backend=default_backend())
+        decryptor = cipher.decryptor()
+        out = decryptor.update(raw) + decryptor.finalize()
+        pad_len = out[-1]
+        out = out[:-pad_len]
+        if out[:2] == b'\x1f\x8b':
+            out = _gzip.decompress(out)
+        return out.decode('utf-8', 'replace')
+    except Exception:
+        return body
 
 # Per-device identity cache: alias -> device_id
 _did_map = {}
@@ -87,14 +119,19 @@ def _proxy_api(path, fields, device_id):
             return json.loads(r.read().decode('utf-8', 'replace'))
     except Exception:
         pass
-    # Fallback: direct to speedracelight (browser-side only, may fail from server)
+    # Fallback: direct to moviein API (AES-encrypted responses)
     try:
         body = urllib.parse.urlencode(fields).encode('utf-8')
         headers = _session_headers(device_id)
-        url = BASE + '/' + path
+        url = BASE + path
         req = urllib.request.Request(url, data=body, headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read().decode('utf-8', 'replace'))
+            raw = r.read().decode('utf-8', 'replace')
+            decrypted = _decrypt(raw)
+            try:
+                return json.loads(decrypted)
+            except Exception:
+                return {'result': []}
     except Exception as e:
         return {'error': str(e)}
 
@@ -106,8 +143,16 @@ def _proxy_api(path, fields, device_id):
 @require_GET
 def cineplayer_index(request):
     """Render the CinePlayer page."""
+    try:
+        from core.models import CinePlayerConfig
+        config = CinePlayerConfig.get_config()
+    except Exception:
+        config = None
+
     return render(request, 'cineplayer/player.html', {
-        'gateway': GATEWAY,
+        'gateway': config.gateway_url if config else GATEWAY,
+        'user': request.user,
+        'config': config,
     })
 
 
@@ -118,13 +163,79 @@ def cineplayer_index(request):
 
 @require_GET
 def api_whoami(request):
-    """Register/return this client's device identity."""
+    """Register/return this client's device identity.
+    
+    If the user is logged in, link the machine ID to their email so
+    their play history is linked to their account.
+    Also activates the invite referral for this device.
+    """
     alias = request.GET.get('did', '').strip()
     device_id = _alias_to_did(alias) if alias else _gen_device_id()
+    
+    # If user is logged in, link this machine ID to their email
+    email = request.GET.get('email', '').strip()
+    if not email and hasattr(request, 'user') and request.user.is_authenticated:
+        email = request.user.email
+    
+    if email and alias:
+        try:
+            from core.models import DeviceIdentity
+            DeviceIdentity.link(email=email, machine_id=alias, device_id=device_id)
+        except Exception:
+            pass  # Don't break playback if linking fails
+    
+    # Activate invite for this device (one-time per device_id)
+    try:
+        from core.models import CinePlayerConfig
+        config = CinePlayerConfig.get_config()
+        invite_code = config.invite_code or '209173008'
+        share_url = config.share_url or ''
+    except Exception:
+        invite_code = '209173008'
+        share_url = ''
+    
+    # Try gateway's whoami first (handles invite activation)
+    invite_activated = False
+    try:
+        gw_url = f'{GATEWAY}/api/whoami?did={urllib.parse.quote(alias)}&email={urllib.parse.quote(email)}' if email else f'{GATEWAY}/api/whoami?did={urllib.parse.quote(alias)}'
+        req = urllib.request.Request(gw_url, headers={'X-Device-Id': alias})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            gw_data = json.loads(r.read().decode('utf-8', 'replace'))
+            invite_activated = True
+    except Exception:
+        pass
+    
+    # If gateway unreachable, activate invite via speedracelight API directly
+    if not invite_activated and device_id:
+        try:
+            # Visit the share link to register the referral click
+            if share_url:
+                req = urllib.request.Request(share_url, headers={
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 9; SM-S908E) AppleWebKit/537.36',
+                    'Referer': 'https://moviein.ajfysu.com/'
+                })
+                urllib.request.urlopen(req, timeout=10).read(4096)
+            
+            # Call api/public/init with invited_by to complete attribution
+            body = urllib.parse.urlencode({
+                'invited_by': invite_code,
+                'is_install': '1',
+                'fb_attribution': ''
+            }).encode('utf-8')
+            headers = _session_headers(device_id)
+            url = 'https://moviein.ajfysu.com/api/public/init'
+            req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+            urllib.request.urlopen(req, timeout=10).read(4096)
+            invite_activated = True
+        except Exception:
+            pass
+    
     return JsonResponse({
         'alias': alias,
         'device_id': device_id,
         'identity': 'registered',
+        'email': email or '',
+        'invite_activated': invite_activated,
     })
 
 
@@ -150,11 +261,33 @@ def api_resolve_tmdb(request, tmdb_id):
     if not title:
         return JsonResponse({'error': f'TMDB ID {tmdb_id} not found'}, status=404)
 
-    result = _proxy_api('api/search/result', {
+    # Try multiple search strategies
+    items = []
+
+    # Strategy 1: api/search/result with keyword (AES-decrypted)
+    search_result = _proxy_api('api/search/result', {
         'kw': title, 'pn': '1', 'page_size': '30'
     }, device_id)
+    items = (search_result or {}).get('result') or []
 
-    items = (result or {}).get('result') or []
+    # Strategy 2: api/search/screen (browse feed — returns flat items)
+    if not items:
+        screen_result = _proxy_api('api/search/screen', {
+            'type_id': type_pid or '1', 'type': '', 'area': '',
+            'year': '', 'sort': '', 'pn': '1'
+        }, device_id)
+        raw = (screen_result or {}).get('result') or []
+        # search/screen returns flat items OR nested modules
+        for item in raw:
+            if 'vod_name' in item:
+                # Flat item (direct vod object)
+                items.append(item)
+            else:
+                # Nested module with block_list
+                for block in (item.get('block_list') or []):
+                    for vod in (block.get('vod_list') or []):
+                        items.append(vod)
+
     if not items:
         return JsonResponse({'error': f'No match for "{title}" ({year})'}, status=404)
 
@@ -162,6 +295,7 @@ def api_resolve_tmdb(request, tmdb_id):
     if not best:
         return JsonResponse({'error': f'No match for "{title}"'}, status=404)
 
+    # API uses 'id' field, not 'vod_id'
     vod_id = str(best.get('vod_id') or best.get('id') or '')
     name = best.get('vod_name') or best.get('name') or title
     return JsonResponse({
@@ -275,6 +409,51 @@ def api_subs_vtt(request, vod_id):
     except Exception:
         from django.http import HttpResponseNotFound
         return HttpResponseNotFound('no subtitles')
+
+
+@require_GET
+def api_stream(request, vod_id):
+    """Get stream URL for an episode. Tries gateway first, then speedracelight."""
+    ep = int(request.GET.get('ep', 0))
+    alias = request.headers.get('X-Device-Id', '')
+    device_id = _alias_to_did(alias) if alias else _gen_device_id()
+
+    # Try gateway stream first
+    try:
+        url = f'{GATEWAY}/stream/{vod_id}?ep={ep}'
+        req = urllib.request.Request(url, headers={'X-Device-Id': alias})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode('utf-8', 'replace'))
+            if data.get('url'):
+                return JsonResponse(data)
+    except Exception:
+        pass
+
+    # Fallback: get stream URL via info_new (needs oracle sign)
+    try:
+        ts = str(int(time.time() * 1000))
+        # Try oracle sign first
+        sign = None
+        try:
+            oracle_url = f'http://127.0.0.1:17000/control?msg=verify&device_id={device_id}{vod_id}&ts={ts}'
+            with urllib.request.urlopen(oracle_url, timeout=5) as r:
+                sign = r.read().decode('utf-8', 'replace').strip()
+        except Exception:
+            pass
+
+        if sign:
+            result = _proxy_api('api/vod/info_new', {
+                'vod_id': vod_id, 'cur_time': ts, 'sign': sign, 'audio_type': ''
+            }, device_id)
+            coll = (result or {}).get('result', {}).get('vod_collection') or []
+            if coll and ep < len(coll):
+                ep_url = coll[ep].get('vod_url', '')
+                if ep_url:
+                    return JsonResponse({'url': ep_url})
+    except Exception:
+        pass
+
+    return JsonResponse({'error': 'stream unavailable', 'url': ''}, status=404)
 
 
 # ═══════════════════════════════════════════════════════════════════
