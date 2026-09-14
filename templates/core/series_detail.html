@@ -1135,8 +1135,8 @@ window.addEventListener('message',function(ev){
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script><script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako_inflate.min.js"></script>
   <script src="/static/js/client-extract.js?v=1788464000"></script>
   <script src="/static/js/moviein-extract.js?v=1788467000"></script>
-  <script src="/static/js/player-core.js?v=1788560000"></script>
-<script src="/static/js/tracks-ui.js?v=1788465900"></script>
+  <script src="/static/js/player-core.js?v=1788656000"></script>
+<script src="/static/js/tracks-ui.js?v=1788655000"></script>
 <script>
 // ===== Player UI Style =====
 (function() {
@@ -1150,6 +1150,7 @@ const playerConfigs = {
     {% for player in all_players %}
     {{ player.id }}: {
         name: "{{ player.name|escapejs }}",
+        order: {{ player.order|default:0 }},
         color: "{{ player.player_color|default:''|escapejs }}",
         width: "{{ player.player_width|default:'100%' }}",
         height: "{{ player.player_height|default:'600px' }}",
@@ -1168,8 +1169,13 @@ const playerConfigs = {
 };
 
 /* A player with no custom embed configured acts as the browser-extraction
-   player; players with a custom URL/HTML load as embed iframes. */
-Object.keys(playerConfigs).forEach(function(id) {
+   player; players with a custom URL/HTML load as embed iframes.
+   Config order also mirrors the admin's DB order — Object.keys would
+   otherwise iterate numeric ids ascending and scramble the ordering. */
+var _pcIds = Object.keys(playerConfigs).sort(function(a, b) {
+    return (playerConfigs[a].order || 0) - (playerConfigs[b].order || 0) || (a - b);
+});
+_pcIds.forEach(function(id) {
     var c = playerConfigs[id];
     c.isExtractor = !(c.customMovieIframeUrl || c.customTvIframeUrl || c.customIframeUrl ||
                       c.customIframeHtml || c.customMovieIframeHtml || c.customTvIframeHtml);
@@ -1178,6 +1184,8 @@ Object.keys(playerConfigs).forEach(function(id) {
     var cu = (c.customMovieIframeUrl || c.customTvIframeUrl || c.customIframeUrl || '').toLowerCase();
     c.isCinePlayer = (nm.indexOf('cine') >= 0) || (cu.indexOf('cineplayer') >= 0);
 });
+/* Export the admin-ordered id list for dropdown building */
+window._pcOrderedIds = _pcIds;
 
 /* Popup shield: block ALL window.open calls silently.
    No new tabs, no popups, no redirects — everything stays invisible. */
@@ -1198,7 +1206,7 @@ let currentEpisode = {{ current_episode }};
 let playerLoaded = false;
 let wikipediaLoaded = false;
 let currentEpisodesData = [];
-let currentPlayerId = Object.keys(playerConfigs)[0] || null;
+let currentPlayerId = (window._pcOrderedIds && window._pcOrderedIds.length) ? window._pcOrderedIds[0] : (Object.keys(playerConfigs)[0] || null);
 
 function getPlayerUrl(cfg, mediaType, mediaId, season, episode, imdbId) {
     imdbId = imdbId || '';
@@ -1263,7 +1271,7 @@ function updateServerButtons() {
 (function() {
     var wrap = document.getElementById('srvOptions');
     if (!wrap) return;
-    var ids = Object.keys(playerConfigs);
+    var ids = (window._pcOrderedIds && window._pcOrderedIds.length) ? window._pcOrderedIds : Object.keys(playerConfigs);
     ids.forEach(function(id) {
         var cfg = playerConfigs[id];
         if (!cfg) return;

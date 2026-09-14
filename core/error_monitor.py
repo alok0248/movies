@@ -142,6 +142,12 @@ class ErrorMonitoringMiddleware:
 
     def process_exception(self, request, exception):
         """Called by Django when a view raises an unhandled exception."""
+        # Client disconnects during body upload are not server errors — they
+        # are the app's network dropping mid-request. Never email about them.
+        from django.http.request import UnreadablePostError
+        if isinstance(exception, UnreadablePostError) or isinstance(exception.__cause__, ConnectionResetError):
+            logger.info('ErrorMonitor: skipping client-disconnect error for %s', request.path)
+            return None
         self._alert(request, type(exception), exception, traceback.format_exc())
         return None  # Let Django's default 500 handler take over
 

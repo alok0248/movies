@@ -1703,7 +1703,7 @@ class UserCloudData(models.Model):
             user=self.user,
         ).filter(
             models.Q(title='') | models.Q(title__isnull=True)
-        ).exclude(tmdb_id__lte=0)[:30]
+        ).exclude(tmdb_id__lte=0)[:3]
         if missing:
             _backfill_from_tmdb(list(missing))
 

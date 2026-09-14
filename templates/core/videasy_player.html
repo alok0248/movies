@@ -128,8 +128,26 @@
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<script src="{% static 'js/player-core.js' %}?v=1788560000"></script>
-<script src="{% static 'js/tracks-ui.js' %}?v=1788465900"></script>
+<script>
+/* Popup shield: only allow window.open during a real user gesture.
+   Ad-driven / timed popups (from extraction callbacks or any injected
+   script) are silently blocked — the page's own Pop Player button still
+   works because it fires inside a genuine click. */
+(function() {
+    var realOpen = window.open;
+    window.open = function(url, name, features) {
+        var ok = false;
+        try { ok = !!(navigator.userActivation && navigator.userActivation.isActive); } catch (e) { ok = true; }
+        if (!ok) {
+            try { console.log('[shield] blocked popup:', String(url).slice(0, 120)); } catch (e) {}
+            return null;
+        }
+        return realOpen.call(window, url, name, features);
+    };
+})();
+</script>
+<script src="{% static 'js/player-core.js' %}?v=1788656000"></script>
+<script src="{% static 'js/tracks-ui.js' %}?v=1788655000"></script>
 <script>
 /* =====================================================================
    /api/player/ — same in-page player as the detail pages.
