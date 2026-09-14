@@ -451,20 +451,47 @@ function _pcResEq(a, b) {
 }
 
 function _pcPickLang(lang) {
+  var prevLang = _pcPrefLang;
   _pcPrefLang = lang;
   var a = _pcActiveSrc();
   var wantRes = _pcPrefRes || (a ? _pcQOf(a) : null);
   var list = _pcCandidates(lang, wantRes);
   if (!list.length) list = _pcCandidates(lang, null);
-  if (list.length) { _pcPrefRes = _pcQOf(list[0]); _pcPlaySource(list[0]); }
+  if (list.length) {
+    _pcPrefRes = _pcQOf(list[0]);
+    _pcPlaySource(list[0]);
+    /* Language always wins over the previous resolution — say so when the
+       combo didn't exist, instead of looking like the pick "didn't stick". */
+    if (wantRes && !_pcResEq(_pcQOf(list[0]), wantRes) && typeof _showPickToast === 'function') {
+      _showPickToast('Playing ' + lang + ' — ' + wantRes + ' isn\'t available in it.');
+    }
+  } else {
+    /* No stream in this language: keep playing what we had and say why. */
+    _pcPrefLang = prevLang;
+    if (typeof _showPickToast === 'function') _showPickToast(lang + ' audio isn\'t available for this title.');
+  }
 }
 function _pcPickRes(res) {
-  _pcPrefRes = res;
   var a = _pcActiveSrc();
   var wantLang = _pcPrefLang || (a ? _pcLangOf(a) : null);
   var list = _pcCandidates(wantLang, res);
+  if (!list.length) list = _pcCandidates(wantLang, null);
   if (!list.length) list = _pcCandidates(null, res);
-  if (list.length) { _pcPrefLang = _pcLangOf(list[0]); _pcPlaySource(list[0]); }
+  if (list.length) {
+    /* Language preference is sticky: adopt the fallback stream's language ONLY
+       if it actually matches what the user had — a missing combo must never
+       silently switch the audio back to another language. */
+    var lang = _pcLangOf(list[0]);
+    if (wantLang && _pcLangEq(lang, wantLang)) _pcPrefLang = (lang === 'Original') ? null : lang;
+    _pcPrefRes = _pcQOf(list[0]);
+    _pcPlaySource(list[0]);
+    if (!_pcResEq(_pcQOf(list[0]), res) && typeof _showPickToast === 'function') {
+      _showPickToast((wantLang && _pcPrefLang ? wantLang + ' ' : '') + res + ' isn\'t available right now — playing ' + (_pcQOf(list[0]) === 'Auto' ? 'best available' : _pcQOf(list[0])) + '.');
+    }
+  } else {
+    _pcPrefRes = a ? _pcCanonRes(a) : null;
+    if (typeof _showPickToast === 'function') _showPickToast(res + ' isn\'t available for this title.');
+  }
 }
 function _pcPlaySource(s) {
   if (!s || !s.url || !_pcVidEl) return;

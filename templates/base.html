@@ -1944,6 +1944,30 @@
                 return false;
             }
 
+            /* Clicks inside the video player (play/pause/seek/quality/audio controls,
+               tracks sheet, click catcher, embedded iframes) must never count toward
+               the autoclick ad threshold or fire an ad tab — the player is the
+               product, not an ad surface. */
+            function isInsidePlayerArea(target) {
+                try {
+                    var cur = target;
+                    for (var hops = 0; cur && cur.nodeType === 1 && hops < 12; hops++) {
+                        var ptag = (cur.tagName || '').toLowerCase();
+                        if (ptag === 'video' || ptag === 'iframe') return true;
+                        var pid = cur.id || '';
+                        if (pid === 'playerContainer' || pid === 'playerClickCatcher' ||
+                            pid === 'playerWrap' || pid === 'mainVideo') return true;
+                        var pcls = (typeof cur.className === 'string')
+                            ? cur.className
+                            : ((cur.className && cur.className.baseVal) || '');
+                        if (pcls.indexOf('det-player') >= 0 || pcls.indexOf('nf-controls') >= 0 ||
+                            pcls.indexOf('pc-sheet') >= 0 || pcls.indexOf('pc-tracks') >= 0) return true;
+                        cur = cur.parentElement;
+                    }
+                } catch (e) {}
+                return false;
+            }
+
             function refreshEligibleAds(callback) {
                 if (fetchingAds) { if (callback) callback(); return; }
                 fetchingAds = true;
@@ -2001,7 +2025,6 @@
                 } catch (e) {}
                 registerClickBackend();
             }
-
             function isAdActionClick(event) {
                 var now = Date.now();
                 if (now - adLastTriggeredAt < 500) return false;
@@ -2013,6 +2036,7 @@
             function countClickIfEligible(event) {
                 if (!hasEligibleAds()) return;
                 if (isFormControl(event.target)) return;
+                if (isInsidePlayerArea(event.target)) return;
                 if (!isTrustedUserClick(event)) {
                     recordEvent('invalid_click_ignored', 'autoclick',
                         'isTrusted=' + (event && event.isTrusted) + ';detail=' + (event && event.detail));
@@ -2035,6 +2059,9 @@
                 }
                 countClickIfEligible(event);
                 if (!isAdActionClick(event)) return;
+                /* Never fire an ad tab because of a player click — even if the
+                   threshold was reached by clicks elsewhere on the page. */
+                if (isInsidePlayerArea(event.target)) return;
                 adLastTriggeredAt = Date.now();
                 clicksSinceLastAd = 0;
                 triggerAdAction();

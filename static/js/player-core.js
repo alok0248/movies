@@ -230,23 +230,38 @@ function _orderedSources(preferUrl) {
   /* Keep the user's choice first, then other sources at the SAME quality before
      any different quality — a dead 1080p server falls back to another 1080p,
      never back to the previous 720p/Auto stream. The remembered fast CDN is only
-     a tiebreak inside each quality group. */
+     a tiebreak inside each quality group. When the user picked a LANGUAGE
+     (tracks UI), same-language sources of another quality come before other
+     languages, so a dead Hindi stream fails over to Hindi first — never
+     silently back to English. */
   function _favCmp(a, b) {
     var ah = _cdnHostOf(a.url), bh = _cdnHostOf(b.url);
     if (ah === _favHost && bh !== _favHost) return -1;
     if (bh === _favHost && ah !== _favHost) return 1;
     return 0;
   }
+  function _langMatch(a, b) {
+    a = String(a || '').toLowerCase(); b = String(b || '').toLowerCase();
+    return a === b || (a && b && (a.indexOf(b) > -1 || b.indexOf(a) > -1));
+  }
+  var prefLang = (typeof window._pcPrefLang === 'string' && window._pcPrefLang && window._pcPrefLang !== 'Original') ? window._pcPrefLang : null;
   if (list.length > 1) {
     var head = list[0];
     var q0 = head ? _qRank(head._quality) : null;
-    var sameQ = [], other = [];
+    var sameQ = [], sameLangOtherQ = [], other = [];
     list.slice(1).forEach(function(s) {
-      if (q0 !== null && _qRank(s._quality) === q0) sameQ.push(s); else other.push(s);
+      var sSameQ = q0 !== null && _qRank(s._quality) === q0;
+      var sSameLang = prefLang && _langMatch(s._lang, prefLang);
+      if (sSameLang) sameQ.push(s);            /* language first: a tied rank ("Hindi" vs "Vimeos" both = 50) must not cross languages */
+      else if (sSameQ && !prefLang) sameQ.push(s);
+      else if (sSameQ) other.push(s);
+      else if (sSameLang) sameLangOtherQ.push(s);
+      else other.push(s);
     });
     sameQ.sort(_favCmp);
+    sameLangOtherQ.sort(_favCmp);
     other.sort(_favCmp);
-    list = [head].concat(sameQ, other);
+    list = [head].concat(sameQ, sameLangOtherQ, other);
   }
   return list;
 }
@@ -459,13 +474,16 @@ function _playOneAttempt(it, mediaEl) {
   var url = it.playUrl;
   var src = it.src || {};
   if (src.url) _activeSrcUrl = src.url;   /* keep the tracks UI in sync with the real attempt */
-  /* The user picked a specific quality and we had to move off it — say so once. */
+  /* The user picked a specific quality/language and we had to move off it — say so once. */
   if (_explicitPick && !_downgradeToastShown && _firstPickSrc && src.url !== _firstPickSrc.url) {
     var fq = _firstPickSrc._quality || '?', aq = src._quality || '?';
-    if (_qRank(fq) !== _qRank(aq)) {
+    var fl = _firstPickSrc._lang || '', al = src._lang || '';
+    var langChanged = fl && al && !_langMatch(fl, al);
+    if (_qRank(fq) !== _qRank(aq) || langChanged) {
       _downgradeToastShown = true;
-      _showPickToast(fq + " isn't available right now — playing " +
-        (String(aq).toLowerCase().indexOf('auto') > -1 ? 'Auto (best available)' : aq) + '.');
+      _showPickToast((langChanged ? fl + ' audio' : fq) + " isn't available right now — playing " +
+        (langChanged ? (al === 'Original' ? 'the default audio' : al) :
+        (String(aq).toLowerCase().indexOf('auto') > -1 ? 'Auto (best available)' : aq)) + '.');
     }
   }
   var name = (src.server || 'Server') + (src.quality && src.quality !== '?' ? ' · ' + src.quality : '');
@@ -655,12 +673,18 @@ function _addSource(s) {
     if (detectedLangs.length > 0) {
       /* Update source with detected languages */
       s._detectedLangs = detectedLangs;
-      /* Pick the most specific language */
-      var nonAuto = detectedLangs.filter(function(l) { return l.code !== 'und' && l.code !== 'zxx'; });
-      if (nonAuto.length === 1) s._lang = nonAuto[0].name || nonAuto[0].code;
-      else if (nonAuto.length > 1) s._lang = nonAuto.map(function(l) { return l.name || l.code; }).join(' / ');
-      else if (detectedLangs.length === 1) s._lang = detectedLangs[0].name || detectedLangs[0].code;
-      else s._lang = detectedLangs.length + ' audio track' + (detectedLangs.length > 1 ? 's' : '');
+      /* The extractor's own language label is authoritative — only fill _lang
+         from the manifest when the source had no explicit language metadata.
+         Overwriting a server label here silently reverts the user's Audio
+         selection while the sheet is open. */
+      var hasMetaLang = !!(s.language || s.audioLanguage || s.audio);
+      if (!hasMetaLang) {
+        var nonAuto = detectedLangs.filter(function(l) { return l.code !== 'und' && l.code !== 'zxx'; });
+        if (nonAuto.length === 1) s._lang = nonAuto[0].name || nonAuto[0].code;
+        else if (nonAuto.length > 1) s._lang = nonAuto.map(function(l) { return l.name || l.code; }).join(' / ');
+        else if (detectedLangs.length === 1) s._lang = detectedLangs[0].name || detectedLangs[0].code;
+        else s._lang = detectedLangs.length + ' audio track' + (detectedLangs.length > 1 ? 's' : '');
+      }
       _renderSourceList();
     }
   });
@@ -718,6 +742,14 @@ function _pickStream(idx) {
   if (!_uniqueSources[idx]) return;
   _activeSrcIdx = idx;
   var s = _uniqueSources[idx].s;
+  /* User picked this stream explicitly: keep the choice sticky. Sync the
+     tracks-UI language/resolution prefs and force keep-first fallback, so a
+     probe reorder or one dead CDN can never silently swap the language back. */
+  if ('_pcPrefLang' in window) {
+    window._pcPrefLang = (s._lang && s._lang !== 'Original') ? s._lang : null;
+    window._pcPrefRes = s._quality || null;
+  }
+  window._pcUserPicked = true;
   var v = document.getElementById('mainVideo');
   if (v) _playHls(s.url, v);
   _renderSourceList();

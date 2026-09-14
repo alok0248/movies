@@ -2,6 +2,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, StreamingHttpResponse
+from django.http.request import UnreadablePostError
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -565,12 +566,67 @@ def index(request):
     request.session.modified = True
     return render(request, 'core/index.html')
 
+EXTRACTOR_PLAYER_NAME = 'Videasy Extractor'
+
+
+def _ensure_extractor_player():
+    """Guarantee the built-in extractor player exists in the DB.
+
+    The detail-page server list is DB-driven; if the 'Videasy Extractor' row
+    is missing (fresh DB, imported dump) or was deactivated, users would have
+    no way to select browser extraction. This creates/repairs the row so the
+    extractor always shows up as a selectable player, in every environment.
+    Idempotent and cheap — one indexed query on the happy path.
+    """
+    try:
+        obj = PlayerConfiguration.objects.filter(name=EXTRACTOR_PLAYER_NAME).first()
+        if obj is None:
+            PlayerConfiguration.objects.create(
+                name=EXTRACTOR_PLAYER_NAME,
+                media_type='both',
+                is_active=True,
+                order=1,
+                player_color='e50914',
+            )
+        elif (not obj.is_active) or obj.media_type not in ('both', 'movie', 'tv') or (
+                obj.custom_movie_iframe_url or obj.custom_tv_iframe_url
+                or obj.custom_iframe_url or obj.custom_iframe_html
+                or obj.custom_movie_iframe_html or obj.custom_tv_iframe_html):
+            # Repair a broken/inactive row so it always behaves as pure extraction
+            obj.is_active = True
+            obj.media_type = 'both'
+            obj.custom_movie_iframe_url = ''
+            obj.custom_tv_iframe_url = ''
+            obj.custom_iframe_url = ''
+            obj.custom_iframe_html = ''
+            obj.custom_movie_iframe_html = ''
+            obj.custom_tv_iframe_html = ''
+            obj.save(update_fields=[
+                'is_active', 'media_type',
+                'custom_movie_iframe_url', 'custom_tv_iframe_url',
+                'custom_iframe_url', 'custom_iframe_html',
+                'custom_movie_iframe_html', 'custom_tv_iframe_html',
+            ])
+    except Exception:
+        logger.warning("_ensure_extractor_player failed", exc_info=True)
+
+
+def _get_detail_players(media_type):
+    """Active players for a detail page, with the extractor guaranteed present."""
+    _ensure_extractor_player()
+    players = PlayerConfiguration.objects.filter(
+        media_type__in=[media_type, 'both'],
+        is_active=True,
+    ).order_by('order', 'id')
+    return _strip_videasy_custom_urls(players)
+
+
 def _strip_videasy_custom_urls(all_players):
     """Force Videasy Extractor to always use extraction — strip custom URLs from DB.
     Only affects players named 'Videasy Extractor' (not CinePlayer or others)."""
     players = list(all_players)
     for v in players:
-        if v.name == 'Videasy Extractor':
+        if v.name == EXTRACTOR_PLAYER_NAME:
             v.custom_movie_iframe_url = ''
             v.custom_iframe_url = ''
             v.custom_iframe_html = ''
@@ -1878,11 +1934,7 @@ def movie_detail_by_id(request, movie_id):
     }
 
     active_player = site_settings.active_movie_player
-    all_players = PlayerConfiguration.objects.filter(
-        media_type__in=['movie', 'both'],
-        is_active=True
-    ).order_by('order', 'id')
-    all_players = _strip_videasy_custom_urls(all_players)
+    all_players = _get_detail_players('movie')
     # Include CinePlayer config if enabled
     try:
         from core.models import CinePlayerConfig
@@ -1977,11 +2029,7 @@ def movie_detail(request, movie_slug):
     }
 
     active_player = site_settings.active_movie_player
-    all_players = PlayerConfiguration.objects.filter(
-        media_type__in=['movie', 'both'],
-        is_active=True
-    ).order_by('order', 'id')
-    all_players = _strip_videasy_custom_urls(all_players)
+    all_players = _get_detail_players('movie')
     try:
         from core.models import CinePlayerConfig
         _cp_cfg2 = CinePlayerConfig.get_config()
@@ -2064,11 +2112,7 @@ def series_detail_by_id(request, series_id):
     }
 
     active_player = site_settings.active_tv_player
-    all_players = PlayerConfiguration.objects.filter(
-        media_type__in=['tv', 'both'],
-        is_active=True
-    ).order_by('order', 'id')
-    all_players = _strip_videasy_custom_urls(all_players)
+    all_players = _get_detail_players('tv')
     try:
         from core.models import CinePlayerConfig
         _cp_cfg3 = CinePlayerConfig.get_config()
@@ -2218,11 +2262,7 @@ def series_detail(request, series_slug):
     }
 
     active_player = site_settings.active_tv_player
-    all_players = PlayerConfiguration.objects.filter(
-        media_type__in=['tv', 'both'],
-        is_active=True
-    ).order_by('order', 'id')
-    all_players = _strip_videasy_custom_urls(all_players)
+    all_players = _get_detail_players('tv')
     try:
         from core.models import CinePlayerConfig
         _cp_cfg4 = CinePlayerConfig.get_config()
@@ -5927,13 +5967,36 @@ def _vk_generate_keystream(seed_str, tmdb_id, length):
     return result
 
 
-def _vk_decrypt(payload_b64, seed_str, tmdb_id):
-    """Decrypt Vidking encrypted response"""
+def _vk_decrypt(payload_b64, seed_str, tmdb_id, max_payload_mb=10):
+    """Decrypt Vidking encrypted response.
+
+    Hardened against pathological upstream responses: validates the "mvm1"
+    magic bytes using only the FIRST keystream block before doing any bulk
+    work, so a large non-encrypted error page can't pin a worker in the
+    pure-Python byte-by-byte loop for minutes (the cause of production 504s).
+    """
     # Base64 decode (URL-safe)
     padded = payload_b64.replace('-', '+').replace('_', '/')
     if len(padded) % 4:
         padded += '=' * (4 - len(padded) % 4)
     data = bytearray(base64.b64decode(padded))
+
+    if len(data) > max_payload_mb * 1024 * 1024:
+        raise ValueError(f'encrypted payload too large ({len(data)} bytes)')
+    if len(data) < len(_MAGIC_BYTES):
+        raise ValueError('encrypted payload too short')
+
+    # Cost guard: decrypt ONLY the first 4 bytes (they come from PRNG step 0,
+    # ~1 byte per step) and require the magic bytes. A legit payload passes;
+    # garbage fails fast without generating a full keystream.
+    probe_state = _vk_init_state(seed_str, tmdb_id)
+    probe_word = _vk_step(probe_state, 0)
+    first = bytearray(data[:4])
+    for k in range(4):
+        first[k] ^= (probe_word >> (8 * k)) & 0xFF
+    for k in range(4):
+        if first[k] != _MAGIC_BYTES[k]:
+            raise ValueError('decryption failed: bad seed or tampered payload (probe)')
 
     # Generate keystream and XOR
     keystream = _vk_generate_keystream(seed_str, tmdb_id, len(data))
@@ -7110,6 +7173,24 @@ def videasy_player_frame_view(request):
     return render(request, 'core/videasy_player_frame.html')
 
 
+def direct_player_view(request):
+    """
+    Browser player that plays the EXTRACTED links directly.
+
+    Unlike /api/player/ (which serves the webplayer embed page), this page
+    calls /api/links/ server-side-extracted links and plays them with
+    hls.js in the browser — raw CDN url first, /proxy/ route as fallback.
+    Query params: tmdb_id (required), type (movie|tv), season, episode, lang
+    """
+    return render(request, 'core/direct_player.html', {
+        'tmdb_id': request.GET.get('tmdb_id', ''),
+        'media_type': request.GET.get('type', 'movie'),
+        'season': request.GET.get('season', ''),
+        'episode': request.GET.get('episode', ''),
+        'lang': request.GET.get('lang', ''),
+    })
+
+
 def series_extractor_view(request):
     """
     Standalone series source extractor page.
@@ -7241,6 +7322,18 @@ def player_sources_view(request):
 
     timestamp = str(int(_time.time() * 1000))
 
+    # Serve a fresh extraction from cache when one exists — identical payload
+    # shape either way. (Extraction is expensive: 11 upstream calls + decrypt.)
+    cache_key = f'psrc:{media_type}:{tmdb_id}:{season}:{episode}'
+    try:
+        cached = cache.get(cache_key)
+    except Exception:
+        cached = None
+    if isinstance(cached, dict) and cached.get('results'):
+        cached = dict(cached)
+        cached['cached'] = True
+        return JsonResponse(cached)
+
     # Fetch TMDB info + seed in parallel (saves ~1-2s)
     tmdb_info = {'title': '', 'year': '', 'imdbId': ''}
     seed = ''
@@ -7316,14 +7409,27 @@ def player_sources_view(request):
                         entry['server_name'] = server_name
                         results.append(entry)
 
-    return JsonResponse({
+    payload = {
         'success': True,
         'title': title,
         'year': year,
         'tmdbId': tmdb_id,
         'type': media_type,
         'results': results,
-    })
+    }
+    # Cache successful extractions for 3 minutes: the Android app re-requests
+    # the same title repeatedly, and each uncached call costs 11 upstream
+    # HTTP round-trips + full-payload decryptions (observed 827 calls/day for
+    # a handful of titles). Failed extractions are cached briefly too so a
+    # dead upstream can't trigger hammering.
+    try:
+        if results:
+            cache.set(cache_key, payload, 180)
+        else:
+            cache.set(cache_key, {'success': False, 'results': [], 'empty': True}, 60)
+    except Exception:
+        pass
+    return JsonResponse(payload)
 
 
 @require_GET
@@ -7374,6 +7480,149 @@ def player_episodes_view(request):
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+_KNOWN_LANG_NAMES = {'hindi','english','tamil','telugu','kannada','bengali','malayalam','marathi',
+                     'german','spanish','portuguese','french','japanese','korean','chinese',
+                     'hinglish','thai','indonesian','turkish','arabic','russian','polish','italian','dutch'}
+
+
+@require_GET
+def api_links_view(request):
+    """
+    Direct-links API for native apps (ExoPlayer / VLC / MX Player etc).
+
+    Instead of loading the webplayer embed, apps call this endpoint with a
+    TMDB id and get back the extracted stream links — both the RAW CDN urls
+    (try these first) and /proxy/ routes that rewrite HLS manifests so any
+    player can stream even CDNs that block unknown clients.
+
+    Params: tmdb_id (required), type (movie|tv), season, episode,
+            lang (optional — filter sources by language, e.g. lang=hindi),
+            server (optional — restrict to one server name).
+
+    Response: { success, title, year, tmdbId, type, links: [
+      { server, quality, language, type: 'hls'|'mp4', url, proxy_url } ] }
+    """
+    import time as _time
+    import concurrent.futures
+
+    tmdb_id = request.GET.get('tmdb_id', '')
+    media_type = request.GET.get('type', 'movie')
+    season = request.GET.get('season', '')
+    episode = request.GET.get('episode', '')
+    lang_filter = (request.GET.get('lang', '') or '').strip().lower()
+    server_filter = (request.GET.get('server', '') or '').strip().lower()
+
+    if not tmdb_id:
+        return JsonResponse({'success': False, 'error': 'tmdb_id is required', 'links': []})
+    try:
+        tmdb_id = int(tmdb_id)
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'Invalid tmdb_id', 'links': []})
+
+    timestamp = str(int(_time.time() * 1000))
+
+    # TMDB info + seed in parallel (same as player_sources_view)
+    def _fetch_tmdb():
+        try:
+            return _vk_fetch_tmdb_info(tmdb_id, media_type)
+        except Exception:
+            return {'title': '', 'year': '', 'imdbId': ''}
+
+    def _fetch_seed():
+        for attempt in range(2):
+            try:
+                return _vk_get_seed(_VIDKING_API_BASE, tmdb_id)
+            except Exception:
+                if attempt == 0:
+                    _time.sleep(0.2)
+        return ''
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        tmdb_future = pool.submit(_fetch_tmdb)
+        seed_future = pool.submit(_fetch_seed)
+        tmdb_info = tmdb_future.result()
+        seed = seed_future.result()
+
+    if not seed:
+        return JsonResponse({'success': False, 'error': 'Could not fetch seed', 'links': []})
+
+    title = tmdb_info.get('title', '')
+    year = tmdb_info.get('year', '')
+    imdb_id = tmdb_info.get('imdbId', '')
+
+    def _fetch_one(server_name, endpoint):
+        try:
+            return _vk_fetch_sources_for_server(
+                server_name, endpoint, tmdb_id, media_type,
+                title=title, year=year, season_id=season,
+                episode_id=episode, imdb_id=imdb_id,
+                seed=seed, timestamp=timestamp,
+            )
+        except Exception:
+            return {'sources': []}
+
+    links = []
+    seen_urls = set()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
+        futures = {pool.submit(_fetch_one, name, ep): name for name, ep in _VIDKING_SERVERS.items()}
+        for future in concurrent.futures.as_completed(futures):
+            server_name = futures[future]
+            try:
+                result = future.result()
+            except Exception:
+                continue
+            sources = result.get('sources', []) if isinstance(result, dict) else []
+            if not isinstance(sources, list):
+                continue
+            for src in sources:
+                if not (isinstance(src, dict) and src.get('url') and src['url'] not in seen_urls):
+                    continue
+                seen_urls.add(src['url'])
+                lang = (src.get('language', '') or src.get('audioLanguage', '') or src.get('audio', '') or '').strip()
+                quality = (src.get('quality', '?') or '?').strip()
+                # Some servers put the LANGUAGE in the quality field ("Hindi") —
+                # normalize so apps can filter/label properly.
+                if not lang and quality.lower() in _KNOWN_LANG_NAMES:
+                    lang = quality
+                    quality = 'Auto'
+                if lang_filter and lang_filter not in (lang + ' ' + quality).lower():
+                    continue
+                if server_filter and server_filter != server_name.lower():
+                    continue
+                url = src['url']
+                is_hls = '.m3u8' in url or 'mpegurl' in url
+                links.append({
+                    'server': server_name,
+                    'quality': quality,
+                    'language': lang or 'Original',
+                    'type': 'hls' if is_hls else 'mp4',
+                    'url': url,
+                    # Proxy route: rewrites the manifest so segments stream
+                    # through our proxy — use when the raw url 403s in the app.
+                    'proxy_url': request.build_absolute_uri(f"/proxy/{url.split('://', 1)[-1]}"),
+                    'headers': {
+                        # Referer some CDNs expect; harmless otherwise.
+                        'Referer': _VIDEASY_ORIGIN + '/',
+                        'Origin': _VIDEASY_ORIGIN,
+                    },
+                })
+
+    resp = JsonResponse({
+        'success': True,
+        'title': title,
+        'year': year,
+        'tmdbId': tmdb_id,
+        'type': media_type,
+        'season': season,
+        'episode': episode,
+        'count': len(links),
+        'links': links,
+    })
+    # Native apps / WebView clients are not same-origin — allow any caller.
+    resp['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 
 # ===== Subtitle Fetcher =====
@@ -8067,6 +8316,14 @@ def _ensure_user_and_profile(email, body):
     return django_user, user_obj, created
 
 
+# Minimum seconds between FULL /api/user/sync cycles for the same user.
+# The Android app polls this endpoint aggressively (5,000+ calls/day observed
+# per device); a full sync does user upsert + cloud merge + web-model
+# backfill, so syncs arriving closer than this get the stored cloud state
+# served back cheaply instead.
+_USER_SYNC_MIN_INTERVAL = 45
+
+
 def _guard_android_api_errors(view_func):
     """Return clean JSON + full server-side traceback when an Android user-API
     endpoint hits an unexpected exception, instead of an opaque HTML 500."""
@@ -8074,6 +8331,17 @@ def _guard_android_api_errors(view_func):
     def _wrapper(request, *args, **kwargs):
         try:
             return view_func(request, *args, **kwargs)
+        except UnreadablePostError:
+            # The client (usually the Android app on a flaky mobile network)
+            # dropped the TCP connection while the POST body was being read.
+            # That is a client-side disconnect, not a server fault: answer a
+            # 400 so the app retries, and do not email/record it as a 500.
+            logger.info('%s: client disconnected during body read — returning 400', view_func.__name__)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Connection lost while uploading data. Please retry.',
+                'retryable': True,
+            }, status=400)
         except Exception as e:
             logger.exception('Unhandled error in Android API endpoint %s', view_func.__name__)
             try:
@@ -8315,6 +8583,24 @@ def api_user_sync(request):
     email = body.get('email', '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    # Throttle full syncs per user. Between full syncs, answer from stored
+    # cloud data with a single read — no writes, no TMDB calls. The payload
+    # shape is identical so the app can treat the response the same way.
+    throttle_key = f'usersync:{email}'
+    if cache.get(throttle_key) is not None:
+        recent_user = User.objects.filter(email__iexact=email).first()
+        if recent_user:
+            recent_cloud = UserCloudData.objects.filter(user=recent_user).first()
+            if recent_cloud:
+                recent_profile = SyncedUser.objects.filter(email__iexact=email).first()
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'User data synced successfully',
+                    'subscription': recent_profile.subscription_payload() if recent_profile else FREE_SUBSCRIPTION,
+                    'userData': recent_cloud.get_cloud_payload(),
+                })
+    cache.set(throttle_key, timezone.now(), _USER_SYNC_MIN_INTERVAL)
 
     # Create or get user + profile
     django_user, user_obj, created = _ensure_user_and_profile(email, body)
