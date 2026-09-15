@@ -1,0 +1,655 @@
+{% extends 'core/admin_base.html' %}
+{% block admin_content %}
+<style>
+    .api-docs-wrap { max-width: 1150px; margin: 0 auto; padding-top: .5rem; }
+    .api-hero {
+        background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(139,92,246,.08));
+        border: 1px solid rgba(99,102,241,.25); border-radius: 18px;
+        padding: 2rem; margin: 2rem 0 1.5rem;
+    }
+    .api-hero h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .4rem; }
+    .api-hero p { color: rgba(255,255,255,.55); margin: 0; font-size: .9rem; }
+    .api-card {
+        background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+        border-radius: 14px; margin-bottom: 1.25rem; overflow: hidden;
+    }
+    .api-card-head {
+        display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+        padding: .9rem 1.2rem; cursor: pointer; user-select: none;
+        border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .api-card-head:hover { background: rgba(255,255,255,.03); }
+    .api-card.open .api-card-head { border-bottom-color: rgba(255,255,255,.08); }
+    .api-method {
+        font-size: .66rem; font-weight: 800; letter-spacing: .06em;
+        padding: .25rem .55rem; border-radius: 6px; min-width: 52px; text-align: center;
+    }
+    .api-method.GET { background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+    .api-method.POST { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
+    .api-card-path { font-family: monospace; font-size: .88rem; color: #e2e2f0; font-weight: 600; }
+    .api-card-title { font-size: .82rem; color: rgba(255,255,255,.5); flex: 1; min-width: 200px; }
+    .api-chevron { margin-left: auto; color: rgba(255,255,255,.35); transition: transform .25s; }
+    .api-card.open .api-chevron { transform: rotate(180deg); }
+    .api-card-body { display: none; padding: 1.2rem; }
+    .api-card.open .api-card-body { display: block; }
+    .api-desc { color: rgba(255,255,255,.6); font-size: .84rem; line-height: 1.6; margin: 0 0 1rem; }
+    .api-label {
+        font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+        color: rgba(255,255,255,.35); margin: 1rem 0 .45rem;
+    }
+    .api-label:first-child { margin-top: 0; }
+    .api-code {
+        background: #0d0e14; border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
+        padding: .85rem 1rem; font-family: monospace; font-size: .78rem; line-height: 1.65;
+        color: #c9d1d9; overflow-x: auto; white-space: pre; margin: 0;
+    }
+    .api-code .k { color: #79c0ff; }
+    .api-code .s { color: #a5d6ff; }
+    .api-code .g { color: #7ee787; }
+    .api-code .c { color: #8b949e; }
+    table.api-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    table.api-table th {
+        text-align: left; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+        color: rgba(255,255,255,.35); padding: .45rem .7rem; border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    table.api-table td { padding: .5rem .7rem; border-bottom: 1px solid rgba(255,255,255,.04); color: rgba(255,255,255,.7); vertical-align: top; }
+    table.api-table code { color: #a5d6ff; background: rgba(99,102,241,.08); padding: .1rem .35rem; border-radius: 5px; font-size: .76rem; }
+    .api-req-badge { font-size: .62rem; font-weight: 700; padding: .1rem .4rem; border-radius: 5px; }
+    .api-req-badge.req { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .api-req-badge.opt { background: rgba(255,255,255,.06); color: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.1); }
+    .api-note {
+        background: rgba(56,189,248,.07); border: 1px solid rgba(56,189,248,.2);
+        border-radius: 10px; padding: .75rem 1rem; font-size: .8rem; color: rgba(255,255,255,.65);
+        display: flex; gap: .6rem; margin: 1rem 0 0;
+    }
+    .api-note i { color: #38bdf8; margin-top: .15rem; }
+    .api-copy-btn {
+        margin-left: auto; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+        color: rgba(255,255,255,.55); border-radius: 7px; font-size: .68rem;
+        padding: .3rem .7rem; cursor: pointer; transition: all .15s; flex-shrink: 0;
+    }
+    .api-copy-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+    @media(max-width:768px) {
+        .api-hero { padding: 1.3rem; }
+        .api-card-title { display: none; }
+    }
+</style>
+
+<div class="container api-docs-wrap">
+    <div class="api-hero">
+        <h1><i class="fas fa-plug me-2" style="color:#818cf8"></i>API Documentation</h1>
+        <p>Every API endpoint this server exposes, how to authenticate, and how to connect from the Android app or any other client.</p>
+        <div class="mt-3 d-flex gap-2 flex-wrap">
+            <a href="{% url 'android_user_sync_reference' %}" class="pill-btn pill-btn-outline" style="font-size:.75rem;">
+                <i class="fas fa-mobile-alt"></i> App Sync Reference
+            </a>
+            <a href="{% url 'api_error_log' %}" class="pill-btn pill-btn-outline" style="font-size:.75rem;">
+                <i class="fas fa-bug"></i> API Error Log
+            </a>
+        </div>
+        <div class="mt-3 d-flex gap-2 flex-wrap">
+            <a class="pill-btn pill-btn-outline" style="font-size:.75rem;" href="#sec-auth">Auth</a>
+            <a class="pill-btn pill-btn-outline" style="font-size:.75rem;" href="#sec-user">User &amp; Sync</a>
+            <a class="pill-btn pill-btn-outline" style="font-size:.75rem;" href="#sec-stream">Streaming</a>
+            <a class="pill-btn pill-btn-outline" style="font-size:.75rem;" href="#sec-app">App Config</a>
+            <a class="pill-btn pill-btn-outline" style="font-size:.75rem;" href="#sec-cineplayer">CinePlayer</a>
+            <a class="pill-btn pill-btn-outline" style="font-size:.75rem;" href="#sec-misc">Utilities</a>
+        </div>
+    </div>
+
+    <!-- ============ AUTH ============ -->
+    <div class="api-label" id="sec-auth" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">1 · Authentication &amp; Connection</div>
+
+    <div class="api-card open">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GUIDE</span>
+            <span class="api-card-path">How to connect from the app</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Base URL</div>
+            <p class="api-desc">All endpoints are relative to the server origin:</p>
+            <pre class="api-code" data-copy>https://newmovies.linkpc.net</pre>
+
+            <div class="api-label">Step 1 — Android app identity (Basic Auth)</div>
+            <p class="api-desc">
+                The user &amp; sync endpoints are protected with <b>HTTP Basic Auth</b> using the
+                <code>access_username</code> / <code>access_password</code> of a registered
+                <a href="{% url 'android_app_list' %}">Android App</a>. The app must be <b>Active</b>.
+                Every request also sends its identity headers so the server can log and rate-limit per app.
+            </p>
+            <pre class="api-code" data-copy>Authorization: Basic base64(access_username:access_password)
+X-App-Slug: my-app
+X-App-Build: 225
+User-Agent: okhttp/4.12.0</pre>
+
+            <div class="api-label">Step 2 — User JWT</div>
+ <p class="api-desc">
+                Login and register return a <b>JWT access + refresh token pair</b> for the end user.
+                Send the access token as a Bearer header on user-scoped calls like profile:
+            </p>
+            <pre class="api-code" data-copy>Authorization: Bearer &lt;access_token&gt;</pre>
+
+            <div class="api-label">Step 3 — Streaming endpoints</div>
+            <p class="api-desc">
+                Streaming endpoints (<code>/api/links/</code>, <code>/ajax/player-sources/</code>) are open
+                (same-origin AJAX + app calls) — no Basic Auth, no JWT. Send <code>Accept: application/json</code>.
+            </p>
+            <div class="api-note">
+                <i class="fas fa-info-circle"></i>
+                <span>Streaming endpoints are intentionally unauthenticated but rate-limited and cached server-side (3&nbsp;min). If you expose them publicly, consider adding an app check later.</span>
+            </div>
+        </div>
+      </div>
+
+    <!-- ============ USER & SYNC ============ -->
+    <div class="api-label" id="sec-user" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">2 · User &amp; Sync API</div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/sync/</span>
+            <span class="api-card-title">Sync app data ↔ cloud (watchlist, history, settings)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Bidirectional sync between the app and the server. Merges the app's <code>userData</code>
+                into the user's cloud record, pulls web watchlist/history into cloud, and returns the
+                merged payload + subscription. Throttled to one full sync per user per <b>45&nbsp;s</b> —
+                within the window it answers from stored cloud data with the same payload shape.
+            </p>
+            <div class="api-label">Auth</div>
+            <pre class="api-code" data-copy>Authorization: Basic base64(app_user:app_pass)
+Content-Type: application/json</pre>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",        // required
+  "userData": {                       // optional — app's local data to merge up
+    "watchlist": [...],
+    "playHistory": [...],
+    "settings": {...}
+  }
+}</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "message": "User data synced successfully",
+  "subscription": { "plan": "free", ... },
+  "userData": { ...merged cloud data... }
+}</pre>
+            <div class="api-note">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Errors: 401 missing/invalid Basic header · 403 wrong credentials · 400 bad JSON / missing email.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/register/</span>
+            <span class="api-card-title">Create account (sends verification email)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">Registers a user, hashes the password, and sends a verification email/OTP. User must verify before login.</p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",
+  "password": "secret123",
+  "username": "optional",
+  "firstName": "optional"
+}</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "message": "...",
+  "requiresVerification": true,
+  "user": { "userId": "usr_1", "email": "..." }
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/login/</span>
+            <span class="api-card-title">Authenticate user → JWT pair + cloud data</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Authenticates email + password (rate-limited by IP <i>and</i> email), returns JWT tokens,
+                profile, subscription and merged cloud data. Unverified accounts get 403 + <code>requiresVerification</code>.
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",
+  "password": "secret123"
+}</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "user": {
+    "userId": "usr_1", "email": "...",
+    "tokens": { "access": "eyJ...", "refresh": "eyJ..." },
+    ...profile fields...
+  },
+  "userData": { ...cloud data... }
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/refresh/</span>
+            <span class="api-card-title">Renew an expired access token</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{ "refresh": "eyJ..." }</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "tokens": { "access": "eyJ...", "refresh": "eyJ..." }
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/api/user/profile/</span>
+            <span class="api-card-title">Fetch profile + subscription via JWT</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Auth</div>
+            <pre class="api-code" data-copy>Authorization: Bearer &lt;access_token&gt;</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "user": { "userId": "usr_1", "email": "...", ... },
+  "subscription": { "plan": "free", ... }
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/forgot-password/</span>
+            <span class="api-card-title">Send password-reset OTP to email</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{ "email": "user@example.com" }</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{ "status": "success", "message": "..." }</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>Then verify with <code>/api/user/verify-reset-otp/</code>, then set the new password with <code>/api/user/reset-password/</code>.</span></div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/verify-reset-otp/ · /api/user/reset-password/</span>
+            <span class="api-card-title">Complete the password reset flow</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Request bodies</div>
+            <pre class="api-code" data-copy>// verify-reset-otp
+{ "email": "user@example.com", "otp": "123456" }
+
+// reset-password
+{ "email": "user@example.com", "otp": "123456", "password": "newSecret123" }</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{ "status": "success" }</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/verify-email/ · /api/user/resend-verification/</span>
+            <span class="api-card-title">Email verification (OTP)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Request bodies</div>
+            <pre class="api-code" data-copy>// verify-email
+{ "email": "user@example.com", "otp": "123456" }
+
+// resend-verification
+{ "email": "user@example.com" }</pre>
+        </div>
+    </div>
+
+    <!-- ============ STREAMING ============ -->
+    <div class="api-label" id="sec-stream" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">3 · Streaming / Extraction API</div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/api/links/</span>
+            <span class="api-card-title">Direct stream links for native players (ExoPlayer / VLC)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                The main extraction endpoint for apps. Queries all upstream servers in parallel, decrypts
+                their payloads, and returns every playable link — raw CDN URL first, plus a
+                server-proxied HLS URL that rewrites manifests so any player can stream even CDNs
+                that block unknown clients. Results cached 3&nbsp;min.
+            </p>
+            <div class="api-label">Query params</div>
+            <table class="api-table">
+                <thead><tr><th>Param</th><th></th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td><code>tmdb_id</code></td><td><span class="api-req-badge req">required</span></td><td>TMDB id of the movie/series</td></tr>
+                    <tr><td><code>type</code></td><td><span class="api-req-badge req">required</span></td><td><code>movie</code> or <code>tv</code></td></tr>
+                    <tr><td><code>season</code></td><td><span class="api-req-badge opt">optional</span></td><td>Season number (tv only)</td></tr>
+                    <tr><td><code>episode</code></td><td><span class="api-req-badge opt">optional</span></td><td>Episode number (tv only)</td></tr>
+                    <tr><td><code>lang</code></td><td><span class="api-req-badge opt">optional</span></td><td>Filter sources by language, e.g. <code>hindi</code></td></tr>
+                    <tr><td><code>server</code></td><td><span class="api-req-badge opt">optional</span></td><td>Restrict to one upstream server name</td></tr>
+                </tbody>
+            </table>
+            <div class="api-label">Example request</div>
+            <pre class="api-code" data-copy>curl "https://newmovies.linkpc.net/api/links/?tmdb_id=550&type=movie"</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "success": true,
+  "title": "Fight Club",
+  "year": "1999",
+  "tmdbId": "550",
+  "type": "movie",
+  "links": [
+    {
+      "server": "Breach",
+      "quality": "1080p",
+      "language": "english",
+      "type": "hls",
+      "url": "https://sun.peakstorm.top/.../index.m3u8",
+      "proxy_url": "/proxy/sun.peakstorm.top/.../index.m3u8"
+    }
+  ]
+}</pre>
+            <div class="api-note">
+                <i class="fas fa-lightbulb"></i>
+                <span>Playback strategy for native players: try <code>url</code> first; if the CDN refuses (403/CORS/IP-bound), play <code>proxy_url</code>. Try each link in order before giving up.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/ajax/player-sources/</span>
+            <span class="api-card-title">Extracted sources for the web player (same engine, different shape)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Same extraction engine as <code>/api/links/</code> but returns the source list shape the
+                web player consumes, and is what the player's server-fallback stage calls when browser
+                extraction fails. Cached 3&nbsp;min (success) / 60&nbsp;s (empty).
+            </p>
+            <div class="api-label">Query params</div>
+            <pre class="api-code" data-copy>tmdb_id, type, season, episode — same as /api/links/</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "success": true,
+  "results": [
+    { "name": "Breach", "quality": "1080p", "url": "https://..." }
+  ],
+  "cached": false
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/ajax/player-episodes/</span>
+            <span class="api-card-title">Episode list for a series season</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Query params</div>
+            <pre class="api-code" data-copy>tmdb_id, season</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{ "success": true, "episodes": [ { "episode_number": 1, "name": "...", ... } ] }</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/ajax/player-subtitles/ · /ajax/stremio-subtitles/</span>
+            <span class="api-card-title">Subtitle tracks for a title</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Query params</div>
+            <pre class="api-code" data-copy>tmdb_id, type, season, episode, lang (preferred language)</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "success": true,
+  "subtitles": [ { "label": "English", "url": "https://...", "lang": "en" } ]
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/proxy/&lt;host&gt;/&lt;path&gt;</span>
+            <span class="api-card-title">Server-side HLS/segment proxy (no scheme in the URL)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Streams any upstream URL through the server and rewrites HLS manifests so segment URLs
+                stay on the proxy. The <code>target</code> has <b>no</b> <code>https://</code> scheme —
+                the view adds it. Used automatically by <code>proxy_url</code> from <code>/api/links/</code>.
+            </p>
+            <div class="api-label">Example</div>
+            <pre class="api-code" data-copy>GET /proxy/sun.peakstorm.top/r6/abc/index.m3u8
+// → server fetches https://sun.peakstorm.top/r6/abc/index.m3u8</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/api/player/?tmdb_id=&amp;type=</span>
+            <span class="api-card-title">Full web player page (browser embed)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Query params</div>
+            <pre class="api-code" data-copy>tmdb_id, type (movie|tv), season, episode, lang</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>Returns HTML, not JSON — load it in a WebView if the app wants the full web player experience instead of native playback.</span></div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/direct-player/?tmdb_id=&amp;type=</span>
+            <span class="api-card-title">Direct-links browser player page (hls.js + auto fallback)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Standalone browser page that calls <code>/api/links/</code> and plays the extracted links
+                with hls.js — raw CDN first, then the proxy route, auto-advancing to the next link when
+                one dies. Same params as <code>/api/player/</code> plus <code>lang</code>.
+            </p>
+        </div>
+    </div>
+
+    <!-- ============ APP CONFIG ============ -->
+    <div class="api-label" id="sec-app" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">4 · App Config API</div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/api/android-apps/&lt;app_slug&gt;/</span>
+            <span class="api-card-title">Remote app configuration (identity + access gating)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                The app calls its own slug at startup. The server checks the app is active, validates the
+                device identity / build ID against the <a href="{% url 'android_app_list' %}">Android Apps</a>
+                config (allowed endpoint, allowed build ids, ranges like <code>225-250</code>), logs the
+                access, and returns the app's stored JSON config.
+            </p>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "success": true,
+  "config": { ...app's stored config JSON... }
+}</pre>
+            <div class="api-note">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Blocked requests are logged in <a href="{% url 'android_app_failed_attempts' 0 %}">Failed Attempts</a> with reason + IP, and 403s are returned.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/android-apps/&lt;app_slug&gt;/log/</span>
+            <span class="api-card-title">App → server log shipping</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "level": "error",
+  "message": "Player failed to start",
+  "extra": { ...optional... }
+}</pre>
+        </div>
+    </div>
+
+    <!-- ============ CINEPLAYER ============ -->
+    <div class="api-label" id="sec-cineplayer" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">5 · CinePlayer Relay API</div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/cineplayer/api/whoami/</span>
+            <span class="api-card-title">Relay identity probe</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <pre class="api-code" data-copy>{ "ok": true, "user": "...", "server": "..." }</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/cineplayer/api/resolve/tmdb/&lt;tmdb_id&gt;/</span>
+            <span class="api-card-title">Resolve a TMDB id → CinePlayer VOD id</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Example</div>
+            <pre class="api-code" data-copy>GET /cineplayer/api/resolve/tmdb/550/</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>Falls back to local relay data when the gateway is unreachable.</span></div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/cineplayer/api/title/&lt;vod_id&gt;/</span>
+            <span class="api-card-title">Title metadata</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{ "ok": true, "title": { "name": "...", "streams": [...] } }</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/cineplayer/api/stream/&lt;vod_id&gt;/</span>
+            <span class="api-card-title">Stream URL for a VOD id</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <pre class="api-code" data-copy>{ "ok": true, "url": "https://..." }</pre>
+            <div class="api-note">
+                <i class="fas fa-info-circle"></i>
+                <span>Related: <code>/cineplayer/api/audio/&lt;vod_id&gt;/</code>, <code>/cineplayer/api/tracks/&lt;vod_id&gt;/</code>,
+                <code>/cineplayer/api/meta/&lt;vod_id&gt;/</code>, <code>/cineplayer/subs/&lt;vod_id&gt;.vtt</code> (WebVTT subtitles).</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ MISC ============ -->
+    <div class="api-label" id="sec-misc" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">6 · Utilities</div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/api/health</span>
+            <span class="api-card-title">Health probe (for uptime monitors)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <pre class="api-code" data-copy>{ "status": "ok" }</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/ajax/toggle-watchlist/ · /ajax/check-watchlist/ · /ajax/record-play/ · /ajax/play-progress/ · /ajax/resume-position/</span>
+            <span class="api-card-title">Web session AJAX — watchlist &amp; playback progress</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                CSRF-protected same-origin endpoints used by the website itself. Native apps should use
+                <code>/api/user/sync/</code> instead of these.
+            </p>
+        </div>
+    </div>
+
+    <div style="height:3rem"></div>
+</div>
+
+<script>
+// Copy buttons for every code block
+document.querySelectorAll('.api-code[data-copy]').forEach(function(pre) {
+    var btn = document.createElement('button');
+    btn.className = 'api-copy-btn';
+    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+    btn.onclick = function(e) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(pre.textContent).then(function() {
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+            setTimeout(function() { btn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 1500);
+        });
+    };
+    pre.style.position = 'relative';
+    pre.appendChild(btn);
+    pre.addEventListener('mouseenter', function() { btn.style.opacity = '1'; });
+    pre.addEventListener('mouseleave', function() { btn.style.opacity = '.0'; });
+    btn.style.cssText += ';position:absolute;top:.5rem;right:.5rem;opacity:0;transition:opacity .15s;';
+});
+</script>
+{% endblock %}
