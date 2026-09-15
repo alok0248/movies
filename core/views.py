@@ -9213,12 +9213,7 @@ def ajax_record_play_progress(request):
     if not tmdb_id:
         return JsonResponse({'success': False, 'message': 'tmdb_id required'})
 
-    history, created = PlayHistory.objects.update_or_create(
-        user=request.user,
-        tmdb_id=tmdb_id,
-        media_type=media_type,
-        season_number=season_number,
-        episode_number=episode_number,
+    history, created = PlayHistory.update_or_create_unique(
         defaults={
             'title': title,
             'poster_path': poster_path,
@@ -9228,7 +9223,12 @@ def ajax_record_play_progress(request):
             'completed': completed,
             # Field is not auto_now — record the real play moment.
             'last_played_at': timezone.now(),
-        }
+        },
+        user=request.user,
+        tmdb_id=tmdb_id,
+        media_type=media_type,
+        season_number=season_number,
+        episode_number=episode_number,
     )
     # Also sync to UserCloudData for Android app
     from .models import UserCloudData
