@@ -10666,16 +10666,22 @@ def _admin_cloud_view(cloud):
     }
 
 
-def _history_calendar_payload(user_qs, year, month):
+def _history_calendar_payload(user_ids, year, month):
     """Build the calendar payload: per-day counts + up to 200 recent items.
 
     Grouped by local day of the given month so the calendar grid can show
     how many titles each user watched per day.
+
+    Takes a plain list of user ids — NOT a User queryset. PlayHistory lives
+    on the external DB while auth.User stays on the default one; passing a
+    queryset would inline `user_id IN (SELECT id FROM auth_user)` and run
+    it against the external DB's stale user copy, silently dropping most
+    rows. Resolving ids in Python keeps every query single-DB.
     """
     from datetime import timedelta
     start = timezone.make_aware(timezone.datetime(year, month, 1))
     end = (start + timedelta(days=32)).replace(day=1)
-    qs = PlayHistory.objects.filter(user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end)
+    qs = PlayHistory.objects.filter(user_id__in=user_ids, last_played_at__gte=start, last_played_at__lt=end)
 
     # Lazy backfill: fetch missing titles/posters from TMDB so the
     # calendar always shows display data.
@@ -10686,7 +10692,7 @@ def _history_calendar_payload(user_qs, year, month):
         from core.models import _backfill_from_tmdb
         _backfill_from_tmdb(list(missing))
         # Refresh the queryset so the loop picks up new data
-        qs = PlayHistory.objects.filter(user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end)
+        qs = PlayHistory.objects.filter(user_id__in=user_ids, last_played_at__gte=start, last_played_at__lt=end)
 
     days = {}
     items = []
@@ -10752,10 +10758,15 @@ def admin_history_calendar(request):
             user_qs = User.objects.filter(id=user_id)
         else:
             user_qs = User.objects.all()
+        user_ids = list(user_qs.values_list('id', flat=True))
 
-        users = User.objects.filter(id__in=PlayHistory.objects.values_list('user_id', flat=True).distinct())\
-            .order_by('username')
-        payload = _history_calendar_payload(user_qs, year, month)
+        # User dropdown: users that actually have play history. Resolve the
+        # history ids first (they read from the external DB) so the User
+        # query uses a plain id list — a queryset __in would run the
+        # playhistory subquery against the wrong database.
+        history_user_ids = list(PlayHistory.objects.values_list('user_id', flat=True).distinct())
+        users = User.objects.filter(id__in=history_user_ids).order_by('username')
+        payload = _history_calendar_payload(user_ids, year, month)
         payload['year'] = year
         payload['month'] = month
         payload['totalEvents'] = sum(d['count'] for d in payload['days'].values())
@@ -10792,10 +10803,10 @@ def admin_history_day(request):
     except (TypeError, ValueError):
         return redirect('admin_history_calendar')
     if user_id > 0:
-        user_qs = User.objects.filter(id=user_id)
+        user_ids = list(User.objects.filter(id=user_id).values_list('id', flat=True))
         detail_user = User.objects.filter(id=user_id).first()
     else:
-        user_qs = User.objects.all()
+        user_ids = list(User.objects.values_list('id', flat=True))
         detail_user = None
     try:
         start = timezone.make_aware(timezone.datetime(year, month, day))
@@ -10804,8 +10815,8 @@ def admin_history_day(request):
     from datetime import timedelta
     end = start + timedelta(days=1)
     items = PlayHistory.objects.filter(
-        user__in=user_qs, last_played_at__gte=start, last_played_at__lt=end,
-    ).select_related('user').order_by('-last_played_at')
+        user_id__in=user_ids, last_played_at__gte=start, last_played_at__lt=end,
+    ).order_by('-last_played_at')
 
     rows = []
     for h in items:
@@ -10858,10 +10869,10 @@ def admin_history_calendar_data(request):
     except (TypeError, ValueError):
         user_id = 0
     if user_id > 0:
-        user_qs = User.objects.filter(id=user_id)
+        user_ids = list(User.objects.filter(id=user_id).values_list('id', flat=True))
     else:
-        user_qs = User.objects.all()
-    payload = _history_calendar_payload(user_qs, year, month)
+        user_ids = list(User.objects.values_list('id', flat=True))
+    payload = _history_calendar_payload(user_ids, year, month)
     payload['year'] = year
     payload['month'] = month
     payload['totalEvents'] = sum(d['count'] for d in payload['days'].values())
