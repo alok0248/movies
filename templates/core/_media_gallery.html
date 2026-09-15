@@ -1,0 +1,303 @@
+{% comment %}
+Reusable media gallery: backdrops (wallpapers) + posters grid with
+Load More, fullscreen lightbox (prev/next, swipe, keyboard) and
+full-size download. Data comes from /ajax/tmdb-extra/ (tmdbExtra).
+Expects: media_type ('movie'|'tv'), tmdb_id.
+{% endcomment %}
+<div class="media-gallery" id="mediaGallery"
+     data-media-type="{{ media_type }}" data-tmdb-id="{{ tmdb_id }}">
+    <div class="mg-head">
+        <h2 class="mg-title"><i class="fas fa-images me-2"></i>Wallpapers &amp; Posters</h2>
+        <div class="mg-tabs">
+            <button class="mg-tab active" data-filter="backdrops">Wallpapers <span class="mg-count" id="mgCountBackdrops"></span></button>
+            <button class="mg-tab" data-filter="posters">Posters <span class="mg-count" id="mgCountPosters"></span></button>
+            <button class="mg-tab" data-filter="all">All <span class="mg-count" id="mgCountAll"></span></button>
+        </div>
+    </div>
+    <div class="mg-grid" id="mgGrid"><!-- filled by JS --></div>
+    <div class="mg-more-wrap" id="mgMoreWrap" style="display:none">
+        <button class="mg-load-more" id="mgLoadMore">
+            <i class="fas fa-plus"></i> Load More
+        </button>
+    </div>
+</div>
+
+<!-- Fullscreen lightbox -->
+<div class="mg-lightbox" id="mgLightbox">
+    <div class="mg-lb-top">
+        <div class="mg-lb-counter" id="mgLbCounter"></div>
+        <div class="mg-lb-actions">
+            <button class="mg-lb-btn" id="mgLbDownload" title="Download full size"><i class="fas fa-download"></i><span> Download</span></button>
+            <button class="mg-lb-btn" id="mgLbClose" title="Close (Esc)"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
+    <button class="mg-lb-nav mg-lb-prev" id="mgLbPrev" title="Previous"><i class="fas fa-chevron-left"></i></button>
+    <img class="mg-lb-img" id="mgLbImg" src="" alt="">
+    <button class="mg-lb-nav mg-lb-next" id="mgLbNext" title="Next"><i class="fas fa-chevron-right"></i></button>
+    <div class="mg-lb-caption" id="mgLbCaption"></div>
+    <div class="mg-lb-toast" id="mgLbToast"></div>
+</div>
+
+<style>
+    .media-gallery { margin: 2.5rem 0 1rem; }
+    .mg-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .mg-title { font-size: 1.15rem; font-weight: 800; margin: 0; color: #fff; }
+    .mg-tabs { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .mg-tab {
+        border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04);
+        color: rgba(255,255,255,.65); font-size: .74rem; font-weight: 700;
+        padding: .38rem .85rem; border-radius: 999px; cursor: pointer; transition: all .2s;
+    }
+    .mg-tab:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .mg-tab.active { background: linear-gradient(135deg, #6366f1, #8b5cf6); border-color: transparent; color: #fff; }
+    .mg-count { opacity: .65; font-weight: 600; }
+    .mg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+    .mg-grid.posters-active { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+    .mg-item {
+        position: relative; border-radius: 10px; overflow: hidden; cursor: zoom-in;
+        background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+        transition: transform .2s, border-color .2s; aspect-ratio: 16/9;
+    }
+    .mg-item.poster { aspect-ratio: 2/3; }
+    .mg-item img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; }
+    .mg-item:hover img { transform: scale(1.06); }
+    .mg-item:hover { border-color: rgba(129,140,248,.55); transform: translateY(-2px); }
+    .mg-dl {
+        position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 8px;
+        background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.2); color: #fff;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        opacity: 0; transition: opacity .2s, background .2s; font-size: .72rem; z-index: 2;
+    }
+    .mg-item:hover .mg-dl { opacity: 1; }
+    .mg-dl:hover { background: rgba(99,102,241,.85); }
+    .mg-more-wrap { display: flex; justify-content: center; margin-top: 1.1rem; }
+    .mg-load-more {
+        display: inline-flex; align-items: center; gap: .5rem; padding: .55rem 1.6rem;
+        border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.05);
+        color: #fff; font-size: .8rem; font-weight: 700; cursor: pointer; transition: all .2s;
+    }
+    .mg-load-more:hover { background: linear-gradient(135deg, #6366f1, #8b5cf6); border-color: transparent; transform: translateY(-1px); }
+    /* Lightbox */
+    .mg-lightbox {
+        position: fixed; inset: 0; z-index: 100000; display: none;
+        background: rgba(0,0,0,.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    }
+    .mg-lightbox.open { display: block; }
+    .mg-lb-img {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        max-width: 92vw; max-height: 82vh; object-fit: contain; border-radius: 8px;
+        box-shadow: 0 24px 90px rgba(0,0,0,.8); cursor: grab; user-select: none;
+    }
+    .mg-lb-top {
+        position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center;
+        justify-content: space-between; padding: 1rem 1.2rem; z-index: 3;
+        background: linear-gradient(rgba(0,0,0,.55), transparent);
+    }
+    .mg-lb-counter { color: rgba(255,255,255,.75); font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .mg-lb-actions { display: flex; gap: .5rem; }
+    .mg-lb-btn {
+        display: inline-flex; align-items: center; gap: .4rem; padding: .5rem .95rem;
+        border-radius: 999px; border: 1px solid rgba(255,255,255,.22);
+        background: rgba(0,0,0,.45); color: #fff; font-size: .78rem; font-weight: 700;
+        cursor: pointer; transition: all .2s;
+    }
+    .mg-lb-btn:hover { background: rgba(99,102,241,.85); border-color: transparent; }
+    .mg-lb-nav {
+        position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+        width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2);
+        background: rgba(0,0,0,.5); color: #fff; font-size: 1.05rem; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; transition: all .2s;
+    }
+    .mg-lb-nav:hover { background: rgba(99,102,241,.85); }
+    .mg-lb-prev { left: 1rem; } .mg-lb-next { right: 1rem; }
+    .mg-lb-caption {
+        position: absolute; bottom: 0; left: 0; right: 0; text-align: center; padding: 1rem;
+        color: rgba(255,255,255,.55); font-size: .74rem;
+        background: linear-gradient(transparent, rgba(0,0,0,.55)); pointer-events: none;
+    }
+    .mg-lb-toast {
+        position: absolute; bottom: 3.4rem; left: 50%; transform: translateX(-50%);
+        background: rgba(20,20,30,.92); border: 1px solid rgba(255,255,255,.15); color: #fff;
+        font-size: .78rem; font-weight: 600; padding: .5rem 1.1rem; border-radius: 999px;
+        opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 4;
+    }
+    .mg-lb-toast.show { opacity: 1; }
+    @media(max-width:640px){
+        .mg-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+        .mg-lb-nav { width: 40px; height: 40px; }
+        .mg-lb-btn span { display: none; }
+    }
+</style>
+
+<script>
+(function () {
+    var root = document.getElementById('mediaGallery');
+    if (!root) return;
+    var mediaType = root.dataset.mediaType;
+    var tmdbId = root.dataset.tmdbId;
+    var IMG = 'https://image.tmdb.org/t/p/';
+    var PAGE = 12;                       // items per "Load More" batch
+    var items = [];                      // [{path, kind}]
+    var shown = 0;                       // count currently rendered
+    var filter = 'backdrops';
+    var grid = document.getElementById('mgGrid');
+    var lb = document.getElementById('mgLightbox');
+    var lbImg = document.getElementById('mgLbImg');
+    var lbCounter = document.getElementById('mgLbCounter');
+    var lbCaption = document.getElementById('mgLbCaption');
+    var lbToast = document.getElementById('mgLbToast');
+    var toastTimer = null;
+
+    function toast(msg) {
+        lbToast.textContent = msg;
+        lbToast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { lbToast.classList.remove('show'); }, 1800);
+    }
+
+    function fetchExtra() {
+        return fetch('/ajax/tmdb-extra/?media_type=' + mediaType + '&tmdb_id=' + tmdbId, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .catch(function () { return {}; });
+    }
+
+    function render(reset) {
+        if (reset) { grid.innerHTML = ''; shown = 0; }
+        var pool = filter === 'all' ? items : items.filter(function (it) { return it.kind === filter; });
+        var batch = pool.slice(shown, shown + PAGE);
+        batch.forEach(function (it) {
+            var card = document.createElement('div');
+            card.className = 'mg-item' + (it.kind === 'posters' ? ' poster' : '');
+            var idx = pool.indexOf(it);
+            card.onclick = function () { openLightbox(idx); };
+            var img = document.createElement('img');
+            img.loading = 'lazy';
+            img.src = IMG + 'w500' + it.path;
+            img.alt = (it.kind === 'posters' ? 'Poster' : 'Wallpaper');
+            var dl = document.createElement('button');
+            dl.className = 'mg-dl';
+            dl.title = 'Download full size';
+            dl.innerHTML = '<i class="fas fa-download"></i>';
+            dl.onclick = function (e) { e.stopPropagation(); download(it); };
+            card.appendChild(img); card.appendChild(dl);
+            grid.appendChild(card);
+        });
+        shown += batch.length;
+        var wrap = document.getElementById('mgMoreWrap');
+        wrap.style.display = shown < pool.length ? 'flex' : 'none';
+    }
+
+    function setCounts() {
+        var b = items.filter(function (i) { return i.kind === 'backdrops'; }).length;
+        var p = items.filter(function (i) { return i.kind === 'posters'; }).length;
+        document.getElementById('mgCountBackdrops').textContent = b;
+        document.getElementById('mgCountPosters').textContent = p;
+        document.getElementById('mgCountAll').textContent = b + p;
+    }
+
+    function setTab(name) {
+        filter = name;
+        document.querySelectorAll('.mg-tab').forEach(function (t) {
+            t.classList.toggle('active', t.dataset.filter === name);
+        });
+        grid.classList.toggle('posters-active', name === 'posters');
+        render(true);
+    }
+
+    function openLightbox(poolIndex) {
+        var pool = filter === 'all' ? items : items.filter(function (it) { return it.kind === filter; });
+        var it = pool[poolIndex];
+        if (!it) return;
+        lb.dataset.pool = JSON.stringify(pool);
+        lb.dataset.index = poolIndex;
+        showLightboxImage();
+        lb.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function showLightboxImage() {
+        var pool = JSON.parse(lb.dataset.pool);
+        var i = parseInt(lb.dataset.index, 10) || 0;
+        var it = pool[i];
+        if (!it) return;
+        lbImg.src = IMG + 'original' + it.path;
+        lbCounter.textContent = (i + 1) + ' / ' + pool.length;
+        lbCaption.textContent = (it.kind === 'posters' ? 'Poster' : 'Wallpaper') + ' · full size';
+    }
+
+    function stepLightbox(delta) {
+        var pool = JSON.parse(lb.dataset.pool);
+        var i = (parseInt(lb.dataset.index, 10) + delta + pool.length) % pool.length;
+        lb.dataset.index = i;
+        showLightboxImage();
+    }
+
+    function download(it) {
+        var url = IMG + 'original' + it.path;
+        var name = (mediaType === 'tv' ? 'series' : 'movie') + '-' + tmdbId + '-' +
+                   (it.kind === 'posters' ? 'poster' : 'wallpaper') + it.path.replace(/\.[^.]+$/, '') + '.jpg';
+        // Route through our own server (/ajax/download-proxy/): same-origin, sets
+        // Content-Disposition so the browser saves the file directly. TMDB blocks
+        // direct cross-origin fetches, so the proxy is the reliable path.
+        var proxied = '/ajax/download-proxy/?url=' + encodeURIComponent(url) +
+                      '&filename=' + encodeURIComponent(name);
+        var a = document.createElement('a');
+        a.href = proxied;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast('Download started');
+    }
+
+    document.getElementById('mgLbDownload').onclick = function () {
+        var pool = JSON.parse(lb.dataset.pool);
+        var it = pool[parseInt(lb.dataset.index, 10) || 0];
+        if (it) download(it);
+    };
+    document.getElementById('mgLbClose').onclick = closeLightbox;
+    document.getElementById('mgLbPrev').onclick = function () { stepLightbox(-1); };
+    document.getElementById('mgLbNext').onclick = function () { stepLightbox(1); };
+    function closeLightbox() {
+        lb.classList.remove('open');
+        document.body.style.overflow = '';
+        lbImg.src = '';
+    }
+    document.addEventListener('keydown', function (e) {
+        if (!lb.classList.contains('open')) return;
+        if (e.key === 'Escape') closeLightbox();
+        else if (e.key === 'ArrowLeft') stepLightbox(-1);
+        else if (e.key === 'ArrowRight') stepLightbox(1);
+    });
+    // Swipe navigation
+    var touchX = null;
+    lb.addEventListener('touchstart', function (e) { touchX = e.touches[0].clientX; }, { passive: true });
+    lb.addEventListener('touchend', function (e) {
+        if (touchX === null) return;
+        var dx = e.changedTouches[0].clientX - touchX;
+        if (Math.abs(dx) > 45) stepLightbox(dx > 0 ? -1 : 1);
+        touchX = null;
+    }, { passive: true });
+    lb.addEventListener('click', function (e) {
+        if (e.target === lb) closeLightbox();
+    });
+
+    document.getElementById('mgLoadMore').onclick = function () { render(false); };
+    document.querySelectorAll('.mg-tab').forEach(function (t) {
+        t.onclick = function () { setTab(t.dataset.filter); };
+    });
+
+    fetchExtra().then(function (res) {
+        var b = (res && res.backdrops) || [];
+        var p = (res && res.posters) || [];
+        b.forEach(function (path) { items.push({ path: path, kind: 'backdrops' }); });
+        p.forEach(function (path) { items.push({ path: path, kind: 'posters' }); });
+        setCounts();
+        if (!items.length) {
+            root.innerHTML = '<p class="text-secondary" style="font-size:.85rem">No wallpapers or posters available.</p>';
+            return;
+        }
+        render(true);
+    });
+})();
+</script>

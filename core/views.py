@@ -1794,7 +1794,8 @@ def _get_best_watch_region(watch_providers, preferred_region):
 def _fetch_tmdb_extra(movie_id, media_type='movie'):
     """Fetch credits, videos, collection from TMDB API for a movie."""
     import time as _time
-    result = {'cast': [], 'crew': [], 'directors': '', 'trailers': [], 'collection': None, 'collection_movies': []}
+    result = {'cast': [], 'crew': [], 'directors': '', 'trailers': [], 'collection': None, 'collection_movies': [],
+              'backdrops': [], 'posters': []}
     try:
         api_key = TMDBApiKey.objects.filter(is_active=True).first()
         if not api_key:
@@ -1807,7 +1808,8 @@ def _fetch_tmdb_extra(movie_id, media_type='movie'):
             try:
                 resp = session.get(
                     f'https://api.themoviedb.org/3/{media_type}/{movie_id}',
-                    params={'api_key': api_key.key, 'append_to_response': 'credits,videos'},
+                    params={'api_key': api_key.key, 'append_to_response': 'credits,videos,images',
+                            'include_image_language': 'en,null'},
                     timeout=(5, 15)
                 )
                 if resp.status_code == 429:
@@ -1827,6 +1829,11 @@ def _fetch_tmdb_extra(movie_id, media_type='movie'):
                 continue
         if not data:
             return result
+        # Media gallery — every backdrop & poster TMDB has, in original size.
+        # TMDB returns them sorted by quality score; we keep the order.
+        images = data.get('images', {}) or {}
+        result['backdrops'] = [b.get('file_path', '') for b in images.get('backdrops', []) if b.get('file_path')]
+        result['posters'] = [p.get('file_path', '') for p in images.get('posters', []) if p.get('file_path')]
         # Cast (with photos)
         credits = data.get('credits', {})
         raw_cast = credits.get('cast', [])[:20]
@@ -1879,7 +1886,7 @@ def tmdb_extra_ajax(request):
         tmdb_id = int(tmdb_id)
     except (ValueError, TypeError):
         return JsonResponse({'error': 'Invalid tmdb_id'}, status=400)
-    cache_key = f'tmdb_extra_ajax_{media_type}_{tmdb_id}'
+    cache_key = f'tmdb_extra_ajax_v2_{media_type}_{tmdb_id}'
     cached = cache.get(cache_key)
     if cached:
         return JsonResponse(cached)
@@ -5767,11 +5774,17 @@ def download_proxy(request):
     if not target_url:
         return HttpResponse('No URL provided', status=400)
 
-    # Block obviously non-video URLs for safety
+    # Block obviously non-media URLs for safety. Images are allowed so the
+    # media gallery can offer full-size poster/wallpaper downloads (TMDB
+    # blocks direct cross-origin fetches, the browser would refuse to save).
     low = target_url.lower().split('?')[0]
     safe_exts = ('.mp4', '.webm', '.m4v', '.mkv', '.mov', '.ts', '.flv',
-                 '.m3u8', '.mpd', '.avi', '.wmv', '.ogg')
-    if not any(low.endswith(ext) for ext in safe_exts):
+                 '.m3u8', '.mpd', '.avi', '.wmv', '.ogg',
+                 '.jpg', '.jpeg', '.png', '.webp')
+    image_hosts = ('image.tmdb.org',)
+    is_image = any(low.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp')) \
+        and any(host in low for host in image_hosts)
+    if not is_image and not any(low.endswith(ext) for ext in safe_exts):
         # Also allow if path hints suggest video
         video_hints = ('/stream/', '/video/', '/vod/', '/play/', '/media/',
                        '/hls/', '/cdn/', '/playlist', '/manifest')
