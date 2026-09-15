@@ -563,6 +563,36 @@ function _allStreamsExhausted(mediaEl) {
     return;
   }
   console.error('All streams exhausted');
+  /* Before the failure screen: one server-extraction round for sources the
+     browser extractors could not reach (IP-bound CDNs etc). Runs once per
+     title; Try Again resets it. */
+  if (!_serverSourcesTried) {
+    _allStreamsFailedWithServerFallback(mediaEl);
+    return;
+  }
+  /* Stage 2: CDN CORS/tokens are flaky — a link that 403s now often plays
+     with freshly-extracted tokens. One automatic re-extraction round. */
+  if (!_retriedExtraction) {
+    if (_extractionInFlight > 0) {
+      /* Extractors still running — when they finish with nothing playable,
+         resume the escalation from this exact point. */
+      _pendingFinalExhausted = mediaEl;
+      return;
+    }
+    _retriedExtraction = true;
+    var wrap2 = mediaEl && mediaEl.closest ? mediaEl.closest('.player-video-wrap') : null;
+    var container2 = wrap2 && wrap2.parentNode ? wrap2.parentNode : null;
+    var params2 = _curMedia ? { tmdb_id: _curMedia.tmdbId, type: _curMedia.type, season: _curMedia.season, episode: _curMedia.episode } : {};
+    if (container2 && params2.tmdb_id) {
+      console.log('[Player] retrying with a fresh extraction round');
+      try { _showBuf(mediaEl); } catch (e) {}
+      var sub2 = container2.querySelector('.player-loading-subtext');
+      if (sub2) sub2.textContent = 'Retrying with fresh links…';
+      _retryRound = true;
+      _fetchClientSources(container2, params2, mediaEl);
+      return;
+    }
+  }
   hidePlayerLoading();
   var wrap = mediaEl && mediaEl.closest ? mediaEl.closest('.player-video-wrap') : null;
   var container = wrap && wrap.parentNode ? wrap.parentNode : null;
@@ -847,6 +877,67 @@ function toggleDualMode() {
   }
 }
 
+/* ===== Server-extraction fallback =====
+ * The in-browser extractors are the default path, but some upstream CDNs are
+ * IP-bound to the extractor's network (every link 403s from the user's
+ * browser), which ends in 'All streams failed to play'. The server extractor
+ * (/ajax/player-sources/) talks to the same upstreams from the server and
+ * often knows different/more hosts. When every browser route fails, pull the
+ * server's sources ONCE for this title and try them before giving up.
+ */
+var _serverSourcesTried = false;
+var _retriedExtraction = false;   /* stage 2: one automatic fresh-extraction round */
+var _retryRound = false;          /* set while a retry extraction is being kicked off */
+var _extractionInFlight = 0;      /* >0 while browser extractors are running */
+var _pendingFinalExhausted = null; /* mediaEl waiting for in-flight extraction to finish */
+
+function _fetchServerSources(container, params, mediaEl) {
+  var tmdbId = params.tmdb_id || params.tmdbId;
+  var mediaType = params.type || params.mediaType || params.media_type || 'movie';
+  var season = params.season || params.season_id || '';
+  var episode = params.episode || params.episode_id || '';
+  var q = ['tmdb_id=' + encodeURIComponent(tmdbId || ''), 'type=' + encodeURIComponent(mediaType)];
+  if (season) q.push('season=' + encodeURIComponent(season));
+  if (episode) q.push('episode=' + encodeURIComponent(episode));
+  console.log('[Player] all browser routes failed — trying server-extracted sources');
+  fetch('/ajax/player-sources/?' + q.join('&'), { credentials: 'same-origin' })
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+    .then(function(data) {
+      var results = (data && data.results) || [];
+      /* Only sources we have NOT already tried. */
+      var known = {};
+      _allSources.forEach(function(s) { if (s && s.url) known[s.url] = 1; });
+      var fresh = results.filter(function(r2) { return r2 && r2.url && !known[r2.url]; });
+      if (!fresh.length) { _allStreamsExhausted(mediaEl); return; }
+      console.log('[Player] server fallback: ' + fresh.length + ' new source(s)');
+      fresh.forEach(function(s) {
+        _addSource({ url: s.url, quality: s.quality || '?', server: s.server || s.server_name || 'Server', language: s.language || '' });
+      });
+      _swReady().then(function(swOk) {
+        _lastSwOk = swOk;
+        var queue = [];
+        fresh.forEach(function(s) {
+          _attemptsForUrl(s.url, swOk).forEach(function(a) { queue.push({ src: s, playUrl: a.url, label: a.label }); });
+        });
+        _attemptQueue = _attemptQueue.concat(queue);
+        _tryNextAttempt(mediaEl);
+      });
+    })
+    .catch(function(err) {
+      console.warn('[Player] server fallback failed:', err && err.message ? err.message : err);
+      _allStreamsExhausted(mediaEl);
+    });
+}
+
+function _allStreamsFailedWithServerFallback(mediaEl) {
+  _serverSourcesTried = true;
+  var params = _curMedia ? { tmdb_id: _curMedia.tmdbId, type: _curMedia.type, season: _curMedia.season, episode: _curMedia.episode } : {};
+  if (!params.tmdb_id) { _allStreamsExhausted(mediaEl); return; }
+  /* Honest loading state while the server round-trip runs. */
+  try { _showBuf(mediaEl); } catch (e) {}
+  _fetchServerSources(null, params, mediaEl);
+}
+
 /* ===== Client-side source extraction (browser only, no server) ===== */
 function _fetchClientSources(container, params, vid) {
   var tmdbId = params.tmdb_id || params.tmdbId;
@@ -857,6 +948,10 @@ function _fetchClientSources(container, params, vid) {
   var startedPlay = false;
   var extractorsDone = 0;
   var totalExtractors = 0;
+  var retryRound = _retryRound; _retryRound = false;
+  _extractionInFlight++;
+  var baselineUrls = {};
+  _allSources.forEach(function(s) { if (s && s.url) baselineUrls[s.url] = 1; });
   console.log('[Player] Extracting sources in-browser:', mediaType, tmdbId, season ? 'S' + season : '', episode ? 'E' + episode : '');
 
   function setStatus(t) {
@@ -866,6 +961,25 @@ function _fetchClientSources(container, params, vid) {
 
   function onSource(src) {
     _addSource(src);
+    if (retryRound) {
+      /* A fresh source arrived during the auto-retry — drop any error panel. */
+      if (container) { try { var pnl = container.querySelector('.player-msg-panel'); if (pnl) pnl.remove(); } catch (e) {} }
+      /* Queue EVERY new source (old ones are in _failedPlayUrls and get skipped);
+         the first one kicks the attempt engine. _startedPlay is already true
+         from round 1, so the normal path would never start playback. */
+      if (src && src.url && !baselineUrls[src.url]) {
+        var kick = !startedPlay;
+        startedPlay = true;
+        _swReady().then(function(swOk) {
+          _lastSwOk = swOk;
+          _attemptsForUrl(src.url, swOk).forEach(function(a) {
+            _attemptQueue.push({ src: src, playUrl: a.url, label: a.label });
+          });
+          if (kick) _tryNextAttempt(vid);
+        });
+      }
+      return;
+    }
     if (!startedPlay && !_startedPlay) {
       startedPlay = true;
       _startedPlay = true;
@@ -889,6 +1003,21 @@ function _fetchClientSources(container, params, vid) {
   function onAllDone() {
     extractorsDone++;
     setStatus('');
+    if (extractorsDone >= totalExtractors) {
+      _extractionInFlight--;
+      /* Extraction finished while a route-exhaustion was waiting on us. */
+      if (_pendingFinalExhausted && _extractionInFlight <= 0) {
+        var pe = _pendingFinalExhausted; _pendingFinalExhausted = null;
+        _allStreamsExhausted(pe);
+        return;
+      }
+      /* Auto-retry round finished: if it produced nothing new, escalate to the
+         final failure message via the exhausted handler (stage 2 → final). */
+      if (retryRound) {
+        var hasNew = _allSources.some(function(s) { return s && s.url && !baselineUrls[s.url]; });
+        if (!hasNew) { _allStreamsExhausted(vid); return; }
+      }
+    }
     if (extractorsDone >= totalExtractors && !_allSources.length) {
       _showPlayerMsg(container, {
         icon: 'fa-unlink',
@@ -933,6 +1062,7 @@ function _fetchClientSources(container, params, vid) {
   }
 
   if (totalExtractors === 0) {
+    _extractionInFlight--;
     _showPlayerMsg(container, {
       icon: 'fa-unlink',
       title: 'Browser extractors unavailable',
@@ -944,7 +1074,7 @@ function _fetchClientSources(container, params, vid) {
 
 /* ===== Main Player Builder ===== */
 function _buildVideasyPlayer(container, apiUrl, retryFn) {
-  _allSources = []; _allSubs = []; _curMedia = null; _playerPlaying = false;
+  _allSources = []; _allSubs = []; _curMedia = null; _playerPlaying = false; _serverSourcesTried = false; _retriedExtraction = false; _retryRound = false; _pendingFinalExhausted = null;
   _startedPlay = false; _lastSwOk = false;
   _retryFn = typeof retryFn === 'function' ? retryFn : null;
   var vw = document.createElement('div'); vw.className = 'player-video-wrap'; vw.style.cssText = 'position:relative;width:100%;';

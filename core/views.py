@@ -3462,6 +3462,14 @@ def android_app_failed_attempts(request, app_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def api_documentation_view(request):
+    """Admin page: documentation of every public API endpoint + connection guide."""
+    apps = AndroidApp.objects.all().order_by('name')
+    return render(request, 'core/api_documentation.html', {
+        'apps': apps,
+    })
+
+
 def android_user_sync_reference(request):
     """Display registered Android apps for the user sync endpoint."""
     apps = AndroidApp.objects.all().order_by('name')
