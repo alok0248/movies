@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import IntegrityError, models
 from django.contrib.auth.models import User
 from django.utils.text import slugify
 from django.utils import timezone
@@ -1331,6 +1331,44 @@ class PlayHistory(models.Model):
             label += f" S{self.season_number}E{self.episode_number}"
         return f"{self.user.username} - {label}"
 
+    @classmethod
+    def update_or_create_unique(cls, defaults=None, **lookup):
+        """Duplicate-safe upsert for PlayHistory.
+
+        The unique_together constraint cannot protect rows where
+        season_number/episode_number are NULL (SQL unique checks skip NULLs),
+        so duplicates can arise when two concurrent syncs race (the app
+        retries on flaky mobile networks). A plain update_or_create then
+        crashes with MultipleObjectsReturned on every later sync.
+
+        This merges any duplicate group into the newest row and upserts it.
+        """
+        defaults = defaults or {}
+        rows = list(cls.objects.filter(**lookup).order_by('-last_played_at', '-id'))
+        if len(rows) > 1:
+            # Self-heal: keep the newest row, delete the older duplicates.
+            keeper = rows[0]
+            cls.objects.filter(pk__in=[r.pk for r in rows[1:]]).delete()
+            rows = [keeper]
+        try:
+            if rows:
+                row = rows[0]
+                for f, v in defaults.items():
+                    setattr(row, f, v)
+                row.save()
+                return row, False
+            row = cls.objects.create(**lookup, **defaults)
+            return row, True
+        except IntegrityError:
+            # Lost a create race with a concurrent request — update the winner.
+            row = cls.objects.filter(**lookup).order_by('-last_played_at', '-id').first()
+            if row is None:
+                raise
+            for f, v in defaults.items():
+                setattr(row, f, v)
+            row.save()
+            return row, False
+
     @property
     def progress_percent(self):
         if not self.total_duration_seconds:
@@ -1612,11 +1650,11 @@ class UserCloudData(models.Model):
                 defaults['title'] = title_val
             if poster_val:
                 defaults['poster_path'] = poster_val
-            PlayHistory.objects.update_or_create(
+            PlayHistory.update_or_create_unique(
+                defaults=defaults,
                 user=self.user, tmdb_id=mid, media_type=media_type,
                 season_number=season if season >= 0 else None,
                 episode_number=episode if episode >= 0 else None,
-                defaults=defaults,
             )
 
         # --- Watch history -> PlayHistory metadata (title/poster/season/episode) ---
@@ -1681,10 +1719,10 @@ class UserCloudData(models.Model):
                     season_number=None, episode_number=None,
                 ).first()
             if row is None:
-                PlayHistory.objects.create(
+                PlayHistory.update_or_create_unique(
+                    defaults=defaults,
                     user=self.user, tmdb_id=h_mid, media_type=h_type,
                     season_number=h_season_final, episode_number=h_episode_final,
-                    **defaults,
                 )
             else:
                 for f, v in defaults.items():

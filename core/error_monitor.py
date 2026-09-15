@@ -154,10 +154,17 @@ class ErrorMonitoringMiddleware:
     def _alert(self, request, exc_type, exc_value, tb_text):
         """Send alert email if not rate-limited."""
         if exc_type is None:
-            # 500 set without exception (e.g., Http500 raised)
+            # 500 response returned without an unhandled exception: a view or
+            # decorator caught the error itself and answered 500 deliberately
+            # (e.g. _guard_android_api_errors). The real traceback is logged by
+            # that handler — point the admin at it instead of a dead end.
             exc_type = type(Exception)
-            exc_value = Exception('HTTP 500 error')
-            tb_text = '(No traceback — status set directly)'
+            exc_value = Exception('HTTP 500 error (returned, not raised)')
+            tb_text = (
+                '(No traceback — a 500 response was returned by the view itself.)\n'
+                'The full traceback was logged by the view error handler; check the\n'
+                'gunicorn error log for the matching timestamp, e.g.:\n'
+                '  grep -A 30 "Unhandled error" /tmp/gunicorn_service.err')
 
         path = request.path
 
