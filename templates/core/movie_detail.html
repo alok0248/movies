@@ -794,6 +794,9 @@ window.addEventListener('message',function(ev){
     <!-- Wikipedia inline -->
     <div id="wikipedia-inline"></div>
 
+    <!-- Wallpapers & Posters gallery -->
+    {% include 'core/_media_gallery.html' with media_type='movie' tmdb_id=movie.id %}
+
     <!-- More Like This -->
     {% if more_movies %}
     <div class="det-section">
