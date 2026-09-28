@@ -1244,7 +1244,12 @@ def ad_delete(request, ad_id):
     if request.method == 'POST':
         ad.delete()
         return redirect('ad_list')
-    return render(request, 'core/ad_delete.html', {'ad': ad})
+    return render(request, 'core/object_delete_confirm.html', {
+        'page_title': 'Delete Ad',
+        'object_label': 'the ad',
+        'object_name': ad.name,
+        'cancel_url_name': 'ad_list',
+    })
 
 
 @login_required
@@ -1468,62 +1473,47 @@ def _hover_preview_html(rating, year, overview, title_html=''):
     return ''.join(parts)
 
 
-def _render_movie_cards(movies):
-    """Render movie cards HTML for AJAX load-more and catalog grids."""
+def _render_card_items(items, build_url, date_field):
+    """Shared card renderer for AJAX load-more and catalog grids (deduplicated)."""
     import html as _html
     parts = []
-    for m in movies:
-        rd = m.get('release_date', '') or m.get('year', '')
-        if _is_future_date(rd):
+    for item in items:
+        date_value = item.get(date_field, '') or item.get('year', '')
+        if _is_future_date(date_value):
             badge = '<div class="card-rating-badge" style="background:rgba(39,174,96,.85);color:#fff">Coming Soon</div>'
         else:
-            badge = '<div class="card-rating-badge">{rating}</div>'.format(rating=m.get('vote_average', ''))
-        title_esc = _html.escape(str(m.get('title', '')))
-        preview = _hover_preview_html(m.get('vote_average'), m.get('year'), m.get('overview'), title_html=title_esc)
+            badge = '<div class="card-rating-badge">{rating}</div>'.format(rating=item.get('vote_average', ''))
+        title_esc = _html.escape(str(item.get('title', '')))
+        preview = _hover_preview_html(item.get('vote_average'), item.get('year'), item.get('overview'), title_html=title_esc)
         parts.append(
-            '<div class="card-wrapper"><a href="/movies/{slug}/" class="movie-card" title="{title}">'
+            '<div class="card-wrapper"><a href="{url}" class="movie-card" title="{title}">'
             '<div class="card-image-container">'
             '<img class="card-image" src="{img}" alt="{title}" loading="lazy">'
             '{badge}'
             '{preview}'
             '</div></a></div>'.format(
-                slug=m.get('slug', ''),
+                url=build_url(item),
                 title=title_esc,
-                img=m.get('cover_url', ''),
+                img=item.get('cover_url', ''),
                 badge=badge,
                 preview=preview,
             )
         )
     return ''.join(parts)
+
+
+def _render_movie_cards(movies):
+    """Render movie cards HTML for AJAX load-more and catalog grids."""
+    def build_url(m):
+        return '/movies/{}/'.format(m.get('slug', ''))
+    return _render_card_items(movies, build_url, 'release_date')
 
 
 def _render_series_cards(series_list):
     """Render series cards HTML for AJAX load-more and catalog grids."""
-    import html as _html
-    parts = []
-    for s in series_list:
-        fad = s.get('first_air_date', '') or s.get('year', '')
-        if _is_future_date(fad):
-            badge = '<div class="card-rating-badge" style="background:rgba(39,174,96,.85);color:#fff">Coming Soon</div>'
-        else:
-            badge = '<div class="card-rating-badge">{rating}</div>'.format(rating=s.get('vote_average', ''))
-        title_esc = _html.escape(str(s.get('title', '')))
-        preview = _hover_preview_html(s.get('vote_average'), s.get('year'), s.get('overview'), title_html=title_esc)
-        parts.append(
-            '<div class="card-wrapper"><a href="/series/id/{sid}/" class="movie-card" title="{title}">'
-            '<div class="card-image-container">'
-            '<img class="card-image" src="{img}" alt="{title}" loading="lazy">'
-            '{badge}'
-            '{preview}'
-            '</div></a></div>'.format(
-                sid=s.get('id', ''),
-                title=title_esc,
-                img=s.get('cover_url', ''),
-                badge=badge,
-                preview=preview,
-            )
-        )
-    return ''.join(parts)
+    def build_url(s):
+        return '/series/id/{}/'.format(s.get('id', ''))
+    return _render_card_items(series_list, build_url, 'first_air_date')
 
 
 @cache_control(public=True, max_age=300, stale_while_revalidate=3600)
@@ -2318,110 +2308,58 @@ def edit_settings(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
-def branding_settings(request):
+def _settings_section_view(request, form_class, title, description='', back_url='admin_dashboard'):
+    """Shared handler for the single-section admin settings pages (deduplicated)."""
     site_settings = SiteSettings.get_settings()
     if request.method == 'POST':
-        form = BrandingSettingsForm(request.POST, instance=site_settings)
+        form = form_class(request.POST, instance=site_settings)
         if form.is_valid():
             form.save()
             return redirect('admin_dashboard')
     else:
-        form = BrandingSettingsForm(instance=site_settings)
+        form = form_class(instance=site_settings)
     return render(request, 'core/settings_section.html', {
         'form': form,
-        'title': 'Branding Settings',
-        'back_url': 'admin_dashboard',
+        'title': title,
+        'description': description,
+        'back_url': back_url,
     })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def branding_settings(request):
+    return _settings_section_view(request, BrandingSettingsForm, 'Branding Settings')
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def display_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = DisplaySettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = DisplaySettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'Display Settings',
-        'back_url': 'admin_dashboard',
-    })
+    return _settings_section_view(request, DisplaySettingsForm, 'Display Settings')
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def data_source_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = DataSourceSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = DataSourceSettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'Data Source Settings',
-        'back_url': 'admin_dashboard',
-    })
+    return _settings_section_view(request, DataSourceSettingsForm, 'Data Source Settings')
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def tmdb_db_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = TMDBDBSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = TMDBDBSettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'TMDB Database Settings',
-        'back_url': 'admin_dashboard',
-    })
+    return _settings_section_view(request, TMDBDBSettingsForm, 'TMDB Database Settings')
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def player_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = PlayerSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = PlayerSettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'Player Settings',
-        'back_url': 'admin_dashboard',
-    })
+    return _settings_section_view(request, PlayerSettingsForm, 'Player Settings')
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def url_blocking_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = URLBlockingSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = URLBlockingSettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'URL Blocking Settings',
-        'back_url': 'admin_dashboard',
-    })
+    return _settings_section_view(request, URLBlockingSettingsForm, 'URL Blocking Settings')
 
 
 def _safe_smtp_port(raw_value, default=587):
@@ -2833,21 +2771,13 @@ def ajax_email_logs(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def footer_settings(request):
-    site_settings = SiteSettings.get_settings()
-    if request.method == 'POST':
-        form = FooterSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return redirect('admin_dashboard')
-    else:
-        form = FooterSettingsForm(instance=site_settings)
-    return render(request, 'core/settings_section.html', {
-        'form': form,
-        'title': 'Footer Settings',
-        'description': 'Edit all footer sections including links, genres, countries, subscribe block, logo area, copyright, and disclaimer.',
-        'back_url': 'admin_dashboard',
-    })
+    return _settings_section_view(
+        request, FooterSettingsForm, 'Footer Settings',
+        description='Edit all footer sections including links, genres, countries, subscribe block, logo area, copyright, and disclaimer.'
+    )
 
 
 @login_required
@@ -3130,7 +3060,12 @@ def content_row_delete(request, row_id):
     if request.method == 'POST':
         content_row.delete()
         return redirect('content_row_list')
-    return render(request, 'core/content_row_delete.html', {'content_row': content_row})
+    return render(request, 'core/object_delete_confirm.html', {
+        'page_title': 'Delete Content Row',
+        'object_label': 'the content row',
+        'object_name': content_row.title,
+        'cancel_url_name': 'content_row_list',
+    })
 
 
 
@@ -6542,7 +6477,12 @@ def player_delete(request, player_id):
     if request.method == 'POST':
         player.delete()
         return redirect('player_list')
-    return render(request, 'core/player_delete.html', {'player': player})
+    return render(request, 'core/object_delete_confirm.html', {
+        'page_title': 'Delete Player Configuration',
+        'object_label': 'the player configuration',
+        'object_name': player.name,
+        'cancel_url_name': 'player_list',
+    })
 
 
 @login_required
@@ -6597,7 +6537,12 @@ def navbar_item_delete(request, item_id):
     if request.method == 'POST':
         navbar_item.delete()
         return redirect('navbar_item_list')
-    return render(request, 'core/navbar_item_delete.html', {'navbar_item': navbar_item})
+    return render(request, 'core/object_delete_confirm.html', {
+        'page_title': 'Delete Navbar Item',
+        'object_label': 'the navbar item',
+        'object_name': navbar_item.name,
+        'cancel_url_name': 'navbar_item_list',
+    })
 
 
 @login_required
