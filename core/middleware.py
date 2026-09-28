@@ -2,6 +2,7 @@
 from django.shortcuts import redirect
 from django.conf import settings
 from django.utils import timezone
+from django.core.cache import cache
 from .models import SiteSettings, WebsiteVisitor, WebsiteVisitorVisit
 import uuid
 
@@ -147,18 +148,48 @@ class WebsiteVisitorTrackingMiddleware:
 
         try:
             if visitor_id is not None:
-                # Upsert existing visitor in one query
-                from django.db.models import F
-                visitor, _ = WebsiteVisitor.objects.update_or_create(
-                    visitor_id=visitor_id,
-                    defaults={
-                        'user': request.user if request.user.is_authenticated else None,
-                        'last_path': path,
-                        'total_visits': F('total_visits') + 1,
-                        'last_ip_address': client_ip,
-                        'user_agent': user_agent,
-                    },
-                )
+                # Cache the visitor PK so the common case skips the per-request
+                # upsert SELECT; the row is still updated atomically by pk.
+                # Falls back to a full upsert whenever the cache is cold.
+                pk_cache_key = f'wv_pk_{visitor_id.hex}'
+                visitor_pk = cache.get(pk_cache_key)
+                if visitor_pk is None:
+                    from django.db.models import F
+                    visitor, _ = WebsiteVisitor.objects.update_or_create(
+                        visitor_id=visitor_id,
+                        defaults={
+                            'user': request.user if request.user.is_authenticated else None,
+                            'last_path': path,
+                            'total_visits': F('total_visits') + 1,
+                            'last_ip_address': client_ip,
+                            'user_agent': user_agent,
+                        },
+                    )
+                    visitor_pk = visitor.pk
+                    try:
+                        cache.set(pk_cache_key, visitor_pk, 600)
+                    except Exception:
+                        pass
+                else:
+                    from django.db.models import F
+                    WebsiteVisitor.objects.filter(pk=visitor_pk).update(
+                        user=request.user if request.user.is_authenticated else None,
+                        last_path=path,
+                        last_seen_at=timezone.now(),
+                        total_visits=F('total_visits') + 1,
+                        last_ip_address=client_ip,
+                        user_agent=user_agent,
+                    )
+
+                # Record visit (skip for bots to reduce noise). Passing the FK id
+                # directly avoids the ORM's SELECT on the parent row.
+                if not is_bot:
+                    WebsiteVisitorVisit.objects.create(
+                        visitor_id=visitor_pk,
+                        path=path,
+                        ip_address=client_ip,
+                        is_bot=is_bot,
+                    )
             else:
                 new_visitor_id = uuid.uuid4()
                 set_cookie = True
@@ -171,14 +202,14 @@ class WebsiteVisitorTrackingMiddleware:
                     user_agent=user_agent,
                 )
 
-            # Record visit (skip for bots to reduce noise)
-            if not is_bot:
-                WebsiteVisitorVisit.objects.create(
-                    visitor=visitor,
-                    path=path,
-                    ip_address=client_ip,
-                    is_bot=is_bot,
-                )
+                # Record visit (skip for bots to reduce noise)
+                if not is_bot:
+                    WebsiteVisitorVisit.objects.create(
+                        visitor=visitor,
+                        path=path,
+                        ip_address=client_ip,
+                        is_bot=is_bot,
+                    )
         except Exception:
             pass
 
