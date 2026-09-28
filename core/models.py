@@ -121,6 +121,9 @@ class ContentRow(models.Model):
 
 
 class SiteSettings(models.Model):
+
+    _SETTINGS_CACHE_KEY = 'sitesettings_row_v1'
+
     DATA_SOURCE_CHOICES = [
         ('tmdb', 'TMDB API'),
         ('tmdb_db', 'TMDB Database (Extracted)'),
@@ -306,8 +309,27 @@ class SiteSettings(models.Model):
 
     @classmethod
     def get_settings(cls):
+        # Cached singleton: this is read by middleware and context processors on
+        # every request, so avoid a DB round-trip each time. Invalidate on save
+        # (below) so admin changes apply immediately; the 60s TTL is a fallback
+        # for out-of-process changes.
+        from django.core.cache import cache
+        cached = cache.get(cls._SETTINGS_CACHE_KEY)
+        if cached is not None:
+            return cached
         settings, created = cls.objects.get_or_create(pk=1)
+        cache.set(cls._SETTINGS_CACHE_KEY, settings, 60)
         return settings
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        from django.core.cache import cache
+        cache.delete(self._SETTINGS_CACHE_KEY)
+
+    def delete(self, *args, **kwargs):
+        from django.core.cache import cache
+        cache.delete(self._SETTINGS_CACHE_KEY)
+        super().delete(*args, **kwargs)
 
 
 class Ad(models.Model):

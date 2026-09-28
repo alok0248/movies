@@ -34,11 +34,8 @@ if creds_path.exists():
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-your-secret-key-here')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Default to True for dev, False for prod
-if ENV == 'prod':
-    DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 't')
-else:
-    DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 't')
+# Default to False everywhere; enable explicitly via DJANGO_DEBUG in development.
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 't')
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
@@ -190,7 +187,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Performance Optimizations
 # ---------------------------------------------------------------------------
 
-# SQLite timeout for concurrent access + WAL mode for better concurrency
+# SQLite tuning: busy timeout. WAL journal mode + synchronous=NORMAL are applied
+# per-connection in core/signals.py (connection_created), guarded so non-SQLite
+# engines such as MySQL/Oracle are unaffected.
 DATABASES['default']['OPTIONS'] = {
     'timeout': 20,
 }
