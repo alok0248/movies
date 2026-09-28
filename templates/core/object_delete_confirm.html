@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% comment %}
+Shared delete-confirmation page. Context:
+  page_title      e.g. "Delete Ad"
+  object_name     display name of the item being deleted
+  object          the object (used for `{{ object }}` in the message)
+  cancel_url_name Django URL name to return to
+{% endcomment %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">{{ page_title }}</h1>
+    <div class="card">
+        <div class="card-body">
+            <p class="mb-4">Are you sure you want to delete {{ object_label|default:"the item" }} "{{ object_name }}"?</p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger me-2">Yes, Delete</button>
+                <a href="{% url cancel_url_name %}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
