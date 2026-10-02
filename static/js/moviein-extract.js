@@ -11,6 +11,11 @@
        callbacks.onSubtitles({ url, lang, lang_name })
        callbacks.onDone(err)        — null on success, error string on failure
        callbacks.onStatus(msg)      — optional progress label
+     MovieInExtract.browse(typeId, pn)
+       — Browse the speedracelight feed for a category.  Returns the
+         flattened vod list (handles nested block_list/vod_list modules).
+     MovieInExtract.search(kw)
+       — Search by keyword, returns flattened vod list.
    ===================================================================== */
 var MovieInExtract = (function () {
   'use strict';
@@ -423,6 +428,7 @@ var MovieInExtract = (function () {
     extract: extract,
     initSession: initSession,
     search: search,
+    browse: browse,
     resolveTmdbId: resolveTmdbId,
     DEVICE: DEVICE
   };

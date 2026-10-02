@@ -2,7 +2,6 @@ from django.urls import path
 from django.views.generic import TemplateView
 from . import views
 from . import local_player
-from . import streaming_views
 from . import mbtv_views
 from cineplayer import views as cineplayer_views
 
@@ -174,14 +173,11 @@ urlpatterns = [
     path('api/health', views.health_view, name='videasy_health'),
     path('ajax/videasy-sources/', views.videasy_sources_view, name='videasy_sources'),
     path('api/series-extractor/', views.series_extractor_view, name='series_extractor'),
-    path('ajax/player-sources/', views.player_sources_view, name='player_sources'),
 
     # MovieBoxTV client-side extractor (relay + media proxy)
     path('ajax/mbtv/relay/', mbtv_views.mbtv_relay_view, name='mbtv_relay'),
     path('ajax/mbtv/title/', mbtv_views.mbtv_title_view, name='mbtv_title'),
     path('mbtv-media/', mbtv_views.mbtv_media_view, name='mbtv_media'),
-    path('ajax/prefetch-sources/', streaming_views.prefetch_sources_view, name='prefetch_sources'),
-    path('ajax/player-sources-stream/', streaming_views.player_sources_stream_view, name='player_sources_stream'),
     path('ajax/player-episodes/', views.player_episodes_view, name='player_episodes'),
     path('api/links/', views.api_links_view, name='api_links'),
     path('api/links', views.api_links_view, name='api_links_noslash'),
@@ -205,6 +201,7 @@ urlpatterns = [
     path('sw-proxy.js', views.serve_sw_proxy_js, name='serve_sw_proxy_js'),
     path('ads.txt', views.serve_ads_txt, name='serve_ads_txt'),
     path('app-ads.txt', views.serve_app_ads_txt, name='serve_app_ads_txt'),
+    path('google3d3495bfc5b3fba2.html', views.serve_google_verification, name='google_verification'),
     path('admin-dashboard/ad-files/', views.admin_ad_files, name='admin_ad_files'),
     path('ajax/ad-files/save/', views.ajax_save_ad_file, name='ajax_save_ad_file'),
     path('ajax/ad-files/delete/', views.ajax_delete_ad_file, name='ajax_delete_ad_file'),

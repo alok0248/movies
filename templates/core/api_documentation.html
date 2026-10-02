@@ -132,7 +132,7 @@ User-Agent: okhttp/4.12.0</pre>
 
             <div class="api-label">Step 3 — Streaming endpoints</div>
             <p class="api-desc">
-                Streaming endpoints (<code>/api/links/</code>, <code>/ajax/player-sources/</code>) are open
+                Streaming endpoints (<code>/api/links/</code>) are open
                 (same-origin AJAX + app calls) — no Basic Auth, no JWT. Send <code>Accept: application/json</code>.
             </p>
             <div class="api-note">
@@ -384,38 +384,10 @@ Content-Type: application/json</pre>
                 <span>Playback strategy for native players: try <code>url</code> first; if the CDN refuses (403/CORS/IP-bound), play <code>proxy_url</code>. Try each link in order before giving up.</span>
             </div>
         </div>
-    </div>
-
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
-            <span class="api-method GET">GET</span>
-            <span class="api-card-path">/ajax/player-sources/</span>
-            <span class="api-card-title">Extracted sources for the web player (same engine, different shape)</span>
-            <i class="fas fa-chevron-down api-chevron"></i>
-        </div>
-        <div class="api-card-body">
-            <p class="api-desc">
-                Same extraction engine as <code>/api/links/</code> but returns the source list shape the
-                web player consumes, and is what the player's server-fallback stage calls when browser
-                extraction fails. Cached 3&nbsp;min (success) / 60&nbsp;s (empty).
-            </p>
-            <div class="api-label">Query params</div>
-            <pre class="api-code" data-copy>tmdb_id, type, season, episode — same as /api/links/</pre>
-            <div class="api-label">Response 200</div>
-            <pre class="api-code" data-copy>{
-  "success": true,
-  "results": [
-    { "name": "Breach", "quality": "1080p", "url": "https://..." }
-  ],
-  "cached": false
-}</pre>
-        </div>
-    </div>
-
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
-            <span class="api-method GET">GET</span>
-            <span class="api-card-path">/ajax/player-episodes/</span>
+    </div><div class="api-card">
+    <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="api-method GET">GET</span>
+        <span class="api-card-path">/ajax/player-episodes/</span>
             <span class="api-card-title">Episode list for a series season</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>

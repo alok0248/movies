@@ -413,22 +413,6 @@ function playOnVideo(el, url) {
   el.play().catch(() => {});
 }
 
-// Last-resort stream lookup: ask Django's videasy extractor (server-side,
-// no oracle needed) for fresh sources for this title and play the first one
-// that responds. Bypasses the gateway/oracle entirely.
-async function findExtractorStream() {
-  const type = curType === 'tv' ? 'tv' : 'movie';
-  let url = '/ajax/player-sources/?tmdb_id=' + encodeURIComponent(curTmdb) + '&type=' + type;
-  if (type === 'tv') url += '&season=' + curSeason + '&episode=' + curEpisode;
-  try {
-    const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (!d.success || !Array.isArray(d.results)) return null;
-    return d.results.filter(s => s && s.url);
-  } catch (e) { return null; }
-}
-
 // ── Client-side Cineplay extractor fallback ─────────────────────────
 // When the moviein catalog (resolve) or the whole gateway chain is down,
 // extract sources in the browser — same engine as the main site player.
@@ -575,23 +559,15 @@ async function playEp(ep) {
       console.log('[CinePlayer] Using relay stream');
       streamUrl = relayUrl;
     } else {
-      // Oracle/gateway dead — extract sources via Django and play them directly
-      console.warn('[CinePlayer] Relay stream unavailable, trying videasy extractor...');
-      const sources = await findExtractorStream();
-      if (sources && sources.length) {
-        window._cineExtractorSources = sources;
-        streamUrl = sources[0].url;
-        console.log('[CinePlayer] Using extractor source:', sources[0].server, sources[0].quality);      } else {
-        // Final tier: client-side Cineplay extraction (same engine as the main player)
-        console.warn('[CinePlayer] Server extractor unavailable, trying client-side Cineplay extractor...');
-        const extSources = await extractorFallback(
-          'No stream available', 'The stream backend (oracle) is offline and no extractor source could be found for this title. Try again later.');
-        if (extSources && extSources.length) {
-          await playExtractorSources(extSources);
-          return;
-        }
-        return; // extractorFallback already showed the error
+      // Oracle/gateway dead — extract sources in-browser (no server fallback)
+      console.warn('[CinePlayer] Relay stream unavailable, extracting sources in-browser...');
+      const extSources = await extractorFallback(
+        'No stream available', 'The stream backend (oracle) is offline and no extractor source could be found for this title. Try again later.');
+      if (extSources && extSources.length) {
+        await playExtractorSources(extSources);
+        return;
       }
+      return; // extractorFallback already showed the error
     }
   }
   playOnVideo(v, streamUrl);

@@ -3,12 +3,15 @@
 This document covers how the project turns a TMDB ID into playable stream links,
 how the links are decrypted, and how playback reaches the browser.
 
-There are **two parallel implementations of the same extraction logic**:
+Extraction now runs **entirely in the browser**. The server-side extraction
+fallback (the `/ajax/player-sources/` and `/ajax/player-sources-stream/`
+endpoints) have been removed — all nine "servers" are queried from JavaScript
+via `static/js/client-extract.js` and `static/js/moviein-extract.js`.
 
 | Implementation | Where | Runs in | Used by |
 |---|---|---|---|
-| Server-side (Python) | `core/views.py` + `core/streaming_views.py` | Django server | Detail-page link lists, CinePlayer fallback |
-| Client-side (JS) | `static/js/client-extract.js` + `static/js/moviein-extract.js` | Browser | The extractor player (`/api/player/`, detail pages) |
+| Server-side (Python) | `core/views.py` | Django server | Detail-page link lists, native-app `/api/links/` |
+| Client-side (JS) | `static/js/client-extract.js` + `static/js/moviein-extract.js` + `static/js/mbtv-extract.js` | Browser | The extractor player (`/api/player/`, detail pages, CinePlayer) |
 
 The upstream for both is the **speedracelight API** (`api.speedracelight.com`,
 internally called "Vidking") — the backend that videasy-style players talk to —
@@ -190,8 +193,6 @@ A second provider on the same API with a mobile-app-style session:
 |---|---|---|
 | `GET /ajax/fetch-sources/` | `fetch_embed_sources` | Original one-shot server extraction; returns decrypted `sources[]` |
 | `GET /ajax/videasy-sources/` | `videasy_sources_view` | Extraction grouped per server; stops after 3 productive servers (detail-page link lists) |
-| `GET /ajax/player-sources/` | `player_sources_view` | Server extraction, **all 9 servers in parallel**, flat deduped `results[]` for the player |
-| `GET /ajax/player-sources-stream/` | `player_sources_stream_view` | Same but **SSE**: emits `type: source` events as each server responds (playback starts ASAP), then `type: done` |
 | `GET /ajax/player-episodes/` | `player_episodes_view` | Seasons + episodes for TV (from the speedracelight DB) |
 | `GET /api/links/` | `api_links_view` | **Direct-links API for native apps** — returns extracted links with raw + `/proxy/` routes per source (see below) |
 | `GET /api/player/` | `videasy_player_view` | The standalone extractor player page |
@@ -309,9 +310,8 @@ extractor player; video bytes never touch the Django server.
 | File | Role |
 |---|---|
 | `core/views.py` (lines ~5784-6060) | Vidking cipher, seed, per-server fetch (Python) |
-| `core/views.py` (lines ~7123-7360) | `videasy_sources_view`, `player_sources_view`, episodes |
+| `core/views.py` (lines ~7123-7360) | `videasy_sources_view`, episodes |
 | `core/views.py` (line ~6880) | Server-side `proxy_view` + manifest rewriting |
-| `core/streaming_views.py` | SSE extraction endpoint + seed prefetch |
 | `static/js/client-extract.js` | Vidking cipher + extraction (browser) |
 | `static/js/moviein-extract.js` | MovieIn AES/MD5 extractor (browser) |
 | `static/js/player-core.js` | Source aggregation, probing, hls.js playback, fallback queue |
