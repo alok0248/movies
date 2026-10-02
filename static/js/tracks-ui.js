@@ -15,6 +15,8 @@
 var _pcWrapEl = null, _pcVidEl = null;
 var _pcChip = null, _pcChipBtn = null, _pcSheet = null, _pcBody = null;
 var _pcOpen = false, _pcDual = false;
+var _pcPendingAnchor = null, _pcAnchorUntil = 0;   /* section to keep scrolled-to across re-renders */
+var _pcKeepScroll = 0;                             /* scroll position preserved across re-renders */
 var _pcPrefLang = null, _pcPrefRes = null;
 var _pcInjected = false;
 var _pcVolBefore = null;       /* main video volume before dual took over */
@@ -36,13 +38,17 @@ function _pcInjectStyle() {
   var st = document.createElement('style');
   st.id = 'pcTracksStyle';
   st.textContent = [
-    '.pc-tracks{position:absolute;top:10px;right:12px;z-index:30;display:flex;align-items:center;gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease}',
+    '.pc-tracks{position:absolute;top:10px;right:12px;z-index:30;display:flex;align-items:center;gap:6px;row-gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 16px)}',
     '.pc-tracks.show{opacity:1;pointer-events:auto;transform:translateY(0)}',
     '.pc-tracks-chip{display:inline-flex;align-items:center;gap:7px;max-width:220px;padding:6px 12px;border-radius:999px;background:rgba(10,10,18,.72);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 18px rgba(0,0,0,.35);transition:all .15s;user-select:none;white-space:nowrap}',
     '.pc-tracks-chip:hover{background:rgba(30,30,48,.88);border-color:var(--brand,#e50914)}',
     '.pc-tracks-chip svg{flex-shrink:0;opacity:.85}',
     '.pc-tracks-chip .pc-chip-q{color:#a78bfa;font-weight:700}',
     '.pc-tracks-chip .pc-chip-lang{color:#e67e22;font-weight:600;overflow:hidden;text-overflow:ellipsis;max-width:96px}',
+    '.pc-sec-anchor{scroll-margin-top:6px}',
+    '.pc-sec-flash{animation:pcSecFlash 1.2s ease}',
+    '@keyframes pcSecFlash{0%,60%{color:rgba(255,255,255,.9)}100%{color:rgba(255,255,255,.35)}}',
+    '@media (max-width:640px){.pc-tracks{top:6px;right:8px;gap:4px;row-gap:4px}.pc-tracks-chip{padding:4px 9px;font-size:.62rem;max-width:46vw}.pc-tracks-chip svg{width:11px;height:11px;flex-shrink:0}}',
     '.pc-tracks-chip .pc-chip-dual{color:#46d369}',
     '.pc-sheet{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.96);z-index:31;width:min(430px,calc(100% - 16px));max-height:86%;display:none;flex-direction:column;border-radius:16px;background:rgba(16,16,28,.94);border:1px solid rgba(255,255,255,.12);box-shadow:0 24px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);overflow:hidden;color:#fff}',
     '.pc-sheet.open{display:flex;animation:pcSheetIn .22s cubic-bezier(.2,.9,.3,1.2) forwards}',
@@ -62,7 +68,7 @@ function _pcInjectStyle() {
     '.pc-row .pc-check{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.55rem;color:transparent;transition:all .12s}',
     '.pc-row.on .pc-check{border-color:var(--brand,#e50914);background:var(--brand,#e50914);color:#fff}',
     '.pc-row .pc-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
-    '.pc-row .pc-sub{font-size:.62rem;color:rgba(255,255,255,.35);flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.pc-row .pc-sub{font-size:.62rem;color:rgba(255,255,255,.35);flex-shrink:0;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.pc-row .pc-badge{padding:2px 8px;border-radius:999px;font-size:.62rem;font-weight:700;flex-shrink:0;background:rgba(108,92,231,.18);color:#a78bfa}',
     '.pc-row .pc-lang-badge{padding:2px 8px;border-radius:999px;font-size:.62rem;font-weight:700;flex-shrink:0;background:rgba(230,126,34,.16);color:#e67e22}',
     '.pc-row .pc-srv{color:rgba(255,255,255,.3);font-size:.6rem;flex-shrink:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
@@ -189,12 +195,64 @@ function _pcRefreshSources() {
   if (!_pcWrapEl) return;
   if (_allSources && _allSources.length) {
     if (_pcChipBtn) _pcChipBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="rgba(10,10,18,.7)"/><circle cx="15" cy="12" r="2" fill="rgba(10,10,18,.7)"/><circle cx="8" cy="18" r="2" fill="rgba(10,10,18,.7)"/></svg><span class="pc-chip-txt">' + _pcChipLabel() + '</span>';
+    _pcUpdateQuickChips();
     _pcShowChip(true);
   } else {
     _pcShowChip(false);
   }
   _pcReapplySub();
   if (_pcOpen) _pcRenderSheet();
+}
+/* ===== Audio / Video quick-change chips =====
+   Dedicated buttons next to Tracks so the audio-language and video-quality
+   lists are one click away. Labels mirror the active source and every click
+   opens the sheet scrolled straight to that section. */
+var _pcChipAudio = null, _pcChipVideo = null;
+var _PC_ICONS = {
+  audio: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+  video: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8.5v7L16 12z"/></svg>'
+};
+function _pcEnsureQuickChips() {
+  if (!_pcChip) return;
+  if (!_pcChipAudio) {
+    _pcChipAudio = document.createElement('div');
+    _pcChipAudio.className = 'pc-tracks-chip pc-chip-audio';
+    _pcChipAudio.title = 'Change audio language';
+    _pcChipAudio.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (_pcOpen) _pcClose(); else _pcOpenSheet('pc-sec-audio');
+    });
+    _pcChip.appendChild(_pcChipAudio);
+  }
+  if (!_pcChipVideo) {
+    _pcChipVideo = document.createElement('div');
+    _pcChipVideo.className = 'pc-tracks-chip pc-chip-video';
+    _pcChipVideo.title = 'Change video quality';
+    _pcChipVideo.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (_pcOpen) _pcClose(); else _pcOpenSheet('pc-sec-video');
+    });
+    _pcChip.appendChild(_pcChipVideo);
+  }
+}
+function _pcUpdateQuickChips() {
+  _pcEnsureQuickChips();
+  if (!_pcChipAudio || !_pcChipVideo) return;
+  var a = _pcActiveSrc();
+  if (!a) {
+    _pcChipAudio.style.display = 'none';
+    _pcChipVideo.style.display = 'none';
+    return;
+  }
+  var lang = _pcLangOf(a);
+  var q = _pcQOf(a);
+  var langShort = lang && lang !== 'Original' ? lang : 'Audio';
+  if (langShort.length > 14) langShort = langShort.substring(0, 13) + '…';
+  _pcChipAudio.innerHTML = _PC_ICONS.audio + '<span class="pc-chip-txt"><span class="pc-chip-lang">' + langShort + '</span></span>';
+  _pcChipAudio.style.display = '';
+  var qLabel = q && q !== '?' ? q : 'Video';
+  _pcChipVideo.innerHTML = _PC_ICONS.video + '<span class="pc-chip-txt"><span class="pc-chip-q">' + qLabel + '</span></span>';
+  _pcChipVideo.style.display = '';
 }
 /* If the user had a subtitle on and the player rebuilt (episode switch /
    failed-stream retry wipes the <video>), re-attach it once tracks return.
@@ -224,10 +282,12 @@ function _pcInitUI(vw, vid) {
     _pcChip.className = 'pc-tracks';
     _pcChip.innerHTML = '<div class="pc-tracks-chip" title="Audio &amp; Resolution"><span class="pc-chip-txt">Tracks</span></div>';
     _pcChipBtn = _pcChip.querySelector('.pc-tracks-chip');
-    _pcChip.addEventListener('click', function(e) {
+    _pcChipBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       if (_pcOpen) _pcClose(); else _pcOpenSheet();
     });
+    /* Audio / Video quick-change chips (labels fill in as sources arrive) */
+    _pcEnsureQuickChips();
   }
   if (!_pcSheet) {
     _pcSheet = document.createElement('div');
@@ -249,6 +309,10 @@ function _pcInitUI(vw, vid) {
     });
     _pcSheet.addEventListener('click', function(e) { e.stopPropagation(); });
     _pcBody = _pcSheet.querySelector('#pcBody');
+    /* Manual scroll/touch cancels the pending quick-chip anchor — never fight
+       the user's own scrolling. */
+    _pcBody.addEventListener('wheel', function() { _pcPendingAnchor = null; }, { passive: true });
+    _pcBody.addEventListener('touchstart', function() { _pcPendingAnchor = null; }, { passive: true });
   }
   /* The detail pages empty the player container and rebuild it on episode
      switch / stream retry — re-attach the (once-created) chip + sheet then.
@@ -294,14 +358,41 @@ function _pcInitUI(vw, vid) {
     if (e.key === 'Escape' && _pcOpen) _pcClose();
   });
 }
-function _pcOpenSheet() {
+function _pcOpenSheet(anchorId) {
   _pcOpen = true;
+  /* Remember the target section: subtitle results re-render the body right
+     after the sheet opens, wiping any scroll position — _pcRenderSheet
+     re-applies this anchor after every render until it expires. */
+  _pcPendingAnchor = anchorId || null;
+  _pcAnchorUntil = Date.now() + 5000;
+  _pcKeepScroll = 0;   /* fresh targeted open — the anchor decides where we land */
   _pcRefreshSources();
   if (_pcChip) _pcChip.classList.add('show');
   _pcSheet.classList.add('open');
+  /* Jump straight to the requested section (Audio / Video quality).
+     The body can be re-rendered WHILE we scroll (subtitles arriving from
+     their async search replace every node and reset scrollTop), so a node
+     captured once goes stale mid-animation. Re-query the section on every
+     attempt instead of holding one element. */
+  if (anchorId && _pcBody) {
+    var tries = 0;
+    var attempt = function() {
+      if (!_pcOpen || !_pcBody) return;
+      var sec = _pcBody.querySelector('#' + anchorId);
+      if (sec && sec.isConnected) {
+        /* Position is handled by the anchor in _pcRenderSheet — this loop
+           only re-highlights the section if a re-render rebuilt the rows. */
+        sec.classList.add('pc-sec-flash');
+        setTimeout(function() { sec.classList.remove('pc-sec-flash'); }, 1200);
+      }
+      if (++tries < 8) setTimeout(attempt, 150);
+    };
+    requestAnimationFrame(attempt);
+  }
 }
 function _pcClose() {
   _pcOpen = false;
+  _pcPendingAnchor = null;
   _pcSheet.classList.remove('open');
   _pcShowChip(true);
 }
@@ -312,8 +403,9 @@ function _pcEl(tag, cls, html) {
   if (html !== undefined) el.innerHTML = html;
   return el;
 }
-function _pcAddSection(body, label, hint) {
-  var sec = _pcEl('div', 'pc-sec', label + (hint ? '<span class="pc-sec-hint">' + hint + '</span>' : ''));
+function _pcAddSection(body, label, hint, anchorId) {
+  var sec = _pcEl('div', 'pc-sec' + (anchorId ? ' pc-sec-anchor' : ''), label + (hint ? '<span class="pc-sec-hint">' + hint + '</span>' : ''));
+  if (anchorId) sec.id = anchorId;
   body.appendChild(sec);
   return sec;
 }
@@ -330,6 +422,11 @@ function _pcAddRow(container, opts) {
 
 function _pcRenderSheet() {
   if (!_pcBody) return;
+  /* A re-render (new subtitles, a playing event…) rebuilds every row and
+     resets scrollTop — remember where the user was and restore it below. */
+  if (_pcOpen && _pcBody.isConnected && _pcBody.scrollHeight > _pcBody.clientHeight) {
+    _pcKeepScroll = _pcBody.scrollTop;
+  }
   _pcBody.innerHTML = '';
   var active = _pcActiveSrc();
   _pcEnsureSubs();
@@ -367,13 +464,21 @@ function _pcRenderSheet() {
     if (ao !== bo) return ao - bo;
     return a.localeCompare(b);
   });
-  _pcAddSection(_pcBody, 'Audio', langList.length + ' track' + (langList.length === 1 ? '' : 's'));
+  _pcAddSection(_pcBody, 'Audio', langList.length + ' track' + (langList.length === 1 ? '' : 's'), 'pc-sec-audio');
   var activeLang = active ? _pcLangOf(active) : null;
   langList.forEach(function(lang) {
     var list = seenLang[lang];
     var res = _pcSortedByBest(list.slice());
     var top = res[0];
-    var sub = top ? (top._server || '') + (res.length > 1 ? ' +' + (res.length - 1) : '') : '';
+    /* Show which resolutions exist in this audio, so each row is
+       self-explanatory ("1080p · 720p — MovieBoxTV +2"). */
+    var rSeen = {}, rLabels = [];
+    res.forEach(function(x) {
+      var rl = _pcCanonRes(x);
+      if (!rSeen[rl]) { rSeen[rl] = 1; rLabels.push(rl); }
+    });
+    var sub = (rLabels.length ? rLabels.join(' · ') : 'Auto') +
+      (top && top._server ? ' — ' + top._server + (res.length > 1 ? ' +' + (res.length - 1) : '') : '');
     _pcAddRow(_pcBody, {
       on: activeLang && _pcLangEq(lang, activeLang),
       badgeHtml: '<span class="pc-lang-badge">' + lang + '</span>',
@@ -422,12 +527,22 @@ function _pcRenderSheet() {
     seenRes[res].push(src);
   }
   resList.sort(function(a, b) { return _pcResRank(a) - _pcResRank(b); });
-  _pcAddSection(_pcBody, 'Resolution', resList.length + ' qualit' + (resList.length === 1 ? 'y' : 'ies'));
+  _pcAddSection(_pcBody, 'Resolution', resList.length + ' qualit' + (resList.length === 1 ? 'y' : 'ies'), 'pc-sec-video');
   var activeRes = active ? _pcCanonRes(active) : null;
   resList.forEach(function(res) {
     var list = _pcSortedByBest(seenRes[res].slice());
     var top = list[0];
-    var sub = top ? (top._server || '') : '';
+    /* Show which audio languages exist at this resolution, so it's clear
+       which resolution is available in which audio ("Original · Hindi"). */
+    var lSeen = {}, lLabels = [];
+    list.forEach(function(x) {
+      var xl = _pcLangOf(x) || 'Original';
+      if (!lSeen[xl]) { lSeen[xl] = 1; lLabels.push(xl); }
+    });
+    var langTxt = lLabels.length > 2
+      ? lLabels.slice(0, 2).join(' · ') + ' +' + (lLabels.length - 2)
+      : (lLabels.join(' · ') || 'Original');
+    var sub = langTxt + (top && top._server ? ' — ' + top._server : '');
     _pcAddRow(_pcBody, {
       /* Exact match — never compare by numeric value, because "Auto HLS",
          "Auto", "Hindi"… all parse to 0 and would light up together. */
@@ -438,6 +553,53 @@ function _pcRenderSheet() {
       onClick: function() { _pcPickRes(res); }
     });
   });
+
+  /* ---- All Links ----
+     Every extracted source, one row each — the Audio/Resolution sections
+     collapse them ("MovieBoxTV +9"), so this is where the full list lives. */
+  var allSrcs = [];
+  for (var li = 0; li < _allSources.length; li++) {
+    var lsrc = _allSources[li];
+    if (lsrc && lsrc.url) allSrcs.push(lsrc);
+  }
+  if (allSrcs.length) {
+    _pcAddSection(_pcBody, 'All Links', allSrcs.length + ' link' + (allSrcs.length === 1 ? '' : 's'), 'pc-sec-links');
+    allSrcs.forEach(function(s, idx) {
+      var lang = _pcLangOf(s);
+      var res = _pcCanonRes(s);
+      var srv = s._server || s.server || ('Link ' + (idx + 1));
+      _pcAddRow(_pcBody, {
+        on: !!active && active.url === s.url,
+        /* Always show BOTH quality and language — this list exists so the
+           user can see exactly which link is which resolution in which audio. */
+        badgeHtml: '<span class="pc-badge">' + res + '</span>' +
+          '<span class="pc-lang-badge">' + (lang || 'Original') + '</span>',
+        txt: srv,
+        sub: '',
+        onClick: function() { _pcPlaySource(s); }
+      });
+    });
+  }
+
+  /* Re-apply the quick-chip anchor after re-renders — subtitle results can
+     replace the whole body right after the sheet opens, which resets the
+     scroll to the top. Instant jump so repeated renders can't fight. */
+  /* The quick-chip anchor wins while it's fresh; afterwards the user's own
+     scroll position is what gets preserved across re-renders. */
+  var anchored = false;
+  if (_pcPendingAnchor && Date.now() < _pcAnchorUntil) {
+    var anchorSec = _pcBody.querySelector('#' + _pcPendingAnchor);
+    if (anchorSec && anchorSec.isConnected) {
+      _pcBody.scrollTop += anchorSec.getBoundingClientRect().top - _pcBody.getBoundingClientRect().top;
+      anchored = true;
+    }
+  } else if (_pcPendingAnchor) {
+    _pcPendingAnchor = null;
+  }
+  if (!anchored && _pcKeepScroll > 0) {
+    _pcBody.scrollTop = _pcKeepScroll;
+    _pcKeepScroll = 0;
+  }
 }
 
 /* Compare two resolution labels for "same quality" purposes.

@@ -475,7 +475,23 @@ def _get_tmdb_key():
 
 
 def _fetch_tmdb_info(tmdb_id):
-    """Fetch title info from TMDB API. Returns (title, year, type_pid)."""
+    """Fetch title info from TMDB. Returns (title, year, type_pid).
+
+    Local TMDB DB first (no network flakiness), live API as fallback.
+    """
+    # 1. Local database
+    try:
+        from core.models import TMDBMovie, TMDBTV
+        m = TMDBMovie.objects.filter(id=tmdb_id).only('title', 'release_date').first()
+        if m and m.title:
+            return m.title, (m.release_date or '')[:4], 1
+        t = TMDBTV.objects.filter(id=tmdb_id).only('name', 'first_air_date').first()
+        if t and t.name:
+            return t.name, (t.first_air_date or '')[:4], 2
+    except Exception:
+        pass
+
+    # 2. Live API (retries on connection resets)
     tmdb_key = _get_tmdb_key()
     if not tmdb_key:
         return None, None, None
@@ -483,20 +499,26 @@ def _fetch_tmdb_info(tmdb_id):
     results = []
     for media_type in ('movie', 'tv'):
         url = f'https://api.themoviedb.org/3/{media_type}/{tmdb_id}?api_key={tmdb_key}&language=en-US'
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'CinePlayer/1.0'})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                data = json.loads(r.read().decode('utf-8', 'replace'))
-                title = data.get('title') or data.get('name') or ''
-                if media_type == 'movie':
-                    year = (data.get('release_date') or '')[:4]
-                else:
-                    year = (data.get('first_air_date') or '')[:4]
-                type_pid = 1 if media_type == 'movie' else 2
-                if title:
-                    results.append((title, year, type_pid))
-        except Exception:
+        req = urllib.request.Request(url, headers={'User-Agent': 'CinePlayer/1.0'})
+        # TMDB intermittently resets connections — retry before giving up
+        data = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    data = json.loads(r.read().decode('utf-8', 'replace'))
+                break
+            except Exception:
+                time.sleep(0.5 * (attempt + 1))
+        if data is None:
             continue
+        title = data.get('title') or data.get('name') or ''
+        if media_type == 'movie':
+            year = (data.get('release_date') or '')[:4]
+        else:
+            year = (data.get('first_air_date') or '')[:4]
+        type_pid = 1 if media_type == 'movie' else 2
+        if title:
+            results.append((title, year, type_pid))
 
     if not results:
         return None, None, None

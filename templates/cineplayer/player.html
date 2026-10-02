@@ -124,6 +124,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;font-family:
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="/static/js/mbtv-extract.js?v=9"></script>
 <script>
 // ═══ Config ═══
 const GW = '{{ gateway|default:"http://127.0.0.1:8787" }}';
@@ -210,7 +211,11 @@ async function init() {
   //    which searches by title — it knows many more IDs than the gateway cache)
   const data = await api('/api/resolve/tmdb/' + tmdb);
   if (!data || !data.vod_id) {
-    showError('TMDB ID not found', 'ID: ' + tmdb + (data && data.error ? ' — ' + data.error : ''));
+    // Catalog resolve failed — fall back to the client-side Cineplay extractor.
+    const extSources = await extractorFallback(
+      'TMDB ID not found', 'ID: ' + tmdb + (data && data.error ? ' — ' + data.error : ''));
+    if (!extSources) return;
+    await playExtractorSources(extSources);
     return;
   }
 
@@ -424,6 +429,120 @@ async function findExtractorStream() {
   } catch (e) { return null; }
 }
 
+// ── Client-side Cineplay extractor fallback ─────────────────────────
+// When the moviein catalog (resolve) or the whole gateway chain is down,
+// extract sources in the browser — same engine as the main site player.
+let _extSources = null;
+let _extIdx = -1;
+
+async function extractorFallback(errMsg, errSub) {
+  if (!window.MBTVExtract) { showError(errMsg, errSub); return null; }
+  showLoading(true);
+  document.getElementById('titleMain').textContent = curTitle || 'Loading…';
+  return new Promise(resolve => {
+    let settled = false;
+    const sources = [];
+    const h = MBTVExtract.extract(curTmdb, curType,
+      curType === 'tv' ? curSeason : null,
+      curType === 'tv' ? curEpisode : null, {
+      onSource: src => { if (src && src.url) sources.push(src); },
+      onDone: () => {
+        // onDone fires after the first source; keep collecting briefly so
+        // the remaining dubs (fetched sequentially) still make the menu.
+        if (settled) return;
+        setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          // DASH (.mpd) sources can't play here (no dash.js) — drop them
+          const playable = sources.filter(s => (s.format || 'mp4') !== 'dash');
+          const final = playable.length ? playable : sources;
+          if (!final.length) { showError(errMsg, errSub); resolve(null); return; }
+          resolve(final);
+        }, 1500);
+      }
+    });
+    window._cineExtractorCancel = () => h.cancel();
+  });
+}
+
+function playExtractorSources(sources) {
+  _extSources = sources;
+  _extIdx = pickExtractorIndex(sources);
+  showLoading(false);
+  curAllEps = [{ vod_id: 'ext', name: curTitle, eps: [] }];
+  renderSeasonBar();
+  renderEpGrid();
+  playExtractorAt(_extIdx);
+}
+
+function pickExtractorIndex(sources) {
+  // DASH (.mpd) can't play here (no dash.js) — prefer mp4/HLS sources
+  const ok = sources.filter(s => (s.format || 'mp4') !== 'dash');
+  const list = ok.length ? ok : sources;
+  const order = ['1080p','720p','480p','360p'];
+  for (const q of order) {
+    const i = list.findIndex(s => s.language === 'Original' && s.quality === q);
+    if (i >= 0) return sources.indexOf(list[i]);
+  }
+  const orig = list.findIndex(s => s.language === 'Original');
+  if (orig >= 0) return sources.indexOf(list[orig]);
+  return sources.indexOf(list[0]);
+}
+
+function playExtractorAt(i) {
+  if (!_extSources || i < 0 || i >= _extSources.length) return;
+  _extIdx = i;
+  const src = _extSources[i];
+  const v = document.getElementById('vid');
+  window._cineExtractorSources = _extSources;
+  playOnVideo(v, src.url);
+  v.play().catch(() => {});
+  // UI
+  document.getElementById('titleMain').textContent = curTitle || 'Now playing';
+  document.getElementById('titleSub').textContent = src.language + (src.quality ? ' · ' + src.quality : '');
+  document.getElementById('epInfo').textContent = '';
+  const nb = document.getElementById('nextBtn'); if (nb) nb.style.display = 'none';
+  const overlay = document.getElementById('titleOverlay');
+  overlay.classList.add('show');
+  setTimeout(() => overlay.classList.remove('show'), 3000);
+  renderExtractorAudioMenu();
+}
+
+function renderExtractorAudioMenu() {
+  const sel = document.getElementById('audioSel');
+  const btn = document.getElementById('audioBtn');
+  const menu = document.getElementById('audioMenu');
+  if (!_extSources || _extSources.length <= 1) { sel.style.display = 'none'; return; }
+  const langs = [...new Set(_extSources.map(s => s.language))];
+  const cur = _extSources[_extIdx] ? _extSources[_extIdx].language : '';
+  sel.style.display = 'inline-flex';
+  btn.textContent = cur || 'Audio';
+  menu.innerHTML = langs.map(l =>
+    '<div class="sel-opt' + (l === cur ? ' chosen' : '') +
+    '" onclick="switchExtractorAudio(\'' + l + '\')">' + l + '</div>'
+  ).join('');
+}
+
+function switchExtractorAudio(lang) {
+  closeMenus();
+  if (!_extSources) return;
+  const ok = _extSources.filter(s => (s.format || 'mp4') !== 'dash');
+  const pool = ok.length ? ok : _extSources;
+  // Keep quality when possible; otherwise take the best of that language
+  const curQ = _extSources[_extIdx] ? _extSources[_extIdx].quality : '';
+  let pick = pool.find(s => s.language === lang && s.quality === curQ);
+  if (!pick) {
+    const order = ['1080p','720p','480p','360p'];
+    for (const q of order) {
+      pick = pool.find(s => s.language === lang && s.quality === q);
+      if (pick) break;
+    }
+  }
+  if (!pick) pick = pool.find(s => s.language === lang);
+  if (!pick) return;
+  playExtractorAt(_extSources.indexOf(pick));
+}
+
 async function playEp(ep) {
   curEp = ep;
   showLoading(true);
@@ -462,10 +581,16 @@ async function playEp(ep) {
       if (sources && sources.length) {
         window._cineExtractorSources = sources;
         streamUrl = sources[0].url;
-        console.log('[CinePlayer] Using extractor source:', sources[0].server, sources[0].quality);
-      } else {
-        showError('No stream available', 'The stream backend (oracle) is offline and no extractor source could be found for this title. Try again later.');
-        return;
+        console.log('[CinePlayer] Using extractor source:', sources[0].server, sources[0].quality);      } else {
+        // Final tier: client-side Cineplay extraction (same engine as the main player)
+        console.warn('[CinePlayer] Server extractor unavailable, trying client-side Cineplay extractor...');
+        const extSources = await extractorFallback(
+          'No stream available', 'The stream backend (oracle) is offline and no extractor source could be found for this title. Try again later.');
+        if (extSources && extSources.length) {
+          await playExtractorSources(extSources);
+          return;
+        }
+        return; // extractorFallback already showed the error
       }
     }
   }
