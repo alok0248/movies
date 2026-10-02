@@ -158,6 +158,8 @@ let curLang = '', curSub = 'off';
 let browseType = '';
 let browsePage = 1;
 let browseHasMore = false;
+// Current episode index (set before playFromInfo is called)
+let curEpIdx = 0;
 
 // ── Session headers (sign = MD5(SALT + device + ts)) ──
 function sessionHeaders() {
@@ -348,7 +350,7 @@ async function loadMore() {
 async function playVodFromBrowse(vod) {
   showPlayer();
   showLD(true);
-  const epParam = 0;
+  curEpIdx = 0;
   const ep = {
     vod_id: vod.id,
     name: vod.name || '',
@@ -385,7 +387,7 @@ function showER(msg, sub) {
 async function init() {
   const p = qs();
   const vodId = p.get('vod') || p.get('id');
-  const epParam = parseInt(p.get('ep') || '0');
+  curEpIdx = parseInt(p.get('ep') || '0');
   const searchQ = p.get('q') || p.get('search');
 
   showLD(true);
@@ -444,7 +446,7 @@ function playFromInfo(info) {
 
   if (isSeriesV) {
     curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
-    curEp = Math.max(0, Math.min(epParam, coll.length - 1));
+    curEp = Math.max(0, Math.min(curEpIdx, coll.length - 1));
   } else {
     curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
     curEp = 0;
