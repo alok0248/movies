@@ -628,17 +628,53 @@ function _openPopup() {
 }
 
 /* ===== Language detection from source metadata ===== */
-var _knownLangs = {'hindi':1,'english':1,'tamil':1,'telugu':1,'kannada':1,'bengali':1,'malayalam':1,'marathi':1,'german':1,'spanish':1,'portuguese':1,'french':1,'japanese':1,'korean':1,'chinese':1,'hinglish':1,'thai':1,'indonesian':1,'turkish':1,'arabic':1,'russian':1,'polish':1,'italian':1,'dutch':1};
+var _knownLangs = {'hindi':1,'english':1,'tamil':1,'telugu':1,'kannada':1,'bengali':1,'malayalam':1,'marathi':1,'german':1,'spanish':1,'portuguese':1,'french':1,'japanese':1,'korean':1,'chinese':1,'hinglish':1,'thai':1,'indonesian':1,'turkish':1,'arabic':1,'russian':1,'polish':1,'italian':1,'dutch':1,'ukrainian':1,'vietnamese':1,'hebrew':1,'greek':1,'swedish':1,'danish':1,'norwegian':1,'finnish':1,'czech':1,'romanian':1,'hungarian':1,'filipino':1,'malay':1};
+
+/* Raw source codes → readable names (mirrors the Cineplay extractor's
+   aliases, kept here so every extractor's labels list cleanly). */
+var _langAliases = {
+  esla: 'Spanish (LatAm)', essp: 'Spanish',
+  ptbr: 'Portuguese (BR)', ptpt: 'Portuguese (PT)',
+  fra: 'French', rus: 'Russian', ara: 'Arabic', ukr: 'Ukrainian',
+  deu: 'German', ger: 'German', ita: 'Italian', hin: 'Hindi',
+  eng: 'English', jpn: 'Japanese', kor: 'Korean', zho: 'Chinese',
+  chi: 'Chinese', tur: 'Turkish', nld: 'Dutch', pol: 'Polish',
+  vie: 'Vietnamese', tha: 'Thai', ind: 'Indonesian', heb: 'Hebrew',
+  ell: 'Greek', gre: 'Greek', swe: 'Swedish', dan: 'Danish',
+  nor: 'Norwegian', fin: 'Finnish', ces: 'Czech', cze: 'Czech',
+  ron: 'Romanian', rum: 'Romanian', hun: 'Hungarian', fil: 'Filipino'
+};
+
+/* Word-boundary matchers, compiled once: labels like "Arabic sub" or
+   "Spanish (LatAm)" must count as their language instead of collapsing to
+   Original. The quoted variants run against the source JSON so URLs and
+   unrelated text cannot fake a language. */
+var _knownLangWordRe = {};
+var _knownLangQuotedRe = {};
+for (var _kl in _knownLangs) {
+  _knownLangWordRe[_kl] = new RegExp('\\b' + _kl + '\\b', 'i');
+  _knownLangQuotedRe[_kl] = new RegExp('"' + _kl + '\\b');
+}
 
 function _detectLangFromSource(s) {
+  var cap = function (v) { return v.charAt(0).toUpperCase() + v.slice(1); };
   var fields = [s.language, s.audioLanguage, s.audio, s.title, s.label];
   for (var i = 0; i < fields.length; i++) {
-    var f = (fields[i] || '').toLowerCase().trim();
-    if (_knownLangs[f]) return fields[i].charAt(0).toUpperCase() + fields[i].slice(1);
+    var raw = (fields[i] == null ? '' : String(fields[i])).trim();
+    if (!raw) continue;
+    var f = raw.toLowerCase();
+    if (_knownLangs[f]) return cap(raw);
+    if (_langAliases[f]) return _langAliases[f];
+    /* Word match anywhere in the label: "Arabic sub", "Russian sub"… */
+    for (var k in _knownLangWordRe) {
+      if (_knownLangWordRe[k].test(f)) return cap(raw);
+    }
   }
-  /* Scan full JSON for known language names */
+  /* Scan source JSON for a known language at the start of a string value */
   var txt = JSON.stringify(s).toLowerCase();
-  for (var k in _knownLangs) { if (txt.indexOf('"' + k + '"') > -1 || txt.indexOf(k + '\\') > -1) return k.charAt(0).toUpperCase() + k.slice(1); }
+  for (var k2 in _knownLangQuotedRe) {
+    if (_knownLangQuotedRe[k2].test(txt)) return k2.charAt(0).toUpperCase() + k2.slice(1);
+  }
   return 'Original';
 }
 

@@ -338,12 +338,49 @@
     });
   }
 
-  /* "Original Audio" → "Original", "Hindi dub" → "Hindi". */
+  /* Raw aoneroom lanName codes → readable names, so every dub gets its
+     own row in the Audio list instead of a cryptic code. */
+  var LANG_CODE_NAMES = {
+    esla: 'Spanish (LatAm)', essp: 'Spanish', es: 'Spanish',
+    ptbr: 'Portuguese (BR)', ptpt: 'Portuguese (PT)', pt: 'Portuguese',
+    fra: 'French', fr: 'French',
+    rus: 'Russian', ru: 'Russian',
+    ara: 'Arabic', ar: 'Arabic',
+    ukr: 'Ukrainian', uk: 'Ukrainian',
+    deu: 'German', ger: 'German', de: 'German',
+    ita: 'Italian', it: 'Italian',
+    hin: 'Hindi', hi: 'Hindi',
+    eng: 'English', en: 'English',
+    jpn: 'Japanese', ja: 'Japanese',
+    kor: 'Korean', ko: 'Korean',
+    zho: 'Chinese', chi: 'Chinese', zh: 'Chinese',
+    tur: 'Turkish', tr: 'Turkish',
+    nld: 'Dutch', nl: 'Dutch',
+    pol: 'Polish', pl: 'Polish',
+    vie: 'Vietnamese', vi: 'Vietnamese',
+    tha: 'Thai', th: 'Thai',
+    ind: 'Indonesian',
+    heb: 'Hebrew', he: 'Hebrew',
+    ell: 'Greek', gre: 'Greek', el: 'Greek',
+    swe: 'Swedish', sv: 'Swedish',
+    dan: 'Danish', da: 'Danish',
+    nor: 'Norwegian', no: 'Norwegian',
+    fin: 'Finnish', fi: 'Finnish',
+    ces: 'Czech', cze: 'Czech',
+    ron: 'Romanian', rum: 'Romanian', ro: 'Romanian',
+    hun: 'Hungarian', hu: 'Hungarian',
+    fil: 'Filipino'
+  };
+
+  /* "Original Audio" → "Original", "Hindi dub" → "Hindi",
+     "esla" → "Spanish (LatAm)". */
   function normLang(n) {
     n = String(n || '').trim();
     if (!n) return 'Original';
     if (/^original/i.test(n)) return 'Original';
-    return n.replace(/\s*dub$/i, '').trim() || n;
+    n = n.replace(/\s*dub$/i, '').trim() || n;
+    var key = n.toLowerCase().replace(/[^a-z]/g, '');
+    return LANG_CODE_NAMES[key] || n;
   }
 
   /* "480" → "480p" so DASH resolutions match the mp4 labels. */
@@ -495,16 +532,18 @@
             var ep = (isTv && episode != null && episode !== '') ? parseInt(episode, 10) : null;
             var finished = false;
 
+            /* Returns the number of playable links for this dub — 0 means the
+               language came back empty (burst throttle) and must be retried. */
             function emitDub(dub, di) {
               var dubSid = String(dub.subjectId || sid);
               var lanName = normLang(dub.lanName);
               return playInfoRetry(dubSid, jwt, se, ep).then(function (pData) {
-                if (canceled) return;
+                if (canceled) return 0;
                 var playable = extractPlayable(pData);
                 onStatus('Audio ' + (di + 1) + '/' + langs.length + ' (' + lanName + '): ' +
                   (playable ? playable.all.length + (playable.all.length === 1 ? ' stream found' : ' streams found')
                    : 'still looking…'));
-                if (!playable) return;
+                if (!playable) return 0;
                 playable.all.forEach(function (res) {
                   if (!res.url || seenUrls[res.url]) return;
                   seenUrls[res.url] = 1;
@@ -518,34 +557,68 @@
                     format: res.format
                   });
                 });
+                return playable.all.length;
               });
             }
 
             /* Sequential, not parallel — parallel bursts are what makes
                play-info come back empty and drop languages from the list.
-               Small spacing between dubs keeps the per-IP throttle calm. */
-            var chain = Promise.resolve();
-            langs.forEach(function (dub, di) {
-              chain = chain.then(function () {
-                var wait = di === 0 ? 0 : new Promise(function (res) { setTimeout(res, 350); });
-                /* Retry the whole dub once when the request itself drops —
-                   a single failed fetch must not erase an audio language. */
-                var attemptDub = function (t) {
-                  return emitDub(dub, di).catch(function () {
-                    if (t <= 1 || canceled) return;
-                    return new Promise(function (res) { setTimeout(res, 1200); })
-                      .then(function () { return attemptDub(t - 1); });
-                  });
-                };
-                return wait.then(function () { return attemptDub(2); });
-              }).catch(function () { });
-            });
-            chain.then(function () {
-              if (!finished && !canceled) {
-                finished = true;
-                finish(sourceCount === 0 ? new Error('No playable Cineplay stream for this title') : null);
-              }
-            });
+               Small spacing between dubs keeps the per-IP throttle calm.
+               Languages that still come back empty are re-queued for later
+               passes with a growing gap: one throttled answer must not erase
+               a language from the Audio list for good. */
+            var dubOk = {};
+            var delay = function (ms) { return new Promise(function (res) { setTimeout(res, ms); }); };
+
+            function runDub(item) {
+              var attempt = function (t) {
+                return emitDub(item.dub, item.di).then(function (found) {
+                  if (found > 0) { dubOk[item.di] = true; return; }
+                  if (t <= 1 || canceled) return;
+                  return delay(1200).then(function () { return attempt(t - 1); });
+                }).catch(function () {
+                  if (t <= 1 || canceled) return;
+                  return delay(1200).then(function () { return attempt(t - 1); });
+                });
+              };
+              return attempt(3);
+            }
+
+            function runPass(items, gapMs) {
+              var p = Promise.resolve();
+              items.forEach(function (item, idx) {
+                p = p.then(function () {
+                  if (canceled) return;
+                  return delay(idx === 0 ? 0 : gapMs)
+                    .then(function () { return runDub(item); })
+                    .catch(function () { });
+                });
+              });
+              return p;
+            }
+
+            var all = langs.map(function (dub, di) { return { dub: dub, di: di }; });
+            var missed = function () { return all.filter(function (it) { return !dubOk[it.di]; }); };
+
+            runPass(all, 350)
+              .then(function () {
+                var left = missed();
+                if (!left.length || canceled) return null;
+                onStatus('Re-checking ' + left.length + ' language' + (left.length > 1 ? 's' : '') + '…');
+                return delay(2500).then(function () { return runPass(left, 700); });
+              })
+              .then(function () {
+                var left = missed();
+                if (!left.length || canceled) return null;
+                onStatus('Final pass for ' + left.length + ' language' + (left.length > 1 ? 's' : '') + '…');
+                return delay(6000).then(function () { return runPass(left, 900); });
+              })
+              .then(function () {
+                if (!finished && !canceled) {
+                  finished = true;
+                  finish(sourceCount === 0 ? new Error('No playable Cineplay stream for this title') : null);
+                }
+              });
           });
         });
       }).catch(function (err) {
