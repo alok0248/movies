@@ -24,6 +24,11 @@
   #playerContainer .player-video-wrap{height:100%}
   #playerContainer video{width:100%!important;height:100%!important;aspect-ratio:auto!important;object-fit:contain}
 
+  /* The floating Audio/Video chips duplicate the quick-switch buttons in the
+     bottom control bar on this page — hide them here (the Tracks pill and
+     sheet stay; detail pages without a bottom bar keep the chips). */
+  #playerContainer .pc-chip-audio,#playerContainer .pc-chip-video{display:none!important}
+
   /* Pause overlay (kept below the Tracks sheet so it never blocks it) */
   .pause-overlay{position:absolute;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);transition:opacity .3s ease;cursor:pointer}
   .pause-overlay.show{display:flex}
@@ -53,6 +58,13 @@
   .status.error{color:#e74c3c}
   .action-btn{padding:4px 8px;border-radius:4px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.4);font-size:.6rem;cursor:pointer;transition:all .12s;white-space:nowrap}
   .action-btn:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+
+  /* ===== Audio / Video quick-switch buttons (open the Tracks sheet) ===== */
+  .track-btn{border-color:rgba(255,255,255,.18);color:rgba(255,255,255,.75);padding:4px 10px}
+  .track-btn:hover{border-color:#e67e22;color:#fff}
+  .track-btn i{opacity:.7}
+  .track-btn .pc-chip-lang{color:#e67e22;font-weight:600}
+  .track-btn .pc-chip-q{color:#a78bfa;font-weight:700}
 
   /* ===== Toast ===== */
   .toast{position:fixed;top:12px;right:12px;background:#27ae60;color:#fff;padding:6px 14px;border-radius:6px;font-size:.7rem;z-index:999;animation:fadeToast 2s forwards}
@@ -117,6 +129,8 @@
       <button class="action-btn" id="infoBtn" style="display:none" onclick="toggleInfo()"><i class="fas fa-circle-info"></i> Info</button>
       {% endif %}
       <div style="flex:1"></div>
+      <button class="action-btn track-btn" id="audioTrackBtn" style="display:none" title="Change audio language" onclick="openTracksSheet('pc-sec-audio')"><i class="fas fa-volume-high"></i> <span class="pc-chip-lang" id="audioTrackLabel">Audio</span></button>
+      <button class="action-btn track-btn" id="videoTrackBtn" style="display:none" title="Change video quality" onclick="openTracksSheet('pc-sec-video')"><i class="fas fa-video"></i> <span class="pc-chip-q" id="videoTrackLabel">Video</span></button>
       <button class="action-btn" id="popPlayerBtn" style="display:none;background:var(--accent,#46d369);color:#000;border-color:var(--accent,#46d369)" onclick="openPopPlayer()"><i class="fas fa-external-link-alt"></i> Pop Player</button>
       <span class="status" id="status">Ready</span>
     </div>
@@ -146,8 +160,10 @@
     };
 })();
 </script>
-<script src="{% static 'js/player-core.js' %}?v=1789408000"></script>
-<script src="{% static 'js/tracks-ui.js' %}?v=1788655000"></script>
+<script src="{% static 'js/moviein-extract.js' %}?v=1788467000"></script>
+<script src="{% static 'js/mbtv-extract.js' %}?v=9"></script>
+<script src="{% static 'js/player-core.js' %}?v=1789550100"></script>
+<script src="{% static 'js/tracks-ui.js' %}?v=1789555000"></script>
 <script>
 /* =====================================================================
    /api/player/ — same in-page player as the detail pages.
@@ -499,7 +515,36 @@
       var csvB = document.getElementById('csvBtn'); if (csvB) csvB.style.display = '';
       var infoB = document.getElementById('infoBtn'); if (infoB) infoB.style.display = '';
     }
+    updateTrackButtons();
   }, 1200);
+
+  /* ===== Audio / Video quick-switch buttons =====
+     Same labels as the floating Tracks chips: current audio language and
+     video quality of the active source. Clicking opens the Tracks sheet
+     scrolled straight to the Audio or Resolution section. */
+  var _lastAudioLabel = '', _lastVideoLabel = '';
+  function updateTrackButtons() {
+    try {
+      if (typeof _pcActiveSrc !== 'function') return;
+      var a = _pcActiveSrc();
+      var ab = document.getElementById('audioTrackBtn');
+      var vb = document.getElementById('videoTrackBtn');
+      if (!a || !a.url || !ab || !vb) return;
+      var lang = _pcLangOf(a);
+      var langShort = (lang && lang !== 'Original') ? lang : 'Original';
+      if (langShort.length > 14) langShort = langShort.substring(0, 13) + '…';
+      if (langShort !== _lastAudioLabel) { _lastAudioLabel = langShort; document.getElementById('audioTrackLabel').textContent = langShort; }
+      var q = _pcQOf(a);
+      var qLabel = (q && q !== '?') ? q : 'Auto';
+      if (qLabel !== _lastVideoLabel) { _lastVideoLabel = qLabel; document.getElementById('videoTrackLabel').textContent = qLabel; }
+      ab.style.display = '';
+      vb.style.display = '';
+    } catch (e) {}
+  }
+  window.openTracksSheet = function(anchorId) {
+    if (typeof _pcOpenSheet !== 'function') { showToast('Player is still loading — try again in a moment.'); return; }
+    _pcOpenSheet(anchorId);
+  };
 
   /* ===== Boot ===== */
   showEpRow(type === 'tv');

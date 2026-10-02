@@ -3,6 +3,7 @@ from django.views.generic import TemplateView
 from . import views
 from . import local_player
 from . import streaming_views
+from . import mbtv_views
 from cineplayer import views as cineplayer_views
 
 handler404 = 'core.views.page_not_found_view'
@@ -174,6 +175,11 @@ urlpatterns = [
     path('ajax/videasy-sources/', views.videasy_sources_view, name='videasy_sources'),
     path('api/series-extractor/', views.series_extractor_view, name='series_extractor'),
     path('ajax/player-sources/', views.player_sources_view, name='player_sources'),
+
+    # MovieBoxTV client-side extractor (relay + media proxy)
+    path('ajax/mbtv/relay/', mbtv_views.mbtv_relay_view, name='mbtv_relay'),
+    path('ajax/mbtv/title/', mbtv_views.mbtv_title_view, name='mbtv_title'),
+    path('mbtv-media/', mbtv_views.mbtv_media_view, name='mbtv_media'),
     path('ajax/prefetch-sources/', streaming_views.prefetch_sources_view, name='prefetch_sources'),
     path('ajax/player-sources-stream/', streaming_views.player_sources_stream_view, name='player_sources_stream'),
     path('ajax/player-episodes/', views.player_episodes_view, name='player_episodes'),

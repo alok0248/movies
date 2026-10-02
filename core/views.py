@@ -566,19 +566,23 @@ def index(request):
     request.session.modified = True
     return render(request, 'core/index.html')
 
-EXTRACTOR_PLAYER_NAME = 'Videasy Extractor'
+EXTRACTOR_PLAYER_NAME = 'Cineplayer 2'
 
 
 def _ensure_extractor_player():
     """Guarantee the built-in extractor player exists in the DB.
 
-    The detail-page server list is DB-driven; if the 'Videasy Extractor' row
+    The detail-page server list is DB-driven; if the 'Cineplayer 2' row
     is missing (fresh DB, imported dump) or was deactivated, users would have
     no way to select browser extraction. This creates/repairs the row so the
     extractor always shows up as a selectable player, in every environment.
     Idempotent and cheap — one indexed query on the happy path.
     """
     try:
+        # Legacy name from before the rename — migrate it so old DBs keep
+        # working without a manual step.
+        PlayerConfiguration.objects.filter(name='Videasy Extractor').update(
+            name=EXTRACTOR_PLAYER_NAME)
         obj = PlayerConfiguration.objects.filter(name=EXTRACTOR_PLAYER_NAME).first()
         if obj is None:
             PlayerConfiguration.objects.create(
@@ -622,8 +626,8 @@ def _get_detail_players(media_type):
 
 
 def _strip_videasy_custom_urls(all_players):
-    """Force Videasy Extractor to always use extraction — strip custom URLs from DB.
-    Only affects players named 'Videasy Extractor' (not CinePlayer or others)."""
+    """Force the extractor player to always use extraction — strip custom URLs from DB.
+    Only affects the extractor row (not CinePlayer or others)."""
     players = list(all_players)
     for v in players:
         if v.name == EXTRACTOR_PLAYER_NAME:

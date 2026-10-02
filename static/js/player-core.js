@@ -108,7 +108,7 @@ function _vpToggleFullscreen() {
     '.player-video-wrap:-webkit-full-screen video{width:100%;height:100%;aspect-ratio:auto;object-fit:contain;border-radius:0;background:#000}',
     '.player-video-wrap:fullscreen .player-msg-panel,.player-video-wrap:-webkit-full-screen .player-msg-panel{border-radius:0}',
     /* On-screen fullscreen button (top-right, beside the Tracks chip) */
-    '.vp-fs-btn{position:absolute;top:10px;right:56px;z-index:30;width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(10,10,18,.72);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease,background .15s;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 18px rgba(0,0,0,.35);padding:0}',
+    '.vp-fs-btn{position:absolute;bottom:12px;right:12px;z-index:30;width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(10,10,18,.72);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease,background .15s;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 18px rgba(0,0,0,.35);padding:0}',
     '.vp-fs-btn.show{opacity:1;pointer-events:auto;transform:translateY(0)}',
     '.vp-fs-btn:hover{background:rgba(30,30,48,.88);border-color:var(--brand,#e50914)}',
     '.vp-fs-btn svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}',
@@ -1028,8 +1028,8 @@ function _fetchClientSources(container, params, vid) {
     }
   }
 
-  /* ── Run both extractors in parallel for maximum coverage ── */
-  totalExtractors = 2;
+  /* ── Run all extractors in parallel for maximum coverage ── */
+  totalExtractors = 3;
 
   /* 1. Speedracelight (existing cipher-based extractor) */
   if (typeof ClientExtract !== 'undefined' && ClientExtract.extractSources) {
@@ -1054,6 +1054,20 @@ function _fetchClientSources(container, params, vid) {
       onSubtitles: onSub,
       onDone: function(err) {
         console.log('[Player] MovieIn extractor done.', err ? err : 'ok');
+        onAllDone();
+      }
+    });
+  } else {
+    totalExtractors--;
+  }
+
+  /* 3. MovieBoxTV (aoneroom) — client-side signed-protocol extractor */
+  if (typeof MBTVExtract !== 'undefined' && MBTVExtract.extract) {
+    MBTVExtract.extract(tmdbId, mediaType, season, episode, {
+      onStatus: function (t) { setStatus(t); },
+      onSource: onSource,
+      onDone: function (err) {
+        console.log('[Player] Cineplay extractor done.', err ? err.message : 'ok');
         onAllDone();
       }
     });
