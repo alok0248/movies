@@ -1255,3 +1255,136 @@ function _fetchFromServer(container, apiUrl, vid) {
     });
   });
 }
+
+/* ===== Duplicate control-bar close (✕ at the player's top) =====
+   Sometimes two full control bars stack up at once: the CinePlayer iframe
+   renders the browser's <video controls> transport AND an Audio/Subs strip
+   (.ctrl-bar) below it, and the series page may lay its (dead) nf-controls
+   over the same area. A small ✕ at the top-right of the player closes the
+   extra bar(s), always keeping the native transport — the only bar with
+   play / seek / time. Closing the Audio strip swaps in a small ♪ button in
+   the same spot that brings the strip back. Detail pages only; standalone
+   players never mount this. */
+var _dupX = null;
+var _dupPill = null;
+var _dupStripClosed = false;
+function _dupBars() {
+  var info = { count: 0, innerNatives: [], innerCtrls: [], nfVisible: false };
+  /* Movie pages use #playerContainer, series pages #player-container — scan
+     both. Same-origin (/cineplayer/) frames are readable; ad frames throw
+     and are skipped. */
+  var frames = document.querySelectorAll('#playerContainer iframe, #player-container iframe');
+  for (var fi = 0; fi < frames.length; fi++) {
+    try {
+      var d = frames[fi].contentDocument;
+      if (!d) continue;
+      var iv = d.querySelector('video');
+      if (iv && iv.controls) { info.innerNatives.push(iv); info.count++; }
+      var ic = d.getElementById('ctrlBar');
+      if (ic && getComputedStyle(ic).display !== 'none') { info.innerCtrls.push(ic); info.count++; }
+    } catch (e) { /* cross-origin embed — nothing to introspect */ }
+  }
+  var nf = document.getElementById('nfControls');
+  if (nf && nf.classList.contains('visible') && getComputedStyle(nf).display !== 'none') {
+    info.nfVisible = true;
+    info.count++;
+  }
+  var pv = document.getElementById('mainVideo');
+  if (pv && pv.controls) { info.count++; }
+  return info;
+}
+function _dupXClose(info) {
+  /* End state: exactly ONE visible control bar — the one that can actually
+     drive playback.
+     - Inline #mainVideo on the page → the page owns playback; drop the
+       bars inside any frame.
+     - Otherwise the iframe IS the player (CinePlayer). Keep its native
+       <video controls> transport, close the Audio/Subs strip (.ctrl-bar)
+       and the page's nf-controls (dead there — wired to a #mainVideo that
+       does not exist). The ♪ button reopens the strip. */
+  var hasPageVid = !!document.getElementById('mainVideo');
+  var nf = document.getElementById('nfControls');
+  if (hasPageVid) {
+    info.innerNatives.forEach(function(v) { v.controls = false; });
+    info.innerCtrls.forEach(function(c) { c.style.display = 'none'; });
+    return;
+  }
+  if (nf) nf.style.display = 'none';
+  if (info.innerCtrls.length) {
+    info.innerCtrls.forEach(function(c) { c.style.display = 'none'; });
+    info.innerNatives.forEach(function(v) { v.controls = true; });
+    _dupStripClosed = true;
+    _dupPillShow();
+  }
+}
+function _dupPillShow() {
+  if (_dupPill) { _dupPill.style.display = 'block'; return; }
+  var host = document.querySelector('.det-player-left');
+  if (!host) return;
+  _dupPill = document.createElement('button');
+  _dupPill.type = 'button';
+  _dupPill.className = 'dup-audio-pill';
+  _dupPill.title = 'Show Audio / Subs controls';
+  _dupPill.setAttribute('aria-label', 'Show audio and subtitle controls');
+  _dupPill.innerHTML = '&#9834;';
+  _dupPill.addEventListener('click', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    var frames = document.querySelectorAll('#playerContainer iframe, #player-container iframe');
+    for (var i = 0; i < frames.length; i++) {
+      try {
+        var cb = frames[i].contentDocument.getElementById('ctrlBar');
+        if (cb) cb.style.display = '';
+      } catch (err) { /* cross-origin embed */ }
+    }
+    _dupStripClosed = false;
+    _dupPill.style.display = 'none';
+    _syncDupBars();
+  });
+  host.appendChild(_dupPill);
+  _dupPill.style.display = 'block';
+}
+function _syncDupBars() {
+  try {
+    var host = document.querySelector('.det-player-left');
+    if (!host) return;
+    var info = _dupBars();
+    if (info.count < 2) {
+      if (_dupX) _dupX.style.display = 'none';
+      if (_dupPill && _dupStripClosed) _dupPill.style.display = 'block';
+      else if (_dupPill) _dupPill.style.display = 'none';
+      return;
+    }
+    if (_dupPill) _dupPill.style.display = 'none';
+    if (!_dupX) {
+      var st = document.getElementById('dupXStyle');
+      if (!st) {
+        st = document.createElement('style');
+        st.id = 'dupXStyle';
+        st.textContent = '.dup-close-x{position:absolute;top:10px;right:10px;z-index:2147483000;width:30px;height:30px;padding:0;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:30px;text-align:center;cursor:pointer;display:none;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.5)}.dup-close-x:hover{background:rgba(214,69,69,.9)}.dup-audio-pill{position:absolute;top:10px;right:10px;z-index:2147483000;width:30px;height:30px;padding:0;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:30px;text-align:center;cursor:pointer;display:none;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.5)}.dup-audio-pill:hover{background:rgba(80,140,255,.9)}';
+        document.head.appendChild(st);
+      }
+      _dupX = document.createElement('button');
+      _dupX.type = 'button';
+      _dupX.className = 'dup-close-x';
+      _dupX.title = 'Close the extra control bar';
+      _dupX.setAttribute('aria-label', 'Close extra control bar');
+      _dupX.innerHTML = '&#10005;';
+      _dupX.addEventListener('click', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        var before = _dupBars().count;
+        _dupXClose(_dupBars());
+        if (_dupBars().count < before) _dupX.style.display = 'none';
+        if (_dupStripClosed && _dupPill) _dupPill.style.display = 'block';
+      });
+      host.appendChild(_dupX);
+    }
+    _dupX.style.display = 'block';
+  } catch (e) {}
+}
+(function () {
+  if (typeof document === 'undefined' || !document.querySelector) return;
+  if (!(document.getElementById('playerContainer') || document.getElementById('player-container'))) return;
+  if (!document.querySelector('.det-player-left')) return;
+  setInterval(_syncDupBars, 1200);
+  setTimeout(_syncDupBars, 1500);
+})();
