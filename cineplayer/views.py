@@ -336,25 +336,66 @@ def api_title(request, vod_id):
             'vod_serial': '1',
         },
         'error': 'oracle unreachable — title info unavailable (embed players still work)',
-    })
+    })@require_GET
 
-
-@require_GET
 def api_browse(request):
-    """Search by keyword via the cinevault gateway."""
-    kw = request.GET.get('kw', '')
-    alias = request.headers.get('X-Device-Id', '')
+    """Browse titles by category via the cinevault gateway, with speedracelight fallback.
 
-    # Try the running cinevault gateway first
+    GET parameters:
+      type_id  — 1 (movies), 2 (tv), or other category ids from the feed
+      pn       — page number (1-based)
+      kw       — keyword filter (optional)
+      type, area, year, sort — additional filters (optional)
+
+    The speedracelight api/search/screen endpoint returns either flat vod
+    items or nested modules (block_list → vod_list).  This view flattens
+    both shapes so the browser always receives a flat list.
+    """
+    type_id = request.GET.get('type_id', '1')
+    pn = request.GET.get('pn', '1')
+    kw = request.GET.get('kw', '')
+    vtype = request.GET.get('type', '')
+    area = request.GET.get('area', '')
+    year = request.GET.get('year', '')
+    sort = request.GET.get('sort', '')
+    alias = request.headers.get('X-Device-Id', '')
+    device_id = _alias_to_did(alias) if alias else _gen_device_id()
+
+    # Try the running cinevault gateway first (keyword + type_id + pagination)
     try:
-        url = f'{GATEWAY}/browse?kw={urllib.parse.quote(kw)}'
+        params = urllib.parse.urlencode({
+            'kw': kw, 'type_id': type_id, 'pn': pn,
+            'type': vtype, 'area': area, 'year': year, 'sort': sort,
+        })
+        url = f'{GATEWAY}/browse?{params}'
         req = urllib.request.Request(url, headers={'X-Device-Id': alias})
         with urllib.request.urlopen(req, timeout=15) as r:
-            return JsonResponse(json.loads(r.read().decode('utf-8', 'replace')), safe=False)
+            data = json.loads(r.read().decode('utf-8', 'replace'))
+            if data:
+                return JsonResponse(data, safe=False)
     except Exception:
         pass
 
-    return JsonResponse([], safe=False)
+    # Fallback: direct to speedracelight api/search/screen (AES-decrypted by _proxy_api)
+    result = _proxy_api('api/search/screen', {
+        'type_id': type_id or '1', 'type': vtype or '', 'area': area or '',
+        'year': year or '', 'sort': sort or '', 'pn': pn or '1'
+    }, device_id)
+    raw = (result or {}).get('result') or []
+
+    # Flatten nested response (block_list → vod_list) into flat vod items
+    items = []
+    for item in raw:
+        if 'vod_name' in item:
+            # Flat item (direct vod object)
+            items.append(item)
+        else:
+            # Nested module with block_list → vod_list
+            for block in (item.get('block_list') or []):
+                for vod in (block.get('vod_list') or []):
+                    items.append(vod)
+
+    return JsonResponse(items, safe=False)
 
 
 @require_GET

@@ -47,6 +47,24 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0f;font-family:
 .er .es{color:rgba(255,255,255,.5);font-size:.85rem;max-width:400px;line-height:1.5}
 .nx{position:absolute;right:24px;bottom:100px;background:linear-gradient(135deg,#e50914,#b20710);color:#fff;border:0;border-radius:24px;padding:10px 20px;font-size:.85rem;font-weight:700;cursor:pointer;z-index:30;display:none}
 .nx:hover{transform:scale(1.05);box-shadow:0 6px 24px rgba(229,9,20,.5)}
+
+/* ── Browse mode ── */
+.bw{flex:1;min-height:0;display:none;flex-direction:column;overflow-y:auto}
+.bw.show{display:flex}
+.bt{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.06);overflow-x:auto;scrollbar-width:none}
+.bt::-webkit-scrollbar{display:none}
+.btb{padding:5px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#ccc;font-size:.73rem;cursor:pointer;white-space:nowrap;font-weight:500}
+.btb:hover{border-color:rgba(255,255,255,.3);color:#fff}
+.btb.ac{background:#e50914;border-color:#e50914;color:#fff}
+.bg{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;padding:14px}
+.bc{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .15s}
+.bc:hover{transform:scale(1.05);border-color:rgba(255,255,255,.3)}
+.bc img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:#111}
+.bc .bn{padding:6px 4px;font-size:.7rem;color:#e5e5e5;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bsr{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:.6rem;padding:2px 6px;border-radius:4px}
+.blm{padding:10px 24px;margin:0 auto 14px;display:block;border:1px solid rgba(255,255,255,.15);border-radius:6px;background:rgba(255,255,255,.07);color:#ccc;font-size:.8rem;cursor:pointer}span.blm-txt{display:inline-block;width:100%}
+.blm:hover{border-color:rgba(255,255,255,.3);color:#fff}
+.blm.loading{opacity:.6;pointer-events:none}
 </style>
 <script>
 if ('serviceWorker' in navigator) {
@@ -58,7 +76,21 @@ if ('serviceWorker' in navigator) {
 <div class="root" id="R">
   <div class="ld" id="LD"><div class="sp"></div><div style="font-size:.8rem;color:rgba(255,255,255,.5)">Loading...</div></div>
   <div class="er" id="ER" style="display:none"><div class="em" id="EM"></div><div class="es" id="ES"></div></div>
-  <div class="vw">
+  <!-- Browse mode UI (shown when no ?vod= in URL) -->
+  <div class="bw" id="BW">
+    <div class="bt" id="BT">
+      <button class="btb ac" data-type="" onclick="setBrowseCategory(this,'')">All</button>
+      <button class="btb" data-type="1" onclick="setBrowseCategory(this,'1')">Movies</button>
+      <button class="btb" data-type="2" onclick="setBrowseCategory(this,'2')">TV</button>
+      <button class="btb" data-type="3" onclick="setBrowseCategory(this,'3')">Animation</button>
+      <button class="btb" data-type="4" onclick="setBrowseCategory(this,'4')">Documentary</button>
+      <button class="btb" data-type="6" onclick="setBrowseCategory(this,'6')">Comedy</button>
+    </div>
+    <div class="bg" id="BG"></div>
+    <button class="blm" id="BLM" onclick="loadMore()"><span class="blm-txt">Load More</span></button>
+  </div>
+
+  <div class="vw" id="VW">
     <video id="V" controls playsinline></video>
     <div class="to" id="TO"><div class="tm" id="TN"></div><div class="ts" id="TT"></div></div>
   </div>
@@ -121,6 +153,11 @@ const ORACLE = 'http://127.0.0.1:17000/control'; // emulator
 let token = '';
 let curVod = null, curEp = 0, curTitle = '', curSeasons = [], curAllEps = [];
 let curLang = '', curSub = 'off';
+
+// Browse state
+let browseType = '';
+let browsePage = 1;
+let browseHasMore = false;
 
 // ── Session headers (sign = MD5(SALT + device + ts)) ──
 function sessionHeaders() {
@@ -202,12 +239,126 @@ async function initSession() {
   console.log('[session] init ok, token_len=' + token.length);
 }
 
+// ── Flatten speedracelight api/search/screen response ──
+// The screen endpoint returns either flat vod items OR nested modules
+// (each with block_list → vod_list).  Flatten both shapes so the
+// grid always receives a flat array of vod objects.
+function flattenBrowseResult(res) {
+  const raw = (res && (res.result || res.items)) || [];
+  const items = [];
+  for (const item of raw) {
+    if ('vod_name' in item || 'vod_id' in item || 'name' in item) {
+      // Flat vod item
+      items.push(item);
+    } else {
+      // Nested module: block_list → vod_list
+      for (const block of (item.block_list || [])) {
+        for (const vod of (block.vod_list || [])) {
+          items.push(vod);
+        }
+      }
+    }
+  }
+  return items;
+}
+
 // ── Browse (search screen) ──
 async function browse(typeId, pn) {
   return await apiCall('api/search/screen', {
     type_id: typeId || '', type: '', area: '', year: '', sort: '', pn: pn || '1'
   });
 }
+
+// ── Browse UI state ──
+function showBrowse() {
+  document.getElementById('BW').classList.add('show');
+  document.getElementById('VW').style.display = 'none';
+  document.getElementById('NX').style.display = 'none';
+  document.querySelector('.cb').style.display = 'none';
+}
+
+function showPlayer() {
+  document.getElementById('BW').classList.remove('show');
+  document.getElementById('VW').style.display = 'block';
+  document.getElementById('NX').style.display = '';
+  document.querySelector('.cb').style.display = 'block';
+}
+
+function setBrowseCategory(btn, typeId) {
+  browseType = typeId;
+  browsePage = 1;
+  document.querySelectorAll('#BT .btb').forEach(b => b.classList.remove('ac'));
+  btn.classList.add('ac');
+  renderBrowse([]);
+  loadBrowse();
+}
+
+function renderBrowse(items) {
+  const grid = document.getElementById('BG');
+  if (!items.length && browsePage === 1) {
+    grid.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,255,255,.5)">No items found</div>';
+    browseHasMore = false;
+  } else {
+    const html = items.map(item => {
+      const id = item.vod_id || item.id || '';
+      const name = item.vod_name || item.name || 'Untitled';
+      const year = item.vod_year || item.year || '';
+      const img = item.vod_pic || item.cover || '';
+      const isSeries = (item.type === 2 || item.vod_type === 2);
+      return '<div class="bc" onclick="playVodFromBrowse(' + JSON.stringify({id: String(id), name: name}) + ')">' +
+        (img ? '<img src="' + img + '" alt="' + name + '">' : '<div style="width:100%;aspect-ratio:2/3;background:#111"></div>') +
+        (year ? '<div class="bsr">' + year + '</div>' : '') +
+        '<div class="bn">' + name + '</div></div>';
+    }).join('');
+    grid.innerHTML = (browsePage === 1) ? html : grid.innerHTML + html;
+  }
+  const blm = document.getElementById('BLM');
+  blm.style.display = browseHasMore ? 'block' : 'none';
+}
+
+async function loadBrowse() {
+  showLD(true);
+  try {
+    const res = await browse(browseType, browsePage);
+    const items = flattenBrowseResult(res);
+    // When we get fewer items than a typical page, there's no more to load
+    browseHasMore = items.length >= 20;
+    renderBrowse(items);
+  } catch(e) {
+    console.warn('[browse] failed:', e);
+  }
+  showLD(false);
+}
+
+let browseLoading = false;
+
+async function loadMore() {
+  if (browseLoading || !browseHasMore) return;
+  browseLoading = true;
+  browsePage++;
+  const blm = document.getElementById('BLM');
+  blm.classList.add('loading');
+  blm.querySelector('.blm-txt').textContent = 'Loading...';
+  await loadBrowse();
+  blm.classList.remove('loading');
+  blm.querySelector('.blm-txt').textContent = 'Load More';
+  browseLoading = false;
+}
+
+async function playVodFromBrowse(vod) {
+  showPlayer();
+  showLD(true);
+  const epParam = 0;
+  const ep = {
+    vod_id: vod.id,
+    name: vod.name || '',
+    vod_url: '',
+    vod_collection: [],
+  };
+  const info = { result: { vod_id: vod.id, vod_name: vod.name, vod_collection: [ep], vod_serial: '1' } };
+  playFromInfo(info);
+}
+
 
 // ── Search by keyword ──
 async function search(kw) {
@@ -262,7 +413,10 @@ async function init() {
   }
 
   if (!vodToPlay) {
-    showER('No vod ID', 'Add ?vod=ID or ?q=search_term to the URL');
+    // No vod/search — show browse UI
+    showBrowse();
+    showLD(false);
+    await loadBrowse();
     return;
   }
 
@@ -278,12 +432,17 @@ async function init() {
   }
   if (!info) { showER('No play info'); return; }
 
+  playFromInfo(info);
+}
+
+// Extract playback setup from info (shared by URL-based and browse-based playback)
+function playFromInfo(info) {
   const coll = info.vod_collection || [];
   const serial = parseInt(info.vod_serial) || 1;
   curTitle = info.vod_name || '';
-  const isSeries = serial > 1 && coll.length > 0;
+  const isSeriesV = serial > 1 && coll.length > 0;
 
-  if (isSeries) {
+  if (isSeriesV) {
     curAllEps = [{ vod_id: curVod, name: curTitle, eps: coll }];
     curEp = Math.max(0, Math.min(epParam, coll.length - 1));
   } else {
@@ -292,6 +451,7 @@ async function init() {
   }
 
   showLD(false);
+  showPlayer();
   renderEpGrid();
   playEp(curEp);
 }

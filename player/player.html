@@ -443,20 +443,20 @@ function exportCSV(){
 async function fetchAndPlay(type, id, extra) {
   var seasonId=extra.season||'',episodeId=extra.episode||'';
   log('"'+id+'" — fetching sources...');
-  var url='/ajax/player-sources/?tmdb_id='+encodeURIComponent(id)+'&type='+type;
+  var url='/api/links/?tmdb_id='+encodeURIComponent(id)+'&type='+type;
   if(seasonId)url+='&season='+encodeURIComponent(seasonId);
   if(episodeId)url+='&episode='+encodeURIComponent(episodeId);
   var resp=await fetch(url);
   var data=await resp.json();
-  if(!data.success||!data.results||!data.results.length)throw new Error(data.error||'No sources found.');
+  if(!data.success||!data.links||!data.links.length)throw new Error(data.error||'No sources found.');
   movieTitle=data.title||id;
   movieDetails={title:data.title,year:data.year,type:type,id:data.tmdbId};
   var serverMap={};
-  for(var i=0;i<data.results.length;i++){
-    var r=data.results[i];
-    var sn=r.server_name||r.server||'Unknown';
+  for(var i=0;i<data.links.length;i++){
+    var r=data.links[i];
+    var sn=r.server||'Unknown';
     if(!serverMap[sn])serverMap[sn]={server:sn,path:sn,sources:[],subtitles:[]};
-    serverMap[sn].sources.push({url:r.url,quality:r.quality||'?',language:r.language||'',type:r.type||'hls'});
+    serverMap[sn].sources.push({url:r.url||r.proxy_url,quality:r.quality||'?',language:r.language||'',type:r.type||'hls'});
   }
   allResults=[];
   for(var k in serverMap)if(serverMap[k].sources.length>0)allResults.push(serverMap[k]);

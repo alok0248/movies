@@ -7269,140 +7269,6 @@ def videasy_sources_view(request):
 
 
 @require_GET
-def player_sources_view(request):
-    """
-    Server-side source fetch & decrypt for the embedded player.
-    Uses parallel fetching for maximum speed.
-    """
-    import time as _time
-    import concurrent.futures
-
-    tmdb_id = request.GET.get('tmdb_id', '')
-    media_type = request.GET.get('type', 'movie')
-    season = request.GET.get('season', '')
-    episode = request.GET.get('episode', '')
-
-    if not tmdb_id:
-        return JsonResponse({'success': False, 'error': 'tmdb_id is required', 'results': []})
-
-    try:
-        tmdb_id = int(tmdb_id)
-    except (ValueError, TypeError):
-        return JsonResponse({'success': False, 'error': 'Invalid tmdb_id', 'results': []})
-
-    timestamp = str(int(_time.time() * 1000))
-
-    # Serve a fresh extraction from cache when one exists — identical payload
-    # shape either way. (Extraction is expensive: 11 upstream calls + decrypt.)
-    cache_key = f'psrc:{media_type}:{tmdb_id}:{season}:{episode}'
-    try:
-        cached = cache.get(cache_key)
-    except Exception:
-        cached = None
-    if isinstance(cached, dict) and cached.get('results'):
-        cached = dict(cached)
-        cached['cached'] = True
-        return JsonResponse(cached)
-
-    # Fetch TMDB info + seed in parallel (saves ~1-2s)
-    tmdb_info = {'title': '', 'year': '', 'imdbId': ''}
-    seed = ''
-
-    def _fetch_tmdb():
-        try:
-            return _vk_fetch_tmdb_info(tmdb_id, media_type)
-        except Exception:
-            return {'title': '', 'year': '', 'imdbId': ''}
-
-    def _fetch_seed():
-        for attempt in range(2):
-            try:
-                return _vk_get_seed(_VIDKING_API_BASE, tmdb_id)
-            except Exception:
-                if attempt == 0:
-                    _time.sleep(0.2)
-        return ''
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        tmdb_future = pool.submit(_fetch_tmdb)
-        seed_future = pool.submit(_fetch_seed)
-        tmdb_info = tmdb_future.result()
-        seed = seed_future.result()
-
-    title = tmdb_info.get('title', '')
-    year = tmdb_info.get('year', '')
-    imdb_id = tmdb_info.get('imdbId', '')
-
-    if not seed:
-        return JsonResponse({'success': False, 'error': 'Could not fetch seed', 'results': []})
-
-    # Fetch from ALL servers in PARALLEL (was sequential — ~8x faster)
-    results = []
-    seen_urls = set()
-
-    def _fetch_one(server_name, endpoint):
-        try:
-            return _vk_fetch_sources_for_server(
-                server_name, endpoint, tmdb_id, media_type,
-                title=title, year=year, season_id=season,
-                episode_id=episode, imdb_id=imdb_id,
-                seed=seed, timestamp=timestamp,
-            )
-        except Exception as e:
-            logger.debug('player_sources: %s failed: %s', server_name, e)
-            return {'sources': []}
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=9) as pool:
-        futures = {
-            pool.submit(_fetch_one, name, ep): name
-            for name, ep in _VIDKING_SERVERS.items()
-        }
-        for future in concurrent.futures.as_completed(futures):
-            server_name = futures[future]
-            try:
-                result = future.result()
-            except Exception:
-                continue
-            sources = result.get('sources', [])
-            if isinstance(sources, list) and sources:
-                for src in sources:
-                    if isinstance(src, dict) and src.get('url') and src['url'] not in seen_urls:
-                        seen_urls.add(src['url'])
-                        lang = src.get('language', '') or src.get('audioLanguage', '') or src.get('audio', '') or src.get('title', '') or ''
-                        quality = src.get('quality', '?')
-                        # Pass through full source object for client-side language detection
-                        entry = dict(src)
-                        entry['url'] = src['url']
-                        entry['quality'] = quality
-                        entry['language'] = lang
-                        entry['server'] = server_name
-                        entry['server_name'] = server_name
-                        results.append(entry)
-
-    payload = {
-        'success': True,
-        'title': title,
-        'year': year,
-        'tmdbId': tmdb_id,
-        'type': media_type,
-        'results': results,
-    }
-    # Cache successful extractions for 3 minutes: the Android app re-requests
-    # the same title repeatedly, and each uncached call costs 11 upstream
-    # HTTP round-trips + full-payload decryptions (observed 827 calls/day for
-    # a handful of titles). Failed extractions are cached briefly too so a
-    # dead upstream can't trigger hammering.
-    try:
-        if results:
-            cache.set(cache_key, payload, 180)
-        else:
-            cache.set(cache_key, {'success': False, 'results': [], 'empty': True}, 60)
-    except Exception:
-        pass
-    return JsonResponse(payload)
-
-
-@require_GET
 def player_episodes_view(request):
     """
     Fetch seasons & episodes list for a TV show from speedracelight DB.
@@ -7493,7 +7359,7 @@ def api_links_view(request):
 
     timestamp = str(int(_time.time() * 1000))
 
-    # TMDB info + seed in parallel (same as player_sources_view)
+    # TMDB info + seed in parallel (same as videasy_sources_view)
     def _fetch_tmdb():
         try:
             return _vk_fetch_tmdb_info(tmdb_id, media_type)
@@ -8080,6 +7946,20 @@ def serve_app_ads_txt(request):
     content = _read_ad_file('app-ads.txt')
     from django.http import HttpResponse
     return HttpResponse(content, content_type='text/plain')
+
+
+def serve_google_verification(request):
+    """Serve the Google Search Console site-verification file at the site root.
+
+    Google looks for ``/google3d3495bfc5b3fba2.html`` and checks that the
+    body contains ``google-site-verification: google3d3495bfc5b3fba2.html``.
+    The file is read from the project root (where it lives alongside
+    manage.py / sw.js) via the same ``_read_ad_file`` helper used for
+    ads.txt, or the AD_FILES_DIR override when one is configured.
+    """
+    content = _read_ad_file('google3d3495bfc5b3fba2.html')
+    from django.http import HttpResponse
+    return HttpResponse(content, content_type='text/html')
 
 def admin_ad_files(request):
     if not request.user.is_staff:
