@@ -8001,23 +8001,56 @@ def serve_sitemap_xml(request):
         site + '/terms/',
     ]
 
+    seen = set(urls)
+
+    def _add(url):
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+
+    # Titles users have actually played. The id-based detail routes always
+    # resolve (independent of the site's slug/id url_format setting), so they
+    # are safe sitemap entries even when TMDB data is fetched live.
     try:
-        from .models import TMDBMovie, TMDBTV
-        for movie_id in (TMDBMovie.objects.order_by('-popularity')
-                         .values_list('id', flat=True)[:5000]):
-            urls.append(site + '/movies/id/' + str(movie_id) + '/')
-        for tv_id in (TMDBTV.objects.order_by('-popularity')
-                      .values_list('id', flat=True)[:5000]):
-            urls.append(site + '/series/id/' + str(tv_id) + '/')
+        from .models import PlayHistory
+        for media_type, tmdb_id in (PlayHistory.objects
+                                    .exclude(tmdb_id=None)
+                                    .values_list('media_type', 'tmdb_id')
+                                    .distinct()[:10000]):
+            if not tmdb_id:
+                continue
+            prefix = '/series/id/' if media_type == 'tv' else '/movies/id/'
+            _add(site + prefix + str(tmdb_id) + '/')
     except Exception:
         pass
+
+    # Public detail pages the site has really served (skip bots + assets).
+    try:
+        from django.db.models import Q
+        from .models import WebsiteVisitorVisit
+        for path in (WebsiteVisitorVisit.objects
+                     .filter(Q(path__startswith='/movies/') | Q(path__startswith='/series/'),
+                             is_bot=False)
+                     .order_by('-id')
+                     .values_list('path', flat=True)[:20000]):
+            path = (path or '').split('?', 1)[0]
+            if path.startswith('/movies/') or path.startswith('/series/'):
+                _add(site + path)
+    except Exception:
+        pass
+
+    def _esc(value):
+        return (value.replace('&', '&amp;')
+                     .replace('<', '&lt;')
+                     .replace('>', '&gt;')
+                     .replace('"', '&quot;'))
 
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
     for url in urls:
-        parts.append('  <url><loc>' + url + '</loc></url>')
+        parts.append('  <url><loc>' + _esc(url) + '</loc></url>')
     parts.append('</urlset>')
     xml = '\n'.join(parts)
     try:
