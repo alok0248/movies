@@ -228,6 +228,7 @@ class SiteSettings(models.Model):
     # Google AdSense
     adsense_verification_meta = models.CharField(max_length=200, blank=True, null=True, help_text="Google AdSense verification meta tag content (e.g., abcdef123456)")
     adsense_client_id = models.CharField(max_length=100, blank=True, null=True, help_text="Google AdSense client ID (e.g., ca-pub-1234567890123456)")
+    google_analytics_id = models.CharField(max_length=50, blank=True, null=True, help_text="Google Analytics 4 measurement ID (e.g., G-XXXXXXXXXX). Leave blank to disable analytics.")
     bot_user_agents = models.TextField(blank=True, null=True, help_text="Comma-separated list of user-agent strings for our bot")
 
     # Auto-click ad cadence (count-based)

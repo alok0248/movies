@@ -1141,16 +1141,18 @@
         body.admin-page .content-wrapper { padding-bottom: .5rem !important; }
 
     <!-- Google Analytics 4 (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-000000000"></script>
+    {% if site_settings.google_analytics_id %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ site_settings.google_analytics_id }}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', 'G-000000000', {
+        gtag('config', '{{ site_settings.google_analytics_id }}', {
           page_path: location.pathname,
           page_title: document.title,
         });
     </script>
+    {% endif %}
 
     <!-- JSON-LD structured data -->
     <script type="application/ld+json">
