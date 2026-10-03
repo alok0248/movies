@@ -15,7 +15,7 @@
     <meta name="google-adsense-account" content="{{ site_settings.adsense_verification_meta }}">
     {% endif %}
     <title>{% block title %}{{ site_settings.brand_name }}{% endblock %}</title>
-    <link rel="canonical" href="https://newmovies.linkpc.net{% block canonical %}{% endblock %}">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     {% if site_settings.brand_tagline %}<meta name="description" content="{{ site_settings.brand_tagline }}">{% endif%}
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://image.tmdb.org">
