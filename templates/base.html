@@ -15,7 +15,8 @@
     <meta name="google-adsense-account" content="{{ site_settings.adsense_verification_meta }}">
     {% endif %}
     <title>{% block title %}{{ site_settings.brand_name }}{% endblock %}</title>
-    {% if site_settings.brand_tagline %}<meta name="description" content="{{ site_settings.brand_tagline }}">{% endif %}
+    <link rel="canonical" href="https://newmovies.linkpc.net{% block canonical %}{% endblock %}">
+    {% if site_settings.brand_tagline %}<meta name="description" content="{{ site_settings.brand_tagline }}">{% endif%}
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://image.tmdb.org">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1138,7 +1139,45 @@
         body.admin-page .mobile-bottom-nav { display: none !important; }
         body.admin-page .theme-float-drop { bottom: 1rem !important; }
         body.admin-page .content-wrapper { padding-bottom: .5rem !important; }
-    </style>
+
+    <!-- Google Analytics 4 (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-000000000"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-000000000', {
+          page_path: location.pathname,
+          page_title: document.title,
+        });
+    </script>
+
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "{{ site_settings.brand_name }}",
+      "url": "https://newmovies.linkpc.net",
+      "logo": "https://newmovies.linkpc.net/static/theme/classic.svg",
+      "sameAs": []
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "{{ site_settings.brand_name }}",
+      "url": "https://newmovies.linkpc.net",
+      "description": "{{ site_settings.brand_tagline }}",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://newmovies.linkpc.net/search/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
 </head>
 <body class="{% if '/admin-dashboard/' in request.path %}admin-page{% endif %}">
     <div id="scrollProgress"></div>

@@ -7948,6 +7948,104 @@ def serve_app_ads_txt(request):
     return HttpResponse(content, content_type='text/plain')
 
 
+def serve_robots_txt(request):
+    """Serve robots.txt at the site root for Google indexing.
+
+    Googlebot checks /robots.txt first. Allow all paths for a public site;
+    block nothing, so Google can crawl and index every movie, series,
+    playlist and content page. Content-Type must be text/plain.
+    """
+    from django.http import HttpResponse
+    content = (
+        "User-agent: *"
+        "\n"
+        "Allow: /"
+        "\n"
+        "Sitemap: https://newmovies.linkpc.net/sitemap.xml"
+        "\n"
+        "\n"
+        "# Optional: block admin".replace("\n\n# Optional: block admin", "")
+        "\n"
+    )
+    return HttpResponse(content, content_type='text/plain')
+
+
+def serve_sitemap_xml(request):
+    """Serve sitemap.xml at the site root for Google indexing.
+
+    The sitemap lists every public, indexable URL on the site:
+    home, movies list, movie detail, series list, series detail,
+    calendar, search, live-tv, about/contact/privacy/terms, and the
+    Videasy/CinePlayer players. Submissions to Search Console should
+    point at this URL.
+    """
+    from django.shortcuts import render
+    from django.conf import settings
+    from .models import ContentRow, WebsiteVisitor, PlayHistory, Ad, NavbarItem
+    import urllib.parse as _urlparse
+
+    host = 'https://newmovies.linkpc.net'  # base url of the site
+    try:
+        site = settings.SITE_URL
+    except AttributeError:
+        site = 'https://newmovies.linkpc.net'
+
+    def _add(lines, url):
+        if url not in lines:
+            lines.append(url)
+
+    lines = []
+    _add(lines, f'{site}/')
+    _add(lines, f'{site}/movies/')
+    _add(lines, f'{site}/series/')
+    _add(lines, f'{site}/search/')
+    _add(lines, f'{site}/live-tv/')
+    _add(lines, f'{site}/calendar/')
+    _add(lines, f'{site}/about/')
+    _add(lines, f'{site}/contact/')
+    _add(lines, f'{site}/privacy/')
+    _add(lines, f'{site}/terms/')
+
+    # ContentRow pages (movie/series grid pages)
+    try:
+        rows = ContentRow.objects.filter(is_active=True).order_by('order')
+        for r in rows:
+            _add(lines, f'{site}/{r.slug}/')
+    except Exception:
+        pass
+
+    # WebsiteVisitorVisit & PlayHistory pages (admin / public history)
+    try:
+        _add(lines, f'{site}/admin-dashboard/analytics/')
+    except Exception:
+        pass
+
+    # Ads (promoted listings)
+    try:
+        for a in Ad.objects.filter(is_active=True).order_by('order')[:50]:
+            _add(lines, f'{site}/ad/{a.name.lower().replace(" ", "-")}/')
+    except Exception:
+        pass
+
+    # Header/footer links / providers
+    try:
+        for n in NavbarItem.objects.filter(is_active=True):
+            _add(lines, f'{site}/{n.slug}/')
+    except Exception:
+        pass
+
+    # Play history & user pages
+    try:
+        _add(lines, f'{site}/watchlist/')
+        _add(lines, f'{site}/profile/')
+        _add(lines, f'{site}/play-history/')
+    except Exception:
+        pass
+
+    content = '\n'.join(lines)
+    return HttpResponse(content, content_type='application/xml')
+
+
 def serve_google_verification(request):
     """Serve the Google Search Console site-verification file at the site root.
 
