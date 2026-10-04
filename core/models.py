@@ -2,6 +2,7 @@ from django.db import IntegrityError, models
 from django.contrib.auth.models import User
 from django.utils.text import slugify
 from django.utils import timezone
+import json
 import secrets
 
 
@@ -60,31 +61,61 @@ def _backfill_from_tmdb(rows):
             continue
 
 
+# poster_path columns are varchar(255); emitting anything longer makes MySQL
+# abort the whole sync with "Data too long for column 'poster_path'".
+POSTER_PATH_MAX_LEN = 255
+
+
 def normalize_poster_path(value):
     """Normalize a poster reference to a clean TMDB-relative path.
 
-    Accepts relative paths ('/abc.jpg'), bare paths ('abc.jpg') and full
-    URLs ('https://image.tmdb.org/t/p/w500/abc.jpg') and always returns the
-    relative '/abc.jpg' form (or '' when empty) so stored values stay
-    consistent regardless of which client sent them.
+    Accepts relative paths ('/abc.jpg'), bare paths ('abc.jpg'), full URLs
+    ('https://image.tmdb.org/t/p/w500/abc.jpg') and clients that wrap the URL
+    in a JSON blob ('{"url": "https://.../abc.jpg"}'), and always returns the
+    relative '/abc.jpg' form (or '' when empty/unusable) so stored values stay
+    consistent regardless of which client sent them. Returns '' rather than an
+    over-long value, so a malformed client can never overflow the column.
     """
     if not value:
         return ''
     v = str(value).strip()
     if not v:
         return ''
+    # Some clients serialize the poster as a JSON object/array rather than a
+    # plain string — unwrap it instead of storing the raw JSON blob.
+    if v[0] in '{[':
+        try:
+            parsed = json.loads(v)
+        except (ValueError, TypeError):
+            return ''
+        if isinstance(parsed, dict):
+            v = (parsed.get('url') or parsed.get('posterUrl')
+                 or parsed.get('posterPath') or parsed.get('path') or '')
+        elif isinstance(parsed, list) and parsed and isinstance(parsed[0], str):
+            v = parsed[0]
+        else:
+            v = ''
+        v = str(v).strip()
+        if not v:
+            return ''
+    # Inline/embedded images (data URIs) are not usable image paths.
+    if v[:5].lower() == 'data:':
+        return ''
     if '://' in v:
         # Strip any image-host prefix and size segment:
         # https://image.tmdb.org/t/p/w500/abc.jpg -> /abc.jpg
         path = v.split('://', 1)[1]
         path = path.split('/', 1)[1] if '/' in path else ''
-        segs = path.split('/')
+        segs = [s for s in path.split('/') if s]
         # image hosts use /t/p/{size}/... — drop the leading t/p/{size}
         if len(segs) >= 3 and segs[0] == 't' and segs[1] == 'p':
             segs = segs[3:]
         v = '/' + '/'.join(segs)
     if not v.startswith('/'):
         v = '/' + v
+    # Final guard: never exceed the database column length.
+    if len(v) > POSTER_PATH_MAX_LEN:
+        return ''
     return v
 
 
@@ -1706,9 +1737,13 @@ class UserCloudData(models.Model):
             h_episode_final = h_episode if h_episode >= 0 else None
             defaults = {
                 'title': h.get('title', ''),
-                'poster_path': normalize_poster_path(h.get('posterUrl') or h.get('posterPath') or ''),
                 'episode_title': h.get('lastEpisodeName', h.get('episodeTitle', '')),
             }
+            # Only set the poster when it normalizes to something usable, so an
+            # empty/unusable value from the app can't clobber a good poster.
+            poster_val = normalize_poster_path(h.get('posterUrl') or h.get('posterPath') or '')
+            if poster_val:
+                defaults['poster_path'] = poster_val
             # Real watch time: lastWatchedEpoch (app) or lastUpdated (web path).
             watched_at = _epoch_ms_to_dt(h.get('lastWatchedEpoch') or h.get('lastUpdated'))
             if watched_at is not None:
