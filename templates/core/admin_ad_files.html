@@ -61,7 +61,7 @@
         border: 1px solid var(--border);
     }
     .af-row .af-name { font-weight: 600; color: var(--text); font-size: .9rem; }
-    .af-row .af-meta { font-size: .7rem; color: var(--text-3); margin-top: .2rem; }
+    .af-row .af-meta { font-size: .7rem; color: var(--text-2); margin-top: .2rem; }
     .af-link { color: var(--brand); text-decoration: none; font-size: .8rem; }
     .af-link:hover { text-decoration: underline; }
     .af-btn-sm {
@@ -83,7 +83,18 @@
         font-size: .75rem;
         cursor: pointer;
     }
-    .af-empty { text-align: center; padding: 2rem; color: var(--text-3); }
+    .af-empty { text-align: center; padding: 2rem; color: var(--text-2); }
+    /* Light theme: brand red needs darkening on light surfaces */
+    html[data-theme="light"] .af-back,
+    html[data-theme="light"] .af-link { color: #b1060f; }
+    /* Dark theme: brand red and danger red are too dim on dark surfaces */
+    html[data-theme="dark"] .af-back,
+    html[data-theme="dark"] .af-link { color: #f87171; }
+    html[data-theme="dark"] .af-btn-danger {
+        color: #f87171;
+        background: rgba(185, 28, 28, .18);
+        border-color: rgba(248, 113, 113, .4);
+    }
     .af-modal {
         display: none;
         position: fixed;
