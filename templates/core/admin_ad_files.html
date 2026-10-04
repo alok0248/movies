@@ -1,55 +1,161 @@
-{% extends "base.html" %}
+{% extends "core/admin_base.html" %}
 {% block title %}Ad Files Management{% endblock %}
-{% block content %}
-<div style="max-width:900px;margin:2rem auto;padding:0 1.5rem;">
-    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem;">
-        <h1 style="font-size:1.6rem;font-weight:800;color:var(--text,#fff);">Ad Files Management</h1>
-        <a href="/admin-dashboard/" style="color:var(--brand,#e50914);text-decoration:none;font-size:.85rem;">Back to Dashboard</a>
+{% block admin_content %}
+<style>
+    .af-wrap { max-width: 900px; margin: 0 auto; }
+    .af-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .af-head h1 { font-size: 1.6rem; font-weight: 800; color: var(--text); margin: 0; }
+    .af-back { color: var(--brand); text-decoration: none; font-size: .85rem; }
+    .af-back:hover { text-decoration: underline; }
+    .af-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .af-card h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; }
+    .af-field { flex: 1; min-width: 200px; }
+    .af-field.wide { flex: 2; min-width: 300px; }
+    .af-label { display: block; font-size: .75rem; color: var(--text-2); margin-bottom: .3rem; }
+    .af-input {
+        width: 100%;
+        padding: .6rem .8rem;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-size: .85rem;
+    }
+    .af-input::placeholder { color: var(--text-3); }
+    .af-input:focus { outline: none; border-color: var(--brand); }
+    textarea.af-input { font-family: monospace; resize: vertical; }
+    .af-btn {
+        padding: .5rem 1.2rem;
+        border-radius: 8px;
+        font-size: .85rem;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: var(--surface-hover);
+        color: var(--text);
+    }
+    .af-btn:hover { background: var(--surface); }
+    .af-btn-primary {
+        padding: .6rem 1.5rem;
+        border-radius: 8px;
+        background: var(--brand);
+        color: #fff;
+        border: none;
+        font-weight: 600;
+        font-size: .85rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .af-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: .8rem 1rem;
+        border-radius: 8px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+    }
+    .af-row .af-name { font-weight: 600; color: var(--text); font-size: .9rem; }
+    .af-row .af-meta { font-size: .7rem; color: var(--text-3); margin-top: .2rem; }
+    .af-link { color: var(--brand); text-decoration: none; font-size: .8rem; }
+    .af-link:hover { text-decoration: underline; }
+    .af-btn-sm {
+        padding: .3rem .8rem;
+        border-radius: 6px;
+        background: var(--surface-hover);
+        color: var(--text);
+        border: 1px solid var(--border);
+        font-size: .75rem;
+        cursor: pointer;
+    }
+    .af-btn-sm:hover { background: var(--surface); }
+    .af-btn-danger {
+        padding: .3rem .8rem;
+        border-radius: 6px;
+        background: rgba(185, 28, 28, .12);
+        color: #b91c1c;
+        border: 1px solid rgba(185, 28, 28, .32);
+        font-size: .75rem;
+        cursor: pointer;
+    }
+    .af-empty { text-align: center; padding: 2rem; color: var(--text-3); }
+    .af-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, .55);
+        backdrop-filter: blur(4px);
+        align-items: center;
+        justify-content: center;
+    }
+    .af-modal-box {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        width: min(90vw, 700px);
+        max-height: 80vh;
+        overflow: auto;
+    }
+    .af-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .af-modal-head h3 { color: var(--text); font-size: 1rem; margin: 0; }
+    .af-modal-close { background: none; border: none; color: var(--text-2); font-size: 1.2rem; cursor: pointer; }
+</style>
+<div class="af-wrap">
+    <div class="af-head">
+        <h1>Ad Files Management</h1>
+        <a href="/admin-dashboard/" class="af-back">Back to Dashboard</a>
     </div>
-    <div style="background:var(--card,rgba(255,255,255,.04));border:1px solid var(--border,rgba(255,255,255,.08));border-radius:12px;padding:1.5rem;margin-bottom:2rem;">
-        <h2 style="font-size:1.1rem;font-weight:700;color:var(--text,#fff);margin-bottom:1rem;">Upload New File</h2>
+    <div class="af-card">
+        <h2>Upload New File</h2>
         <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
-            <div style="flex:1;min-width:200px;">
-                <label style="display:block;font-size:.75rem;color:#888;margin-bottom:.3rem;">Filename (e.g. ads.txt, sw.js)</label>
-                <input type="text" id="newFilename" placeholder="filename.txt" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:.85rem;">
+            <div class="af-field">
+                <label class="af-label">Filename (e.g. ads.txt, sw.js)</label>
+                <input type="text" id="newFilename" class="af-input" placeholder="filename.txt">
             </div>
-            <div style="flex:2;min-width:300px;">
-                <label style="display:block;font-size:.75rem;color:#888;margin-bottom:.3rem;">File Content</label>
-                <textarea id="newFileContent" rows="6" placeholder="Paste file content here..." style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:.85rem;font-family:monospace;resize:vertical;"></textarea>
+            <div class="af-field wide">
+                <label class="af-label">File Content</label>
+                <textarea id="newFileContent" rows="6" class="af-input" placeholder="Paste file content here..."></textarea>
             </div>
-            <button onclick="saveNewFile()" style="padding:.6rem 1.5rem;border-radius:8px;background:#e50914;color:#fff;border:none;font-weight:600;font-size:.85rem;cursor:pointer;white-space:nowrap;">Save File</button>
+            <button onclick="saveNewFile()" class="af-btn-primary">Save File</button>
         </div>
     </div>
-    <div style="background:var(--card,rgba(255,255,255,.04));border:1px solid var(--border,rgba(255,255,255,.08));border-radius:12px;padding:1.5rem;">
-        <h2 style="font-size:1.1rem;font-weight:700;color:var(--text,#fff);margin-bottom:1rem;">Existing Files</h2>
+    <div class="af-card">
+        <h2>Existing Files</h2>
         {% if files %}
         <div style="display:flex;flex-direction:column;gap:.5rem;">
             {% for file in files %}
-            <div style="display:flex;align-items:center;gap:1rem;padding:.8rem 1rem;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);">
+            <div class="af-row">
                 <div style="flex:1;">
-                    <div style="font-weight:600;color:#fff;font-size:.9rem;">{{ file.name }}</div>
-                    <div style="font-size:.7rem;color:#666;margin-top:.2rem;">{{ file.size }} bytes{% if file.in_root %} (root){% endif %}</div>
+                    <div class="af-name">{{ file.name }}</div>
+                    <div class="af-meta">{{ file.size }} bytes{% if file.in_root %} (root){% endif %}</div>
                 </div>
-                <a href="/{{ file.name }}" target="_blank" style="color:#e50914;text-decoration:none;font-size:.8rem;">View</a>
-                <button onclick="editFile('{{ file.name }}')" style="padding:.3rem .8rem;border-radius:6px;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.1);font-size:.75rem;cursor:pointer;">Edit</button>
-                <button onclick="deleteFile('{{ file.name }}')" style="padding:.3rem .8rem;border-radius:6px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:.75rem;cursor:pointer;">Delete</button>
+                <a href="/{{ file.name }}" target="_blank" class="af-link">View</a>
+                <button onclick="editFile('{{ file.name }}')" class="af-btn-sm">Edit</button>
+                <button onclick="deleteFile('{{ file.name }}')" class="af-btn-danger">Delete</button>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div style="text-align:center;padding:2rem;color:#666;">No ad files found.</div>
+        <div class="af-empty">No ad files found.</div>
         {% endif %}
     </div>
-    <div id="editModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
-        <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:1.5rem;width:min(90vw,700px);max-height:80vh;overflow:auto;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-                <h3 style="color:#fff;font-size:1rem;" id="editTitle">Edit File</h3>
-                <button onclick="closeEditModal()" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;">&times;</button>
+    <div id="editModal" class="af-modal">
+        <div class="af-modal-box">
+            <div class="af-modal-head">
+                <h3 id="editTitle">Edit File</h3>
+                <button onclick="closeEditModal()" class="af-modal-close">&times;</button>
             </div>
-            <textarea id="editContent" rows="15" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:.85rem;font-family:monospace;resize:vertical;"></textarea>
+            <textarea id="editContent" rows="15" class="af-input"></textarea>
             <div style="display:flex;gap:.8rem;margin-top:1rem;justify-content:flex-end;">
-                <button onclick="closeEditModal()" style="padding:.5rem 1.2rem;border-radius:8px;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.1);font-size:.85rem;cursor:pointer;">Cancel</button>
-                <button onclick="saveEditFile()" style="padding:.5rem 1.2rem;border-radius:8px;background:#e50914;color:#fff;border:none;font-weight:600;font-size:.85rem;cursor:pointer;">Save</button>
+                <button onclick="closeEditModal()" class="af-btn">Cancel</button>
+                <button onclick="saveEditFile()" class="af-btn-primary">Save</button>
             </div>
         </div>
     </div>

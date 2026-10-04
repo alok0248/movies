@@ -329,6 +329,210 @@
         border-left-color: var(--brand);
     }
     html[data-theme="light"] .sb-item.active i { color: var(--brand); }
+
+    /* ============================================================
+       THEME NORMALIZATION
+       Legacy admin pages use hard-coded Bootstrap utility classes
+       (text-white / bg-dark / table-dark) and raw white/blue-grey 
+       colours that assume a dark surface. These overrides make them
+       follow the active theme so text stays readable in BOTH modes.
+       !important is required because page-local <style> blocks are
+       emitted after this one inside .admin-main.
+       ============================================================ */
+
+    /* --- Utility text colours --- */
+    .admin-main .text-secondary,
+    .admin-main .text-muted,
+    .admin-main .text-body-secondary { color: var(--text-2) !important; }
+    .admin-main .text-white,
+    .admin-main .text-light,
+    .admin-main .text-body,
+    .admin-main .text-dark,
+    .admin-main .text-black { color: var(--text) !important; }
+    .admin-main .text-info { color: #38bdf8 !important; }
+    html[data-theme="light"] .admin-main .text-info { color: #0369a1 !important; }
+    .admin-main .text-success { color: #22c55e !important; }
+    html[data-theme="light"] .admin-main .text-success { color: #15803d !important; }
+    .admin-main .text-warning { color: #fbbf24 !important; }
+    html[data-theme="light"] .admin-main .text-warning { color: #b45309 !important; }
+    .admin-main .text-danger { color: #f87171 !important; }
+    html[data-theme="light"] .admin-main .text-danger { color: #b91c1c !important; }
+
+    /* --- Dark surfaces become theme surfaces --- */
+    .admin-main .bg-dark,
+    .admin-main .bg-black,
+    .admin-main .bg-body,
+    .admin-main .bg-body-tertiary {
+        background-color: var(--bg-2) !important;
+        color: var(--text) !important;
+    }
+    .admin-main .bg-secondary {
+        background-color: var(--surface-hover) !important;
+        color: var(--text) !important;
+    }
+    .admin-main .card,
+    .admin-main .modal-content,
+    .admin-main .offcanvas,
+    .admin-main .accordion-item,
+    .admin-main .list-group-item,
+    .admin-main .dropdown-menu {
+        background-color: var(--card-bg) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }
+    .admin-main .card-header,
+    .admin-main .card-footer,
+    .admin-main .modal-header,
+    .admin-main .modal-footer {
+        background-color: transparent !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }
+    .admin-main .list-group-item-action:hover { background-color: var(--surface-hover) !important; }
+    html[data-theme="dark"] .admin-main .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
+    /* --- Tables --- */
+    .admin-main .table,
+    .admin-main .table-dark {
+        --bs-table-bg: transparent;
+        --bs-table-color: var(--text);
+        --bs-table-border-color: var(--border);
+        --bs-table-striped-bg: var(--surface);
+        --bs-table-striped-color: var(--text);
+        --bs-table-hover-bg: var(--surface-hover);
+        --bs-table-hover-color: var(--text);
+        color: var(--text) !important;
+    }
+    .admin-main .table > thead th,
+    .admin-main .table-dark > thead th { color: var(--text-2) !important; border-color: var(--border) !important; }
+    .admin-main .table > tbody td,
+    .admin-main .table > tbody th,
+    .admin-main .table-dark > tbody td,
+    .admin-main .table-dark > tbody th { color: var(--text) !important; border-color: var(--border) !important; }
+
+    /* --- Contextual backgrounds (badges/chips) --- */
+    .admin-main .bg-primary { background-color: #2563eb !important; color: #fff !important; }
+    .admin-main .bg-success { background-color: #15803d !important; color: #fff !important; }
+    .admin-main .bg-danger { background-color: #b91c1c !important; color: #fff !important; }
+    .admin-main .bg-info { background-color: #0e7490 !important; color: #fff !important; }
+    .admin-main .bg-warning { background-color: #b45309 !important; color: #fff !important; }
+    .admin-main .bg-dark { color: var(--text) !important; }
+    .admin-main .badge.bg-light { color: #1a1a2e !important; }
+    .admin-main .badge.bg-secondary { background-color: var(--surface-hover) !important; color: var(--text-2) !important; }
+
+    /* --- Forms --- */
+    .admin-main .form-label,
+    .admin-main .col-form-label,
+    .admin-main .form-check-label { color: var(--text) !important; }
+    .admin-main .form-text,
+    .admin-main .form-text.text-muted { color: var(--text-2) !important; }
+    .admin-main .input-group-text {
+        background-color: var(--surface) !important;
+        color: var(--text-2) !important;
+        border-color: var(--border) !important;
+    }
+
+    /* --- Nav / tabs / pagination / outline buttons --- */
+    .admin-main .nav-tabs { border-color: var(--border) !important; }
+    .admin-main .nav-tabs .nav-link { color: var(--text-2) !important; }
+    .admin-main .nav-tabs .nav-link.active {
+        color: var(--text) !important;
+        background-color: transparent !important;
+        border-color: var(--border) var(--border) transparent !important;
+    }
+    .admin-main .nav-pills .nav-link { color: var(--text-2) !important; }
+    .admin-main .nav-pills .nav-link.active { color: #fff !important; }
+    .admin-main .pagination .page-link {
+        background-color: var(--bg-2) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }
+    .admin-main .pagination .page-item.active .page-link { background-color: var(--brand) !important; border-color: var(--brand) !important; color: #fff !important; }
+    .admin-main .accordion-button { background-color: var(--bg-2) !important; color: var(--text) !important; }
+    .admin-main .accordion-button:not(.collapsed) { color: var(--text) !important; }
+    .admin-main .btn-outline-light { color: var(--text) !important; border-color: var(--border) !important; }
+    .admin-main .btn-outline-light:hover { background-color: var(--surface-hover) !important; color: var(--text) !important; }
+    .admin-main .btn-outline-secondary { color: var(--text-2) !important; border-color: var(--border) !important; }
+    .admin-main .btn-outline-secondary:hover { background-color: var(--surface-hover) !important; color: var(--text) !important; }
+    /* Bootstrap contextual outline buttons are too light on white — darken in light theme */
+    html[data-theme="light"] .admin-main .btn-outline-primary { color: #1d4ed8 !important; border-color: #1d4ed8 !important; }
+    html[data-theme="light"] .admin-main .btn-outline-info { color: #0e7490 !important; border-color: #0e7490 !important; }
+    html[data-theme="light"] .admin-main .btn-outline-success { color: #15803d !important; border-color: #15803d !important; }
+    html[data-theme="light"] .admin-main .btn-outline-warning { color: #b45309 !important; border-color: #b45309 !important; }
+    html[data-theme="light"] .admin-main .btn-outline-danger { color: #b91c1c !important; border-color: #b91c1c !important; }
+    html[data-theme="light"] .admin-main .btn-outline-primary:hover { background-color: #1d4ed8 !important; color: #fff !important; }
+    html[data-theme="light"] .admin-main .btn-outline-info:hover { background-color: #0e7490 !important; color: #fff !important; }
+    html[data-theme="light"] .admin-main .btn-outline-success:hover { background-color: #15803d !important; color: #fff !important; }
+    html[data-theme="light"] .admin-main .btn-outline-warning:hover { background-color: #b45309 !important; color: #fff !important; }
+    html[data-theme="light"] .admin-main .btn-outline-danger:hover { background-color: #b91c1c !important; color: #fff !important; }
+    /* Bootstrap contextual outline buttons are too dark on a dark surface — brighten in dark theme */
+    html[data-theme="dark"] .admin-main .btn-outline-primary { color: #60a5fa !important; border-color: #60a5fa !important; }
+    html[data-theme="dark"] .admin-main .btn-outline-info { color: #38bdf8 !important; border-color: #38bdf8 !important; }
+    html[data-theme="dark"] .admin-main .btn-outline-success { color: #4ade80 !important; border-color: #4ade80 !important; }
+    html[data-theme="dark"] .admin-main .btn-outline-warning { color: #fbbf24 !important; border-color: #fbbf24 !important; }
+    html[data-theme="dark"] .admin-main .btn-outline-danger { color: #f87171 !important; border-color: #f87171 !important; }
+    .admin-main .text-blue-400 { color: #60a5fa !important; }
+    html[data-theme="light"] .admin-main .text-blue-400 { color: #1d4ed8 !important; }
+
+    /* --- Light theme: darken accent text so it stays readable on light ---
+       Inline styles appear both as "color:#hex" and "color: #hex", so each
+       accent needs both attribute forms. --- */
+    html[data-theme="light"] .admin-main [style*="color:#38bdf8"], html[data-theme="light"] .admin-main [style*="color: #38bdf8"] { color: #0369a1 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#22d3ee"], html[data-theme="light"] .admin-main [style*="color: #22d3ee"] { color: #0e7490 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#60a5fa"], html[data-theme="light"] .admin-main [style*="color: #60a5fa"] { color: #1d4ed8 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#3b82f6"], html[data-theme="light"] .admin-main [style*="color: #3b82f6"] { color: #1d4ed8 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#22c55e"], html[data-theme="light"] .admin-main [style*="color: #22c55e"] { color: #15803d !important; }
+    html[data-theme="light"] .admin-main [style*="color:#4ade80"], html[data-theme="light"] .admin-main [style*="color: #4ade80"] { color: #15803d !important; }
+    html[data-theme="light"] .admin-main [style*="color:#34d399"], html[data-theme="light"] .admin-main [style*="color: #34d399"] { color: #047857 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#00c896"], html[data-theme="light"] .admin-main [style*="color: #00c896"] { color: #047857 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#f59e0b"], html[data-theme="light"] .admin-main [style*="color: #f59e0b"] { color: #b45309 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#fbbf24"], html[data-theme="light"] .admin-main [style*="color: #fbbf24"] { color: #b45309 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#a78bfa"], html[data-theme="light"] .admin-main [style*="color: #a78bfa"] { color: #6d28d9 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#818cf8"], html[data-theme="light"] .admin-main [style*="color: #818cf8"] { color: #4338ca !important; }
+    html[data-theme="light"] .admin-main [style*="color:#c084fc"], html[data-theme="light"] .admin-main [style*="color: #c084fc"] { color: #7c3aed !important; }
+    html[data-theme="light"] .admin-main [style*="color:#a855f7"], html[data-theme="light"] .admin-main [style*="color: #a855f7"] { color: #7c3aed !important; }
+    html[data-theme="light"] .admin-main [style*="color:#8b5cf6"], html[data-theme="light"] .admin-main [style*="color: #8b5cf6"] { color: #6d28d9 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#6366f1"], html[data-theme="light"] .admin-main [style*="color: #6366f1"] { color: #4338ca !important; }
+    html[data-theme="light"] .admin-main [style*="color:#f472b6"], html[data-theme="light"] .admin-main [style*="color: #f472b6"] { color: #be185d !important; }
+    html[data-theme="light"] .admin-main [style*="color:#ef4444"], html[data-theme="light"] .admin-main [style*="color: #ef4444"] { color: #b91c1c !important; }
+    html[data-theme="light"] .admin-main [style*="color:#f87171"], html[data-theme="light"] .admin-main [style*="color: #f87171"] { color: #b91c1c !important; }
+    html[data-theme="light"] .admin-main [style*="color:#e50914"], html[data-theme="light"] .admin-main [style*="color: #e50914"] { color: #b1060f !important; }
+    html[data-theme="light"] .admin-main [style*="color:#94a3b8"], html[data-theme="light"] .admin-main [style*="color: #94a3b8"] { color: #475569 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#cbd5e1"], html[data-theme="light"] .admin-main [style*="color: #cbd5e1"] { color: #334155 !important; }
+    html[data-theme="light"] .admin-main [style*="color:#64748b"], html[data-theme="light"] .admin-main [style*="color: #64748b"] { color: #475569 !important; }
+
+    /* --- Dark theme: lift muted inline text that is too dim on dark --- */
+    html[data-theme="dark"] .admin-main [style*="color:#475569"], html[data-theme="dark"] .admin-main [style*="color: #475569"] { color: var(--text-2) !important; }
+    html[data-theme="dark"] .admin-main [style*="color:#334155"], html[data-theme="dark"] .admin-main [style*="color: #334155"] { color: var(--text-2) !important; }
+    html[data-theme="dark"] .admin-main [style*="color:#64748b"], html[data-theme="dark"] .admin-main [style*="color: #64748b"] { color: var(--text-2) !important; }
+
+    /* --- Inline code + solid accent chips --- */
+    .admin-main code { color: #d63384; }
+    html[data-theme="dark"] .admin-main code { color: #f472b6 !important; }
+    .admin-main [style*="background:#22c55e"],
+    .admin-main [style*="background: #22c55e"] { background-color: #15803d !important; }
+    .admin-main [style*="background:#4ade80"],
+    .admin-main [style*="background: #4ade80"] { background-color: #15803d !important; }
+
+    /* --- Light theme: neutralise raw light-on-dark inline text --- */
+    html[data-theme="light"] .admin-main [style*="color:#fff"],
+    html[data-theme="light"] .admin-main [style*="color: #fff"],
+    html[data-theme="light"] .admin-main [style*="color:#f1f5f9"],
+    html[data-theme="light"] .admin-main [style*="color:#f8fafc"],
+    html[data-theme="light"] .admin-main [style*="color:#e2e8f0"],
+    html[data-theme="light"] .admin-main [style*="color:rgba(255,255,255"],
+    html[data-theme="light"] .admin-main [style*="color: rgba(255,255,255"] { color: var(--text) !important; }
+    html[data-theme="light"] .admin-main [style*="color:#94a3b8"],
+    html[data-theme="light"] .admin-main [style*="color:#cbd5e1"],
+    html[data-theme="light"] .admin-main [style*="color:#cbd5e1"],
+    html[data-theme="light"] .admin-main [style*="color:rgba(255,255,255,.5"],
+    html[data-theme="light"] .admin-main [style*="color: rgba(255,255,255,.5"] { color: var(--text-2) !important; }
+    /* Raw dark-on-light inline text that breaks dark mode */
+    html[data-theme="dark"] .admin-main [style*="color:#000"],
+    html[data-theme="dark"] .admin-main [style*="color: #000"],
+    html[data-theme="dark"] .admin-main [style*="color:#111"],
+    html[data-theme="dark"] .admin-main [style*="color:#212529"],
+    html[data-theme="dark"] .admin-main [style*="color:#333"] { color: var(--text) !important; }
 </style>
 
 <!-- Toast container -->

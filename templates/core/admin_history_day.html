@@ -58,6 +58,35 @@
     .hd-badge.mv { background: rgba(167,139,250,.15); color: #a78bfa; }
     .hd-se { color: rgba(255,255,255,.55); font-size: .68rem; }
     .hd-empty { text-align: center; color: rgba(255,255,255,.35); padding: 3rem 0; }
+
+    /* ===== LIGHT THEME ===== */
+    html[data-theme="light"] .hd-title { color: #12122a; }
+    html[data-theme="light"] .hd-title i { color: #b45309; }
+    html[data-theme="light"] .hd-sub { color: rgba(25,25,45,.55); }
+    html[data-theme="light"] .hd-stat { background: #ffffff; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .hd-stat .v { color: #12122a; }
+    html[data-theme="light"] .hd-stat .l { color: rgba(25,25,45,.5); }
+    html[data-theme="light"] .hd-stat.purple .v { color: #6d28d9; }
+    html[data-theme="light"] .hd-stat.blue .v { color: #1d4ed8; }
+    html[data-theme="light"] .hd-row { background: #ffffff; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .hd-row:hover { background: rgba(99,102,241,.06); }
+    html[data-theme="light"] .hd-row .hd-ph { background: linear-gradient(160deg,#eceffb,#e7dcfb); }
+    html[data-theme="light"] .hd-time { color: #b45309; background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.35); }
+    html[data-theme="light"] .hd-info .t { color: #1a1a30; }
+    html[data-theme="light"] .hd-info .m { color: rgba(25,25,45,.5); }
+    html[data-theme="light"] .hd-who .nm { color: rgba(25,25,45,.7); }
+    html[data-theme="light"] .hd-who .em { color: rgba(25,25,45,.5); }
+    html[data-theme="light"] .hd-badge.tv { color: #1d4ed8; }
+    html[data-theme="light"] .hd-badge.mv { color: #6d28d9; }
+    html[data-theme="light"] .hd-se { color: rgba(25,25,45,.6); }
+    html[data-theme="light"] .hd-empty { color: rgba(25,25,45,.5); }
+    /* Dark-mode readability lifts */
+    html[data-theme="dark"] .hd-sub,
+    html[data-theme="dark"] .hd-stat .l,
+    html[data-theme="dark"] .hd-info .m,
+    html[data-theme="dark"] .hd-who .em,
+    html[data-theme="dark"] .hd-empty { color: rgba(255,255,255,.55); }
+    html[data-theme="dark"] .hd-who .nm { color: rgba(255,255,255,.8); }
     @media(max-width: 700px) {
         .hd-who .em { display: none; }
         .hd-time { width: 64px; font-size: .7rem; }

@@ -73,6 +73,37 @@
         .api-hero { padding: 1.3rem; }
         .api-card-title { display: none; }
     }
+    /* ===== LIGHT THEME ===== */
+    html[data-theme="light"] .api-hero p { color: rgba(25,25,45,.6); }
+    html[data-theme="light"] .api-card { background: #ffffff; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .api-card-head { border-bottom-color: rgba(0,0,0,.07); }
+    html[data-theme="light"] .api-card-head:hover { background: rgba(0,0,0,.02); }
+    html[data-theme="light"] .api-card.open .api-card-head { border-bottom-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .api-method.GET { color: #15803d; }
+    html[data-theme="light"] .api-method.POST { color: #b45309; }
+    html[data-theme="light"] .api-card-path { color: #1f2937; }
+    html[data-theme="light"] .api-card-title { color: rgba(25,25,45,.55); }
+    html[data-theme="light"] .api-chevron { color: rgba(25,25,45,.4); }
+    html[data-theme="light"] .api-desc { color: rgba(25,25,45,.72); }
+    html[data-theme="light"] .api-label { color: rgba(25,25,45,.45); }
+    html[data-theme="light"] table.api-table th { color: rgba(25,25,45,.5); border-bottom-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] table.api-table td { color: rgba(25,25,45,.8); border-bottom-color: rgba(0,0,0,.05); }
+    html[data-theme="light"] table.api-table code { color: #1d4ed8; background: rgba(99,102,241,.1); }
+    html[data-theme="light"] .api-req-badge.req { color: #b91c1c; }
+    html[data-theme="light"] .api-req-badge.opt { color: rgba(25,25,45,.5); background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .api-note { color: rgba(25,25,45,.78); }
+    html[data-theme="light"] .api-copy-btn { background: rgba(0,0,0,.04); color: rgba(25,25,45,.6); border-color: rgba(0,0,0,.12); }
+    html[data-theme="light"] .api-copy-btn:hover { background: rgba(0,0,0,.08); color: #12122a; }
+    /* ===== DARK THEME READABILITY ===== */
+    html[data-theme="dark"] .api-hero p,
+    html[data-theme="dark"] .api-card-title,
+    html[data-theme="dark"] .api-desc { color: rgba(255,255,255,.72); }
+    html[data-theme="dark"] .api-label,
+    html[data-theme="dark"] .api-chevron { color: rgba(255,255,255,.55); }
+    html[data-theme="dark"] table.api-table th { color: rgba(255,255,255,.55); }
+    html[data-theme="dark"] .api-req-badge.opt { color: rgba(255,255,255,.72); }
+    html[data-theme="dark"] .api-note { color: rgba(255,255,255,.78); }
+    html[data-theme="dark"] .api-copy-btn { color: rgba(255,255,255,.7); }
 </style>
 
 <div class="container api-docs-wrap">
