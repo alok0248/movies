@@ -2449,3 +2449,46 @@ class DeviceIdentity(models.Model):
             }
         )
         return obj
+
+
+class ErrorLog(models.Model):
+    """Every failed response (4xx/5xx), from the Android API and from normal pages.
+
+    Persisted so errors survive restarts and are visible no matter which
+    gunicorn worker served the request. Rows are pruned to the newest
+    api_errors.MAX_ROWS so bot 404 traffic cannot grow the table without bound.
+
+    Request bodies are deliberately never stored — they can contain passwords.
+    """
+
+    KIND_API = 'api'
+    KIND_SERVER = 'server'
+    KIND_CHOICES = [
+        (KIND_API, 'API'),
+        (KIND_SERVER, 'Server'),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=KIND_SERVER)
+    status_code = models.PositiveIntegerField(default=500)
+    view_name = models.CharField(max_length=120, blank=True, default='')
+    method = models.CharField(max_length=10, blank=True, default='')
+    path = models.CharField(max_length=500, blank=True, default='')
+    query = models.CharField(max_length=500, blank=True, default='')
+    client_ip = models.CharField(max_length=64, blank=True, default='')
+    username = models.CharField(max_length=150, blank=True, default='')
+    user_agent = models.CharField(max_length=300, blank=True, default='')
+    error_type = models.CharField(max_length=160, blank=True, default='')
+    message = models.TextField(blank=True, default='')
+    traceback = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at'], name='errorlog_created_idx'),
+            models.Index(fields=['kind', '-created_at'], name='errorlog_kind_idx'),
+            models.Index(fields=['status_code', '-created_at'], name='errorlog_status_idx'),
+        ]
+
+    def __str__(self):
+        return f'[{self.status_code}] {self.method} {self.path}'

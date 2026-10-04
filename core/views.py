@@ -8328,25 +8328,38 @@ def _guard_android_api_errors(view_func):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def api_error_log(request):
-    """Admin page: recent Android API exceptions captured by the error guard."""
-    from .api_errors import recent_errors, clear_errors
+    """Admin page: every captured error — Android API and ordinary pages."""
+    from .api_errors import recent_errors, clear_errors, error_total, error_to_dict
 
     if request.method == 'POST':
         if request.POST.get('action') == 'clear':
             clear_errors()
         return redirect('api_error_log')
 
-    records = recent_errors()
+    kind = request.GET.get('kind') or ''
+    status = request.GET.get('status') or ''
+    q = (request.GET.get('q') or '').strip()
+    if kind not in ('api', 'server'):
+        kind = ''
+    if status not in ('4xx', '5xx'):
+        status = ''
+
+    records = recent_errors(limit=300, kind=kind, status=status, q=q)
     if request.GET.get('format') == 'json':
         return JsonResponse({
             'status': 'success',
             'count': len(records),
-            'errors': records,
+            'filters': {'kind': kind, 'status': status, 'q': q},
+            'errors': [error_to_dict(r) for r in records],
         })
 
     return render(request, 'core/admin_api_errors.html', {
         'records': records,
         'count': len(records),
+        'total': error_total(),
+        'kind': kind,
+        'status': status,
+        'q': q,
         'back_url': 'admin_dashboard',
     })
 

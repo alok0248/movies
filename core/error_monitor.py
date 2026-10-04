@@ -8,10 +8,10 @@ Rate-limited to at most one email per unique URL path per 5 minutes to
 avoid flooding inboxes during sustained errors.
 """
 
+import http
 import logging
 import traceback
 import threading
-from collections import defaultdict
 from datetime import timedelta
 
 from django.conf import settings
@@ -125,30 +125,76 @@ def _send_alert_email(request, exc_type, exc_value, tb_text):
         return False
 
 
+def _record(request, status_code, error_type='', message='', tb='', kind='server'):
+    """Persist an error row for the admin error page. Never raises."""
+    try:
+        from core.api_errors import record_error
+        record_error(request, kind, status_code, error_type=error_type,
+                     message=message, tb=tb)
+    except Exception:
+        logger.debug('ErrorMonitor: could not record error', exc_info=True)
+
+
+def _status_error_type(code):
+    """'NotFound' for 404, 'InternalServerError' for 500, etc."""
+    try:
+        return ''.join(p.title() for p in http.HTTPStatus(code).name.split('_'))
+    except Exception:
+        return f'HTTP{code}'
+
+
 class ErrorMonitoringMiddleware:
-    """Catch unhandled exceptions and email the admin with full traceback."""
+    """Catch unhandled exceptions and email the admin with full traceback.
+
+    Also records every failed response (4xx/5xx) — API and ordinary pages —
+    in the ErrorLog table so the admin error page shows them all in one place.
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
+        code = getattr(response, 'status_code', None)
 
-        # Check for 500 status set by Django's error handling
-        if hasattr(response, 'status_code') and response.status_code == 500:
-            self._alert(request, None, None, None)
+        if code is not None and code >= 400:
+            # A guarded API view (or process_exception below) already recorded
+            # this failure with its traceback — don't log it twice.
+            if not getattr(request, '_error_log_recorded', False):
+                try:
+                    reason = http.HTTPStatus(code).phrase
+                except Exception:
+                    reason = f'HTTP {code}'
+                _record(request, code, error_type=_status_error_type(code),
+                        message=f'{code} {reason}')
+            # An error page nobody can see is worthless — email on 500s.
+            if code == 500:
+                self._alert(request, None, None, None)
 
         return response
 
     def process_exception(self, request, exception):
         """Called by Django when a view raises an unhandled exception."""
+        from django.core.exceptions import PermissionDenied
+        from django.http import Http404
+
         # Client disconnects during body upload are not server errors — they
         # are the app's network dropping mid-request. Never email about them.
         from django.http.request import UnreadablePostError
         if isinstance(exception, UnreadablePostError) or isinstance(exception.__cause__, ConnectionResetError):
             logger.info('ErrorMonitor: skipping client-disconnect error for %s', request.path)
             return None
-        self._alert(request, type(exception), exception, traceback.format_exc())
+
+        # Http404 / PermissionDenied are normal outcomes, not server faults.
+        # Let them fall through so __call__ records the real 4xx status (and
+        # no "[500]" alert email is sent for a missing page).
+        if isinstance(exception, (Http404, PermissionDenied)):
+            return None
+
+        tb_text = traceback.format_exc()
+        _record(request, 500, error_type=type(exception).__name__,
+                message=str(exception), tb=tb_text)
+        self._alert(request, type(exception), exception, tb_text)
         return None  # Let Django's default 500 handler take over
 
     def _alert(self, request, exc_type, exc_value, tb_text):

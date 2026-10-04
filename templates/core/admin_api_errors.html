@@ -1,5 +1,5 @@
 {% extends 'core/admin_base.html' %}
-{% block title %}API Errors - Admin{% endblock %}
+{% block title %}Error Log - Admin{% endblock %}
 {% block admin_content %}
 <style>
     .ae-card {
@@ -20,6 +20,18 @@
         background: rgba(239,68,68,.15);
         color: #ef4444;
     }
+    .ae-kind-api { background: rgba(239,68,68,.15); color: #ef4444; }
+    .ae-kind-server { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .ae-status {
+        display: inline-block;
+        font-size: .65rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-variant-numeric: tabular-nums;
+    }
+    .ae-status-5xx { background: rgba(239,68,68,.15); color: #ef4444; }
+    .ae-status-4xx { background: rgba(251,191,36,.15); color: #fbbf24; }
     .ae-view {
         font-family: monospace;
         font-size: .82rem;
@@ -50,14 +62,34 @@
     .ae-meta { font-size: .75rem; color: #64748b; }
     .ae-meta i { width: 14px; text-align: center; margin-right: 4px; color: #475569; }
     .ae-msg { font-size: .85rem; color: #f1f5f9; }
+    .ae-filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .ae-chip {
+        font-size: .75rem;
+        padding: .3rem .7rem;
+        border-radius: 999px;
+        text-decoration: none;
+        border: 1px solid rgba(255,255,255,.14);
+        color: #94a3b8;
+        background: rgba(255,255,255,.03);
+    }
+    .ae-chip:hover { color: #e2e8f0; border-color: rgba(255,255,255,.28); }
+    .ae-chip.active { background: rgba(96,165,250,.18); color: #93c5fd; border-color: rgba(96,165,250,.4); }
 
     html[data-theme="light"] .ae-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(20,20,45,.05); }
     html[data-theme="light"] .ae-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
     html[data-theme="light"] .ae-view { color: #b45309; }
-    html[data-theme="light"] .ae-tb { color: #dc2626; background: #f1f5f9; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .ae-tb { color: #b91c1c; background: #f1f5f9; border-color: rgba(0,0,0,.08); }
     html[data-theme="light"] .ae-msg { color: #0f172a; }
     html[data-theme="light"] .ae-empty { color: #64748b; }
     html[data-theme="light"] .ae-empty i { color: #94a3b8; }
+    html[data-theme="light"] .ae-meta { color: #64748b; }
+    html[data-theme="light"] .ae-chip { color: #475569; border-color: rgba(0,0,0,.14); background: #f8fafc; }
+    html[data-theme="light"] .ae-chip:hover { color: #0f172a; border-color: rgba(0,0,0,.3); }
+    html[data-theme="light"] .ae-chip.active { background: rgba(37,99,235,.12); color: #1d4ed8; border-color: rgba(37,99,235,.35); }
+    html[data-theme="light"] .ae-kind-server { background: rgba(37,99,235,.12); color: #1d4ed8; }
+    html[data-theme="light"] .ae-kind-api { background: rgba(185,28,28,.12); color: #b91c1c; }
+    html[data-theme="light"] .ae-status-5xx { background: rgba(185,28,28,.12); color: #b91c1c; }
+    html[data-theme="light"] .ae-status-4xx { background: rgba(180,83,9,.12); color: #b45309; }
 </style>
 
 <div class="container py-4" style="max-width:1100px;">
@@ -68,23 +100,24 @@
                 <i class="fas fa-bug text-white" style="font-size:1.1rem;"></i>
             </div>
             <div>
-                <h3 class="mb-0" style="font-size:1.25rem;">Android API Errors</h3>
-                <div style="color:#64748b;font-size:.82rem;">Recent exceptions from the Android user API — full tracebacks, no log digging</div>
+                <h3 class="mb-0" style="font-size:1.25rem;">Error Log</h3>
+                <div style="color:#64748b;font-size:.82rem;">API and server errors in one place — full tracebacks, no log digging</div>
             </div>
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
-            <span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444;font-size:.8rem;">{{ count }} captured</span>
+            <span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444;font-size:.8rem;">{{ count }} shown</span>
+            <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.8rem;">{{ total }} stored</span>
             <span class="ms-2" style="color:#475569;font-size:.72rem;">
-                <i class="fas fa-info-circle me-1"></i>Held in server memory — resets when the server restarts; request bodies (passwords) are never stored.
+                <i class="fas fa-info-circle me-1"></i>Saved to the database — survives restarts. Request bodies (passwords) are never stored.
             </span>
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'api_error_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
             <a href="{% url 'api_error_log' %}?format=json" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</a>
-            <form method="post" action="{% url 'api_error_log' %}" onsubmit="return confirm('Clear all captured API errors?');" style="margin:0;">
+            <form method="post" action="{% url 'api_error_log' %}" onsubmit="return confirm('Clear all recorded errors? This cannot be undone.');" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="clear">
                 <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>
@@ -92,27 +125,58 @@
         </div>
     </div>
 
+    <form method="get" class="ae-filters mb-3">
+        <a href="?{% if status %}status={{ status }}&{% endif %}{% if q %}q={{ q }}{% endif %}"
+           class="ae-chip {% if not kind %}active{% endif %}">All sources</a>
+        <a href="?kind=api{% if status %}&status={{ status }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+           class="ae-chip {% if kind == 'api' %}active{% endif %}">API</a>
+        <a href="?kind=server{% if status %}&status={{ status }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+           class="ae-chip {% if kind == 'server' %}active{% endif %}">Server</a>
+
+        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
+
+        <a href="?{% if kind %}kind={{ kind }}&{% endif %}{% if q %}q={{ q }}{% endif %}"
+           class="ae-chip {% if not status %}active{% endif %}">All statuses</a>
+        <a href="?status=5xx{% if kind %}&kind={{ kind }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+           class="ae-chip {% if status == '5xx' %}active{% endif %}">5xx</a>
+        <a href="?status=4xx{% if kind %}&kind={{ kind }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+           class="ae-chip {% if status == '4xx' %}active{% endif %}">4xx</a>
+
+        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
+
+        <input type="hidden" name="kind" value="{{ kind }}">
+        <input type="hidden" name="status" value="{{ status }}">
+        <input type="text" name="q" value="{{ q }}" placeholder="Search path, message, view…"
+               style="background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;color:inherit;font-size:.75rem;padding:.3rem .6rem;min-width:200px;">
+        <button type="submit" class="ae-chip" style="cursor:pointer;">Search</button>
+        {% if q %}<a href="?" class="ae-chip">Clear search</a>{% endif %}
+    </form>
+
     {% for rec in records %}
     <div class="ae-card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-start mb-2" style="gap:.75rem;">
             <div style="min-width:0;">
-                <span class="ae-badge">{{ rec.error_type }}</span>
-                <span class="ae-view ms-2">{{ rec.view }}</span>
+                <span class="ae-badge ae-kind-{{ rec.kind }}">{{ rec.get_kind_display }}</span>
+                <span class="ae-status ae-status-{% if rec.status_code >= 500 %}5xx{% else %}4xx{% endif %} ms-1">{{ rec.status_code }}</span>
+                {% if rec.error_type %}<span class="ae-badge ae-kind-{{ rec.kind }} ms-1">{{ rec.error_type }}</span>{% endif %}
+                {% if rec.view_name %}<span class="ae-view ms-2">{{ rec.view_name }}</span>{% endif %}
                 <span class="ms-2" style="color:#64748b;font-size:.72rem;">{{ rec.method }} {{ rec.path }}</span>
             </div>
-            <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.time }}</div>
+            <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.created_at|date:"Y-m-d H:i:s" }}</div>
         </div>
-        <div class="ae-msg mb-2">{{ rec.message }}</div>
+        {% if rec.message %}<div class="ae-msg mb-2">{{ rec.message }}</div>{% endif %}
         <div class="ae-meta mb-2">
             <i class="fas fa-network-wired"></i>{{ rec.client_ip|default:"—" }}
+            {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
+            {% if rec.query %}<span class="ms-3"><i class="fas fa-search"></i>?{{ rec.query }}</span>{% endif %}
         </div>
-        <pre class="ae-tb">{{ rec.traceback }}</pre>
+        {% if rec.traceback %}<pre class="ae-tb">{{ rec.traceback }}</pre>{% endif %}
     </div>
     {% empty %}
     <div class="ae-card ae-empty">
         <i class="fas fa-check-circle"></i>
-        <div style="font-size:.95rem;color:#94a3b8;">No API errors captured</div>
-        <div style="font-size:.82rem;color:#475569;margin-top:4px;">Exceptions from /api/user/* endpoints will appear here automatically.</div>
+        <div style="font-size:.95rem;color:#94a3b8;">No errors captured</div>
+        <div style="font-size:.82rem;color:#475569;margin-top:4px;">Failed responses (4xx/5xx) from the API and from normal pages appear here automatically.</div>
     </div>
     {% endfor %}
 </div>
