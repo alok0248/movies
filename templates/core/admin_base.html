@@ -628,8 +628,11 @@
             <a href="{% url 'android_app_dashboard' %}" class="sb-item {% if 'android-apps' in request.path and 'analytics' in request.path %}active{% endif %}">
                 <i class="fas fa-chart-line"></i> Android Analytics
             </a>
-            <a href="{% url 'ad_list' %}" class="sb-item {% if 'ads' in request.path %}active{% endif %}">
+            <a href="{% url 'ad_list' %}" class="sb-item {% if 'ads' in request.path and 'adsterra' not in request.path %}active{% endif %}">
                 <i class="fas fa-ad"></i> Ads
+            </a>
+            <a href="{% url 'admin_adsterra' %}" class="sb-item {% if 'adsterra' in request.path %}active{% endif %}">
+                <i class="fas fa-bullhorn"></i> Adsterra Ads
             </a>
             <a href="{% url 'navbar_item_list' %}" class="sb-item {% if 'navbar-items' in request.path %}active{% endif %}">
                 <i class="fas fa-bars"></i> Navbar
