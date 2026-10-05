@@ -424,8 +424,11 @@ class AdsterraLink(models.Model):
     next enabled link is opened in a background tab once the click threshold is
     reached. The per-link click counter records how many times that link opened.
     """
-    url = models.URLField(max_length=1000, help_text="Adsterra direct link / smartlink URL.")
-    is_active = models.BooleanField(default=True, help_text="Enable or disable this link. Only enabled links open and show on movie/series pages.")
+    name = models.CharField(max_length=200, blank=True, null=True, help_text="Label for this Adsterra unit, e.g. Popunder_1.")
+    ad_type = models.CharField(max_length=100, blank=True, null=True, help_text="Adsterra ad format, e.g. Popunder, Smartlink, Social Bar, Native Banner, Banner 320x50.")
+    unit_id = models.CharField(max_length=50, blank=True, null=True, help_text="Adsterra ad unit / placement ID, e.g. 30866764.")
+    url = models.URLField(max_length=1000, blank=True, null=True, help_text="Adsterra direct link / smartlink URL for this unit.")
+    is_active = models.BooleanField(default=True, help_text="Enable or disable this link. Only enabled links with a URL open and show on movie/series pages.")
     click_count = models.IntegerField(default=0, help_text="Number of times this link has been opened (counted automatically).")
     order = models.IntegerField(default=0, help_text="Display / rotation order (lower numbers come first).")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -437,7 +440,7 @@ class AdsterraLink(models.Model):
         verbose_name_plural = "Adsterra Links"
 
     def __str__(self):
-        return self.url
+        return self.name or self.url or ('AdsterraLink #%s' % self.pk)
 
 
 class AdImpression(models.Model):

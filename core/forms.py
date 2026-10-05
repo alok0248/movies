@@ -525,12 +525,27 @@ class AdsterraLinkForm(forms.ModelForm):
 
     class Meta:
         model = AdsterraLink
-        fields = ['url', 'order', 'is_active']
+        fields = ['name', 'ad_type', 'unit_id', 'url', 'order', 'is_active']
         widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. Popunder_1',
+                'title': 'A label for this Adsterra unit.',
+            }),
+            'ad_type': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. Popunder, Smartlink, Social Bar, Native Banner, Banner 320x50',
+                'title': 'The Adsterra ad format for this unit.',
+            }),
+            'unit_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. 30866764',
+                'title': 'The Adsterra ad unit / placement ID.',
+            }),
             'url': forms.URLInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'https://beta.publishers.adsterra.com/links/... or your direct link',
-                'title': 'Paste an Adsterra direct-link / smartlink URL to save.',
+                'title': 'Paste this unit\'s Adsterra direct-link / smartlink URL.',
             }),
             'order': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': '0'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -538,6 +553,4 @@ class AdsterraLinkForm(forms.ModelForm):
 
     def clean_url(self):
         url = (self.cleaned_data.get('url') or '').strip()
-        if not url:
-            raise forms.ValidationError('Enter the Adsterra link URL.')
-        return url
+        return url or None

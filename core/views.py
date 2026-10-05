@@ -1315,6 +1315,22 @@ def admin_adsterra(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def admin_adsterra_link_edit(request, link_id):
+    """Edit a saved Adsterra link (URL, name, type, unit ID, order, status)."""
+    link = get_object_or_404(AdsterraLink, id=link_id)
+    if request.method == 'POST':
+        form = AdsterraLinkForm(request.POST, instance=link)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Adsterra link updated.')
+            return redirect('admin_adsterra')
+    else:
+        form = AdsterraLinkForm(instance=link)
+    return render(request, 'core/admin_adsterra_edit.html', {'form': form, 'link': link})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 @require_POST
 def admin_adsterra_link_toggle(request, link_id):
     """Enable / disable a saved Adsterra link."""
@@ -1361,11 +1377,12 @@ def ajax_adsterra_click(request):
             return JsonResponse({'success': False, 'error': 'adsterra_disabled'})
 
         link_id = request.POST.get('link_id')
+        usable = AdsterraLink.objects.filter(is_active=True).exclude(url__isnull=True).exclude(url='')
         link = None
         if link_id:
-            link = AdsterraLink.objects.filter(id=link_id, is_active=True).first()
+            link = usable.filter(id=link_id).first()
         if link is None:
-            link = AdsterraLink.objects.filter(is_active=True).order_by('order', 'id').first()
+            link = usable.order_by('order', 'id').first()
         if link is None:
             return JsonResponse({'success': False, 'error': 'no_active_link'})
 

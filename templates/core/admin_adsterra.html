@@ -92,7 +92,10 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Adsterra URL</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Unit ID</th>
+                        <th>URL</th>
                         <th>Status</th>
                         <th>Opens</th>
                         <th>Actions</th>
@@ -102,7 +105,10 @@
                     {% for link in links %}
                     <tr>
                         <td>{{ link.order }}</td>
-                        <td><a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="as-link-url">{{ link.url }}</a></td>
+                        <td>{{ link.name|default:"\u2014" }}</td>
+                        <td>{{ link.ad_type|default:"\u2014" }}</td>
+                        <td>{{ link.unit_id|default:"\u2014" }}</td>
+                        <td>{% if link.url %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="as-link-url">{{ link.url }}</a>{% else %}<span class="as-note" style="margin:0">No URL yet</span>{% endif %}</td>
                         <td>
                             {% if link.is_active %}
                                 <span class="as-badge as-badge-on">Enabled</span>
@@ -112,6 +118,7 @@
                         </td>
                         <td>{{ link.click_count }}</td>
                         <td class="as-actions-cell">
+                            <a href="{% url 'admin_adsterra_link_edit' link.id %}" class="as-btn as-btn-sm">Edit</a>
                             <form method="post" action="{% url 'admin_adsterra_link_toggle' link.id %}">
                                 {% csrf_token %}
                                 {% if link.is_active %}
@@ -144,13 +151,27 @@
         <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="add_link">
+            <div class="as-inline">
+                <div class="as-field" style="flex:1;min-width:180px;">
+                    <label class="as-label" for="{{ link_form.name.id_for_label }}">Name</label>
+                    {{ link_form.name }}
+                </div>
+                <div class="as-field" style="flex:1;min-width:180px;">
+                    <label class="as-label" for="{{ link_form.ad_type.id_for_label }}">Ad Type</label>
+                    {{ link_form.ad_type }}
+                </div>
+                <div class="as-field" style="flex:0 0 160px;">
+                    <label class="as-label" for="{{ link_form.unit_id.id_for_label }}">Unit ID</label>
+                    {{ link_form.unit_id }}
+                </div>
+            </div>
             <div class="as-field">
                 <label class="as-label" for="{{ link_form.url.id_for_label }}">Adsterra Ad URL</label>
                 {{ link_form.url }}
-                <small class="as-help">Paste your Adsterra direct link (from beta.publishers.adsterra.com/links). It opens full-page in a background tab when the click threshold is reached.</small>
+                <small class="as-help">Paste this unit's Adsterra direct link (from beta.publishers.adsterra.com/links). It opens full-page in a background tab when the click threshold is reached.</small>
                 {% if link_form.url.errors %}<div class="as-err">{{ link_form.url.errors|join:", " }}</div>{% endif %}
             </div>
-            <div class="as-inline">
+            <div class="as-inline" style="margin-top:1rem;">
                 <div class="as-field" style="max-width:160px;">
                     <label class="as-label" for="{{ link_form.order.id_for_label }}">Order</label>
                     {{ link_form.order }}
