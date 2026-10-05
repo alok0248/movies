@@ -13,7 +13,7 @@ from django.utils.text import slugify
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.core.cache import cache
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, F
 from django.db.models.functions import TruncDate
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.views.decorators.cache import cache_control
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm
+    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm
 )
 
 
@@ -1265,6 +1265,67 @@ def ad_toggle(request, ad_id):
         ad.save()
         return redirect('ad_list')
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_adsterra(request):
+    """Admin page to configure the Adsterra direct-link ad.
+
+    Asks for the Adsterra URL and the click threshold, saves both, and shows the
+    running count of how many times the Adsterra page has been opened.
+    """
+    site_settings = SiteSettings.get_settings()
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or 'save').strip().lower()
+        if action == 'reset_count':
+            SiteSettings.objects.filter(pk=site_settings.pk).update(adsterra_click_count=0)
+            from django.core.cache import cache
+            cache.delete(SiteSettings._SETTINGS_CACHE_KEY)
+            messages.success(request, 'Adsterra click count reset to 0.')
+            return redirect('admin_adsterra')
+
+        form = AdsterraSettingsForm(request.POST, instance=site_settings)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Adsterra ad settings saved.')
+            return redirect('admin_adsterra')
+    else:
+        form = AdsterraSettingsForm(instance=site_settings)
+
+    return render(request, 'core/admin_adsterra.html', {
+        'form': form,
+        'site_settings': site_settings,
+        'click_count': site_settings.adsterra_click_count or 0,
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ajax_adsterra_click(request):
+    """POST /ajax/adsterra/click/ — record that the Adsterra page was opened.
+
+    Increments the persisted Adsterra open counter and returns the running total.
+    The client decides (from the configured threshold) when to open the Adsterra
+    page; this endpoint just persists the captured click.
+    """
+    try:
+        ss = SiteSettings.get_settings()
+        url = (ss.adsterra_ad_url or '').strip()
+        if not ss.adsterra_ad_url or ss.adsterra_clicks_required in (None, 0):
+            return JsonResponse({'success': False, 'error': 'adsterra_disabled'})
+
+        SiteSettings.objects.filter(pk=ss.pk).update(adsterra_click_count=F('adsterra_click_count') + 1)
+        from django.core.cache import cache
+        cache.delete(SiteSettings._SETTINGS_CACHE_KEY)
+        ss.refresh_from_db(fields=['adsterra_click_count'])
+        count = ss.adsterra_click_count or 0
+        logger.info("ADSTERRA_OPEN total=%s url=%s", count, url)
+        return JsonResponse({'success': True, 'click_count': count, 'url': url})
+    except Exception as e:
+        logger.error("adsterra click: %s", e)
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 @csrf_exempt

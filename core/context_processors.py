@@ -86,4 +86,8 @@ def site_settings(request):
         'enable_tile_click_gating': ss.enable_tile_click_gating,
         'tile_gating_source': gating_source,
         'tile_ad_source': tile_ad_source,
+        'adsterra_ad_url': ss.adsterra_ad_url or '',
+        'adsterra_ad_url_json': json.dumps(ss.adsterra_ad_url or ''),
+        'adsterra_clicks_required': int(ss.adsterra_clicks_required or 0),
+        'adsterra_show_banner': bool(ss.adsterra_show_banner),
     }

@@ -1,0 +1,14 @@
+{% if site_settings.adsterra_ad_url and site_settings.adsterra_show_banner %}
+<div class="adsterra-sponsor" style="margin:1rem 0;">
+    <a href="{{ site_settings.adsterra_ad_url }}" target="_blank" rel="sponsored noopener noreferrer"
+       class="adsterra-sponsor-link"
+       style="display:flex;align-items:center;gap:.85rem;padding:.85rem 1.1rem;border:1px solid var(--border);border-radius:12px;background:var(--surface);text-decoration:none;color:var(--text);">
+        <span aria-hidden="true" style="font-size:1.4rem;line-height:1;">&#127916;</span>
+        <span style="flex:1;min-width:0;">
+            <span style="display:block;font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);font-weight:700;">Sponsored</span>
+            <span style="display:block;font-size:.92rem;font-weight:600;color:var(--text);">Check out this offer</span>
+        </span>
+        <span style="font-size:.75rem;font-weight:700;color:var(--brand);white-space:nowrap;">Open &rarr;</span>
+    </a>
+</div>
+{% endif %}

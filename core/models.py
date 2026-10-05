@@ -286,6 +286,26 @@ class SiteSettings(models.Model):
         help_text="Maximum number of automatic retries for failed ad network script/asset loads before the slot is marked failed."
     )
 
+    # Adsterra direct-link ads
+    adsterra_ad_url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        help_text="Adsterra direct link / smartlink URL. Opened in a new tab once the click threshold is reached, and shown as a sponsor block on movie and series pages."
+    )
+    adsterra_clicks_required = models.IntegerField(
+        default=5,
+        help_text="Number of user clicks after which the Adsterra ad page opens in the browser. Set 0 to disable auto-open."
+    )
+    adsterra_click_count = models.IntegerField(
+        default=0,
+        help_text="Total number of times the Adsterra ad page has been opened (counted automatically)."
+    )
+    adsterra_show_banner = models.BooleanField(
+        default=True,
+        help_text="Show the Adsterra sponsor block on movies and series pages."
+    )
+
     IDM_VISIBILITY_CHOICES = [
         ('hide', 'Hide IDM (Disabled)'),
         ('logged_in', 'Logged-In Users Only'),

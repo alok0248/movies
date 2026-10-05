@@ -4277,6 +4277,74 @@
         return v ? decodeURIComponent(v[2]) : '';
     }
     </script>
+
+    <script>
+        // Adsterra direct-link ad: open the configured URL after N clicks.
+        (function () {
+            var ADSTERRA_URL = {{ adsterra_ad_url_json|safe }} || '';
+            var ADSTERRA_THRESHOLD = parseInt({{ adsterra_clicks_required|default:0 }}, 10) || 0;
+            if (!ADSTERRA_URL || ADSTERRA_THRESHOLD < 1) return;
+
+            var KEY = 'adsterra_clicks';
+            var CLICK_ENDPOINT = '{% url "ajax_adsterra_click" %}';
+            var lastCounted = 0;
+
+            function getCount() {
+                try { return parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0; } catch (e) { return 0; }
+            }
+            function setCount(n) {
+                try { sessionStorage.setItem(KEY, String(n)); } catch (e) {}
+            }
+            function inPlayer(t) {
+                var cur = t;
+                for (var i = 0; cur && cur.nodeType === 1 && i < 12; i++) {
+                    var tag = (cur.tagName || '').toLowerCase();
+                    if (tag === 'video' || tag === 'iframe') return true;
+                    var id = cur.id || '';
+                    if (id === 'playerContainer' || id === 'playerClickCatcher' || id === 'playerWrap' || id === 'mainVideo') return true;
+                    cur = cur.parentElement;
+                }
+                return false;
+            }
+            function isFormControl(t) {
+                var cur = t;
+                for (var i = 0; cur && cur.nodeType === 1 && i < 3; i++) {
+                    var tag = (cur.tagName || '').toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option') return true;
+                    cur = cur.parentElement;
+                }
+                return false;
+            }
+
+            document.addEventListener('click', function (event) {
+                try {
+                    if (typeof event.isTrusted === 'boolean' && !event.isTrusted) return;
+                    if (typeof event.button === 'number' && event.button !== 0) return;
+                    if (isFormControl(event.target) || inPlayer(event.target)) return;
+                    var now = Date.now();
+                    if (now - lastCounted < 1000) return;
+                    lastCounted = now;
+                    var count = getCount() + 1;
+                    if (count >= ADSTERRA_THRESHOLD) {
+                        setCount(0);
+                        // Open synchronously inside the click handler so popup blockers allow it.
+                        try { window.open(ADSTERRA_URL, '_blank', 'noopener,noreferrer'); } catch (e) {}
+                        try {
+                            fetch(CLICK_ENDPOINT, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'X-CSRFToken': '{{ csrf_token }}'
+                                }
+                            }).catch(function () {});
+                        } catch (e) {}
+                    } else {
+                        setCount(count);
+                    }
+                } catch (e) {}
+            }, true);
+        })();
+    </script>
     {% block extra_js %}{% endblock %}
 
 {% if site_settings.dev_mode_protection %}
