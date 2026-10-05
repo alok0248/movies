@@ -1,5 +1,5 @@
 import json
-from .models import SiteSettings, NavbarItem, Ad, AmazonAffiliateProduct, ProviderItem, WatchRegion
+from .models import SiteSettings, NavbarItem, Ad, AdsterraLink, AmazonAffiliateProduct, ProviderItem, WatchRegion
 
 
 def site_settings(request):
@@ -68,6 +68,16 @@ def site_settings(request):
             'price': p.price or '',
         })
 
+    # Adsterra direct-link ads (enabled links only, in rotation order)
+    adsterra_links = []
+    adsterra_banner_url = ''
+    for link in AdsterraLink.objects.filter(is_active=True).order_by('order', 'id')[:100]:
+        if not link.url:
+            continue
+        adsterra_links.append({'id': link.id, 'url': link.url})
+        if not adsterra_banner_url:
+            adsterra_banner_url = link.url
+
     # Providers and watch regions for navbar
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
     watch_regions_nav = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')[:50]
@@ -86,8 +96,9 @@ def site_settings(request):
         'enable_tile_click_gating': ss.enable_tile_click_gating,
         'tile_gating_source': gating_source,
         'tile_ad_source': tile_ad_source,
-        'adsterra_ad_url': ss.adsterra_ad_url or '',
-        'adsterra_ad_url_json': json.dumps(ss.adsterra_ad_url or ''),
+        'adsterra_links_json': json.dumps(adsterra_links),
+        'adsterra_banner_url': adsterra_banner_url,
+        'adsterra_has_links': bool(adsterra_links),
         'adsterra_clicks_required': int(ss.adsterra_clicks_required or 0),
         'adsterra_show_banner': bool(ss.adsterra_show_banner),
     }

@@ -1,5 +1,5 @@
 from django import forms
-from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdsterraLink
 import json
 
 
@@ -488,38 +488,28 @@ class AdForm(forms.ModelForm):
 
 
 class AdsterraSettingsForm(forms.ModelForm):
-    """Dedicated form for the Adsterra direct-link ad settings page."""
+    """Threshold + banner display settings for the Adsterra direct-link ads page."""
 
     class Meta:
         model = SiteSettings
-        fields = ['adsterra_ad_url', 'adsterra_clicks_required', 'adsterra_show_banner']
+        fields = ['adsterra_clicks_required', 'adsterra_show_banner']
         labels = {
-            'adsterra_ad_url': 'Adsterra Ad URL',
-            'adsterra_clicks_required': 'Open Adsterra Page After (clicks)',
-            'adsterra_show_banner': 'Show Adsterra Sponsor Block on Movies & Series Pages',
+            'adsterra_clicks_required': 'Open the Adsterra page after (clicks)',
+            'adsterra_show_banner': 'Show Adsterra Links on Movies & Series Pages',
         }
         widgets = {
-            'adsterra_ad_url': forms.URLInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'https://beta.publishers.adsterra.com/links/... or your direct link',
-                'title': 'Paste the Adsterra direct-link / smartlink URL. It opens in a new browser tab once the click threshold is reached.',
-            }),
             'adsterra_clicks_required': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': '0',
                 'step': '1',
                 'placeholder': 'e.g., 5',
-                'title': 'Number of user clicks after which the Adsterra page opens automatically. Set 0 to disable auto-open.',
+                'title': 'Number of user clicks after which the next enabled Adsterra link opens automatically. Set 0 to disable auto-open.',
             }),
             'adsterra_show_banner': forms.CheckboxInput(attrs={
                 'class': 'form-check-input',
-                'title': 'Render a sponsor block linking to the Adsterra URL on movie and series pages.',
+                'title': 'Render a sponsor block linking to an enabled Adsterra link on movie and series pages.',
             }),
         }
-
-    def clean_adsterra_ad_url(self):
-        url = (self.cleaned_data.get('adsterra_ad_url') or '').strip()
-        return url or None
 
     def clean_adsterra_clicks_required(self):
         value = self.cleaned_data.get('adsterra_clicks_required')
@@ -528,3 +518,26 @@ class AdsterraSettingsForm(forms.ModelForm):
         if value < 0:
             return 0
         return value
+
+
+class AdsterraLinkForm(forms.ModelForm):
+    """Add / edit a saved Adsterra direct link."""
+
+    class Meta:
+        model = AdsterraLink
+        fields = ['url', 'order', 'is_active']
+        widgets = {
+            'url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://beta.publishers.adsterra.com/links/... or your direct link',
+                'title': 'Paste an Adsterra direct-link / smartlink URL to save.',
+            }),
+            'order': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': '0'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def clean_url(self):
+        url = (self.cleaned_data.get('url') or '').strip()
+        if not url:
+            raise forms.ValidationError('Enter the Adsterra link URL.')
+        return url

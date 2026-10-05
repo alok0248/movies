@@ -4281,13 +4281,23 @@
     <script>
         // Adsterra direct-link ad: open the configured URL after N clicks.
         (function () {
-            var ADSTERRA_URL = {{ adsterra_ad_url_json|safe }} || '';
+            var ADSTERRA_LINKS = {{ adsterra_links_json|safe }} || [];
             var ADSTERRA_THRESHOLD = parseInt({{ adsterra_clicks_required|default:0 }}, 10) || 0;
-            if (!ADSTERRA_URL || ADSTERRA_THRESHOLD < 1) return;
+            if (!ADSTERRA_LINKS.length || ADSTERRA_THRESHOLD < 1) return;
 
             var KEY = 'adsterra_clicks';
+            var IDX_KEY = 'adsterra_link_idx';
             var CLICK_ENDPOINT = '{% url "ajax_adsterra_click" %}';
             var lastCounted = 0;
+
+            function nextLink() {
+                var idx = 0;
+                try { idx = parseInt(sessionStorage.getItem(IDX_KEY) || '0', 10) || 0; } catch (e) { idx = 0; }
+                idx = ((idx % ADSTERRA_LINKS.length) + ADSTERRA_LINKS.length) % ADSTERRA_LINKS.length;
+                var link = ADSTERRA_LINKS[idx];
+                try { sessionStorage.setItem(IDX_KEY, String((idx + 1) % ADSTERRA_LINKS.length)); } catch (e) {}
+                return link;
+            }
 
             function getCount() {
                 try { return parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0; } catch (e) { return 0; }
@@ -4343,15 +4353,18 @@
                     var count = getCount() + 1;
                     if (count >= ADSTERRA_THRESHOLD) {
                         setCount(0);
+                        var link = nextLink();
+                        if (!link || !link.url) return;
                         // Open synchronously inside the click handler so popup blockers allow it.
-                        openAdInBackground(ADSTERRA_URL);
+                        openAdInBackground(link.url);
                         try {
                             fetch(CLICK_ENDPOINT, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/x-www-form-urlencoded',
                                     'X-CSRFToken': '{{ csrf_token }}'
-                                }
+                                },
+                                body: 'link_id=' + encodeURIComponent(String(link.id || ''))
                             }).catch(function () {});
                         } catch (e) {}
                     } else {

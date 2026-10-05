@@ -35,7 +35,7 @@ from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
 import platform
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm
+    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm
 )
 
 
@@ -1270,59 +1270,109 @@ def ad_toggle(request, ad_id):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_adsterra(request):
-    """Admin page to configure the Adsterra direct-link ad.
+    """Admin page for the Adsterra direct-link ads.
 
-    Asks for the Adsterra URL and the click threshold, saves both, and shows the
-    running count of how many times the Adsterra page has been opened.
+    Manage the saved links (add, enable/disable, delete, reset counts) and the
+    click threshold that triggers opening the next enabled link.
     """
     site_settings = SiteSettings.get_settings()
 
     if request.method == 'POST':
-        action = (request.POST.get('action') or 'save').strip().lower()
-        if action == 'reset_count':
-            SiteSettings.objects.filter(pk=site_settings.pk).update(adsterra_click_count=0)
-            from django.core.cache import cache
-            cache.delete(SiteSettings._SETTINGS_CACHE_KEY)
-            messages.success(request, 'Adsterra click count reset to 0.')
-            return redirect('admin_adsterra')
+        action = (request.POST.get('action') or 'save_settings').strip().lower()
+        if action == 'add_link':
+            link_form = AdsterraLinkForm(request.POST)
+            if link_form.is_valid():
+                link_form.save()
+                messages.success(request, 'Adsterra link saved.')
+                return redirect('admin_adsterra')
+            settings_form = AdsterraSettingsForm(instance=site_settings)
+            return render(request, 'core/admin_adsterra.html', {
+                'form': settings_form,
+                'link_form': link_form,
+                'links': AdsterraLink.objects.all(),
+                'site_settings': site_settings,
+            })
 
-        form = AdsterraSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Adsterra ad settings saved.')
+        settings_form = AdsterraSettingsForm(request.POST, instance=site_settings)
+        if settings_form.is_valid():
+            settings_form.save()
+            messages.success(request, 'Adsterra settings saved.')
             return redirect('admin_adsterra')
-    else:
-        form = AdsterraSettingsForm(instance=site_settings)
+        return render(request, 'core/admin_adsterra.html', {
+            'form': settings_form,
+            'link_form': AdsterraLinkForm(),
+            'links': AdsterraLink.objects.all(),
+            'site_settings': site_settings,
+        })
 
     return render(request, 'core/admin_adsterra.html', {
-        'form': form,
+        'form': AdsterraSettingsForm(instance=site_settings),
+        'link_form': AdsterraLinkForm(),
+        'links': AdsterraLink.objects.all(),
         'site_settings': site_settings,
-        'click_count': site_settings.adsterra_click_count or 0,
     })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def admin_adsterra_link_toggle(request, link_id):
+    """Enable / disable a saved Adsterra link."""
+    link = get_object_or_404(AdsterraLink, id=link_id)
+    link.is_active = not link.is_active
+    link.save(update_fields=['is_active', 'updated_at'])
+    messages.success(request, 'Adsterra link %s.' % ('enabled' if link.is_active else 'disabled'))
+    return redirect('admin_adsterra')
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def admin_adsterra_link_delete(request, link_id):
+    """Delete a saved Adsterra link."""
+    link = get_object_or_404(AdsterraLink, id=link_id)
+    link.delete()
+    messages.success(request, 'Adsterra link deleted.')
+    return redirect('admin_adsterra')
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def admin_adsterra_link_reset(request, link_id):
+    """Reset the click counter of a saved Adsterra link."""
+    AdsterraLink.objects.filter(id=link_id).update(click_count=0)
+    messages.success(request, 'Adsterra link click count reset.')
+    return redirect('admin_adsterra')
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def ajax_adsterra_click(request):
-    """POST /ajax/adsterra/click/ — record that the Adsterra page was opened.
+    """POST /ajax/adsterra/click/ — record that an Adsterra link was opened.
 
-    Increments the persisted Adsterra open counter and returns the running total.
-    The client decides (from the configured threshold) when to open the Adsterra
-    page; this endpoint just persists the captured click.
+    Increments the click counter on the given link (or the next enabled link when
+    no id is supplied) and returns the running total. The client decides (from the
+    configured threshold) when to open a link; this endpoint just persists it.
     """
     try:
         ss = SiteSettings.get_settings()
-        url = (ss.adsterra_ad_url or '').strip()
-        if not ss.adsterra_ad_url or ss.adsterra_clicks_required in (None, 0):
+        if int(ss.adsterra_clicks_required or 0) < 1:
             return JsonResponse({'success': False, 'error': 'adsterra_disabled'})
 
-        SiteSettings.objects.filter(pk=ss.pk).update(adsterra_click_count=F('adsterra_click_count') + 1)
-        from django.core.cache import cache
-        cache.delete(SiteSettings._SETTINGS_CACHE_KEY)
-        ss.refresh_from_db(fields=['adsterra_click_count'])
-        count = ss.adsterra_click_count or 0
-        logger.info("ADSTERRA_OPEN total=%s url=%s", count, url)
-        return JsonResponse({'success': True, 'click_count': count, 'url': url})
+        link_id = request.POST.get('link_id')
+        link = None
+        if link_id:
+            link = AdsterraLink.objects.filter(id=link_id, is_active=True).first()
+        if link is None:
+            link = AdsterraLink.objects.filter(is_active=True).order_by('order', 'id').first()
+        if link is None:
+            return JsonResponse({'success': False, 'error': 'no_active_link'})
+
+        AdsterraLink.objects.filter(pk=link.pk).update(click_count=F('click_count') + 1)
+        link.refresh_from_db(fields=['click_count'])
+        logger.info("ADSTERRA_OPEN link_id=%s total=%s url=%s", link.id, link.click_count, link.url)
+        return JsonResponse({'success': True, 'link_id': link.id, 'click_count': link.click_count, 'url': link.url})
     except Exception as e:
         logger.error("adsterra click: %s", e)
         return JsonResponse({'success': False, 'error': str(e)})

@@ -287,19 +287,9 @@ class SiteSettings(models.Model):
     )
 
     # Adsterra direct-link ads
-    adsterra_ad_url = models.URLField(
-        max_length=1000,
-        blank=True,
-        null=True,
-        help_text="Adsterra direct link / smartlink URL. Opened in a new tab once the click threshold is reached, and shown as a sponsor block on movie and series pages."
-    )
     adsterra_clicks_required = models.IntegerField(
         default=5,
-        help_text="Number of user clicks after which the Adsterra ad page opens in the browser. Set 0 to disable auto-open."
-    )
-    adsterra_click_count = models.IntegerField(
-        default=0,
-        help_text="Total number of times the Adsterra ad page has been opened (counted automatically)."
+        help_text="Number of user clicks after which the next enabled Adsterra link opens in the browser. Set 0 to disable auto-open."
     )
     adsterra_show_banner = models.BooleanField(
         default=True,
@@ -425,6 +415,29 @@ class Ad(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class AdsterraLink(models.Model):
+    """A saved Adsterra direct link shown/opened from the Adsterra admin page.
+
+    Each link can be enabled or disabled independently. Enabled links rotate: the
+    next enabled link is opened in a background tab once the click threshold is
+    reached. The per-link click counter records how many times that link opened.
+    """
+    url = models.URLField(max_length=1000, help_text="Adsterra direct link / smartlink URL.")
+    is_active = models.BooleanField(default=True, help_text="Enable or disable this link. Only enabled links open and show on movie/series pages.")
+    click_count = models.IntegerField(default=0, help_text="Number of times this link has been opened (counted automatically).")
+    order = models.IntegerField(default=0, help_text="Display / rotation order (lower numbers come first).")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = "Adsterra Link"
+        verbose_name_plural = "Adsterra Links"
+
+    def __str__(self):
+        return self.url
 
 
 class AdImpression(models.Model):
