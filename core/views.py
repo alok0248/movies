@@ -1277,56 +1277,53 @@ def admin_adsterra(request):
     """
     site_settings = SiteSettings.get_settings()
 
+    links = list(AdsterraLink.objects.all())
+
+    def render_page():
+        return render(request, 'core/admin_adsterra.html', {
+            'form': AdsterraSettingsForm(instance=site_settings),
+            'link_form': AdsterraLinkForm(),
+            'links': links,
+            'site_settings': site_settings,
+        })
+
     if request.method == 'POST':
         action = (request.POST.get('action') or 'save_settings').strip().lower()
+
+        if action == 'edit_link':
+            link = get_object_or_404(AdsterraLink, id=request.POST.get('link_id'))
+            link_form = AdsterraLinkForm(request.POST, instance=link)
+            if link_form.is_valid():
+                link_form.save()
+                messages.success(request, '%s updated.' % (link.name or link.ad_type or 'Unit'))
+                return redirect('admin_adsterra')
+            messages.error(request, 'Could not save that unit: %s' % '; '.join(
+                '%s: %s' % (field, ', '.join(errs))
+                for field, errs in link_form.errors.items()
+            ))
+            return redirect('admin_adsterra')
+
         if action == 'add_link':
             link_form = AdsterraLinkForm(request.POST)
             if link_form.is_valid():
                 link_form.save()
-                messages.success(request, 'Adsterra link saved.')
+                messages.success(request, 'Adsterra unit added.')
                 return redirect('admin_adsterra')
-            settings_form = AdsterraSettingsForm(instance=site_settings)
-            return render(request, 'core/admin_adsterra.html', {
-                'form': settings_form,
-                'link_form': link_form,
-                'links': AdsterraLink.objects.all(),
-                'site_settings': site_settings,
-            })
+            messages.error(request, 'Could not add that unit: %s' % '; '.join(
+                '%s: %s' % (field, ', '.join(errs))
+                for field, errs in link_form.errors.items()
+            ))
+            return redirect('admin_adsterra')
 
         settings_form = AdsterraSettingsForm(request.POST, instance=site_settings)
         if settings_form.is_valid():
             settings_form.save()
             messages.success(request, 'Adsterra settings saved.')
             return redirect('admin_adsterra')
-        return render(request, 'core/admin_adsterra.html', {
-            'form': settings_form,
-            'link_form': AdsterraLinkForm(),
-            'links': AdsterraLink.objects.all(),
-            'site_settings': site_settings,
-        })
+        messages.error(request, 'Could not save Adsterra settings.')
+        return redirect('admin_adsterra')
 
-    return render(request, 'core/admin_adsterra.html', {
-        'form': AdsterraSettingsForm(instance=site_settings),
-        'link_form': AdsterraLinkForm(),
-        'links': AdsterraLink.objects.all(),
-        'site_settings': site_settings,
-    })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def admin_adsterra_link_edit(request, link_id):
-    """Edit a saved Adsterra link (URL, name, type, unit ID, order, status)."""
-    link = get_object_or_404(AdsterraLink, id=link_id)
-    if request.method == 'POST':
-        form = AdsterraLinkForm(request.POST, instance=link)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Adsterra link updated.')
-            return redirect('admin_adsterra')
-    else:
-        form = AdsterraLinkForm(instance=link)
-    return render(request, 'core/admin_adsterra_edit.html', {'form': form, 'link': link})
+    return render_page()
 
 
 @login_required
