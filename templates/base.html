@@ -4316,6 +4316,22 @@
                 return false;
             }
 
+            /* Open the Adsterra page in a NEW tab that loads fully in the background,
+               then hand focus back to the current page so the visitor stays here.
+               We intentionally do not use window.open('noopener') here because we
+               need the handle in order to blur the new tab; opener is nulled instead. */
+            function openAdInBackground(url) {
+                var w = null;
+                try { w = window.open(url, '_blank'); } catch (e) {}
+                try {
+                    if (w) {
+                        try { w.opener = null; } catch (e) {}
+                        try { w.blur(); } catch (e) {}
+                    }
+                    try { window.focus(); } catch (e) {}
+                } catch (e) {}
+            }
+
             document.addEventListener('click', function (event) {
                 try {
                     if (typeof event.isTrusted === 'boolean' && !event.isTrusted) return;
@@ -4328,7 +4344,7 @@
                     if (count >= ADSTERRA_THRESHOLD) {
                         setCount(0);
                         // Open synchronously inside the click handler so popup blockers allow it.
-                        try { window.open(ADSTERRA_URL, '_blank', 'noopener,noreferrer'); } catch (e) {}
+                        openAdInBackground(ADSTERRA_URL);
                         try {
                             fetch(CLICK_ENDPOINT, {
                                 method: 'POST',
