@@ -68,15 +68,18 @@ def site_settings(request):
             'price': p.price or '',
         })
 
-    # Adsterra direct-link ads (enabled links only, in rotation order)
+    # Adsterra ads: URL units rotate/open after N clicks; JS units are injected.
     adsterra_links = []
+    adsterra_js_codes = []
     adsterra_banner_url = ''
     for link in AdsterraLink.objects.filter(is_active=True).order_by('order', 'id')[:100]:
-        if not link.url:
-            continue
-        adsterra_links.append({'id': link.id, 'url': link.url})
-        if not adsterra_banner_url:
-            adsterra_banner_url = link.url
+        if link.url:
+            adsterra_links.append({'id': link.id, 'url': link.url})
+            if not adsterra_banner_url:
+                adsterra_banner_url = link.url
+        code = (link.code or '').strip()
+        if code:
+            adsterra_js_codes.append(code)
 
     # Providers and watch regions for navbar
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
@@ -97,6 +100,7 @@ def site_settings(request):
         'tile_gating_source': gating_source,
         'tile_ad_source': tile_ad_source,
         'adsterra_links_json': json.dumps(adsterra_links),
+        'adsterra_js_codes': adsterra_js_codes,
         'adsterra_banner_url': adsterra_banner_url,
         'adsterra_has_links': bool(adsterra_links),
         'adsterra_clicks_required': int(ss.adsterra_clicks_required or 0),

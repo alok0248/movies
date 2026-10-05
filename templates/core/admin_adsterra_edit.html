@@ -52,11 +52,18 @@
                 {% if form.unit_id.errors %}<div class="ae-err">{{ form.unit_id.errors|join:", " }}</div>{% endif %}
             </div>
             <div class="ae-field">
-                <label class="ae-label" for="{{ form.url.id_for_label }}">Adsterra Ad URL</label>
+                <label class="ae-label" for="{{ form.url.id_for_label }}">Adsterra Ad URL <span style="color:var(--text-3);font-weight:400">(link units, e.g. Smartlink)</span></label>
                 {{ form.url }}
                 <small class="ae-help">Paste this unit's Adsterra direct link. It opens full-page in a background tab when the click threshold is reached.</small>
                 {% if form.url.errors %}<div class="ae-err">{{ form.url.errors|join:", " }}</div>{% endif %}
             </div>
+            <div class="ae-field">
+                <label class="ae-label" for="{{ form.code.id_for_label }}">Adsterra JS / HTML code <span style="color:var(--text-3);font-weight:400">(script units)</span></label>
+                {{ form.code }}
+                <small class="ae-help">Paste the Adsterra JS ad code. It is rendered on the movie and series pages. Add a URL, JS code, or both.</small>
+                {% if form.code.errors %}<div class="ae-err">{{ form.code.errors|join:", " }}</div>{% endif %}
+            </div>
+            {% if form.non_field_errors %}<div class="ae-err">{{ form.non_field_errors|join:", " }}</div>{% endif %}
             <div class="ae-field" style="max-width:160px;">
                 <label class="ae-label" for="{{ form.order.id_for_label }}">Order</label>
                 {{ form.order }}

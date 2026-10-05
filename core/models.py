@@ -427,8 +427,9 @@ class AdsterraLink(models.Model):
     name = models.CharField(max_length=200, blank=True, null=True, help_text="Label for this Adsterra unit, e.g. Popunder_1.")
     ad_type = models.CharField(max_length=100, blank=True, null=True, help_text="Adsterra ad format, e.g. Popunder, Smartlink, Social Bar, Native Banner, Banner 320x50.")
     unit_id = models.CharField(max_length=50, blank=True, null=True, help_text="Adsterra ad unit / placement ID, e.g. 30866764.")
-    url = models.URLField(max_length=1000, blank=True, null=True, help_text="Adsterra direct link / smartlink URL for this unit.")
-    is_active = models.BooleanField(default=True, help_text="Enable or disable this link. Only enabled links with a URL open and show on movie/series pages.")
+    url = models.URLField(max_length=1000, blank=True, null=True, help_text="Adsterra direct link / smartlink URL. Used for link-type units (e.g. Smartlink).")
+    code = models.TextField(blank=True, null=True, help_text="Adsterra JS / HTML ad code. Used for script-type units (Popunder, Social Bar, Native Banner, Banner 320x50).")
+    is_active = models.BooleanField(default=True, help_text="Enable or disable this unit. Only enabled units with a URL open, and only enabled units with code render on movie/series pages.")
     click_count = models.IntegerField(default=0, help_text="Number of times this link has been opened (counted automatically).")
     order = models.IntegerField(default=0, help_text="Display / rotation order (lower numbers come first).")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -441,6 +442,20 @@ class AdsterraLink(models.Model):
 
     def __str__(self):
         return self.name or self.url or ('AdsterraLink #%s' % self.pk)
+
+    @property
+    def is_js(self):
+        return bool((self.code or '').strip())
+
+    @property
+    def kind_label(self):
+        if self.is_js and self.url:
+            return 'JS + URL'
+        if self.is_js:
+            return 'JS code'
+        if self.url:
+            return 'URL'
+        return 'Empty'
 
 
 class AdImpression(models.Model):

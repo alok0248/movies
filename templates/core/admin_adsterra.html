@@ -63,6 +63,8 @@
     .as-badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; }
     .as-badge-on { background: rgba(22, 163, 74, .15); color: #16a34a; }
     .as-badge-off { background: rgba(148, 163, 184, .18); color: var(--text-2); }
+    .as-badge-js { background: rgba(99, 102, 241, .16); color: #6366f1; }
+    .as-badge-url { background: rgba(56, 189, 248, .16); color: #0284c7; }
     .as-err { color: #dc2626; font-size: .8rem; margin-top: .35rem; }
     .as-note { font-size: .8rem; color: var(--text-2); margin-top: .5rem; }
     .as-flash { padding: .7rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: .85rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
@@ -95,7 +97,8 @@
                         <th>Name</th>
                         <th>Type</th>
                         <th>Unit ID</th>
-                        <th>URL</th>
+                        <th>Kind</th>
+                        <th>URL / Code</th>
                         <th>Status</th>
                         <th>Opens</th>
                         <th>Actions</th>
@@ -105,10 +108,23 @@
                     {% for link in links %}
                     <tr>
                         <td>{{ link.order }}</td>
-                        <td>{{ link.name|default:"\u2014" }}</td>
-                        <td>{{ link.ad_type|default:"\u2014" }}</td>
-                        <td>{{ link.unit_id|default:"\u2014" }}</td>
-                        <td>{% if link.url %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="as-link-url">{{ link.url }}</a>{% else %}<span class="as-note" style="margin:0">No URL yet</span>{% endif %}</td>
+                        <td>{{ link.name|default:"—" }}</td>
+                        <td>{{ link.ad_type|default:"—" }}</td>
+                        <td>{{ link.unit_id|default:"—" }}</td>
+                        <td>
+                            {% if link.is_js %}
+                                <span class="as-badge as-badge-js">JS</span>{% if link.url %} <span class="as-badge as-badge-url">URL</span>{% endif %}
+                            {% elif link.url %}
+                                <span class="as-badge as-badge-url">URL</span>
+                            {% else %}
+                                <span class="as-badge as-badge-off">Empty</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if link.url %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="as-link-url">{{ link.url }}</a>{% endif %}
+                            {% if link.is_js %}<div class="as-note" style="margin:.2rem 0 0">JS code saved ({{ link.code|length }} chars)</div>{% endif %}
+                            {% if not link.url and not link.is_js %}<span class="as-note" style="margin:0">Nothing saved yet</span>{% endif %}
+                        </td>
                         <td>
                             {% if link.is_active %}
                                 <span class="as-badge as-badge-on">Enabled</span>
@@ -166,11 +182,18 @@
                 </div>
             </div>
             <div class="as-field">
-                <label class="as-label" for="{{ link_form.url.id_for_label }}">Adsterra Ad URL</label>
+                <label class="as-label" for="{{ link_form.url.id_for_label }}">Adsterra Ad URL <span class="as-note" style="display:inline;color:var(--text-3)">(link units, e.g. Smartlink)</span></label>
                 {{ link_form.url }}
-                <small class="as-help">Paste this unit's Adsterra direct link (from beta.publishers.adsterra.com/links). It opens full-page in a background tab when the click threshold is reached.</small>
+                <small class="as-help">Paste this unit's Adsterra direct link. It opens full-page in a background tab when the click threshold is reached.</small>
                 {% if link_form.url.errors %}<div class="as-err">{{ link_form.url.errors|join:", " }}</div>{% endif %}
             </div>
+            <div class="as-field">
+                <label class="as-label" for="{{ link_form.code.id_for_label }}">Adsterra JS / HTML code <span class="as-note" style="display:inline;color:var(--text-3)">(script units: Popunder, Social Bar, Native Banner, Banner 320x50)</span></label>
+                {{ link_form.code }}
+                <small class="as-help">Paste the Adsterra JS ad code. It is rendered on the movie and series pages. Add a URL, JS code, or both.</small>
+                {% if link_form.code.errors %}<div class="as-err">{{ link_form.code.errors|join:", " }}</div>{% endif %}
+            </div>
+            {% if link_form.non_field_errors %}<div class="as-err">{{ link_form.non_field_errors|join:", " }}</div>{% endif %}
             <div class="as-inline" style="margin-top:1rem;">
                 <div class="as-field" style="max-width:160px;">
                     <label class="as-label" for="{{ link_form.order.id_for_label }}">Order</label>

@@ -525,7 +525,7 @@ class AdsterraLinkForm(forms.ModelForm):
 
     class Meta:
         model = AdsterraLink
-        fields = ['name', 'ad_type', 'unit_id', 'url', 'order', 'is_active']
+        fields = ['name', 'ad_type', 'unit_id', 'url', 'code', 'order', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -545,7 +545,13 @@ class AdsterraLinkForm(forms.ModelForm):
             'url': forms.URLInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'https://beta.publishers.adsterra.com/links/... or your direct link',
-                'title': 'Paste this unit\'s Adsterra direct-link / smartlink URL.',
+                'title': 'For link-type units such as Smartlink: paste the Adsterra direct-link URL.',
+            }),
+            'code': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 6,
+                'placeholder': '<script type="text/javascript">\n  ... Adsterra JS ad code ...\n</script>',
+                'title': 'For script-type units (Popunder, Social Bar, Native Banner, Banner 320x50): paste the Adsterra JS/HTML code.',
             }),
             'order': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': '0'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -554,3 +560,11 @@ class AdsterraLinkForm(forms.ModelForm):
     def clean_url(self):
         url = (self.cleaned_data.get('url') or '').strip()
         return url or None
+
+    def clean(self):
+        cleaned = super().clean()
+        url = (cleaned.get('url') or '').strip()
+        code = (cleaned.get('code') or '').strip()
+        if not url and not code:
+            raise forms.ValidationError('Add either an Adsterra URL or the Adsterra JS code.')
+        return cleaned
