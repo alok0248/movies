@@ -248,7 +248,8 @@ class RequestLogMiddleware:
         try:
             from .request_log import record_request
             duration_ms = int((time.monotonic() - start) * 1000)
-            record_request(request, getattr(response, 'status_code', 0), duration_ms)
+            record_request(request, getattr(response, 'status_code', 0), duration_ms,
+                           response=response)
         except Exception:
             pass
         return response

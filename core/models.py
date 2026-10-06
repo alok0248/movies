@@ -2554,7 +2554,8 @@ class RequestLog(models.Model):
     response took. Rows are pruned to the newest request_log.MAX_ROWS so busy
     days cannot grow the table without bound.
 
-    Request bodies are deliberately never stored — they can contain passwords.
+    For API/Ajax calls the request parameters are stored in request_body with
+    sensitive fields masked; page and admin traffic keeps metadata only.
     """
 
     CAT_PAGE = 'page'
@@ -2578,6 +2579,10 @@ class RequestLog(models.Model):
     referer = models.CharField(max_length=500, blank=True, default='')
     view_name = models.CharField(max_length=120, blank=True, default='')
     duration_ms = models.PositiveIntegerField(default=0)
+    # API/Ajax request parameters (JSON or form), sensitive fields masked.
+    request_body = models.TextField(blank=True, default='')
+    # Response body size in bytes (from Content-Length when available).
+    response_size = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']

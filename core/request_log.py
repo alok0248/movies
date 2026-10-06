@@ -6,13 +6,29 @@ the admin ``/admin-dashboard/requests/`` page can answer "who asked for what,
 with which method, from which IP, and how fast".
 
 Recording is best-effort: a failure to log a request must never break the
-request itself. Request bodies are deliberately never stored — they can
-contain passwords.
+request itself. For API/Ajax calls the request parameters are stored too, but
+values under sensitive names (password, token, OTP, secret, api_key, …) are
+masked before they ever reach the database; page and admin traffic is kept
+metadata-only.
 """
 
+import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Field names whose values are masked before a payload is stored. Matching is
+# by substring on the lower-cased key, so `password`, `new_password`,
+# `accessToken`, `api_key`, `otp`, `authorization`, etc. are all covered.
+SENSITIVE_MARKERS = (
+    'password', 'passwd', 'pwd', 'pass', 'token', 'secret', 'otp',
+    'api_key', 'apikey', 'authorization', 'credential', 'auth_code',
+    'private_key', 'session', 'signature',
+)
+
+# Cap the stored payload so a huge body cannot bloat the table.
+MAX_PAYLOAD_CHARS = 4000
+MAX_QUERY_CHARS = 2000
 
 # Keep the table bounded so sustained traffic (and bots) cannot grow it forever.
 MAX_ROWS = 5000
@@ -80,18 +96,101 @@ def _view_name(request):
         return ''
 
 
-def record_request(request, status_code, duration_ms=0):
+def _is_sensitive(key):
+    """True when a parameter name looks like a secret worth masking."""
+    try:
+        k = str(key).lower()
+    except Exception:
+        return False
+    return any(marker in k for marker in SENSITIVE_MARKERS)
+
+
+def _redact(obj, depth=0):
+    """Recursively mask sensitive values in parsed JSON/form data."""
+    if depth > 8:
+        return obj
+    if isinstance(obj, dict):
+        return {k: ('***' if _is_sensitive(k) else _redact(v, depth + 1))
+                for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_redact(v, depth + 1) for v in obj]
+    return obj
+
+
+def _redact_query(raw):
+    """Mask sensitive query-string parameters (e.g. an OTP in the URL)."""
+    raw = raw or ''
+    if not raw:
+        return ''
+    try:
+        from urllib.parse import parse_qsl, urlencode
+        pairs = parse_qsl(raw[:MAX_QUERY_CHARS], keep_blank_values=True)
+        if not pairs:
+            return raw[:500]
+        masked = [(k, '***' if _is_sensitive(k) else v) for k, v in pairs]
+        return urlencode(masked)[:500]
+    except Exception:
+        return raw[:500]
+
+
+def _extract_payload(request):
+    """Return the request parameters as masked JSON text, or '' if not an
+    API/Ajax call we should capture. Never raises."""
+    try:
+        method = (getattr(request, 'method', '') or '').upper()
+        if method in ('GET', 'HEAD', 'OPTIONS'):
+            return ''
+        ctype = (request.META.get('CONTENT_TYPE', '') or '').lower()
+        if 'application/json' in ctype:
+            raw = request.body  # cached by the view when it parsed the JSON
+            if not raw:
+                return ''
+            data = json.loads(raw.decode('utf-8', 'replace'))
+            return json.dumps(_redact(data), ensure_ascii=False)[:MAX_PAYLOAD_CHARS]
+        if ('application/x-www-form-urlencoded' in ctype
+                or 'multipart/form-data' in ctype):
+            data = request.POST.dict()
+            if not data:
+                return ''
+            return json.dumps(_redact(data), ensure_ascii=False)[:MAX_PAYLOAD_CHARS]
+    except Exception:
+        # Body already consumed, multipart stream, malformed JSON, etc.
+        return ''
+    return ''
+
+
+def _response_size(response):
+    """Response body size in bytes, from Content-Length when present."""
+    if response is None:
+        return 0
+    try:
+        cl = response.get('Content-Length')
+        if cl is not None:
+            return max(0, int(cl))
+    except Exception:
+        pass
+    try:
+        return max(0, len(response.content))
+    except Exception:
+        return 0
+
+
+def record_request(request, status_code, duration_ms=0, response=None):
     """Write one request row. Never raises."""
     try:
         if not should_record(request):
             return
         from .models import RequestLog
         path = getattr(request, 'path', '') or ''
+        category = categorize(path)
+        # Only capture parameters for API/Ajax calls; page and admin traffic
+        # keeps the metadata-only record.
+        payload = _extract_payload(request) if category == 'api' else ''
         RequestLog.objects.create(
-            category=categorize(path),
+            category=category,
             method=(getattr(request, 'method', '') or '')[:10],
             path=path[:500],
-            query=(request.META.get('QUERY_STRING', '') or '')[:500],
+            query=_redact_query(request.META.get('QUERY_STRING', '')),
             status_code=status_code or 0,
             client_ip=_client_ip(request),
             username=_username(request),
@@ -99,6 +198,8 @@ def record_request(request, status_code, duration_ms=0):
             referer=(request.META.get('HTTP_REFERER', '') or '')[:500],
             view_name=_view_name(request),
             duration_ms=max(0, int(duration_ms or 0)),
+            request_body=payload,
+            response_size=_response_size(response),
         )
         _maybe_prune()
     except Exception:
@@ -154,6 +255,7 @@ def recent_requests(limit=300, category=None, method=None, status=None, q=None):
             Q(path__icontains=q) | Q(query__icontains=q) | Q(client_ip__icontains=q)
             | Q(username__icontains=q) | Q(user_agent__icontains=q)
             | Q(view_name__icontains=q) | Q(referer__icontains=q)
+            | Q(request_body__icontains=q)
         )
     return list(qs[:limit])
 
@@ -195,4 +297,6 @@ def request_to_dict(rec):
         'referer': rec.referer,
         'view': rec.view_name,
         'duration_ms': rec.duration_ms,
+        'request_body': rec.request_body,
+        'response_size': rec.response_size,
     }

@@ -35,6 +35,23 @@
     .rl-status-s5 { background: rgba(239,68,68,.15); color: #ef4444; }
     .rl-path { font-family: monospace; font-size: .82rem; color: var(--text, #e2e8f0); word-break: break-all; }
     .rl-view { font-family: monospace; font-size: .72rem; color: #a78bfa; }
+    .rl-payload-tag { background: rgba(52,211,153,.15); color: #34d399; }
+    .rl-body {
+        font-family: Consolas, Menlo, monospace;
+        font-size: .72rem;
+        line-height: 1.5;
+        color: var(--text-2, #cbd5e1);
+        background: rgba(0,0,0,.28);
+        border: 1px solid var(--border, rgba(255,255,255,.05));
+        border-radius: 8px;
+        padding: 10px 12px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 220px;
+        overflow-y: auto;
+        margin: .5rem 0 0;
+    }
     .rl-meta { font-size: .75rem; color: var(--text-3, #64748b); }
     .rl-meta i { width: 14px; text-align: center; margin-right: 4px; color: #475569; }
     .rl-slow { color: #f87171; font-weight: 600; }
@@ -64,6 +81,8 @@
     html[data-theme="light"] .rl-method-head { background: rgba(124,58,237,.12); color: #6d28d9; }
     html[data-theme="light"] .rl-cat-admin { background: rgba(124,58,237,.12); color: #6d28d9; }
     html[data-theme="light"] .rl-view { color: #6d28d9; }
+    html[data-theme="light"] .rl-body { color: #334155; background: #f1f5f9; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .rl-payload-tag { background: rgba(5,150,105,.12); color: #047857; }
     html[data-theme="light"] .rl-status-s2 { background: rgba(5,150,105,.12); color: #047857; }
     html[data-theme="light"] .rl-status-s4 { background: rgba(180,83,9,.12); color: #b45309; }
     html[data-theme="light"] .rl-status-s5 { background: rgba(185,28,28,.12); color: #b91c1c; }
@@ -88,7 +107,7 @@
             <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.8rem;">{{ count }} shown</span>
             <span class="badge" style="background:rgba(52,211,153,.15);color:#34d399;font-size:.8rem;">{{ total }} stored</span>
             <span class="ms-2" style="color:#475569;font-size:.72rem;">
-                <i class="fas fa-info-circle me-1"></i>Saved to the database — survives restarts. Request bodies (passwords) are never stored.
+                <i class="fas fa-info-circle me-1"></i>Saved to the database — survives restarts. API/Ajax payloads are kept with secrets (password, token, OTP) masked.
             </span>
         </div>
         <div class="d-flex gap-2">
@@ -155,6 +174,7 @@
                 <span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %} ms-1">{{ rec.status_code }}</span>
                 <span class="rl-badge rl-cat-{{ rec.category }} ms-1">{{ rec.get_category_display }}</span>
                 {% if rec.view_name %}<span class="rl-view ms-2">{{ rec.view_name }}</span>{% endif %}
+                {% if rec.request_body %}<span class="rl-badge rl-payload-tag ms-2">payload</span>{% endif %}
             </div>
             <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.created_at|date:"Y-m-d H:i:s" }}</div>
         </div>
@@ -164,10 +184,12 @@
         <div class="rl-meta">
             <i class="fas fa-network-wired"></i>{{ rec.client_ip|default:"—" }}
             <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
+            {% if rec.response_size %}<span class="ms-3"><i class="fas fa-download"></i>{{ rec.response_size }} B</span>{% endif %}
             {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
             {% if rec.referer %}<span class="ms-3"><i class="fas fa-link"></i>{{ rec.referer }}</span>{% endif %}
         </div>
         {% if rec.user_agent %}<div class="rl-meta mt-1"><i class="fas fa-desktop"></i>{{ rec.user_agent }}</div>{% endif %}
+        {% if rec.request_body %}<pre class="rl-body">{{ rec.request_body }}</pre>{% endif %}
     </div>
     {% empty %}
     <div class="rl-card rl-empty">
