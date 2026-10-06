@@ -168,12 +168,27 @@
     .rl-iplink:hover { background: rgba(56,189,248,.22); color: #7dd3fc; border-color: #7dd3fc; }
     .rl-iplink i { font-size: .6rem; opacity: .8; }
     .rl-meta .rl-iplink { font-size: .75rem; }
+    .rl-pathlink {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+        color: #7dd3fc;
+        text-decoration: none;
+        border-bottom: 1px dotted rgba(125,211,252,.45);
+    }
+    .rl-pathlink:hover { color: #bae6fd; border-bottom-color: #bae6fd; }
+    .rl-pathlink i { font-size: .58rem; opacity: .7; margin-left: .15rem; }
     .rl-trunc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
     .rl-table .rl-empty-row { text-align: center; color: #64748b; padding: 32px 8px; }
 
     html[data-theme="light"] .rl-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(20,20,45,.05); }
     html[data-theme="light"] .rl-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
     html[data-theme="light"] .rl-path { color: #0f172a; }
+    html[data-theme="light"] .rl-pathlink { color: #0369a1; border-bottom-color: rgba(3,105,161,.35); }
+    html[data-theme="light"] .rl-pathlink:hover { color: #075985; border-bottom-color: #075985; }
     html[data-theme="light"] .rl-chip { color: #475569; border-color: rgba(0,0,0,.14); background: #f8fafc; }
     html[data-theme="light"] .rl-chip:hover { color: #0f172a; border-color: rgba(0,0,0,.3); }
     html[data-theme="light"] .rl-chip.active { background: rgba(37,99,235,.12); color: #1d4ed8; border-color: rgba(37,99,235,.35); }
@@ -344,7 +359,7 @@
                     <td><span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span></td>
                     <td><span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %}">{{ rec.status_code }}</span></td>
                     <td><span class="rl-badge rl-cat-{{ rec.category }}">{{ rec.get_category_display }}</span></td>
-                    <td class="rl-mono rl-trunc" title="{{ rec.path }}">{{ rec.path }}</td>
+                    <td class="rl-mono rl-trunc" title="{{ rec.path }}">{% if rec.path %}<a class="rl-pathlink" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td class="rl-mono rl-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
                     <td class="rl-mono">{% if rec.client_ip %}<a class="rl-iplink" href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }} on iplocation.io">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td>{{ rec.username|default:"" }}</td>
@@ -423,7 +438,7 @@
             <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.created_at|date:"Y-m-d H:i:s" }}</div>
         </div>
         <div class="mb-2">
-            <span class="rl-path">{{ rec.path }}</span>{% if rec.query %}<span class="rl-path" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}
+            {% if rec.path %}<a class="rl-path rl-pathlink" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% if rec.query %}<span class="rl-path" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}{% else %}—{% endif %}
         </div>
         <div class="rl-meta">
             <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<a class="rl-iplink" href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }} on iplocation.io">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
