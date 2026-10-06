@@ -10401,7 +10401,11 @@ _AU_BOT_PATH_MARKERS = (
     '/index.php', '/wp-', '/.env', '/.git', '/vendor/', '/phpunit',
     '/xmlrpc.php', '/admin.php', '/config.php', '/cgi-bin/', '/shell',
     '/actuator', '/docker', '/credentials', '/.aws', '/.ssh', '/boaform',
-    '/hudson', '/solr/', '/jenkins', '/telescope',
+    '/hudson', '/solr/', '/jenkins', '/telescope', '/containers/json',
+    '/sdk/', '/userportal/', '/_ignition', '/.vscode', '/.idea', '/.svn',
+    '/.htaccess', '/.htpasswd', '/.ds_store', '/server-status', '/phpinfo',
+    '/info.php', '/test.php', '/db.php', '/owa/', '/autodiscover', '/cgi',
+    '/gponform', '/.dockerenv', '/wp-content',
 )
 
 
