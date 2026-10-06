@@ -1,0 +1,180 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Request Log - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .rl-card {
+        background: var(--card-bg, #1a1a2e);
+        border: 1px solid var(--border, rgba(255,255,255,.06));
+        border-radius: 12px;
+        transition: transform .15s, box-shadow .15s;
+    }
+    .rl-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .rl-badge {
+        display: inline-block;
+        font-size: .65rem;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: rgba(148,163,184,.15);
+        color: #94a3b8;
+    }
+    .rl-method { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .rl-method-get { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .rl-method-post { background: rgba(52,211,153,.15); color: #34d399; }
+    .rl-method-head { background: rgba(167,139,250,.15); color: #a78bfa; }
+    .rl-method-other { background: rgba(251,191,36,.15); color: #fbbf24; }
+    .rl-cat-page { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .rl-cat-api { background: rgba(251,191,36,.15); color: #fbbf24; }
+    .rl-cat-admin { background: rgba(167,139,250,.15); color: #a78bfa; }
+    .rl-status { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .rl-status-s2 { background: rgba(52,211,153,.15); color: #34d399; }
+    .rl-status-s3 { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .rl-status-s4 { background: rgba(251,191,36,.15); color: #fbbf24; }
+    .rl-status-s5 { background: rgba(239,68,68,.15); color: #ef4444; }
+    .rl-path { font-family: monospace; font-size: .82rem; color: var(--text, #e2e8f0); word-break: break-all; }
+    .rl-view { font-family: monospace; font-size: .72rem; color: #a78bfa; }
+    .rl-meta { font-size: .75rem; color: var(--text-3, #64748b); }
+    .rl-meta i { width: 14px; text-align: center; margin-right: 4px; color: #475569; }
+    .rl-slow { color: #f87171; font-weight: 600; }
+    .rl-empty { text-align: center; padding: 56px 16px; color: #475569; }
+    .rl-empty i { font-size: 2.6rem; margin-bottom: 12px; display: block; color: #334155; }
+    .rl-filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .rl-chip {
+        font-size: .75rem;
+        padding: .3rem .7rem;
+        border-radius: 999px;
+        text-decoration: none;
+        border: 1px solid var(--border, rgba(255,255,255,.14));
+        color: var(--text-2, #94a3b8);
+        background: rgba(148,163,184,.05);
+    }
+    .rl-chip:hover { color: var(--text, #e2e8f0); border-color: rgba(148,163,184,.4); }
+    .rl-chip.active { background: rgba(96,165,250,.18); color: #93c5fd; border-color: rgba(96,165,250,.4); }
+
+    html[data-theme="light"] .rl-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(20,20,45,.05); }
+    html[data-theme="light"] .rl-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
+    html[data-theme="light"] .rl-path { color: #0f172a; }
+    html[data-theme="light"] .rl-chip { color: #475569; border-color: rgba(0,0,0,.14); background: #f8fafc; }
+    html[data-theme="light"] .rl-chip:hover { color: #0f172a; border-color: rgba(0,0,0,.3); }
+    html[data-theme="light"] .rl-chip.active { background: rgba(37,99,235,.12); color: #1d4ed8; border-color: rgba(37,99,235,.35); }
+    html[data-theme="light"] .rl-method-get { background: rgba(37,99,235,.12); color: #1d4ed8; }
+    html[data-theme="light"] .rl-method-post { background: rgba(5,150,105,.12); color: #047857; }
+    html[data-theme="light"] .rl-method-head { background: rgba(124,58,237,.12); color: #6d28d9; }
+    html[data-theme="light"] .rl-cat-admin { background: rgba(124,58,237,.12); color: #6d28d9; }
+    html[data-theme="light"] .rl-view { color: #6d28d9; }
+    html[data-theme="light"] .rl-status-s2 { background: rgba(5,150,105,.12); color: #047857; }
+    html[data-theme="light"] .rl-status-s4 { background: rgba(180,83,9,.12); color: #b45309; }
+    html[data-theme="light"] .rl-status-s5 { background: rgba(185,28,28,.12); color: #b91c1c; }
+</style>
+
+<div class="container py-4" style="max-width:1100px;">
+    <div class="mb-4">
+        <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;"><i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard</a>
+        <div class="d-flex align-items-center gap-3 mt-2">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#22d3ee,#3b82f6);display:flex;align-items:center;justify-content:center;">
+                <i class="fas fa-network-wired text-white" style="font-size:1.1rem;"></i>
+            </div>
+            <div>
+                <h3 class="mb-0" style="font-size:1.25rem;">Request Log</h3>
+                <div style="color:#64748b;font-size:.82rem;">Every incoming request — IP, page, method, status and response time</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.8rem;">{{ count }} shown</span>
+            <span class="badge" style="background:rgba(52,211,153,.15);color:#34d399;font-size:.8rem;">{{ total }} stored</span>
+            <span class="ms-2" style="color:#475569;font-size:.72rem;">
+                <i class="fas fa-info-circle me-1"></i>Saved to the database — survives restarts. Request bodies (passwords) are never stored.
+            </span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+            <a href="{% url 'request_log' %}?format=json" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</a>
+            <form method="post" action="{% url 'request_log' %}" onsubmit="return confirm('Clear all recorded requests? This cannot be undone.');" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="clear">
+                <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>
+            </form>
+        </div>
+    </div>
+
+    <form method="get" class="rl-filters mb-3">
+        <a href="?method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if not category %}active{% endif %}">All</a>
+        <a href="?category=page&method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if category == 'page' %}active{% endif %}">Pages</a>
+        <a href="?category=api&method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if category == 'api' %}active{% endif %}">API / Ajax</a>
+        <a href="?category=admin&method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if category == 'admin' %}active{% endif %}">Admin</a>
+
+        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
+
+        <a href="?category={{ category }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if not method %}active{% endif %}">All methods</a>
+        <a href="?category={{ category }}&method=GET&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if method == 'GET' %}active{% endif %}">GET</a>
+        <a href="?category={{ category }}&method=POST&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if method == 'POST' %}active{% endif %}">POST</a>
+        <a href="?category={{ category }}&method=HEAD&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if method == 'HEAD' %}active{% endif %}">HEAD</a>
+
+        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
+
+        <a href="?category={{ category }}&method={{ method }}{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if not status %}active{% endif %}">All statuses</a>
+        <a href="?category={{ category }}&method={{ method }}&status=2xx{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if status == '2xx' %}active{% endif %}">2xx</a>
+        <a href="?category={{ category }}&method={{ method }}&status=3xx{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if status == '3xx' %}active{% endif %}">3xx</a>
+        <a href="?category={{ category }}&method={{ method }}&status=4xx{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if status == '4xx' %}active{% endif %}">4xx</a>
+        <a href="?category={{ category }}&method={{ method }}&status=5xx{% if q %}&q={{ q|urlencode }}{% endif %}"
+           class="rl-chip {% if status == '5xx' %}active{% endif %}">5xx</a>
+
+        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
+
+        <input type="hidden" name="category" value="{{ category }}">
+        <input type="hidden" name="method" value="{{ method }}">
+        <input type="hidden" name="status" value="{{ status }}">
+        <input type="text" name="q" value="{{ q }}" placeholder="Search path, IP, user, UA…"
+               style="background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;color:inherit;font-size:.75rem;padding:.3rem .6rem;min-width:200px;">
+        <button type="submit" class="rl-chip" style="cursor:pointer;">Search</button>
+        {% if q %}<a href="?" class="rl-chip">Clear search</a>{% endif %}
+    </form>
+
+    {% for rec in records %}
+    <div class="rl-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start mb-2" style="gap:.75rem;">
+            <div style="min-width:0;">
+                <span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span>
+                <span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %} ms-1">{{ rec.status_code }}</span>
+                <span class="rl-badge rl-cat-{{ rec.category }} ms-1">{{ rec.get_category_display }}</span>
+                {% if rec.view_name %}<span class="rl-view ms-2">{{ rec.view_name }}</span>{% endif %}
+            </div>
+            <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.created_at|date:"Y-m-d H:i:s" }}</div>
+        </div>
+        <div class="mb-2">
+            <span class="rl-path">{{ rec.path }}</span>{% if rec.query %}<span class="rl-path" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}
+        </div>
+        <div class="rl-meta">
+            <i class="fas fa-network-wired"></i>{{ rec.client_ip|default:"—" }}
+            <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
+            {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
+            {% if rec.referer %}<span class="ms-3"><i class="fas fa-link"></i>{{ rec.referer }}</span>{% endif %}
+        </div>
+        {% if rec.user_agent %}<div class="rl-meta mt-1"><i class="fas fa-desktop"></i>{{ rec.user_agent }}</div>{% endif %}
+    </div>
+    {% empty %}
+    <div class="rl-card rl-empty">
+        <i class="fas fa-network-wired"></i>
+        <div style="font-size:.95rem;color:#94a3b8;">No requests captured yet</div>
+        <div style="font-size:.82rem;color:#475569;margin-top:4px;">Incoming requests are recorded automatically as traffic hits the site.</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

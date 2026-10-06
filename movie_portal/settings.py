@@ -64,6 +64,7 @@ MIDDLEWARE = [
     'core.middleware.WebsiteVisitorTrackingMiddleware',
     'core.browser_cache.BrowserCacheMiddleware',
     'core.error_monitor.ErrorMonitoringMiddleware',
+    'core.middleware.RequestLogMiddleware',
 ]
 
 ROOT_URLCONF = 'movie_portal.urls'

@@ -640,6 +640,9 @@
             <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
                 <i class="fas fa-bug"></i> API Errors
             </a>
+            <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
+                <i class="fas fa-network-wired"></i> Request Log
+            </a>
             <a href="{% url 'api_documentation' %}" class="sb-item {% if 'api-docs' in request.path %}active{% endif %}">
                 <i class="fas fa-book"></i> API Docs
             </a>

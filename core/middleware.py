@@ -230,6 +230,30 @@ class WebsiteVisitorTrackingMiddleware:
         return response
 
 
+class RequestLogMiddleware:
+    """Record every incoming request (page, Ajax and API) for the admin log.
+
+    Placed last in MIDDLEWARE so its timer wraps the whole downstream stack
+    (including the error monitor) and measures the true response time. The
+    write is best-effort — a logging failure never breaks the response.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        import time
+        start = time.monotonic()
+        response = self.get_response(request)
+        try:
+            from .request_log import record_request
+            duration_ms = int((time.monotonic() - start) * 1000)
+            record_request(request, getattr(response, 'status_code', 0), duration_ms)
+        except Exception:
+            pass
+        return response
+
+
 class ContentSecurityPolicyMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

@@ -8489,6 +8489,51 @@ def api_error_log(request):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def request_log(request):
+    """Admin page: every incoming request — IP, page, method, status, timing."""
+    from .request_log import (recent_requests, clear_requests, request_total,
+                              request_to_dict)
+
+    if request.method == 'POST':
+        if request.POST.get('action') == 'clear':
+            clear_requests()
+        return redirect('request_log')
+
+    category = (request.GET.get('category') or '').strip()
+    method = (request.GET.get('method') or '').strip().upper()
+    status = (request.GET.get('status') or '').strip()
+    q = (request.GET.get('q') or '').strip()
+    if category not in ('page', 'api', 'admin'):
+        category = ''
+    if method not in ('GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'):
+        method = ''
+    if status not in ('2xx', '3xx', '4xx', '5xx'):
+        status = ''
+
+    records = recent_requests(limit=300, category=category, method=method,
+                              status=status, q=q)
+    if request.GET.get('format') == 'json':
+        return JsonResponse({
+            'status': 'success',
+            'count': len(records),
+            'filters': {'category': category, 'method': method,
+                        'status': status, 'q': q},
+            'requests': [request_to_dict(r) for r in records],
+        })
+
+    return render(request, 'core/admin_request_log.html', {
+        'records': records,
+        'count': len(records),
+        'total': request_total(),
+        'category': category,
+        'method': method,
+        'status': status,
+        'q': q,
+    })
+
+
 @_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])

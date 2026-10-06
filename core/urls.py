@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin-dashboard/settings/email/', views.email_settings, name='email_settings'),
     path('admin-dashboard/settings/email/logs/', views.ajax_email_logs, name='ajax_email_logs'),
     path('admin-dashboard/api-errors/', views.api_error_log, name='api_error_log'),
+    path('admin-dashboard/requests/', views.request_log, name='request_log'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
     path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),

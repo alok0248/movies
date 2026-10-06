@@ -2543,3 +2543,50 @@ class ErrorLog(models.Model):
 
     def __str__(self):
         return f'[{self.status_code}] {self.method} {self.path}'
+
+
+class RequestLog(models.Model):
+    """Every incoming request — page views, Ajax calls and Android API hits.
+
+    Unlike ErrorLog (which only keeps failed 4xx/5xx responses), this records
+    successful traffic too so the admin can see who is hitting the site, which
+    page they asked for, with which HTTP method, from what IP, and how long the
+    response took. Rows are pruned to the newest request_log.MAX_ROWS so busy
+    days cannot grow the table without bound.
+
+    Request bodies are deliberately never stored — they can contain passwords.
+    """
+
+    CAT_PAGE = 'page'
+    CAT_API = 'api'
+    CAT_ADMIN = 'admin'
+    CATEGORY_CHOICES = [
+        (CAT_PAGE, 'Page'),
+        (CAT_API, 'API / Ajax'),
+        (CAT_ADMIN, 'Admin'),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    category = models.CharField(max_length=10, choices=CATEGORY_CHOICES, default=CAT_PAGE)
+    method = models.CharField(max_length=10, blank=True, default='')
+    path = models.CharField(max_length=500, blank=True, default='')
+    query = models.CharField(max_length=500, blank=True, default='')
+    status_code = models.PositiveIntegerField(default=200)
+    client_ip = models.CharField(max_length=64, blank=True, default='')
+    username = models.CharField(max_length=150, blank=True, default='')
+    user_agent = models.CharField(max_length=300, blank=True, default='')
+    referer = models.CharField(max_length=500, blank=True, default='')
+    view_name = models.CharField(max_length=120, blank=True, default='')
+    duration_ms = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at'], name='reqlog_created_idx'),
+            models.Index(fields=['category', '-created_at'], name='reqlog_cat_idx'),
+            models.Index(fields=['method', '-created_at'], name='reqlog_method_idx'),
+            models.Index(fields=['status_code', '-created_at'], name='reqlog_status_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.method} {self.path} -> {self.status_code}'
