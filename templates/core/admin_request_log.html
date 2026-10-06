@@ -151,6 +151,23 @@
     }
     .rl-table tbody tr:hover { background: var(--surface-hover, rgba(148,163,184,.07)); }
     .rl-mono { font-family: Consolas, Menlo, monospace; }
+    .rl-iplink {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        padding: .05rem .4rem;
+        border: 1px solid rgba(56,189,248,.35);
+        border-radius: 999px;
+        background: rgba(56,189,248,.1);
+        color: #38bdf8;
+        text-decoration: none;
+        font-family: Consolas, Menlo, monospace;
+        font-size: .7rem;
+        line-height: 1.5;
+    }
+    .rl-iplink:hover { background: rgba(56,189,248,.22); color: #7dd3fc; border-color: #7dd3fc; }
+    .rl-iplink i { font-size: .6rem; opacity: .8; }
+    .rl-meta .rl-iplink { font-size: .75rem; }
     .rl-trunc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
     .rl-table .rl-empty-row { text-align: center; color: #64748b; padding: 32px 8px; }
 
@@ -329,7 +346,7 @@
                     <td><span class="rl-badge rl-cat-{{ rec.category }}">{{ rec.get_category_display }}</span></td>
                     <td class="rl-mono rl-trunc" title="{{ rec.path }}">{{ rec.path }}</td>
                     <td class="rl-mono rl-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
-                    <td class="rl-mono">{{ rec.client_ip|default:"—" }}</td>
+                    <td class="rl-mono">{% if rec.client_ip %}<a class="rl-iplink" href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }} on iplocation.io">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td>{{ rec.username|default:"" }}</td>
                     <td class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }}</td>
                     <td>{{ rec.response_size }}</td>
@@ -409,7 +426,7 @@
             <span class="rl-path">{{ rec.path }}</span>{% if rec.query %}<span class="rl-path" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}
         </div>
         <div class="rl-meta">
-            <i class="fas fa-network-wired"></i>{{ rec.client_ip|default:"—" }}
+            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<a class="rl-iplink" href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }} on iplocation.io">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
             <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
             {% if rec.response_size %}<span class="ms-3"><i class="fas fa-download"></i>{{ rec.response_size }} B</span>{% endif %}
             {% if rec.time_on_page_ms %}<span class="ms-3"><i class="fas fa-hourglass-half"></i>{{ rec.time_on_page_ms }} ms on page</span>{% endif %}
