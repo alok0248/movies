@@ -141,15 +141,7 @@
             {% if platform_counts.unknown %}<a class="au-chip {% if platform == 'unknown' %}on{% endif %}" href="?platform=unknown&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-question"></i> Unknown <span style="opacity:.6;">{{ platform_counts.unknown }}</span></a>{% endif %}
         </div>
         <form method="get" class="au-filtergrid">
-            <label>Platform
-                <select name="platform">
-                    <option value="all" {% if platform == 'all' %}selected{% endif %}>All platforms</option>
-                    <option value="web" {% if platform == 'web' %}selected{% endif %}>Web</option>
-                    <option value="android" {% if platform == 'android' %}selected{% endif %}>Android</option>
-                    <option value="ios" {% if platform == 'ios' %}selected{% endif %}>iOS</option>
-                    <option value="unknown" {% if platform == 'unknown' %}selected{% endif %}>Unknown</option>
-                </select>
-            </label>
+            <input type="hidden" name="platform" value="{{ platform }}">
             <label>Visitors
                 <select name="bots">
                     <option value="hide" {% if bots == 'hide' %}selected{% endif %}>Humans only (hide bots)</option>

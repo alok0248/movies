@@ -506,10 +506,6 @@
             <div class="card bg-dark border-secondary shadow-sm">
                 <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</h5></div>
                 <div class="card-body d-grid gap-2">
-                    <a href="{% url 'admin_user_edit' detail_user.id %}" class="btn btn-outline-warning btn-sm"><i class="fas fa-edit me-1"></i>Edit User</a>
-                    <button class="btn btn-outline-{% if detail_user.is_active %}warning{% else %}success{% endif %} btn-sm" onclick="toggleBlock({{ detail_user.id }})">
-                        <i class="fas fa-{% if detail_user.is_active %}ban{% else %}check{% endif %} me-1"></i>{% if detail_user.is_active %}Block User{% else %}Unblock User{% endif %}
-                    </button>
                     <button class="btn btn-outline-danger btn-sm" onclick="deleteUser({{ detail_user.id }}, '{{ detail_user.username }}')">
                         <i class="fas fa-trash me-1"></i>Delete User
                     </button>

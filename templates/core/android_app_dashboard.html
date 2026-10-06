@@ -190,7 +190,6 @@
                         <div class="d-flex gap-2">
                             <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-scroll me-1"></i>Logs</a>
                             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code me-1"></i>Connection Helper</button>
-                            <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success">Synced Users</a>
                             <a href="{% url 'android_app_clear_data' selected_app.id 'all_analytics' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('DELETE ALL analytics data for this app?\n\nThis includes: logs, failed attempts, devices, visits, access logs, build logs, daily visitors.\n\nThis cannot be undone!');"><i class="fas fa-skull-crossbones me-1"></i>Nuke All</a>
                         </div>
                     </div>
