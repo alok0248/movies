@@ -376,6 +376,30 @@ def column_options(records, cap=200):
     return options
 
 
+# Query-string keys a saved preset is allowed to keep.
+PRESET_KEYS = {
+    'category', 'method', 'status', 'status_code', 'q', 'min_duration',
+    'min_size', 'min_time', 'min_clicks', 'on_date', 'sort', 'dir', 'view',
+} | set(FIELD_FILTERS)
+
+
+def clean_preset_query(raw):
+    """Keep only the whitelisted filter/sort/view keys from a query string.
+
+    Drops anything else (e.g. ``format=csv``) so a saved/shared preset always
+    reopens the log page itself. Returns a re-encoded query string.
+    """
+    from urllib.parse import parse_qsl, urlencode
+
+    raw = (raw or '')[:2000]
+    try:
+        pairs = parse_qsl(raw, keep_blank_values=False)
+    except Exception:
+        return ''
+    kept = [(k, v[:300]) for k, v in pairs if k in PRESET_KEYS and v != '']
+    return urlencode(kept)[:1000]
+
+
 def record_page_activity(path, client_ip, time_ms=0, clicks=0, window_minutes=120):
     """Attach browser-reported engagement to the newest matching page row.
 

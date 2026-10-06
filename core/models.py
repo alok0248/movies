@@ -2599,3 +2599,24 @@ class RequestLog(models.Model):
 
     def __str__(self):
         return f'{self.method} {self.path} -> {self.status_code}'
+
+
+class RequestLogPreset(models.Model):
+    """A named, saved Request Log view (filters + sort) for one-click reuse.
+
+    ``query`` is the URL query string of the view (e.g.
+    ``view=table&category=api&status=5xx``), so a preset is also just a
+    shareable/bookmarkable link. Seeded presets have ``is_system`` set.
+    """
+
+    name = models.CharField(max_length=120)
+    query = models.CharField(max_length=1000, blank=True, default='')
+    is_system = models.BooleanField(default=False)
+    owner = models.CharField(max_length=150, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-is_system', 'name']
+
+    def __str__(self):
+        return self.name

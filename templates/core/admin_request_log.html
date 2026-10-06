@@ -86,6 +86,30 @@
     .rl-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
     .rl-sortable:hover { color: #60a5fa; }
     .rl-arrow { font-size: .62rem; margin-left: .25rem; color: #34d399; }
+    /* Saved views (filter presets) */
+    .rl-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        align-items: center;
+        padding: .5rem .6rem;
+        border: 1px dashed var(--border, rgba(148,163,184,.3));
+        border-radius: 10px;
+        background: rgba(148,163,184,.04);
+    }
+    .rl-presets-label { font-size: .72rem; color: var(--text-3, #64748b); margin-right: .25rem; }
+    .rl-preset { display: inline-flex; align-items: center; gap: .1rem; }
+    .rl-preset-del { border: none; background: transparent; color: #f87171; cursor: pointer; font-size: .95rem; line-height: 1; padding: 0 .2rem; }
+    .rl-preset-save { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; }
+    .rl-preset-save input[type="text"] {
+        background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px;
+        color: inherit;
+        font-size: .72rem;
+        padding: .28rem .5rem;
+        min-width: 180px;
+    }
     .rl-table thead tr.rl-frow th {
         top: 32px;
         background: var(--bg-2, #101a2e);
@@ -217,6 +241,31 @@
                 window.location.href = u.toString();
             }
         </script>
+    </div>
+
+    <div class="rl-presets mb-3">
+        <span class="rl-presets-label"><i class="fas fa-bookmark me-1"></i>Saved views</span>
+        {% for p in presets %}
+        <span class="rl-preset">
+            <a href="?{{ p.query }}" class="rl-chip">{{ p.name }}</a>
+            <form method="post" onsubmit="return confirm('Delete saved view &quot;{{ p.name|escapejs }}&quot;?');" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_preset">
+                <input type="hidden" name="preset_id" value="{{ p.id }}">
+                <button type="submit" class="rl-preset-del" title="Delete this saved view">&times;</button>
+            </form>
+        </span>
+        {% empty %}
+        <span style="color:#64748b;font-size:.72rem;">No saved views yet — set your filters, then save them on the right.</span>
+        {% endfor %}
+        <form method="post" class="rl-preset-save" style="margin:0;"
+              onsubmit="this.querySelector('input[name=query]').value = window.location.search.replace(/^\?/, '');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_preset">
+            <input type="hidden" name="query" value="">
+            <input type="text" name="preset_name" placeholder="Save current view as…" maxlength="120" required>
+            <button type="submit" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);border-radius:8px;"><i class="fas fa-save me-1"></i>Save view</button>
+        </form>
     </div>
 
 {% if view_mode == 'table' %}

@@ -8501,12 +8501,30 @@ def request_log(request):
     import csv
     from django.http import HttpResponse
     from .request_log import (recent_requests, clear_requests, request_total,
-                              request_to_dict, FIELD_FILTERS, SORTABLE_FIELDS)
+                              request_to_dict, FIELD_FILTERS, SORTABLE_FIELDS,
+                              clean_preset_query)
+    from .models import RequestLogPreset
 
     if request.method == 'POST':
-        if request.POST.get('action') == 'clear':
+        action = request.POST.get('action')
+        if action == 'clear':
             clear_requests()
-        return redirect('request_log')
+            return redirect('request_log')
+        if action == 'save_preset':
+            name = (request.POST.get('preset_name') or '').strip()[:120]
+            query = clean_preset_query(request.POST.get('query') or '')
+            if name:
+                RequestLogPreset.objects.create(
+                    name=name, query=query,
+                    owner=(request.user.username or '')[:150],
+                )
+                messages.success(request, f'Saved view "{name}".')
+            else:
+                messages.error(request, 'Give the saved view a name.')
+        elif action == 'delete_preset':
+            RequestLogPreset.objects.filter(id=request.POST.get('preset_id')).delete()
+        # Return to the exact view we came from (filters intact).
+        return redirect(request.get_full_path() or 'request_log')
 
     def clean(name, maxlen=200):
         return (request.GET.get(name) or '').strip()[:maxlen]
@@ -8590,6 +8608,7 @@ def request_log(request):
         'view_mode': view_mode,
         'filters': filters,
         'options': options,
+        'presets': list(RequestLogPreset.objects.all()[:50]),
         'methods': ('GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'),
         # Keep the old context keys so the card view's chips still work.
         'category': category,
