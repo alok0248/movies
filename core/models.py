@@ -2620,3 +2620,44 @@ class RequestLogPreset(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ApkDownload(models.Model):
+    """One record per APK download, so the admin can see who took the app.
+
+    The downloader's IP is kept so it can later be matched against requests
+    arriving at the app's API (see AndroidApp endpoint): when the same IP shows
+    up, the download is flagged ``opened_app`` — i.e. the app was launched.
+    """
+
+    android_app = models.ForeignKey(
+        AndroidApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='apk_downloads',
+    )
+    app_slug = models.CharField(max_length=255, blank=True, default='')
+    file_name = models.CharField(max_length=500, blank=True, default='')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.CharField(max_length=500, blank=True, default='')
+    referer = models.CharField(max_length=500, blank=True, default='')
+    downloaded_at = models.DateTimeField(auto_now_add=True)
+
+    # Filled in when the app is later seen calling the API from the same IP.
+    opened_app = models.BooleanField(default=False)
+    opened_at = models.DateTimeField(blank=True, null=True)
+    device_user_id = models.CharField(max_length=255, blank=True, default='')
+    device_model = models.CharField(max_length=255, blank=True, default='')
+    os_version = models.CharField(max_length=50, blank=True, default='')
+    build_identifier = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        ordering = ['-downloaded_at']
+        verbose_name = 'APK Download'
+        verbose_name_plural = 'APK Downloads'
+        indexes = [
+            models.Index(fields=['-downloaded_at'], name='apkdl_created_idx'),
+            models.Index(fields=['ip_address'], name='apkdl_ip_idx'),
+            models.Index(fields=['android_app', '-downloaded_at'], name='apkdl_app_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.file_name or self.app_slug} @ {self.ip_address or "unknown"}'

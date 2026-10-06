@@ -622,8 +622,11 @@
 
         <div class="sb-section">
             <div class="sb-section-title">Android & API</div>
-            <a href="{% url 'android_app_list' %}" class="sb-item {% if 'android-apps' in request.path and 'analytics' not in request.path %}active{% endif %}">
+            <a href="{% url 'android_app_list' %}" class="sb-item {% if 'android-apps' in request.path and 'analytics' not in request.path and 'downloads' not in request.path %}active{% endif %}">
                 <i class="fab fa-android"></i> Android Apps
+            </a>
+            <a href="{% url 'android_app_downloads' %}" class="sb-item {% if 'android-apps/downloads' in request.path %}active{% endif %}">
+                <i class="fas fa-download"></i> APK Downloads
             </a>
             <a href="{% url 'android_app_dashboard' %}" class="sb-item {% if 'android-apps' in request.path and 'analytics' in request.path %}active{% endif %}">
                 <i class="fas fa-chart-line"></i> Android Analytics

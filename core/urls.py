@@ -78,7 +78,10 @@ urlpatterns = [
     path('admin-dashboard/android-apps/<int:app_id>/delete/', views.android_app_delete, name='android_app_delete'),
     path('admin-dashboard/android-apps/analytics/', views.android_app_dashboard, name='android_app_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/', views.android_app_dashboard, name='android_app_dashboard_detail'),
+    path('admin-dashboard/android-apps/downloads/', views.android_app_downloads, name='android_app_downloads'),
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
+    # Public APK download — records the download, then serves the file.
+    path('apps/download/<int:app_id>/', views.apk_download, name='apk_download'),
     path('admin-dashboard/android-apps/user-sync-reference/', views.android_user_sync_reference, name='android_user_sync_reference'),
     path('admin-dashboard/api-docs/', views.api_documentation_view, name='api_documentation'),
     # Android API endpoints — with and without trailing slash for app compat

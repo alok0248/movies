@@ -1,0 +1,195 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}APK Downloads - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .adl-card {
+        background: var(--card-bg, #1a1a2e);
+        border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px;
+    }
+    .adl-stat { padding: 1rem; }
+    .adl-stat .adl-num { font-size: 1.6rem; font-weight: 700; color: var(--text, #e2e8f0); }
+    .adl-stat .adl-lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3, #64748b); }
+    .adl-tablewrap { overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; background: var(--card-bg, #1a1a2e); }
+    .adl-table { width: 100%; border-collapse: collapse; font-size: .74rem; white-space: nowrap; }
+    .adl-table th, .adl-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06)); text-align: left; }
+    .adl-table thead th { background: var(--surface, #16213e); color: var(--text-2, #cbd5e1); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .adl-table tbody tr:hover { background: rgba(148,163,184,.07); }
+    .adl-mono { font-family: Consolas, Menlo, monospace; }
+    .adl-trunc { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+    .adl-badge { display: inline-block; font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+    .adl-yes { background: rgba(52,211,153,.15); color: #34d399; }
+    .adl-no { background: rgba(148,163,184,.15); color: #94a3b8; }
+    .adl-filtergrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .5rem .7rem; }
+    .adl-filtergrid label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
+    .adl-filtergrid input, .adl-filtergrid select {
+        width: 100%; background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px; color: inherit; font-size: .72rem; padding: .3rem .45rem;
+    }
+    html[data-theme="light"] .adl-tablewrap { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .adl-table thead th { background: #f1f5f9; color: #334155; }
+    html[data-theme="light"] .adl-table th, html[data-theme="light"] .adl-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .adl-stat .adl-num { color: #0f172a; }
+</style>
+
+<div class="container py-4" style="max-width:1250px;">
+    <div class="mb-4 d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <a href="{% url 'android_app_list' %}" class="text-decoration-none" style="color:#4ade80;"><i class="fas fa-arrow-left me-1"></i> Android Apps</a>
+            <div class="d-flex align-items-center gap-3 mt-2">
+                <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#4ade80,#16a34a);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-download text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0" style="font-size:1.25rem;">APK Downloads</h3>
+                    <div style="color:#64748b;font-size:.82rem;">Who downloaded the APK, and whether they opened the app (matched by IP)</div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" onclick="adlExportCsv()" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</button>
+            <a href="{% url 'android_app_list' %}" class="btn btn-sm" style="color:#4ade80;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);border-radius:8px;"><i class="fab fa-android me-1"></i>Apps</a>
+            <a href="{% url 'android_app_downloads' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="adl-card adl-stat">
+                <div class="adl-num">{{ total }}</div>
+                <div class="adl-lbl">Total downloads</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="adl-card adl-stat">
+                <div class="adl-num">{{ unique_ips }}</div>
+                <div class="adl-lbl">Unique IPs</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="adl-card adl-stat">
+                <div class="adl-num" style="color:#34d399;">{{ opened }}</div>
+                <div class="adl-lbl">App opened after download</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="adl-card adl-stat">
+                <div class="adl-num">{{ conversion }}%</div>
+                <div class="adl-lbl">Open rate</div>
+            </div>
+        </div>
+    </div>
+
+    <form method="get" class="adl-filtergrid mb-3">
+        <label>App
+            <select name="app">
+                <option value="">All apps</option>
+                {% for a in apps %}<option value="{{ a.id }}" {% if filters.app == a.id|stringformat:'s' %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Status
+            <select name="status">
+                <option value="">All</option>
+                <option value="opened" {% if filters.status == 'opened' %}selected{% endif %}>Installed &amp; opened</option>
+                <option value="not_opened" {% if filters.status == 'not_opened' %}selected{% endif %}>Not opened</option>
+            </select>
+        </label>
+        <label>From date
+            <input type="date" name="date_from" value="{{ filters.date_from }}">
+        </label>
+        <label>To date
+            <input type="date" name="date_to" value="{{ filters.date_to }}">
+        </label>
+        <label>Search IP / user / device
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="e.g. 49.36. or Pixel">
+        </label>
+        <label>&nbsp;
+            <span class="d-flex gap-2">
+                <button type="submit" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
+                <a href="{% url 'android_app_downloads' %}" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;">Reset</a>
+            </span>
+        </label>
+    </form>
+
+    <div class="adl-card p-3 mb-4" style="background:rgba(96,165,250,.06);border-color:rgba(96,165,250,.25);">
+        <div style="font-size:.78rem;color:#94a3b8;">
+            <i class="fas fa-circle-info me-1" style="color:#60a5fa;"></i>
+            How matching works: each APK download stores the downloader's IP. When the app later calls its API from the same IP,
+            that download is marked <span class="adl-badge adl-yes">opened</span>. IPs can change between Wi-Fi and mobile data,
+            so a few downloads may never match.
+        </div>
+    </div>
+
+    <h6 class="mb-2" style="color:var(--text-2,#cbd5e1);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;">Date-wise totals</h6>
+    <div class="adl-tablewrap mb-4">
+        <table class="adl-table">
+            <thead>
+                <tr><th>Date</th><th>Downloads</th><th>Unique IPs</th><th>Opened app</th></tr>
+            </thead>
+            <tbody>
+                {% for d in daily %}
+                <tr>
+                    <td class="adl-mono">{{ d.day|date:"Y-m-d" }}</td>
+                    <td>{{ d.downloads }}</td>
+                    <td>{{ d.unique_ips }}</td>
+                    <td>{{ d.opened }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" style="text-align:center;color:#64748b;padding:24px;">No downloads recorded yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h6 class="mb-2" style="color:var(--text-2,#cbd5e1);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;">Downloads ({{ records|length }} shown)</h6>
+    <div class="adl-tablewrap">
+        <table class="adl-table">
+            <thead>
+                <tr>
+                    <th>Downloaded at</th>
+                    <th>App</th>
+                    <th>IP address</th>
+                    <th>File</th>
+                    <th>Opened app</th>
+                    <th>Opened at</th>
+                    <th>Device user ID</th>
+                    <th>Device model</th>
+                    <th>OS</th>
+                    <th>Build</th>
+                    <th>User-Agent</th>
+                    <th>Referer</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td class="adl-mono">{{ r.downloaded_at|date:"Y-m-d H:i:s" }}</td>
+                    <td>{{ r.android_app.name|default:r.app_slug }}</td>
+                    <td class="adl-mono">{{ r.ip_address|default:"—" }}</td>
+                    <td class="adl-mono adl-trunc" title="{{ r.file_name }}">{{ r.file_name|default:"" }}</td>
+                    <td>{% if r.opened_app %}<span class="adl-badge adl-yes">opened</span>{% else %}<span class="adl-badge adl-no">no</span>{% endif %}</td>
+                    <td class="adl-mono">{% if r.opened_at %}{{ r.opened_at|date:"Y-m-d H:i:s" }}{% endif %}</td>
+                    <td class="adl-trunc" title="{{ r.device_user_id }}">{{ r.device_user_id|default:"" }}</td>
+                    <td>{{ r.device_model|default:"" }}</td>
+                    <td>{{ r.os_version|default:"" }}</td>
+                    <td>{{ r.build_identifier|default:"" }}</td>
+                    <td class="adl-trunc" title="{{ r.user_agent }}">{{ r.user_agent|default:"" }}</td>
+                    <td class="adl-trunc" title="{{ r.referer }}">{{ r.referer|default:"" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="12" style="text-align:center;color:#64748b;padding:24px;">No APK downloads match these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function adlExportCsv() {
+        var u = new URL(window.location.href);
+        u.searchParams.set('format', 'csv');
+        window.location.href = u.toString();
+    }
+</script>
+{% endblock %}

@@ -13,7 +13,8 @@ from django.utils.text import slugify
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.core.cache import cache
-from django.db.models import Sum, Count, F
+from django.db.models import Sum, Count, F, Q
+from django.urls import reverse
 from django.db.models.functions import TruncDate
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.views.decorators.cache import cache_control
@@ -35,7 +36,7 @@ from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
 import platform
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -3342,6 +3343,198 @@ def android_app_list(request):
     })
 
 
+def _normalize_ip(value):
+    """Return a normalized IP string, or None for blank/invalid input."""
+    import ipaddress
+    raw = (value or '').strip()
+    if not raw:
+        return None
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        return None
+
+
+def _mark_apk_opened(ip_address, user_id='', device_model='', os_version='',
+                     build_identifier='', days=90):
+    """Flag the newest recent download from this IP as 'app opened'.
+
+    Called when the app hits its API, which means it was launched on the
+    device that (from that IP) previously downloaded the APK. Best-effort.
+    """
+    from datetime import timedelta
+
+    ip = _normalize_ip(ip_address)
+    if not ip:
+        return None
+    try:
+        cutoff = timezone.now() - timedelta(days=days)
+        download = (ApkDownload.objects
+                    .filter(ip_address=ip, opened_app=False,
+                            downloaded_at__gte=cutoff)
+                    .order_by('-downloaded_at')
+                    .first())
+        if download is None:
+            return None
+        download.opened_app = True
+        download.opened_at = timezone.now()
+        if user_id:
+            download.device_user_id = user_id[:255]
+        if device_model:
+            download.device_model = device_model[:255]
+        if os_version:
+            download.os_version = os_version[:50]
+        if build_identifier:
+            download.build_identifier = build_identifier[:255]
+        download.save(update_fields=[
+            'opened_app', 'opened_at', 'device_user_id', 'device_model',
+            'os_version', 'build_identifier',
+        ])
+        return download
+    except Exception:
+        logger.debug('APK open-match failed', exc_info=True)
+        return None
+
+
+def apk_download(request, app_id):
+    """Serve an app's APK and record who downloaded it (IP + user agent).
+
+    Public: the app itself calls this URL when an update is required, and
+    visitors may download the APK directly. The download row's IP is later
+    matched against the app's API hits to mark it as opened.
+    """
+    import os
+    from django.http import FileResponse, Http404
+
+    android_app = get_object_or_404(AndroidApp, id=app_id)
+    if not android_app.apk_file:
+        raise Http404('No APK configured for this app')
+
+    try:
+        ApkDownload.objects.create(
+            android_app=android_app,
+            app_slug=(android_app.slug or '')[:255],
+            file_name=os.path.basename(android_app.apk_file.name or '')[:500],
+            ip_address=_normalize_ip(_get_client_ip(request)),
+            user_agent=(request.META.get('HTTP_USER_AGENT', '') or '')[:500],
+            referer=(request.META.get('HTTP_REFERER', '') or '')[:500],
+        )
+    except Exception:
+        logger.debug('Could not record APK download', exc_info=True)
+
+    try:
+        handle = android_app.apk_file.open('rb')
+    except Exception:
+        raise Http404('APK file is missing')
+    filename = os.path.basename(android_app.apk_file.name or 'app.apk')
+    return FileResponse(
+        handle, as_attachment=True, filename=filename,
+        content_type='application/vnd.android.package-archive',
+    )
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_downloads(request):
+    """Admin page: APK downloads with IP, app-opened match and date-wise totals."""
+    import csv
+    from django.http import HttpResponse
+
+    apps = AndroidApp.objects.all().order_by('name')
+
+    app_id = (request.GET.get('app') or '').strip()
+    status = (request.GET.get('status') or '').strip()
+    q = (request.GET.get('q') or '').strip()[:200]
+    date_from = (request.GET.get('date_from') or '').strip()
+    date_to = (request.GET.get('date_to') or '').strip()
+
+    def _valid_date(value):
+        try:
+            datetime.datetime.strptime(value, '%Y-%m-%d')
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    if not _valid_date(date_from):
+        date_from = ''
+    if not _valid_date(date_to):
+        date_to = ''
+
+    qs = ApkDownload.objects.select_related('android_app')
+    if app_id.isdigit():
+        qs = qs.filter(android_app_id=int(app_id))
+    else:
+        app_id = ''
+    if status == 'opened':
+        qs = qs.filter(opened_app=True)
+    elif status == 'not_opened':
+        qs = qs.filter(opened_app=False)
+    else:
+        status = ''
+    if q:
+        qs = qs.filter(
+            Q(ip_address__icontains=q) | Q(user_agent__icontains=q)
+            | Q(file_name__icontains=q) | Q(device_user_id__icontains=q)
+            | Q(device_model__icontains=q)
+        )
+    if date_from:
+        qs = qs.filter(downloaded_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(downloaded_at__date__lte=date_to)
+
+    total = qs.count()
+    opened = qs.filter(opened_app=True).count()
+    unique_ips = (qs.exclude(ip_address__isnull=True)
+                    .values('ip_address').distinct().count())
+    conversion = round((opened / total) * 100, 1) if total else 0
+
+    daily = list(
+        qs.annotate(day=TruncDate('downloaded_at'))
+          .values('day')
+          .annotate(downloads=Count('id'),
+                    opened=Count('id', filter=Q(opened_app=True)),
+                    unique_ips=Count('ip_address', distinct=True))
+          .order_by('-day')
+    )
+
+    records = list(qs.order_by('-downloaded_at')[:1000])
+
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="apk_downloads.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow([
+            'Downloaded at', 'App', 'IP address', 'File', 'Opened app',
+            'Opened at', 'Device user ID', 'Device model', 'OS', 'Build',
+            'User-Agent', 'Referer',
+        ])
+        for r in records:
+            writer.writerow([
+                r.downloaded_at.strftime('%Y-%m-%d %H:%M:%S'),
+                r.android_app.name if r.android_app else r.app_slug,
+                r.ip_address or '', r.file_name, 'yes' if r.opened_app else 'no',
+                r.opened_at.strftime('%Y-%m-%d %H:%M:%S') if r.opened_at else '',
+                r.device_user_id, r.device_model, r.os_version, r.build_identifier,
+                r.user_agent, r.referer,
+            ])
+        return response
+
+    return render(request, 'core/android_app_downloads.html', {
+        'apps': apps,
+        'records': records,
+        'daily': daily,
+        'total': total,
+        'opened': opened,
+        'unique_ips': unique_ips,
+        'conversion': conversion,
+        'filters': {
+            'app': app_id, 'status': status, 'q': q,
+            'date_from': date_from, 'date_to': date_to,
+        },
+    })
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def toggle_android_app(request, app_id):
@@ -3956,7 +4149,11 @@ def android_app_endpoint(request, app_slug):
             'expected_build_id': android_app.allowed_build_id,
         }
         if android_app.apk_file:
-            response_payload['apk_url'] = request.build_absolute_uri(android_app.apk_file.url)
+            # Route through the logging download view (not raw /media/) so the
+            # download is recorded and can later be matched to this app.
+            response_payload['apk_url'] = request.build_absolute_uri(
+                reverse('apk_download', args=[android_app.id])
+            )
         return JsonResponse(response_payload, status=426)
 
     today = timezone.localdate()
@@ -4002,8 +4199,16 @@ def android_app_endpoint(request, app_slug):
         ''
     ).strip()
     
-    ip_address = request.META.get('REMOTE_ADDR', None)
-    
+    # Behind nginx REMOTE_ADDR is the proxy; use the forwarded client IP so
+    # a download and the app's later API hit can be matched by one address.
+    ip_address = _normalize_ip(_get_client_ip(request))
+
+    # If this IP downloaded the APK earlier, flag it as opened in the app.
+    _mark_apk_opened(
+        ip_address, user_id=user_id, device_model=device_model,
+        os_version=os_version, build_identifier=build_identifier,
+    )
+
     if user_id:
         # Get or create device
         device, created = AndroidAppDevice.objects.get_or_create(
