@@ -15,6 +15,8 @@ metadata-only.
 import json
 import logging
 
+from django.utils import timezone
+
 logger = logging.getLogger(__name__)
 
 # Field names whose values are masked before a payload is stored. Matching is
@@ -361,7 +363,7 @@ def column_options(records, cap=200):
     counters = {f: Counter() for f in OPTION_FIELDS}
     for r in records:
         try:
-            counters['on_date'][r.created_at.strftime('%Y-%m-%d')] += 1
+            counters['on_date'][timezone.localtime(r.created_at).strftime('%Y-%m-%d')] += 1
         except Exception:
             pass
         for field in OPTION_FIELDS:
@@ -469,7 +471,7 @@ def clear_requests():
 def request_to_dict(rec):
     """Serialize a RequestLog row for the JSON view."""
     try:
-        when = rec.created_at.isoformat(timespec='seconds')
+        when = timezone.localtime(rec.created_at).isoformat(timespec='seconds')
     except Exception:
         when = ''
     return {

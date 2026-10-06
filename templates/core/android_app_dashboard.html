@@ -546,7 +546,7 @@ function updateDashboard(data) {
     if (failedTbody && data.failed_attempts.length) {
         failedTbody.innerHTML = data.failed_attempts.map(attempt => `
             <tr>
-                <td data-datetime="${attempt.attempted_at}">${new Date(attempt.attempted_at).toLocaleString()}</td>
+                <td data-datetime="${attempt.attempted_at}">${formatDateTimeForDisplay(attempt.attempted_at)}</td>
                 <td><span class="badge bg-danger">${attempt.failure_reason_display}</span></td>
                 <td>${attempt.ip_address || '-'}</td>
                 <td>${attempt.request_identity || '-'}</td>
@@ -565,8 +565,8 @@ function updateDashboard(data) {
                 <td>${device.device_model || '-'}</td>
                 <td>${device.os_version || '-'}</td>
                 <td>${device.total_visits}</td>
-                <td data-datetime="${device.last_seen_at}">${new Date(device.last_seen_at).toLocaleString()}</td>
-                <td data-datetime="${device.first_seen_at}">${new Date(device.first_seen_at).toLocaleString()}</td>
+                <td data-datetime="${device.last_seen_at}">${formatDateTimeForDisplay(device.last_seen_at)}</td>
+                <td data-datetime="${device.first_seen_at}">${formatDateTimeForDisplay(device.first_seen_at)}</td>
                 <td><a class="btn btn-sm btn-outline-info" href="/admin-dashboard/android-apps/${appId}/analytics/device/${encodeURIComponent(device.user_id)}/logs/" title="View all request logs"><i class="fas fa-terminal me-1"></i>Logs</a></td>
             </tr>`;
         });
@@ -578,7 +578,7 @@ function updateDashboard(data) {
     if (visitsTbody && data.recent_visits.length) {
         visitsTbody.innerHTML = data.recent_visits.map(visit => `
             <tr>
-                <td data-datetime="${visit.visited_at}">${new Date(visit.visited_at).toLocaleString()}</td>
+                <td data-datetime="${visit.visited_at}">${formatDateTimeForDisplay(visit.visited_at)}</td>
                 <td><code class="text-info">${visit.device__user_id}</code></td>
                 <td>${visit.device_model || '-'}</td>
                 <td>${visit.os_version || '-'}</td>
@@ -605,7 +605,7 @@ function updateDashboard(data) {
                             <span class="text-secondary mx-2">|</span>
                             <span class="text-secondary">${visit.build_identifier || '-'}</span>
                             <span class="text-secondary mx-2">|</span>
-                            <span class="text-secondary">${new Date(visit.visited_at).toLocaleString()}</span>
+                            <span class="text-secondary">${formatDateTimeForDisplay(visit.visited_at)}</span>
                         </span>
                         <span class="toggle-icon text-info" style="font-size:0.6rem;">▶</span>
                     </button>

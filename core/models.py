@@ -976,9 +976,9 @@ class AndroidApp(models.Model):
 
     def clean_old_analytics_data(self):
         """Delete analytics logs older than their respective retention settings."""
-        from datetime import date, timedelta
-        analytics_cutoff = date.today() - timedelta(days=self.data_retention_days)
-        log_cutoff = date.today() - timedelta(days=self.log_retention_days)
+        from datetime import timedelta
+        analytics_cutoff = timezone.localdate() - timedelta(days=self.data_retention_days)
+        log_cutoff = timezone.localdate() - timedelta(days=self.log_retention_days)
         deleted_counts = {
             'access_logs': AndroidAppAccessLog.objects.filter(
                 android_app=self, access_date__lt=analytics_cutoff
@@ -1317,8 +1317,7 @@ class SyncedUser(models.Model):
     def days_remaining(self):
         if not self.valid_until:
             return 0
-        from datetime import date
-        delta = self.valid_until - date.today()
+        delta = self.valid_until - timezone.localdate()
         return max(0, delta.days)
 
     def subscription_payload(self):
@@ -2090,7 +2089,7 @@ class UserPageView(models.Model):
     @classmethod
     def today_views(cls, user=None, platform=None):
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         qs = cls.objects.filter(viewed_at__date=today)
         if user:
             qs = qs.filter(user=user)
@@ -2101,7 +2100,7 @@ class UserPageView(models.Model):
     @classmethod
     def total_time_today(cls, user=None):
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         from django.db.models import Sum
         qs = cls.objects.filter(viewed_at__date=today)
         if user:

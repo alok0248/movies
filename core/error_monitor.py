@@ -85,7 +85,7 @@ def _send_alert_email(request, exc_type, exc_value, tb_text):
         body = (
             f'SERVER ERROR REPORT\n'
             f'{"=" * 60}\n\n'
-            f'Time:       {tz.now().strftime("%Y-%m-%d %H:%M:%S %Z")}\n'
+            f'Time:       {tz.localtime().strftime("%Y-%m-%d %H:%M:%S %Z")}\n'
             f'URL:        {method} https://{host}{path}\n'
             f'IP:         {ip}\n'
             f'User:       {user_str}\n'

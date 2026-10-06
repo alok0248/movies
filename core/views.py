@@ -401,8 +401,8 @@ def calendar_db(request):
             return JsonResponse({'success': False, 'error': str(e)})
 
     # GET — return cached data
-    year = int(request.GET.get('year', datetime.date.today().year))
-    month = int(request.GET.get('month', datetime.date.today().month))
+    year = int(request.GET.get('year', timezone.localdate().year))
+    month = int(request.GET.get('month', timezone.localdate().month))
 
     try:
         cached = CalendarMonthCache.objects.get(year=year, month=month)
@@ -416,7 +416,7 @@ def calendar_db(request):
             'last_day': cached.last_day,
             'movies': cached.movies or [],
             'series': cached.series or [],
-            'last_synced': cached.last_synced_at.isoformat() if cached.last_synced_at else None,
+            'last_synced': timezone.localtime(cached.last_synced_at).isoformat() if cached.last_synced_at else None,
         })
     except CalendarMonthCache.DoesNotExist:
         return JsonResponse({'success': False, 'movies': [], 'series': []})
@@ -424,8 +424,8 @@ def calendar_db(request):
 
 def calendar_month_data(request):
     """AJAX endpoint to get calendar data for a specific month"""
-    year = int(request.GET.get('year', datetime.date.today().year))
-    month = int(request.GET.get('month', datetime.date.today().month))
+    year = int(request.GET.get('year', timezone.localdate().year))
+    month = int(request.GET.get('month', timezone.localdate().month))
     calendar_data = get_calendar_month_data(year, month)
     return JsonResponse(calendar_data)
 
@@ -453,9 +453,9 @@ def _build_home_data():
     site_settings = SiteSettings.get_settings()
 
     current_month_data = {
-        'year': datetime.date.today().year,
-        'month': datetime.date.today().month,
-        'month_name': calendar.month_name[datetime.date.today().month],
+        'year': timezone.localdate().year,
+        'month': timezone.localdate().month,
+        'month_name': calendar.month_name[timezone.localdate().month],
         'first_day': None,
         'last_day': None,
         'movies': [],
@@ -901,7 +901,7 @@ def admin_dashboard(request):
     from django.utils import timezone
     import os
 
-    today = timezone.now().date()
+    today = timezone.localdate()
 
     # Determine which DB to query for user data
     # Try external first if routing enabled, fall back to default
@@ -1093,7 +1093,7 @@ def ajax_dashboard_stats(request):
                 'icon': 'sign-in-alt',
                 'color': '#4ade80',
                 'text': f'{uname} logged in via {s.source}',
-                'time': s.logged_in_at.strftime('%I:%M %p'),
+                'time': timezone.localtime(s.logged_in_at).strftime('%I:%M %p'),
             })
     except Exception:
         pass
@@ -1112,7 +1112,7 @@ def ajax_dashboard_stats(request):
                 'icon': 'play',
                 'color': '#60a5fa',
                 'text': f'{uname} watched {title}',
-                'time': p.last_played_at.strftime('%I:%M %p'),
+                'time': timezone.localtime(p.last_played_at).strftime('%I:%M %p'),
             })
     except Exception:
         pass
@@ -1127,7 +1127,7 @@ def ajax_dashboard_stats(request):
                 'icon': 'envelope',
                 'color': '#a78bfa',
                 'text': f'Email sent: {e.subject[:50]}',
-                'time': e.created_at.strftime('%I:%M %p'),
+                'time': timezone.localtime(e.created_at).strftime('%I:%M %p'),
             })
     except Exception:
         pass
@@ -1149,13 +1149,13 @@ def ajax_dashboard_stats(request):
             'server_health': server_health,
         },
         'activity': activity,
-        'updated_at': now.strftime('%I:%M:%S %p'),
+        'updated_at': timezone.localtime(now).strftime('%I:%M:%S %p'),
     })
 
 
 # Helper functions for ads
 def get_user_today_clicks(user, ip_address):
-    today = timezone.now().date()
+    today = timezone.localdate()
     try:
         if user and user.is_authenticated:
             activity, created = UserActivity.objects.get_or_create(user=user, activity_date=today, defaults={'ip_address': ip_address})
@@ -1405,7 +1405,7 @@ def track_user_click(request):
     """
     user = request.user if request.user.is_authenticated else None
     ip_address = request.META.get('REMOTE_ADDR')
-    today = timezone.now().date()
+    today = timezone.localdate()
     now_ts = int(timezone.now().timestamp())
 
     try:
@@ -1573,7 +1573,7 @@ def _is_future_date(date_str):
     try:
         from datetime import date as _date
         d = _date.fromisoformat(str(date_str)[:10])
-        return d > _date.today()
+        return d > timezone.localdate()
     except Exception:
         return False
 
@@ -2786,7 +2786,7 @@ def email_settings(request):
         'total': EmailSendLog.objects.count(),
         'sent': EmailSendLog.objects.filter(status='sent').count(),
         'failed': EmailSendLog.objects.filter(status='failed').count(),
-        'today': EmailSendLog.objects.filter(created_at__date__gte=timezone.now().date()).count(),
+        'today': EmailSendLog.objects.filter(created_at__date__gte=timezone.localdate()).count(),
     }
     log_by_purpose = _email_purpose_stats()
 
@@ -2824,7 +2824,7 @@ def _email_purpose_stats():
 
     purpose_labels = dict(PURPOSE_CHOICES)
     purpose_order = ['verification', 'password_reset', 'notification', 'newsletter', 'marketing', 'transactional']
-    today = timezone.now().date()
+    today = timezone.localdate()
 
     def serving_address(pcode):
         addr = EmailAddress.objects.filter(purpose=pcode, is_active=True, is_default=True).first()
@@ -2880,10 +2880,10 @@ def ajax_email_logs(request):
             'address': (log.address.email if log.address_id and log.address else None),
             'error': log.error_message or '',
             'sent_by': _safe_sent_by(log),
-            'time': log.created_at.strftime('%b %d, %H:%M:%S'),
+            'time': timezone.localtime(log.created_at).strftime('%b %d, %H:%M:%S'),
         })
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     qs = EmailSendLog.objects.all()
     return JsonResponse({
         'ok': True,
@@ -2895,7 +2895,7 @@ def ajax_email_logs(request):
         },
         'groups': _email_purpose_stats(),
         'recent': recent,
-        'updated_at': timezone.now().strftime('%H:%M:%S'),
+        'updated_at': timezone.localtime().strftime('%H:%M:%S'),
     })
 
 
@@ -2971,7 +2971,7 @@ def add_api_key(request):
                 'id': api_key.id,
                 'key': api_key.key,
                 'is_active': api_key.is_active,
-                'created_at': api_key.created_at.strftime('%Y-%m-%d %H:%M'),
+                'created_at': timezone.localtime(api_key.created_at).strftime('%Y-%m-%d %H:%M'),
                 'last_used_at': None,
             }
         })
@@ -2996,8 +2996,8 @@ def update_api_key(request, key_id):
                 'id': api_key.id,
                 'key': api_key.key,
                 'is_active': api_key.is_active,
-                'created_at': api_key.created_at.strftime('%Y-%m-%d %H:%M'),
-                'last_used_at': api_key.last_used_at.strftime('%Y-%m-%d %H:%M') if api_key.last_used_at else None,
+                'created_at': timezone.localtime(api_key.created_at).strftime('%Y-%m-%d %H:%M'),
+                'last_used_at': timezone.localtime(api_key.last_used_at).strftime('%Y-%m-%d %H:%M') if api_key.last_used_at else None,
             }
         })
     return JsonResponse({'success': False, 'message': 'Invalid form data', 'errors': form.errors})
@@ -3511,10 +3511,10 @@ def android_app_downloads(request):
         ])
         for r in records:
             writer.writerow([
-                r.downloaded_at.strftime('%Y-%m-%d %H:%M:%S'),
+                timezone.localtime(r.downloaded_at).strftime('%Y-%m-%d %H:%M:%S'),
                 r.android_app.name if r.android_app else r.app_slug,
                 r.ip_address or '', r.file_name, 'yes' if r.opened_app else 'no',
-                r.opened_at.strftime('%Y-%m-%d %H:%M:%S') if r.opened_at else '',
+                timezone.localtime(r.opened_at).strftime('%Y-%m-%d %H:%M:%S') if r.opened_at else '',
                 r.device_user_id, r.device_model, r.os_version, r.build_identifier,
                 r.user_agent, r.referer,
             ])
@@ -3767,21 +3767,21 @@ def ajax_android_app_dashboard(request, app_id):
     ))
     # Convert failed_attempts datetime to iso string
     for attempt in failed_attempts:
-        attempt['attempted_at'] = attempt['attempted_at'].isoformat()
+        attempt['attempted_at'] = timezone.localtime(attempt['attempted_at']).isoformat()
         attempt['failure_reason_display'] = dict(AndroidAppFailedAttempt.FAILURE_REASON_CHOICES).get(attempt['failure_reason'])
 
     recent_devices = list(selected_app.devices.all()[:10].values(
         'user_id', 'device_model', 'os_version', 'total_visits', 'last_seen_at', 'first_seen_at'
     ))
     for device in recent_devices:
-        device['last_seen_at'] = device['last_seen_at'].isoformat()
-        device['first_seen_at'] = device['first_seen_at'].isoformat()
+        device['last_seen_at'] = timezone.localtime(device['last_seen_at']).isoformat()
+        device['first_seen_at'] = timezone.localtime(device['first_seen_at']).isoformat()
 
     recent_visits = list(selected_app.device_visits.select_related('device').all()[:20].values(
         'visited_at', 'device__user_id', 'device_model', 'os_version', 'build_identifier', 'ip_address', 'full_request'
     ))
     for visit in recent_visits:
-        visit['visited_at'] = visit['visited_at'].isoformat()
+        visit['visited_at'] = timezone.localtime(visit['visited_at']).isoformat()
 
     unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
     unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
@@ -3799,7 +3799,7 @@ def ajax_android_app_dashboard(request, app_id):
         'failed_attempts': failed_attempts,
         'recent_devices': recent_devices,
         'recent_visits': recent_visits,
-        'last_accessed_at': selected_app.last_accessed_at.isoformat() if selected_app.last_accessed_at else None
+        'last_accessed_at': timezone.localtime(selected_app.last_accessed_at).isoformat() if selected_app.last_accessed_at else None
     })
 
 
@@ -4242,7 +4242,7 @@ def android_app_endpoint(request, app_slug):
             'build_identifier': build_identifier,
             'request_identity': request_identity,
             'ip_address': ip_address,
-            'timestamp': timezone.now().isoformat(),
+            'timestamp': timezone.localtime().isoformat(),
         }
         
         # Record individual visit
@@ -5460,7 +5460,7 @@ def upcoming(request):
     # Get dates from query params or use default
     start_date = request.GET.get('start')
     if not start_date:
-        start_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        start_date = timezone.localdate().isoformat()
     
     end_date = request.GET.get('end')
     if not end_date:
@@ -6948,7 +6948,7 @@ def _get_web_management_dashboard_payload():
         recent_activity.append({
             'visitor__visitor_id': str(activity.visitor.visitor_id),
             'path': activity.path,
-            'visited_at': activity.visited_at.isoformat(),
+            'visited_at': timezone.localtime(activity.visited_at).isoformat(),
             'ip_address': activity.ip_address,
             'is_bot': activity.is_bot,
         })
@@ -8797,7 +8797,7 @@ def request_log(request):
         ])
         for r in records:
             writer.writerow([
-                r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M:%S'),
                 r.method, r.status_code, r.get_category_display(),
                 r.path, r.query, r.client_ip, r.username, r.duration_ms,
                 r.response_size, r.time_on_page_ms, r.click_count,
@@ -10057,14 +10057,14 @@ def admin_analytics(request):
     chart_days = min(days * 2, 30)
     daily_views = []
     for i in range(chart_days):
-        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        d = timezone.localdate() - timezone.timedelta(days=i)
         count = UserPageView.objects.filter(viewed_at__date=d).count()
         daily_views.append({'date': d.isoformat(), 'views': count})
     daily_views.reverse()
 
     # Hourly heatmap data (today)
     hourly_views = list(UserPageView.objects.filter(
-        viewed_at__date=timezone.now().date())
+        viewed_at__date=timezone.localdate())
         .extra(select={'hour': 'strftime("%%H", viewed_at)'})
         .values('hour')
         .annotate(views=Count('id'))
@@ -10102,7 +10102,7 @@ def admin_engagement_analytics(request):
     platform_filter = request.GET.get('platform', 'all')  # all, web, android
     reg_filter = request.GET.get('reg', 'all')  # all, registered, unregistered
     since = timezone.now() - timezone.timedelta(days=days)
-    today = timezone.now().date()
+    today = timezone.localdate()
 
     # Determine DB alias
     user_db = 'default'
@@ -10163,7 +10163,7 @@ def admin_engagement_analytics(request):
     # --- 1. Daily Active Users (DAU) chart ---
     dau_data = []
     for i in range(min(days, 60)):
-        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        d = timezone.localdate() - timezone.timedelta(days=i)
         qs = UserPageView.objects.filter(viewed_at__date=d)
         qs = _apply_pv_filters(qs)
         dau = qs.values('user').distinct().count() if reg_filter != 'unregistered' else qs.count()
@@ -10268,7 +10268,7 @@ def admin_engagement_analytics(request):
     # --- 8. Daily plays chart ---
     daily_plays = []
     for i in range(min(days, 60)):
-        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        d = timezone.localdate() - timezone.timedelta(days=i)
         try:
             qs = _apply_ph_filters(_ph_qs(last_played_at__date=d))
             cnt = qs.count()
@@ -10350,7 +10350,7 @@ def admin_user_analytics_detail(request, user_id):
     # Daily activity
     daily_views = []
     for i in range(min(days, 30)):
-        d = (timezone.now() - timezone.timedelta(days=i)).date()
+        d = timezone.localdate() - timezone.timedelta(days=i)
         count = user_views.filter(viewed_at__date=d).count()
         daily_views.append({'date': d.isoformat(), 'views': count})
     daily_views.reverse()
@@ -11611,7 +11611,7 @@ def _history_calendar_payload(user_ids, year, month):
                 'episode': h.episode_number,
                 'episodeTitle': h.episode_title or '',
                 'isTv': is_tv,
-                'ts': h.last_played_at.isoformat() if h.last_played_at else '',
+                'ts': timezone.localtime(h.last_played_at).isoformat() if h.last_played_at else '',
                 'time': local_dt.strftime('%I:%M %p'),
                 'day': day,
                 'user': user_info,

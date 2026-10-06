@@ -223,7 +223,7 @@ const chartText = '#cbd5e1';
 const gridColor = 'rgba(148, 163, 184, 0.16)';
 
 function formatBrowserLocalTime(timestamp) {
-    return timestamp ? new Date(timestamp).toLocaleString() : '-';
+    return timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }) : '-';
 }
 
 function initializeCharts() {
