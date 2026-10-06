@@ -248,9 +248,19 @@ def _as_int(value):
         return None
 
 
+# Columns the spreadsheet can be sorted by (click a header).
+SORTABLE_FIELDS = (
+    'created_at', 'method', 'status_code', 'category', 'path', 'query',
+    'client_ip', 'username', 'duration_ms', 'response_size',
+    'time_on_page_ms', 'click_count', 'view_name', 'referer', 'user_agent',
+    'request_body',
+)
+
+
 def filter_requests(category=None, method=None, status=None, status_code=None,
                     q=None, min_duration=None, min_size=None, on_date=None,
-                    min_time=None, min_clicks=None, **field_filters):
+                    min_time=None, min_clicks=None, sort=None, direction=None,
+                    **field_filters):
     """Build the RequestLog queryset for the given filter conditions.
 
     Every stored field has a condition: ``category``/``method``/``status``
@@ -313,6 +323,10 @@ def filter_requests(category=None, method=None, status=None, status_code=None,
             | Q(view_name__icontains=q) | Q(referer__icontains=q)
             | Q(request_body__icontains=q)
         )
+
+    if sort in SORTABLE_FIELDS:
+        prefix = '-' if direction == 'desc' else ''
+        qs = qs.order_by(prefix + sort)
     return qs
 
 

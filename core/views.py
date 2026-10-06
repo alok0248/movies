@@ -8501,7 +8501,7 @@ def request_log(request):
     import csv
     from django.http import HttpResponse
     from .request_log import (recent_requests, clear_requests, request_total,
-                              request_to_dict, FIELD_FILTERS)
+                              request_to_dict, FIELD_FILTERS, SORTABLE_FIELDS)
 
     if request.method == 'POST':
         if request.POST.get('action') == 'clear':
@@ -8532,7 +8532,13 @@ def request_log(request):
         'min_time': clean('min_time', 12),
         'min_clicks': clean('min_clicks', 12),
         'on_date': clean('on_date', 10),
+        'sort': clean('sort', 30),
+        'direction': clean('dir', 4).lower(),
     }
+    if filters['sort'] not in SORTABLE_FIELDS:
+        filters['sort'] = ''
+    if filters['direction'] not in ('asc', 'desc'):
+        filters['direction'] = ''
     for field in FIELD_FILTERS:
         filters[field] = clean(field)
 

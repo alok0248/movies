@@ -83,6 +83,9 @@
     }
     /* Excel-style filter row sitting directly under the column headers */
     .rl-table thead tr:first-child th { top: 0; height: 32px; box-sizing: border-box; }
+    .rl-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    .rl-sortable:hover { color: #60a5fa; }
+    .rl-arrow { font-size: .62rem; margin-left: .25rem; color: #34d399; }
     .rl-table thead tr.rl-frow th {
         top: 32px;
         background: var(--bg-2, #101a2e);
@@ -146,6 +149,7 @@
     html[data-theme="light"] .rl-tablewrap { background: #ffffff; border-color: rgba(0,0,0,.1); }
     html[data-theme="light"] .rl-table thead th { background: #f1f5f9; color: #334155; }
     html[data-theme="light"] .rl-table th, html[data-theme="light"] .rl-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .rl-sortable:hover { color: #1d4ed8; }
     html[data-theme="light"] .rl-table thead tr.rl-frow th { background: #e2e8f0; }
     html[data-theme="light"] .rl-table thead tr.rl-frow select, html[data-theme="light"] .rl-table thead tr.rl-frow input { border-color: rgba(0,0,0,.18); }
 </style>
@@ -195,12 +199,31 @@
                 u.searchParams.set('format', fmt);
                 window.location.href = u.toString();
             }
+            function rlSort(field) {
+                var u = new URL(window.location.href);
+                var numeric = ['created_at', 'duration_ms', 'response_size',
+                               'time_on_page_ms', 'click_count'];
+                var cur = u.searchParams.get('sort');
+                var curDir = u.searchParams.get('dir');
+                var dir;
+                if (cur === field) {
+                    dir = (curDir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    dir = (numeric.indexOf(field) >= 0) ? 'desc' : 'asc';
+                }
+                u.searchParams.set('sort', field);
+                u.searchParams.set('dir', dir);
+                u.searchParams.set('view', 'table');
+                window.location.href = u.toString();
+            }
         </script>
     </div>
 
 {% if view_mode == 'table' %}
     <form method="get" class="rl-tableform mb-2">
         <input type="hidden" name="view" value="table">
+        <input type="hidden" name="sort" value="{{ filters.sort }}">
+        <input type="hidden" name="dir" value="{{ filters.direction }}">
         <div class="rl-toolbar mb-2">
             <input type="text" name="q" value="{{ filters.q }}" placeholder="Search all fields…">
             <button type="submit" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
@@ -212,22 +235,22 @@
             <table class="rl-table">
                 <thead>
                     <tr>
-                        <th>Time</th>
-                        <th>Method</th>
-                        <th>Status</th>
-                        <th>Category</th>
-                        <th>Path</th>
-                        <th>Query</th>
-                        <th>Client IP</th>
-                        <th>Username</th>
-                        <th>Duration (ms)</th>
-                        <th>Size (B)</th>
-                        <th>Time on page (ms)</th>
-                        <th>Clicks</th>
-                        <th>View name</th>
-                        <th>Referer</th>
-                        <th>User-Agent</th>
-                        <th>Payload</th>
+                        <th class="rl-sortable" onclick="rlSort('created_at')" title="Sort by Time">Time<span class="rl-arrow">{% if filters.sort == 'created_at' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('method')" title="Sort by Method">Method<span class="rl-arrow">{% if filters.sort == 'method' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('status_code')" title="Sort by Status">Status<span class="rl-arrow">{% if filters.sort == 'status_code' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('category')" title="Sort by Category">Category<span class="rl-arrow">{% if filters.sort == 'category' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('path')" title="Sort by Path">Path<span class="rl-arrow">{% if filters.sort == 'path' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('query')" title="Sort by Query">Query<span class="rl-arrow">{% if filters.sort == 'query' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('client_ip')" title="Sort by Client IP">Client IP<span class="rl-arrow">{% if filters.sort == 'client_ip' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('username')" title="Sort by Username">Username<span class="rl-arrow">{% if filters.sort == 'username' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('duration_ms')" title="Sort by Duration">Duration (ms)<span class="rl-arrow">{% if filters.sort == 'duration_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('response_size')" title="Sort by Size">Size (B)<span class="rl-arrow">{% if filters.sort == 'response_size' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('time_on_page_ms')" title="Sort by Time on page">Time on page (ms)<span class="rl-arrow">{% if filters.sort == 'time_on_page_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('click_count')" title="Sort by Clicks">Clicks<span class="rl-arrow">{% if filters.sort == 'click_count' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('view_name')" title="Sort by View name">View name<span class="rl-arrow">{% if filters.sort == 'view_name' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('referer')" title="Sort by Referer">Referer<span class="rl-arrow">{% if filters.sort == 'referer' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('user_agent')" title="Sort by User-Agent">User-Agent<span class="rl-arrow">{% if filters.sort == 'user_agent' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="rl-sortable" onclick="rlSort('request_body')" title="Sort by Payload">Payload<span class="rl-arrow">{% if filters.sort == 'request_body' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
                     </tr>
                     <tr class="rl-frow">
                         <th><select name="on_date" onchange="this.form.submit()"><option value="">All</option>{% for v in options.on_date %}<option value="{{ v }}" {% if filters.on_date == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
