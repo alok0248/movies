@@ -10387,6 +10387,43 @@ def _au_int_param(request, name, default, low, high):
     return max(low, min(high, value))
 
 
+# Signatures of scanners, crawlers and command-line clients that hammer the
+# site without ever being a real visitor.
+_AU_BOT_UA_MARKERS = (
+    'bot', 'crawler', 'spider', 'scrapy', 'curl', 'wget', 'python-requests',
+    'python-urllib', 'go-http-client', 'java/', 'okhttp', 'libwww', 'axios',
+    'headlesschrome', 'phantomjs', 'masscan', 'zgrab', 'nmap', 'nuclei',
+    'l9explore', 'expanse', 'censys', 'shodan', 'internetmeasurement',
+)
+
+# Paths that real users never browse to: exploit probes and framework files.
+_AU_BOT_PATH_MARKERS = (
+    '/index.php', '/wp-', '/.env', '/.git', '/vendor/', '/phpunit',
+    '/xmlrpc.php', '/admin.php', '/config.php', '/cgi-bin/', '/shell',
+    '/actuator', '/docker', '/credentials', '/.aws', '/.ssh', '/boaform',
+    '/hudson', '/solr/', '/jenkins', '/telescope',
+)
+
+
+def _au_looks_like_bot(row):
+    """Best-effort bot/scanner detection for an anonymous connection row.
+
+    Logged-in identities are never treated as bots so a real user can never be
+    hidden by a clever user-agent.
+    """
+    if row['user_id']:
+        return False
+    user_agent = (row['user_agent'] or '').strip().lower()
+    if not user_agent:
+        return True
+    if any(marker in user_agent for marker in _AU_BOT_UA_MARKERS):
+        return True
+    path = (row['last_path'] or '').lower()
+    if path and any(marker in path for marker in _AU_BOT_PATH_MARKERS):
+        return True
+    return False
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_active_users(request):
@@ -10409,6 +10446,9 @@ def admin_active_users(request):
     status = (request.GET.get('status') or 'all').strip().lower()
     if status not in ('all', 'active', 'inactive'):
         status = 'all'
+    bots = (request.GET.get('bots') or 'hide').strip().lower()
+    if bots not in ('hide', 'show', 'only'):
+        bots = 'hide'
     hours = _au_int_param(request, 'hours', 24, 1, 720)
     minutes = _au_int_param(request, 'minutes', 15, 1, 1440)
     search = (request.GET.get('q') or '').strip()
@@ -10657,6 +10697,7 @@ def admin_active_users(request):
         row['last_login'] = account.last_login if account else None
         row['account_active'] = account.is_active if account else None
         row['is_staff'] = account.is_staff if account else False
+        row['is_bot'] = _au_looks_like_bot(row)
         if row['username']:
             row['display_name'] = row['username']
         elif row['device_uid']:
@@ -10674,11 +10715,16 @@ def admin_active_users(request):
         if row['is_active']:
             active_platform[row['platform']] = active_platform.get(row['platform'], 0) + 1
     active_total = sum(1 for r in all_rows if r['is_active'])
+    bot_total = sum(1 for r in all_rows if r['is_bot'])
 
     # --- filter / sort ------------------------------------------------------
     filtered = []
     needle = search.lower()
     for row in all_rows:
+        if bots == 'hide' and row['is_bot']:
+            continue
+        if bots == 'only' and not row['is_bot']:
+            continue
         if platform != 'all' and row['platform'] != platform:
             continue
         if status == 'active' and not row['is_active']:
@@ -10742,6 +10788,8 @@ def admin_active_users(request):
         'total_rows': len(all_rows),
         'active_total': active_total,
         'inactive_total': len(all_rows) - active_total,
+        'bot_total': bot_total,
+        'bots': bots,
         'platform_counts': platform_counts,
         'active_platform': active_platform,
         'total_time': sum(r['total_time'] for r in all_rows),

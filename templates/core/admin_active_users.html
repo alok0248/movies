@@ -24,6 +24,7 @@
     .au-b-android { background: rgba(34,197,94,.15); color: #34d399; }
     .au-b-ios { background: rgba(168,85,247,.15); color: #c084fc; }
     .au-b-other { background: rgba(148,163,184,.15); color: #94a3b8; }
+    .au-b-bot { background: rgba(239,68,68,.15); color: #f87171; }
     .au-tablewrap { overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; background: var(--card-bg, #1a1a2e); }
     .au-table { width: 100%; border-collapse: collapse; font-size: .74rem; white-space: nowrap; }
     .au-table th, .au-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06)); text-align: left; vertical-align: middle; }
@@ -80,8 +81,8 @@
             </div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="?{{ request.GET.urlencode }}&format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
-            <a href="{{ request.path }}?{% if platform != 'all' %}platform={{ platform }}&amp;{% endif %}status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+            <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
+            <a href="{{ request.path }}?{% if platform != 'all' %}platform={{ platform }}&amp;{% endif %}status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
         </div>
     </div>
 
@@ -102,6 +103,12 @@
             <div class="au-card au-stat">
                 <div class="au-num" style="color:#9ca3af;">{{ inactive_total }}</div>
                 <div class="au-lbl">Inactive</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num" style="color:#f87171;">{{ bot_total }}</div>
+                <div class="au-lbl">Bots / scanners</div>
             </div>
         </div>
         <div class="col-6 col-md-3 col-xl-2">
@@ -127,11 +134,11 @@
     <div class="au-card p-3 mb-3">
         <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
             <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">Platform</span>
-            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ total_rows }}</span></a>
-            <a class="au-chip {% if platform == 'web' %}on{% endif %}" href="?platform=web&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web <span style="opacity:.6;">{{ platform_counts.web|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.web|default:0 }} live</span></a>
-            <a class="au-chip {% if platform == 'android' %}on{% endif %}" href="?platform=android&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-android" style="color:#22c55e;"></i> Android <span style="opacity:.6;">{{ platform_counts.android|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.android|default:0 }} live</span></a>
-            <a class="au-chip {% if platform == 'ios' %}on{% endif %}" href="?platform=ios&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-apple" style="color:#c084fc;"></i> iOS <span style="opacity:.6;">{{ platform_counts.ios|default:0 }}</span></a>
-            {% if platform_counts.unknown %}<a class="au-chip {% if platform == 'unknown' %}on{% endif %}" href="?platform=unknown&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-question"></i> Unknown <span style="opacity:.6;">{{ platform_counts.unknown }}</span></a>{% endif %}
+            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ total_rows }}</span></a>
+            <a class="au-chip {% if platform == 'web' %}on{% endif %}" href="?platform=web&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web <span style="opacity:.6;">{{ platform_counts.web|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.web|default:0 }} live</span></a>
+            <a class="au-chip {% if platform == 'android' %}on{% endif %}" href="?platform=android&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-android" style="color:#22c55e;"></i> Android <span style="opacity:.6;">{{ platform_counts.android|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.android|default:0 }} live</span></a>
+            <a class="au-chip {% if platform == 'ios' %}on{% endif %}" href="?platform=ios&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-apple" style="color:#c084fc;"></i> iOS <span style="opacity:.6;">{{ platform_counts.ios|default:0 }}</span></a>
+            {% if platform_counts.unknown %}<a class="au-chip {% if platform == 'unknown' %}on{% endif %}" href="?platform=unknown&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-question"></i> Unknown <span style="opacity:.6;">{{ platform_counts.unknown }}</span></a>{% endif %}
         </div>
         <form method="get" class="au-filtergrid">
             <label>Platform
@@ -141,6 +148,13 @@
                     <option value="android" {% if platform == 'android' %}selected{% endif %}>Android</option>
                     <option value="ios" {% if platform == 'ios' %}selected{% endif %}>iOS</option>
                     <option value="unknown" {% if platform == 'unknown' %}selected{% endif %}>Unknown</option>
+                </select>
+            </label>
+            <label>Visitors
+                <select name="bots">
+                    <option value="hide" {% if bots == 'hide' %}selected{% endif %}>Humans only (hide bots)</option>
+                    <option value="show" {% if bots == 'show' %}selected{% endif %}>Humans + bots</option>
+                    <option value="only" {% if bots == 'only' %}selected{% endif %}>Bots only</option>
                 </select>
             </label>
             <label>Status
@@ -223,6 +237,7 @@
                         </span>
                         {% if r.on_page %}<div class="au-sub" style="color:#22c55e;">on page now</div>{% endif %}
                         {% if r.logged_out %}<div class="au-sub">logged out</div>{% endif %}
+                        {% if r.is_bot %}<div class="au-sub"><span class="au-badge au-b-bot">bot</span></div>{% endif %}
                     </td>
                     <td>
                         {% if r.user_id %}
