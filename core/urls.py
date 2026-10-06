@@ -50,6 +50,7 @@ urlpatterns = [
     path('admin-dashboard/ads/<int:ad_id>/delete/', views.ad_delete, name='ad_delete'),
     path('admin-dashboard/ads/<int:ad_id>/toggle/', views.ad_toggle, name='ad_toggle'),
     path('ajax/track-click/', views.track_user_click, name='track_user_click'),
+    path('ajax/page-activity/', views.ajax_page_activity, name='ajax_page_activity'),
     path('ajax/adsterra/click/', views.ajax_adsterra_click, name='ajax_adsterra_click'),
     path('ajax/autoclick-ads/', views.ajax_get_autoclick_ads, name='ajax_get_autoclick_ads'),
     path('ajax/click-status/', views.ajax_click_status, name='ajax_click_status'),

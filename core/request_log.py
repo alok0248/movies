@@ -44,6 +44,9 @@ SKIP_PREFIXES = (
     '/media/',
     '/admin-dashboard/health/',
     '/admin-dashboard/requests',
+    # The engagement beacon fires on every page leave — recording it would
+    # double the log and bury the page row it updates.
+    '/ajax/page-activity',
 )
 
 
@@ -247,7 +250,7 @@ def _as_int(value):
 
 def filter_requests(category=None, method=None, status=None, status_code=None,
                     q=None, min_duration=None, min_size=None, on_date=None,
-                    **field_filters):
+                    min_time=None, min_clicks=None, **field_filters):
     """Build the RequestLog queryset for the given filter conditions.
 
     Every stored field has a condition: ``category``/``method``/``status``
@@ -281,6 +284,12 @@ def filter_requests(category=None, method=None, status=None, status_code=None,
     size = _as_int(min_size)
     if size is not None:
         qs = qs.filter(response_size__gte=size)
+    time_on = _as_int(min_time)
+    if time_on is not None:
+        qs = qs.filter(time_on_page_ms__gte=time_on)
+    clicks = _as_int(min_clicks)
+    if clicks is not None:
+        qs = qs.filter(click_count__gte=clicks)
     if on_date:
         try:
             from datetime import datetime
@@ -307,6 +316,48 @@ def filter_requests(category=None, method=None, status=None, status_code=None,
 def recent_requests(limit=300, **filters):
     """Newest first, applying any of the filter_requests conditions."""
     return list(filter_requests(**filters)[:limit])
+
+
+def record_page_activity(path, client_ip, time_ms=0, clicks=0, window_minutes=120):
+    """Attach browser-reported engagement to the newest matching page row.
+
+    The beacon arrives after the page view was already logged, so we match the
+    most recent page request for this path from this IP within a recent window.
+    Returns the updated row id, or None. Never raises.
+    """
+    try:
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import RequestLog
+
+        path = (path or '')[:500]
+        if not path:
+            return None
+        try:
+            time_ms = max(0, min(int(time_ms), 24 * 60 * 60 * 1000))
+        except (TypeError, ValueError):
+            time_ms = 0
+        try:
+            clicks = max(0, min(int(clicks), 100000))
+        except (TypeError, ValueError):
+            clicks = 0
+
+        since = timezone.now() - timedelta(minutes=window_minutes)
+        row = (RequestLog.objects
+               .filter(category='page', path=path,
+                       client_ip=(client_ip or '')[:64],
+                       created_at__gte=since)
+               .order_by('-created_at')
+               .first())
+        if row is None:
+            return None
+        row.time_on_page_ms = time_ms
+        row.click_count = clicks
+        row.save(update_fields=['time_on_page_ms', 'click_count'])
+        return row.id
+    except Exception:
+        logger.debug('RequestLog: could not record page activity', exc_info=True)
+        return None
 
 
 def request_total():
@@ -348,4 +399,6 @@ def request_to_dict(rec):
         'duration_ms': rec.duration_ms,
         'request_body': rec.request_body,
         'response_size': rec.response_size,
+        'time_on_page_ms': rec.time_on_page_ms,
+        'click_count': rec.click_count,
     }

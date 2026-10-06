@@ -4374,6 +4374,79 @@
             }, true);
         })();
     </script>
+
+    <script>
+        // Page engagement: how long the visitor stayed on the page and how many
+        // clicks they made. Sent once (beacon) when they leave, and attached to
+        // this page view's row in the admin Request Log.
+        (function () {
+            try {
+                var path = window.location.pathname || '';
+                // Only real content pages — admin and dashboard beacons have no
+                // page row to attach to.
+                if (path.indexOf('/admin-dashboard') === 0 || path.indexOf('/admin/') === 0) return;
+
+                var ENDPOINT = '{% url "ajax_page_activity" %}';
+                var clicks = 0;
+                var activeStart = Date.now();
+                var accumulated = 0;
+                var sent = false;
+
+                document.addEventListener('click', function (e) {
+                    try {
+                        if (typeof e.isTrusted === 'boolean' && !e.isTrusted) return;
+                        clicks++;
+                    } catch (err) {}
+                }, true);
+
+                document.addEventListener('visibilitychange', function () {
+                    try {
+                        if (document.hidden) {
+                            accumulated += Date.now() - activeStart;
+                        } else {
+                            activeStart = Date.now();
+                        }
+                    } catch (e) {}
+                });
+
+                function totalTime() {
+                    var t = accumulated;
+                    if (!document.hidden) t += Date.now() - activeStart;
+                    return t;
+                }
+
+                function send() {
+                    if (sent) return;
+                    sent = true;
+                    var payload = JSON.stringify({
+                        path: path,
+                        time_ms: Math.round(totalTime()),
+                        clicks: clicks
+                    });
+                    try {
+                        if (navigator.sendBeacon) {
+                            var ok = navigator.sendBeacon(
+                                ENDPOINT,
+                                new Blob([payload], { type: 'application/json' })
+                            );
+                            if (ok) return;
+                        }
+                    } catch (e) {}
+                    try {
+                        fetch(ENDPOINT, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: payload,
+                            keepalive: true
+                        }).catch(function () {});
+                    } catch (e) {}
+                }
+
+                window.addEventListener('pagehide', send);
+                window.addEventListener('beforeunload', send);
+            } catch (e) {}
+        })();
+    </script>
     {% block extra_js %}{% endblock %}
 
 {% if site_settings.dev_mode_protection %}

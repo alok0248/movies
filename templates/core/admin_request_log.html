@@ -243,6 +243,12 @@
             <label>Min response size (B)
                 <input type="number" name="min_size" value="{{ filters.min_size }}" placeholder="e.g. 500">
             </label>
+            <label>Min time on page (ms)
+                <input type="number" name="min_time" value="{{ filters.min_time }}" placeholder="e.g. 30000">
+            </label>
+            <label>Min clicks on page
+                <input type="number" name="min_clicks" value="{{ filters.min_clicks }}" placeholder="e.g. 5">
+            </label>
             <label>View name
                 <input type="text" name="view_name" value="{{ filters.view_name }}" placeholder="contains…">
             </label>
@@ -277,6 +283,8 @@
                     <th>Username</th>
                     <th>Duration (ms)</th>
                     <th>Size (B)</th>
+                    <th>Time on page (ms)</th>
+                    <th>Clicks</th>
                     <th>View name</th>
                     <th>Referer</th>
                     <th>User-Agent</th>
@@ -296,13 +304,15 @@
                     <td>{{ rec.username|default:"" }}</td>
                     <td class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }}</td>
                     <td>{{ rec.response_size }}</td>
+                    <td>{{ rec.time_on_page_ms }}</td>
+                    <td>{{ rec.click_count }}</td>
                     <td class="rl-view">{{ rec.view_name|default:"" }}</td>
                     <td class="rl-trunc" title="{{ rec.referer }}">{{ rec.referer|default:"" }}</td>
                     <td class="rl-trunc" title="{{ rec.user_agent }}">{{ rec.user_agent|default:"" }}</td>
                     <td class="rl-mono rl-trunc" title="{{ rec.request_body }}">{{ rec.request_body|default:"" }}</td>
                 </tr>
                 {% empty %}
-                <tr><td class="rl-empty-row" colspan="14">No requests match these filters.</td></tr>
+                <tr><td class="rl-empty-row" colspan="16">No requests match these filters.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -372,6 +382,8 @@
             <i class="fas fa-network-wired"></i>{{ rec.client_ip|default:"—" }}
             <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
             {% if rec.response_size %}<span class="ms-3"><i class="fas fa-download"></i>{{ rec.response_size }} B</span>{% endif %}
+            {% if rec.time_on_page_ms %}<span class="ms-3"><i class="fas fa-hourglass-half"></i>{{ rec.time_on_page_ms }} ms on page</span>{% endif %}
+            {% if rec.click_count %}<span class="ms-3"><i class="fas fa-mouse-pointer"></i>{{ rec.click_count }} clicks</span>{% endif %}
             {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
             {% if rec.referer %}<span class="ms-3"><i class="fas fa-link"></i>{{ rec.referer }}</span>{% endif %}
         </div>

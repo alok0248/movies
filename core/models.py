@@ -2583,6 +2583,10 @@ class RequestLog(models.Model):
     request_body = models.TextField(blank=True, default='')
     # Response body size in bytes (from Content-Length when available).
     response_size = models.PositiveIntegerField(default=0)
+    # Engagement for page views, reported by the browser after the visit:
+    # active time spent on the page and how many clicks the visitor made.
+    time_on_page_ms = models.PositiveIntegerField(default=0)
+    click_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']

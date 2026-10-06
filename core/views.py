@@ -8529,6 +8529,8 @@ def request_log(request):
         'q': clean('q'),
         'min_duration': clean('min_duration', 12),
         'min_size': clean('min_size', 12),
+        'min_time': clean('min_time', 12),
+        'min_clicks': clean('min_clicks', 12),
         'on_date': clean('on_date', 10),
     }
     for field in FIELD_FILTERS:
@@ -8553,15 +8555,16 @@ def request_log(request):
         writer.writerow([
             'Time', 'Method', 'Status', 'Category', 'Path', 'Query',
             'Client IP', 'Username', 'Duration (ms)', 'Response size (B)',
-            'View', 'Referer', 'User-Agent', 'Payload',
+            'Time on page (ms)', 'Clicks', 'View', 'Referer', 'User-Agent',
+            'Payload',
         ])
         for r in records:
             writer.writerow([
                 r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 r.method, r.status_code, r.get_category_display(),
                 r.path, r.query, r.client_ip, r.username, r.duration_ms,
-                r.response_size, r.view_name, r.referer, r.user_agent,
-                r.request_body,
+                r.response_size, r.time_on_page_ms, r.click_count,
+                r.view_name, r.referer, r.user_agent, r.request_body,
             ])
         return response
 
@@ -8579,6 +8582,30 @@ def request_log(request):
         'status': status,
         'q': filters['q'],
     })
+
+
+@csrf_exempt
+@require_POST
+def ajax_page_activity(request):
+    """Beacon: attach time-on-page and click count to the matching page row.
+
+    Sent by the site's own JS when a visitor leaves a page. Anonymous, so no
+    login is required; it only ever updates an existing page row.
+    """
+    from .request_log import record_page_activity, _client_ip as _rl_client_ip
+    try:
+        data = json.loads(request.body or b'{}')
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    record_page_activity(
+        path=data.get('path') or '',
+        client_ip=_rl_client_ip(request),
+        time_ms=data.get('time_ms'),
+        clicks=data.get('clicks'),
+    )
+    return JsonResponse({'status': 'success'})
 
 
 @_guard_android_api_errors
