@@ -88,9 +88,9 @@
 
     <div class="row g-3 mb-3">
         <div class="col-6 col-md-3 col-xl-2">
-            <div class="au-card au-stat">
+            <div class="au-card au-stat" title="Rows matching the filters above">
                 <div class="au-num">{{ total_rows }}</div>
-                <div class="au-lbl">Identities</div>
+                <div class="au-lbl">In list</div>
             </div>
         </div>
         <div class="col-6 col-md-3 col-xl-2">
@@ -106,9 +106,9 @@
             </div>
         </div>
         <div class="col-6 col-md-3 col-xl-2">
-            <div class="au-card au-stat">
+            <div class="au-card au-stat" title="{% if bot_hidden %}Scanners kept out of the list below{% else %}Scanner rows in the list below{% endif %}">
                 <div class="au-num" style="color:#f87171;">{{ bot_total }}</div>
-                <div class="au-lbl">Bots / scanners</div>
+                <div class="au-lbl">{% if bot_hidden %}Bots hidden{% else %}Bots / scanners{% endif %}</div>
             </div>
         </div>
         <div class="col-6 col-md-3 col-xl-2">
@@ -134,7 +134,7 @@
     <div class="au-card p-3 mb-3">
         <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
             <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">Platform</span>
-            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ total_rows }}</span></a>
+            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ scope_total }}</span> <span style="color:#22c55e;">{{ scope_active }} live</span></a>
             <a class="au-chip {% if platform == 'web' %}on{% endif %}" href="?platform=web&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web <span style="opacity:.6;">{{ platform_counts.web|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.web|default:0 }} live</span></a>
             <a class="au-chip {% if platform == 'android' %}on{% endif %}" href="?platform=android&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-android" style="color:#22c55e;"></i> Android <span style="opacity:.6;">{{ platform_counts.android|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.android|default:0 }} live</span></a>
             <a class="au-chip {% if platform == 'ios' %}on{% endif %}" href="?platform=ios&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-apple" style="color:#c084fc;"></i> iOS <span style="opacity:.6;">{{ platform_counts.ios|default:0 }}</span></a>

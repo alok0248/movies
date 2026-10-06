@@ -10712,38 +10712,60 @@ def admin_active_users(request):
             row['display_name'] = 'Anonymous'
 
     all_rows = list(rows.values())
+
+    # Every number on the page is counted from exactly the rows the table is
+    # showing, so a card can never disagree with the list below it. Bots are
+    # part of that population, which is why the Active card used to look too
+    # high while bots were filtered out of the list.
+    needle = search.lower()
+
+    def _matches(row):
+        if not needle:
+            return True
+        haystack = ' '.join(str(row.get(f) or '') for f in (
+            'display_name', 'username', 'email', 'ip', 'device_model',
+            'os_version', 'app_version', 'app_name', 'last_path',
+            'last_title', 'user_agent', 'visitor_id', 'device_uid',
+            'platform', 'referrer')).lower()
+        return needle in haystack
+
+    def _in_scope(row, apply_bots=True, apply_platform=True, apply_status=True):
+        if apply_bots:
+            if bots == 'hide' and row['is_bot']:
+                return False
+            if bots == 'only' and not row['is_bot']:
+                return False
+        if apply_platform and platform != 'all' and row['platform'] != platform:
+            return False
+        if apply_status:
+            if status == 'active' and not row['is_active']:
+                return False
+            if status == 'inactive' and row['is_active']:
+                return False
+        return _matches(row)
+
+    # --- filter / sort ------------------------------------------------------
+    filtered = [r for r in all_rows if _in_scope(r)]
+
+    # The platform chips describe what each platform would show under the
+    # current filters, so they ignore the platform filter itself.
     platform_counts = {}
     active_platform = {}
     for row in all_rows:
+        if not _in_scope(row, apply_platform=False):
+            continue
         platform_counts[row['platform']] = platform_counts.get(row['platform'], 0) + 1
         if row['is_active']:
             active_platform[row['platform']] = active_platform.get(row['platform'], 0) + 1
-    active_total = sum(1 for r in all_rows if r['is_active'])
-    bot_total = sum(1 for r in all_rows if r['is_bot'])
 
-    # --- filter / sort ------------------------------------------------------
-    filtered = []
-    needle = search.lower()
-    for row in all_rows:
-        if bots == 'hide' and row['is_bot']:
-            continue
-        if bots == 'only' and not row['is_bot']:
-            continue
-        if platform != 'all' and row['platform'] != platform:
-            continue
-        if status == 'active' and not row['is_active']:
-            continue
-        if status == 'inactive' and row['is_active']:
-            continue
-        if needle:
-            haystack = ' '.join(str(row.get(f) or '') for f in (
-                'display_name', 'username', 'email', 'ip', 'device_model',
-                'os_version', 'app_version', 'app_name', 'last_path',
-                'last_title', 'user_agent', 'visitor_id', 'device_uid',
-                'platform', 'referrer')).lower()
-            if needle not in haystack:
-                continue
-        filtered.append(row)
+    total_rows = len(filtered)
+    active_total = sum(1 for r in filtered if r['is_active'])
+    inactive_total = total_rows - active_total
+    # While bots are hidden the card reports how many were kept out of the
+    # list; otherwise it is just the number of bot rows on screen.
+    hidden_bots = sum(1 for r in all_rows
+                      if r['is_bot'] and _in_scope(r, apply_bots=False))
+    bot_total = hidden_bots if bots == 'hide' else sum(1 for r in filtered if r['is_bot'])
 
     sort_keys = {
         'user': lambda r: (r['display_name'] or '').lower(),
@@ -10789,15 +10811,18 @@ def admin_active_users(request):
         'shown': len(displayed),
         'row_total': len(filtered),
         'max_display': max_display,
-        'total_rows': len(all_rows),
+        'total_rows': total_rows,
         'active_total': active_total,
-        'inactive_total': len(all_rows) - active_total,
+        'inactive_total': inactive_total,
         'bot_total': bot_total,
+        'bot_hidden': bots == 'hide',
         'bots': bots,
         'platform_counts': platform_counts,
         'active_platform': active_platform,
-        'total_time': sum(r['total_time'] for r in all_rows),
-        'total_clicks': sum(r['clicks'] for r in all_rows),
+        'scope_total': sum(platform_counts.values()),
+        'scope_active': sum(active_platform.values()),
+        'total_time': sum(r['total_time'] for r in filtered),
+        'total_clicks': sum(r['clicks'] for r in filtered),
         'platform': platform,
         'status': status,
         'hours': hours,
