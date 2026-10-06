@@ -8492,19 +8492,28 @@ def api_error_log(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def request_log(request):
-    """Admin page: every incoming request — IP, page, method, status, timing."""
+    """Admin page: every incoming request — IP, page, method, status, timing.
+
+    Renders as cards or as a spreadsheet-style table (``?view=table``) with a
+    filter condition on every column, and exports JSON or CSV with the same
+    filters applied.
+    """
+    import csv
+    from django.http import HttpResponse
     from .request_log import (recent_requests, clear_requests, request_total,
-                              request_to_dict)
+                              request_to_dict, FIELD_FILTERS)
 
     if request.method == 'POST':
         if request.POST.get('action') == 'clear':
             clear_requests()
         return redirect('request_log')
 
-    category = (request.GET.get('category') or '').strip()
-    method = (request.GET.get('method') or '').strip().upper()
-    status = (request.GET.get('status') or '').strip()
-    q = (request.GET.get('q') or '').strip()
+    def clean(name, maxlen=200):
+        return (request.GET.get(name) or '').strip()[:maxlen]
+
+    category = clean('category', 10)
+    method = clean('method', 10).upper()
+    status = clean('status', 10)
     if category not in ('page', 'api', 'admin'):
         category = ''
     if method not in ('GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'):
@@ -8512,25 +8521,63 @@ def request_log(request):
     if status not in ('2xx', '3xx', '4xx', '5xx'):
         status = ''
 
-    records = recent_requests(limit=300, category=category, method=method,
-                              status=status, q=q)
+    filters = {
+        'category': category,
+        'method': method,
+        'status': status,
+        'status_code': clean('status_code', 6),
+        'q': clean('q'),
+        'min_duration': clean('min_duration', 12),
+        'min_size': clean('min_size', 12),
+        'on_date': clean('on_date', 10),
+    }
+    for field in FIELD_FILTERS:
+        filters[field] = clean(field)
+
+    records = recent_requests(limit=500, **filters)
+
     if request.GET.get('format') == 'json':
         return JsonResponse({
             'status': 'success',
             'count': len(records),
-            'filters': {'category': category, 'method': method,
-                        'status': status, 'q': q},
+            'filters': {k: v for k, v in filters.items() if v},
             'requests': [request_to_dict(r) for r in records],
         })
 
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="request_log.csv"'
+        # BOM so Excel opens the UTF-8 file without mangling accented data.
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow([
+            'Time', 'Method', 'Status', 'Category', 'Path', 'Query',
+            'Client IP', 'Username', 'Duration (ms)', 'Response size (B)',
+            'View', 'Referer', 'User-Agent', 'Payload',
+        ])
+        for r in records:
+            writer.writerow([
+                r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                r.method, r.status_code, r.get_category_display(),
+                r.path, r.query, r.client_ip, r.username, r.duration_ms,
+                r.response_size, r.view_name, r.referer, r.user_agent,
+                r.request_body,
+            ])
+        return response
+
+    view_mode = 'table' if request.GET.get('view') == 'table' else 'cards'
     return render(request, 'core/admin_request_log.html', {
         'records': records,
         'count': len(records),
         'total': request_total(),
+        'view_mode': view_mode,
+        'filters': filters,
+        'methods': ('GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'),
+        # Keep the old context keys so the card view's chips still work.
         'category': category,
         'method': method,
         'status': status,
-        'q': q,
+        'q': filters['q'],
     })
 
 

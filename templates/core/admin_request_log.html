@@ -70,6 +70,55 @@
     .rl-chip:hover { color: var(--text, #e2e8f0); border-color: rgba(148,163,184,.4); }
     .rl-chip.active { background: rgba(96,165,250,.18); color: #93c5fd; border-color: rgba(96,165,250,.4); }
 
+    /* Spreadsheet / Excel-style table view */
+    .rl-filtergrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: .5rem .7rem;
+    }
+    .rl-filtergrid label {
+        display: flex;
+        flex-direction: column;
+        gap: .15rem;
+        font-size: .68rem;
+        color: var(--text-3, #64748b);
+    }
+    .rl-filtergrid input, .rl-filtergrid select {
+        width: 100%;
+        background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px;
+        color: inherit;
+        font-size: .72rem;
+        padding: .3rem .45rem;
+    }
+    .rl-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .rl-tablewrap {
+        overflow: auto;
+        max-height: 72vh;
+        border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px;
+        background: var(--card-bg, #1a1a2e);
+    }
+    .rl-table { width: 100%; border-collapse: collapse; font-size: .72rem; white-space: nowrap; }
+    .rl-table th, .rl-table td {
+        padding: .4rem .6rem;
+        border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
+        text-align: left;
+    }
+    .rl-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--surface, #16213e);
+        color: var(--text-2, #cbd5e1);
+        font-weight: 600;
+    }
+    .rl-table tbody tr:hover { background: var(--surface-hover, rgba(148,163,184,.07)); }
+    .rl-mono { font-family: Consolas, Menlo, monospace; }
+    .rl-trunc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+    .rl-table .rl-empty-row { text-align: center; color: #64748b; padding: 32px 8px; }
+
     html[data-theme="light"] .rl-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(20,20,45,.05); }
     html[data-theme="light"] .rl-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
     html[data-theme="light"] .rl-path { color: #0f172a; }
@@ -86,6 +135,10 @@
     html[data-theme="light"] .rl-status-s2 { background: rgba(5,150,105,.12); color: #047857; }
     html[data-theme="light"] .rl-status-s4 { background: rgba(180,83,9,.12); color: #b45309; }
     html[data-theme="light"] .rl-status-s5 { background: rgba(185,28,28,.12); color: #b91c1c; }
+    html[data-theme="light"] .rl-tablewrap { background: #ffffff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .rl-table thead th { background: #f1f5f9; color: #334155; }
+    html[data-theme="light"] .rl-table th, html[data-theme="light"] .rl-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .rl-filtergrid input, html[data-theme="light"] .rl-filtergrid select { border-color: rgba(0,0,0,.18); }
 </style>
 
 <div class="container py-4" style="max-width:1100px;">
@@ -110,17 +163,151 @@
                 <i class="fas fa-info-circle me-1"></i>Saved to the database — survives restarts. API/Ajax payloads are kept with secrets (password, token, OTP) masked.
             </span>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" onclick="rlSetView('cards')" class="btn btn-sm" style="border-radius:8px;{% if view_mode == 'cards' %}color:#60a5fa;background:rgba(96,165,250,.16);border:1px solid rgba(96,165,250,.4);{% else %}color:#94a3b8;background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.22);{% endif %}"><i class="fas fa-th-large me-1"></i>Cards</button>
+            <button type="button" onclick="rlSetView('table')" class="btn btn-sm" style="border-radius:8px;{% if view_mode == 'table' %}color:#34d399;background:rgba(52,211,153,.16);border:1px solid rgba(52,211,153,.4);{% else %}color:#94a3b8;background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.22);{% endif %}"><i class="fas fa-table me-1"></i>Table / Excel</button>
+            <button type="button" onclick="rlExport('csv')" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</button>
             <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
-            <a href="{% url 'request_log' %}?format=json" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</a>
+            <button type="button" onclick="rlExport('json')" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</button>
             <form method="post" action="{% url 'request_log' %}" onsubmit="return confirm('Clear all recorded requests? This cannot be undone.');" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="clear">
                 <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>
             </form>
         </div>
+        <script>
+            function rlSetView(mode) {
+                var u = new URL(window.location.href);
+                u.searchParams.set('view', mode);
+                window.location.href = u.toString();
+            }
+            function rlExport(fmt) {
+                var u = new URL(window.location.href);
+                u.searchParams.set('format', fmt);
+                window.location.href = u.toString();
+            }
+        </script>
     </div>
 
+{% if view_mode == 'table' %}
+    <form method="get" class="rl-tableform mb-3">
+        <input type="hidden" name="view" value="table">
+        <div class="rl-filtergrid mb-2">
+            <label>Search all fields
+                <input type="text" name="q" value="{{ filters.q }}" placeholder="any word…">
+            </label>
+            <label>Date
+                <input type="date" name="on_date" value="{{ filters.on_date }}">
+            </label>
+            <label>Method
+                <select name="method">
+                    <option value="">All</option>
+                    {% for m in methods %}<option value="{{ m }}" {% if filters.method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>Status class
+                <select name="status">
+                    <option value="">All</option>
+                    <option value="2xx" {% if filters.status == '2xx' %}selected{% endif %}>2xx</option>
+                    <option value="3xx" {% if filters.status == '3xx' %}selected{% endif %}>3xx</option>
+                    <option value="4xx" {% if filters.status == '4xx' %}selected{% endif %}>4xx</option>
+                    <option value="5xx" {% if filters.status == '5xx' %}selected{% endif %}>5xx</option>
+                </select>
+            </label>
+            <label>Status code
+                <input type="number" name="status_code" value="{{ filters.status_code }}" placeholder="e.g. 404">
+            </label>
+            <label>Category
+                <select name="category">
+                    <option value="">All</option>
+                    <option value="page" {% if filters.category == 'page' %}selected{% endif %}>Page</option>
+                    <option value="api" {% if filters.category == 'api' %}selected{% endif %}>API / Ajax</option>
+                    <option value="admin" {% if filters.category == 'admin' %}selected{% endif %}>Admin</option>
+                </select>
+            </label>
+            <label>Path
+                <input type="text" name="path" value="{{ filters.path }}" placeholder="contains…">
+            </label>
+            <label>Query string
+                <input type="text" name="query" value="{{ filters.query }}" placeholder="contains…">
+            </label>
+            <label>Client IP
+                <input type="text" name="client_ip" value="{{ filters.client_ip }}" placeholder="contains…">
+            </label>
+            <label>Username
+                <input type="text" name="username" value="{{ filters.username }}" placeholder="contains…">
+            </label>
+            <label>Min duration (ms)
+                <input type="number" name="min_duration" value="{{ filters.min_duration }}" placeholder="e.g. 1000">
+            </label>
+            <label>Min response size (B)
+                <input type="number" name="min_size" value="{{ filters.min_size }}" placeholder="e.g. 500">
+            </label>
+            <label>View name
+                <input type="text" name="view_name" value="{{ filters.view_name }}" placeholder="contains…">
+            </label>
+            <label>Referer
+                <input type="text" name="referer" value="{{ filters.referer }}" placeholder="contains…">
+            </label>
+            <label>User-Agent
+                <input type="text" name="user_agent" value="{{ filters.user_agent }}" placeholder="contains…">
+            </label>
+            <label>Payload
+                <input type="text" name="request_body" value="{{ filters.request_body }}" placeholder="contains…">
+            </label>
+        </div>
+        <div class="rl-toolbar">
+            <button type="submit" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply filters</button>
+            <a href="?view=table" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-times me-1"></i>Reset</a>
+            <span style="color:#64748b;font-size:.72rem;">Filters combine (AND). Every field has its own condition.</span>
+        </div>
+    </form>
+
+    <div class="rl-tablewrap">
+        <table class="rl-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>Category</th>
+                    <th>Path</th>
+                    <th>Query</th>
+                    <th>Client IP</th>
+                    <th>Username</th>
+                    <th>Duration (ms)</th>
+                    <th>Size (B)</th>
+                    <th>View name</th>
+                    <th>Referer</th>
+                    <th>User-Agent</th>
+                    <th>Payload</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in records %}
+                <tr>
+                    <td class="rl-mono">{{ rec.created_at|date:"Y-m-d H:i:s" }}</td>
+                    <td><span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span></td>
+                    <td><span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %}">{{ rec.status_code }}</span></td>
+                    <td><span class="rl-badge rl-cat-{{ rec.category }}">{{ rec.get_category_display }}</span></td>
+                    <td class="rl-mono rl-trunc" title="{{ rec.path }}">{{ rec.path }}</td>
+                    <td class="rl-mono rl-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
+                    <td class="rl-mono">{{ rec.client_ip|default:"—" }}</td>
+                    <td>{{ rec.username|default:"" }}</td>
+                    <td class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }}</td>
+                    <td>{{ rec.response_size }}</td>
+                    <td class="rl-view">{{ rec.view_name|default:"" }}</td>
+                    <td class="rl-trunc" title="{{ rec.referer }}">{{ rec.referer|default:"" }}</td>
+                    <td class="rl-trunc" title="{{ rec.user_agent }}">{{ rec.user_agent|default:"" }}</td>
+                    <td class="rl-mono rl-trunc" title="{{ rec.request_body }}">{{ rec.request_body|default:"" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td class="rl-empty-row" colspan="14">No requests match these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
     <form method="get" class="rl-filters mb-3">
         <a href="?method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
            class="rl-chip {% if not category %}active{% endif %}">All</a>
@@ -198,5 +385,6 @@
         <div style="font-size:.82rem;color:#475569;margin-top:4px;">Incoming requests are recorded automatically as traffic hits the site.</div>
     </div>
     {% endfor %}
+{% endif %}
 </div>
 {% endblock %}

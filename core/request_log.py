@@ -230,10 +230,31 @@ def prune():
         logger.debug('RequestLog: prune failed', exc_info=True)
 
 
-def recent_requests(limit=300, category=None, method=None, status=None, q=None):
-    """Newest requests first, optionally filtered by category ('page'/'api'/
-    'admin'), HTTP method, status class ('2xx'/'3xx'/'4xx'/'5xx') and a
-    free-text query."""
+# Text fields that support a per-column 'contains' filter (the spreadsheet
+# view exposes an input for every one of these).
+FIELD_FILTERS = (
+    'path', 'query', 'client_ip', 'username', 'user_agent', 'referer',
+    'view_name', 'request_body',
+)
+
+
+def _as_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def filter_requests(category=None, method=None, status=None, status_code=None,
+                    q=None, min_duration=None, min_size=None, on_date=None,
+                    **field_filters):
+    """Build the RequestLog queryset for the given filter conditions.
+
+    Every stored field has a condition: ``category``/``method``/``status``
+    (class) selects, exact ``status_code``, a ``min_duration`` and ``min_size``
+    threshold, an ``on_date`` day, a per-column 'contains' filter for each of
+    FIELD_FILTERS, and a free-text ``q`` across all of them.
+    """
     from django.db.models import Q
     from .models import RequestLog
 
@@ -250,6 +271,29 @@ def recent_requests(limit=300, category=None, method=None, status=None, q=None):
         qs = qs.filter(status_code__gte=400, status_code__lt=500)
     elif status == '5xx':
         qs = qs.filter(status_code__gte=500)
+
+    code = _as_int(status_code)
+    if code is not None:
+        qs = qs.filter(status_code=code)
+    dur = _as_int(min_duration)
+    if dur is not None:
+        qs = qs.filter(duration_ms__gte=dur)
+    size = _as_int(min_size)
+    if size is not None:
+        qs = qs.filter(response_size__gte=size)
+    if on_date:
+        try:
+            from datetime import datetime
+            datetime.strptime(on_date, '%Y-%m-%d')
+            qs = qs.filter(created_at__date=on_date)
+        except (ValueError, TypeError):
+            pass
+
+    for field in FIELD_FILTERS:
+        value = field_filters.get(field)
+        if value:
+            qs = qs.filter(**{f'{field}__icontains': value})
+
     if q:
         qs = qs.filter(
             Q(path__icontains=q) | Q(query__icontains=q) | Q(client_ip__icontains=q)
@@ -257,7 +301,12 @@ def recent_requests(limit=300, category=None, method=None, status=None, q=None):
             | Q(view_name__icontains=q) | Q(referer__icontains=q)
             | Q(request_body__icontains=q)
         )
-    return list(qs[:limit])
+    return qs
+
+
+def recent_requests(limit=300, **filters):
+    """Newest first, applying any of the filter_requests conditions."""
+    return list(filter_requests(**filters)[:limit])
 
 
 def request_total():
