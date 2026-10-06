@@ -10061,6 +10061,9 @@ def admin_analytics(request):
         count = UserPageView.objects.filter(viewed_at__date=d).count()
         daily_views.append({'date': d.isoformat(), 'views': count})
     daily_views.reverse()
+    # The template draws each bar as a share of the busiest day, otherwise the
+    # bar height would be the raw view count in pixels and burst out of the card.
+    max_daily_views = max((d['views'] for d in daily_views), default=0)
 
     # Hourly heatmap data (today)
     hourly_views = list(UserPageView.objects.filter(
@@ -10082,6 +10085,8 @@ def admin_analytics(request):
         'active_users': active_users,
         'active_sessions': active_sessions,
         'daily_views': daily_views,
+        'max_daily_views': max_daily_views,
+        'daily_days': len(daily_views),
         'hourly_views': hourly_views,
     })
 
@@ -10354,6 +10359,7 @@ def admin_user_analytics_detail(request, user_id):
         count = user_views.filter(viewed_at__date=d).count()
         daily_views.append({'date': d.isoformat(), 'views': count})
     daily_views.reverse()
+    max_daily_views = max((d['views'] for d in daily_views), default=0)
 
     # Sessions
     sessions = UserSession.objects.filter(user=target_user).order_by('-logged_in_at')[:20]
@@ -10369,6 +10375,7 @@ def admin_user_analytics_detail(request, user_id):
         'top_pages': top_pages,
         'platform_data': platform_data,
         'daily_views': daily_views,
+        'max_daily_views': max_daily_views,
         'sessions': sessions,
         'recent_views': recent_views,
     })

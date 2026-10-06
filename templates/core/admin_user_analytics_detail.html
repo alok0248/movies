@@ -99,7 +99,7 @@
             <div class="d-flex align-items-end gap-1" style="height:80px;">
                 {% for d in daily_views %}
                 <div class="flex-fill text-center" title="{{ d.date }}: {{ d.views }}" style="min-width:0;">
-                    <div style="height:{% if d.views %}{% widthratio d.views 1 1 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#818cf8,#a855f7);border-radius:3px 3px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};"></div>
+                    <div style="height:{% if d.views %}{% widthratio d.views max_daily_views 76 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#818cf8,#a855f7);border-radius:3px 3px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};"></div>
                 </div>
                 {% endfor %}
             </div>

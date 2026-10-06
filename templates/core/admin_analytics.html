@@ -183,11 +183,11 @@
 
     <div class="col-md-8">
         <div class="stat-card h-100">
-            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-chart-area me-2 text-info"></i>Daily Views ({{ days }} days)</h6>
+            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-chart-area me-2 text-info"></i>Daily Views ({{ daily_days }} days)</h6>
             <div class="d-flex align-items-end gap-1" style="height:120px;">
                 {% for d in daily_views %}
                 <div class="flex-fill text-center" title="{{ d.date }}: {{ d.views }} views" style="min-width:0;">
-                    <div style="height:{% if d.views %}{% widthratio d.views 1 1 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#3b82f6,#818cf8);border-radius:4px 4px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};transition:height .5s;width:100%;"></div>
+                    <div style="height:{% if d.views %}{% widthratio d.views max_daily_views 96 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#3b82f6,#818cf8);border-radius:4px 4px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};transition:height .5s;width:100%;"></div>
                     <small class="text-secondary" style="font-size:.6rem;">{{ d.date|slice:"-5:" }}</small>
                 </div>
                 {% endfor %}
