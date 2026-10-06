@@ -1,0 +1,283 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Active Users - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .au-card {
+        background: var(--card-bg, #1a1a2e);
+        border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px;
+    }
+    .au-stat { padding: 1rem; }
+    .au-stat .au-num { font-size: 1.6rem; font-weight: 700; color: var(--text, #e2e8f0); line-height: 1.1; }
+    .au-stat .au-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3, #64748b); }
+    .au-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .au-dot.active { background: #22c55e; animation: au-pulse 2s infinite; }
+    .au-dot.inactive { background: #6b7280; }
+    @keyframes au-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .au-badge {
+        display: inline-block; font-size: .65rem; font-weight: 700; padding: 2px 8px;
+        border-radius: 4px; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .au-b-active { background: rgba(34,197,94,.15); color: #22c55e; }
+    .au-b-inactive { background: rgba(107,114,128,.2); color: #9ca3af; }
+    .au-b-web { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .au-b-android { background: rgba(34,197,94,.15); color: #34d399; }
+    .au-b-ios { background: rgba(168,85,247,.15); color: #c084fc; }
+    .au-b-other { background: rgba(148,163,184,.15); color: #94a3b8; }
+    .au-tablewrap { overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; background: var(--card-bg, #1a1a2e); }
+    .au-table { width: 100%; border-collapse: collapse; font-size: .74rem; white-space: nowrap; }
+    .au-table th, .au-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06)); text-align: left; vertical-align: middle; }
+    .au-table thead th { background: var(--surface, #16213e); color: var(--text-2, #cbd5e1); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .au-table thead th.sortable { cursor: pointer; user-select: none; }
+    .au-table thead th.sortable:hover { color: #93c5fd; }
+    .au-table tbody tr:hover { background: rgba(148,163,184,.07); }
+    .au-mono { font-family: Consolas, Menlo, monospace; }
+    .au-trunc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    .au-user { font-weight: 600; color: var(--text, #e2e8f0); text-decoration: none; }
+    .au-user:hover { color: #93c5fd; }
+    .au-sub { color: var(--text-3, #64748b); font-size: .68rem; }
+    .au-infolink { color: #7dd3fc; text-decoration: none; border-bottom: 1px dotted rgba(125,211,252,.45); }
+    .au-infolink:hover { color: #bae6fd; }
+    .au-infolink i { font-size: .58rem; }
+    .au-filtergrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem .7rem; }
+    .au-filtergrid label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
+    .au-filtergrid input, .au-filtergrid select {
+        width: 100%; background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px; color: inherit; font-size: .72rem; padding: .3rem .45rem;
+    }
+    .au-chip {
+        display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .7rem;
+        border-radius: 8px; font-size: .72rem; font-weight: 600; text-decoration: none;
+        border: 1px solid var(--border, rgba(148,163,184,.25)); color: var(--text-2, #cbd5e1);
+    }
+    .au-chip.on { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.45); color: #93c5fd; }
+    .au-qtoggle { display: inline-flex; gap: .4rem; }
+    html[data-theme="light"] .au-tablewrap { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .au-table thead th { background: #f1f5f9; color: #334155; }
+    html[data-theme="light"] .au-table th, html[data-theme="light"] .au-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .au-stat .au-num { color: #0f172a; }
+    html[data-theme="light"] .au-user { color: #0f172a; }
+    html[data-theme="light"] .au-infolink { color: #0369a1; }
+    html[data-theme="light"] .au-infolink:hover { color: #075985; }
+</style>
+
+<div class="container-fluid py-4" style="max-width:1600px;">
+    <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <a href="{% url 'admin_analytics' %}?days=7" class="text-decoration-none" style="color:#38bdf8;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Analytics</a>
+            <div class="d-flex align-items-center gap-3 mt-2">
+                <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#38bdf8,#818cf8);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-users-viewfinder text-white" style="font-size:1.1rem;"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0" style="font-size:1.25rem;">Active &amp; Inactive Users</h3>
+                    <div style="color:#64748b;font-size:.82rem;">
+                        {% if platform != 'all' %}<span class="text-capitalize fw-bold" style="color:#93c5fd;">{{ platform }}</span> connections · {% endif %}
+                        Last {{ hours }}h window · active = seen in the last {{ minutes }} min
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="?{{ request.GET.urlencode }}&format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
+            <a href="{{ request.path }}?{% if platform != 'all' %}platform={{ platform }}&amp;{% endif %}status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num">{{ total_rows }}</div>
+                <div class="au-lbl">Identities</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num" style="color:#22c55e;">{{ active_total }}</div>
+                <div class="au-lbl">Active now</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num" style="color:#9ca3af;">{{ inactive_total }}</div>
+                <div class="au-lbl">Inactive</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num" style="color:#a855f7;">{{ total_time|floatformat:0 }}s</div>
+                <div class="au-lbl">Time on site</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num" style="color:#f59e0b;">{{ total_clicks }}</div>
+                <div class="au-lbl">Clicks</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="au-card au-stat">
+                <div class="au-num" style="color:#38bdf8;">{{ shown }}{% if row_total > shown %}<span style="font-size:.9rem;color:#64748b;">/{{ row_total }}</span>{% endif %}</div>
+                <div class="au-lbl">Shown</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="au-card p-3 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+            <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">Platform</span>
+            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ total_rows }}</span></a>
+            <a class="au-chip {% if platform == 'web' %}on{% endif %}" href="?platform=web&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web <span style="opacity:.6;">{{ platform_counts.web|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.web|default:0 }} live</span></a>
+            <a class="au-chip {% if platform == 'android' %}on{% endif %}" href="?platform=android&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-android" style="color:#22c55e;"></i> Android <span style="opacity:.6;">{{ platform_counts.android|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.android|default:0 }} live</span></a>
+            <a class="au-chip {% if platform == 'ios' %}on{% endif %}" href="?platform=ios&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-apple" style="color:#c084fc;"></i> iOS <span style="opacity:.6;">{{ platform_counts.ios|default:0 }}</span></a>
+            {% if platform_counts.unknown %}<a class="au-chip {% if platform == 'unknown' %}on{% endif %}" href="?platform=unknown&amp;status={{ status }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-question"></i> Unknown <span style="opacity:.6;">{{ platform_counts.unknown }}</span></a>{% endif %}
+        </div>
+        <form method="get" class="au-filtergrid">
+            <label>Platform
+                <select name="platform">
+                    <option value="all" {% if platform == 'all' %}selected{% endif %}>All platforms</option>
+                    <option value="web" {% if platform == 'web' %}selected{% endif %}>Web</option>
+                    <option value="android" {% if platform == 'android' %}selected{% endif %}>Android</option>
+                    <option value="ios" {% if platform == 'ios' %}selected{% endif %}>iOS</option>
+                    <option value="unknown" {% if platform == 'unknown' %}selected{% endif %}>Unknown</option>
+                </select>
+            </label>
+            <label>Status
+                <select name="status">
+                    <option value="all" {% if status == 'all' %}selected{% endif %}>Active + Inactive</option>
+                    <option value="active" {% if status == 'active' %}selected{% endif %}>Active only</option>
+                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive only</option>
+                </select>
+            </label>
+            <label>Seen within (hours)
+                <input type="number" name="hours" min="1" max="720" value="{{ hours }}">
+            </label>
+            <label>Active if seen in (min)
+                <input type="number" name="minutes" min="1" max="1440" value="{{ minutes }}">
+            </label>
+            <label>Sort by
+                <select name="sort">
+                    <option value="last_seen" {% if sort == 'last_seen' %}selected{% endif %}>Last seen</option>
+                    <option value="first_seen" {% if sort == 'first_seen' %}selected{% endif %}>First seen</option>
+                    <option value="time" {% if sort == 'time' %}selected{% endif %}>Time on site</option>
+                    <option value="views" {% if sort == 'views' %}selected{% endif %}>Page views</option>
+                    <option value="clicks" {% if sort == 'clicks' %}selected{% endif %}>Clicks</option>
+                    <option value="user" {% if sort == 'user' %}selected{% endif %}>Name</option>
+                </select>
+            </label>
+            <label>Direction
+                <select name="dir">
+                    <option value="desc" {% if dir == 'desc' %}selected{% endif %}>Descending</option>
+                    <option value="asc" {% if dir == 'asc' %}selected{% endif %}>Ascending</option>
+                </select>
+            </label>
+            <label>Search (user / IP / device / page)
+                <input type="text" name="q" value="{{ search }}" placeholder="username, IP, path...">
+            </label>
+            <label>&nbsp;
+                <button type="submit" class="btn btn-sm" style="color:#93c5fd;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
+            </label>
+            <label>&nbsp;
+                <a href="{% url 'admin_active_users' %}" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-eraser me-1"></i>Reset</a>
+            </label>
+        </form>
+    </div>
+
+    <div class="mb-2 d-flex align-items-center gap-2 flex-wrap">
+        <span style="font-size:.72rem;color:#64748b;">
+            {{ row_total }} match{{ row_total|pluralize:"es" }}{% if row_total > shown %} · showing newest {{ shown }}{% endif %}
+            · active if last seen after {{ active_cutoff|date:"H:i:s" }}
+        </span>
+    </div>
+
+    <div class="au-tablewrap">
+        <table class="au-table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th class="sortable" onclick="auSort('user')">User</th>
+                    <th class="sortable" onclick="auSort('platform')">Platform</th>
+                    <th>IP</th>
+                    <th>Device / OS</th>
+                    <th>App</th>
+                    <th class="sortable" onclick="auSort('views')">Views</th>
+                    <th class="sortable" onclick="auSort('time')">Time / Avg</th>
+                    <th class="sortable" onclick="auSort('clicks')">Clicks</th>
+                    <th>Scroll</th>
+                    <th>Last page</th>
+                    <th class="sortable" onclick="auSort('first_seen')">First seen</th>
+                    <th class="sortable" onclick="auSort('last_seen')">Last seen</th>
+                    <th>Logins</th>
+                    <th>Visits</th>
+                    <th>User agent</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>
+                        <span class="au-badge {% if r.is_active %}au-b-active{% else %}au-b-inactive{% endif %}">
+                            <span class="au-dot {% if r.is_active %}active{% else %}inactive{% endif %}"></span>
+                            {% if r.is_active %}Active{% else %}Inactive{% endif %}
+                        </span>
+                        {% if r.on_page %}<div class="au-sub" style="color:#22c55e;">on page now</div>{% endif %}
+                        {% if r.logged_out %}<div class="au-sub">logged out</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.user_id %}
+                        <a class="au-user" href="{% url 'admin_user_analytics_detail' user_id=r.user_id %}">{{ r.display_name }}</a>
+                        {% else %}
+                        <span class="au-user" title="{{ r.display_name }}">{{ r.display_name }}</span>
+                        {% endif %}
+                        {% if r.email %}<div class="au-sub au-trunc" title="{{ r.email }}">{{ r.email }}</div>{% endif %}
+                        {% if r.account_active is not None %}<div class="au-sub">{% if r.account_active %}account active{% else %}account disabled{% endif %}{% if r.is_staff %} · staff{% endif %}</div>{% endif %}
+                    </td>
+                    <td>
+                        <span class="au-badge {% if r.platform == 'web' %}au-b-web{% elif r.platform == 'android' %}au-b-android{% elif r.platform == 'ios' %}au-b-ios{% else %}au-b-other{% endif %}">
+                            {% if r.platform == 'web' %}Web{% elif r.platform == 'android' %}Android{% elif r.platform == 'ios' %}iOS{% else %}{{ r.platform }}{% endif %}
+                        </span>
+                    </td>
+                    <td class="au-mono">
+                        {% if r.ip %}<a class="au-infolink" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
+                        {% if r.ips|length > 1 %}<div class="au-sub" title="{{ r.ips|join:', ' }}">+{{ r.ips|length|add:"-1" }} more IPs</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.device_model %}<div class="au-trunc" style="max-width:170px;" title="{{ r.device_model }}">{{ r.device_model }}</div>{% endif %}
+                        <div class="au-sub">{% if r.os_version %}OS {{ r.os_version }}{% endif %}{% if r.app_version %}{% if r.os_version %} · {% endif %}v{{ r.app_version }}{% endif %}{% if not r.device_model and not r.os_version %}—{% endif %}</div>
+                    </td>
+                    <td>{% if r.app_name %}{{ r.app_name }}{% else %}—{% endif %}</td>
+                    <td class="fw-bold">{{ r.views }}</td>
+                    <td>{{ r.total_time }}s <span class="au-sub">/ {{ r.avg_time }}s avg</span>{% if r.time_on_page_s %}<div class="au-sub">logged {{ r.time_on_page_s }}s</div>{% endif %}</td>
+                    <td>{{ r.clicks }}</td>
+                    <td>{% if r.scroll %}{{ r.scroll|floatformat:0 }}%{% else %}—{% endif %}</td>
+                    <td class="au-mono au-trunc" style="max-width:260px;" title="{{ r.last_path }}{% if r.last_title %} — {{ r.last_title }}{% endif %}">
+                        {% if r.last_path %}<a class="au-infolink" href="{{ r.last_path }}" target="_blank" rel="noopener noreferrer">{{ r.last_path }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
+                        {% if r.last_title %}<div class="au-sub au-trunc" style="max-width:240px;">{{ r.last_title }}</div>{% endif %}
+                        {% if r.referrer %}<div class="au-sub au-trunc" style="max-width:240px;" title="{{ r.referrer }}">from {{ r.referrer }}</div>{% endif %}
+                    </td>
+                    <td class="au-sub" title="{{ r.first_seen|date:'Y-m-d H:i:s' }}">{% if r.first_seen %}{{ r.first_seen|date:"M d H:i" }}{% else %}—{% endif %}</td>
+                    <td class="au-sub" title="{{ r.last_seen|date:'Y-m-d H:i:s' }}">{% if r.last_seen %}{{ r.last_seen|timesince }} ago{% else %}—{% endif %}</td>
+                    <td>{{ r.logins }}</td>
+                    <td>{{ r.visits }}{% if r.device_visits %}<span class="au-sub">/{{ r.device_visits }}</span>{% endif %}</td>
+                    <td class="au-sub au-trunc" style="max-width:240px;" title="{{ r.user_agent }}">{% if r.user_agent %}{{ r.user_agent }}{% else %}—{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="16" class="text-center text-secondary py-4">No users matched these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function auSort(field) {
+        var params = new URLSearchParams(window.location.search);
+        var current = params.get('sort');
+        var dir = params.get('dir') === 'asc' ? 'asc' : 'desc';
+        params.set('sort', field);
+        params.set('dir', (current === field && dir === 'desc') ? 'asc' : 'desc');
+        window.location.search = params.toString();
+    }
+</script>
+{% endblock %}

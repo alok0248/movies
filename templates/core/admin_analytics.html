@@ -67,6 +67,36 @@
         border-color: rgba(255,255,255,.06);
         padding: .6rem .8rem;
     }
+    .conn-card {
+        display: block;
+        padding: 1rem;
+        border-radius: 12px;
+        background: rgba(255,255,255,.03);
+        border: 1px solid var(--border);
+        text-decoration: none;
+        height: 100%;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .conn-card:hover {
+        border-color: rgba(56,189,248,.45);
+        background: rgba(56,189,248,.07);
+        transform: translateY(-2px);
+    }
+    .conn-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: .7rem;
+        padding: .3rem .7rem;
+        border-radius: 8px;
+        font-size: .72rem;
+        font-weight: 600;
+        background: rgba(56,189,248,.14);
+        border: 1px solid rgba(56,189,248,.35);
+        color: #7dd3fc;
+    }
+    .conn-card:hover .conn-btn { background: rgba(56,189,248,.25); color: #bae6fd; }
     .session-dot {
         width: 8px;
         height: 8px;
@@ -258,7 +288,7 @@
     <div class="row g-3">
         {% for p in platform_data %}
         <div class="col-md-4">
-            <div class="p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid var(--border);">
+            <a class="conn-card" href="{% url 'admin_active_users' %}?platform={{ p.platform|urlencode }}" title="Open the active / inactive user list for {{ p.platform }}">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     {% if p.platform == 'web' %}
                     <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
@@ -282,10 +312,34 @@
                         <div class="text-white fw-bold">{% if p.views %}{% widthratio p.total_time p.views 1 %}{% else %}0{% endif %}s</div>
                     </div>
                 </div>
-            </div>
+                <span class="conn-btn"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
+            </a>
         </div>
         {% empty %}
-        <div class="col-12 text-center text-secondary py-3">No connection data yet</div>
+        <div class="col-md-4">
+            <a class="conn-card" href="{% url 'admin_active_users' %}?platform=web" title="Open the active / inactive user list for web">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
+                    <div>
+                        <div class="fw-bold text-white">Web</div>
+                        <small class="text-secondary">No views in this range</small>
+                    </div>
+                </div>
+                <span class="conn-btn"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a class="conn-card" href="{% url 'admin_active_users' %}?platform=android" title="Open the active / inactive user list for android">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
+                    <div>
+                        <div class="fw-bold text-white">Android</div>
+                        <small class="text-secondary">No views in this range</small>
+                    </div>
+                </div>
+                <span class="conn-btn"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
+            </a>
+        </div>
         {% endfor %}
     </div>
 </div>

@@ -10375,6 +10375,391 @@ def admin_user_analytics_detail(request, user_id):
 
 
 # ---------------------------------------------------------------------------
+# Active / Inactive connection list (behind the analytics Web vs Android cards)
+# ---------------------------------------------------------------------------
+
+def _au_int_param(request, name, default, low, high):
+    """Read a clamped integer query-string parameter."""
+    try:
+        value = int(request.GET.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(low, min(high, value))
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_active_users(request):
+    """Live connection list reached from the analytics 'Web vs Android' cards.
+
+    Aggregates every per-identity signal we have — login sessions, page views
+    (with time spent and platform), anonymous website visitors, Android app
+    devices and request-log engagement (clicks / time on page) — into one row
+    per identity+platform. Each row is labelled Active or Inactive from how
+    recently it was last seen, and the list can be filtered by platform
+    (web / android / ios) and by active vs inactive status.
+    """
+    from .models import (UserPageView, UserSession, WebsiteVisitor,
+                         AndroidAppDevice, AndroidAppDeviceVisit, RequestLog)
+    from django.db.models import Sum, Count, Max
+    from datetime import timedelta
+    import csv
+
+    platform = (request.GET.get('platform') or 'all').strip().lower()
+    status = (request.GET.get('status') or 'all').strip().lower()
+    if status not in ('all', 'active', 'inactive'):
+        status = 'all'
+    hours = _au_int_param(request, 'hours', 24, 1, 720)
+    minutes = _au_int_param(request, 'minutes', 15, 1, 1440)
+    search = (request.GET.get('q') or '').strip()
+    sort = (request.GET.get('sort') or 'last_seen').strip()
+    direction = (request.GET.get('dir') or 'desc').strip().lower()
+    if direction not in ('asc', 'desc'):
+        direction = 'desc'
+
+    now = timezone.now()
+    since = now - timedelta(hours=hours)
+    active_cutoff = now - timedelta(minutes=minutes)
+    epoch = now - timedelta(days=3650)
+
+    rows = {}
+
+    def _ensure(platform_name, user_id=None, visitor_id='', ip='', device_uid=''):
+        """Fetch (or create) the running row for one identity+platform pair."""
+        if user_id:
+            ident = 'u%s' % user_id
+        elif device_uid:
+            ident = 'd%s' % device_uid
+        elif visitor_id:
+            ident = 'v%s' % visitor_id
+        elif ip:
+            ident = 'i%s' % ip
+        else:
+            ident = 'x'
+        plat = platform_name or 'web'
+        key = ident + '|' + plat
+        row = rows.get(key)
+        if row is None:
+            row = {
+                'key': key, 'ident': ident, 'platform': plat,
+                'user_id': user_id, 'visitor_id': visitor_id,
+                'device_uid': device_uid, 'ip': '', 'ips': set(),
+                'device_model': '', 'os_version': '', 'app_version': '',
+                'app_name': '', 'user_agent': '', 'referrer': '',
+                'last_path': '', 'last_title': '', 'views': 0, 'total_time': 0,
+                'scroll': 0.0, 'clicks': 0, 'requests': 0, 'page_time_ms': 0,
+                'logins': 0, 'visits': 0, 'device_visits': 0,
+                'first_seen': None, 'last_seen': None, 'last_pv_at': None,
+                'session_open': False, 'logged_out': False, 'on_page': False,
+            }
+            rows[key] = row
+        return row
+
+    # --- login sessions (web logins + android app logins) -------------------
+    try:
+        sessions = list(UserSession.objects.filter(
+            Q(last_seen_at__gte=since) | Q(logged_in_at__gte=since)
+        ).order_by('-last_seen_at')[:5000])
+    except Exception as exc:
+        logger.warning('active users: sessions query failed: %s', exc)
+        sessions = []
+    for s in sessions:
+        row = _ensure(s.source, user_id=s.user_id, ip=s.ip_address or '')
+        row['logins'] += 1
+        if s.ip_address:
+            row['ips'].add(s.ip_address)
+        if s.last_seen_at and (row['last_seen'] is None or s.last_seen_at > row['last_seen']):
+            row['last_seen'] = s.last_seen_at
+            row['session_open'] = bool(s.is_active)
+            row['logged_out'] = not s.is_active
+            row['ip'] = s.ip_address or row['ip']
+            row['user_agent'] = s.user_agent or row['user_agent']
+            row['device_model'] = s.device_model or row['device_model']
+            row['os_version'] = s.os_version or row['os_version']
+            row['app_version'] = s.app_version or row['app_version']
+        if s.logged_in_at and (row['first_seen'] is None or s.logged_in_at < row['first_seen']):
+            row['first_seen'] = s.logged_in_at
+
+    # --- page views (with time spent, platform, scroll depth) ---------------
+    try:
+        page_views = list(UserPageView.objects.filter(viewed_at__gte=since)
+                          .order_by('-viewed_at')
+                          .values('user_id', 'visitor_id', 'platform', 'path',
+                                  'page_title', 'ip_address', 'user_agent', 'referrer',
+                                  'time_spent_seconds', 'scroll_depth', 'is_active',
+                                  'viewed_at')[:20000])
+    except Exception as exc:
+        logger.warning('active users: page view query failed: %s', exc)
+        page_views = []
+    for pv in page_views:
+        row = _ensure(pv['platform'], user_id=pv['user_id'],
+                      visitor_id=pv['visitor_id'] or '',
+                      ip=pv['ip_address'] or '')
+        when = pv['viewed_at']
+        row['views'] += 1
+        row['total_time'] += pv['time_spent_seconds'] or 0
+        row['scroll'] = max(row['scroll'], pv['scroll_depth'] or 0)
+        if pv['ip_address']:
+            row['ips'].add(pv['ip_address'])
+        # The newest page view decides the "last page" details, independently
+        # of logins which may carry a fresher timestamp.
+        if when and (row['last_pv_at'] is None or when > row['last_pv_at']):
+            row['last_pv_at'] = when
+            row['last_path'] = pv['path'] or ''
+            row['last_title'] = pv['page_title'] or ''
+            row['referrer'] = pv['referrer'] or row['referrer']
+            if pv['ip_address']:
+                row['ip'] = pv['ip_address']
+            if pv['user_agent']:
+                row['user_agent'] = pv['user_agent']
+        if when and (row['last_seen'] is None or when > row['last_seen']):
+            row['last_seen'] = when
+        if when and (row['first_seen'] is None or when < row['first_seen']):
+            row['first_seen'] = when
+        if pv['is_active'] and when and when >= active_cutoff:
+            row['on_page'] = True
+
+    # --- anonymous website visitors (visitor_id cookie) ---------------------
+    try:
+        visitors = list(WebsiteVisitor.objects.filter(last_seen_at__gte=since).annotate(
+            recent_visits=Count('visits', filter=Q(visits__visited_at__gte=since))
+        ).order_by('-last_seen_at')[:5000])
+    except Exception as exc:
+        logger.warning('active users: visitor query failed: %s', exc)
+        visitors = []
+    for v in visitors:
+        ua = v.user_agent or ''
+        low_ua = ua.lower()
+        if 'android' in low_ua:
+            plat = 'android'
+        elif 'iphone' in low_ua or 'ipad' in low_ua:
+            plat = 'ios'
+        else:
+            plat = 'web'
+        row = _ensure(plat, user_id=v.user_id, visitor_id=str(v.visitor_id),
+                      ip=v.last_ip_address or '')
+        row['visits'] += getattr(v, 'recent_visits', 0) or 0
+        if v.last_path and not row['last_path']:
+            row['last_path'] = v.last_path
+        if v.last_ip_address:
+            row['ips'].add(v.last_ip_address)
+        if v.last_seen_at and (row['last_seen'] is None or v.last_seen_at > row['last_seen']):
+            row['last_seen'] = v.last_seen_at
+        if v.first_seen_at and (row['first_seen'] is None or v.first_seen_at < row['first_seen']):
+            row['first_seen'] = v.first_seen_at
+        if ua and not row['user_agent']:
+            row['user_agent'] = ua
+
+    # --- android app devices (installed apps that never logged in) ----------
+    try:
+        devices = list(AndroidAppDevice.objects.filter(last_seen_at__gte=since)
+                       .select_related('android_app').order_by('-last_seen_at')[:2000])
+    except Exception as exc:
+        logger.warning('active users: device query failed: %s', exc)
+        devices = []
+    latest_visits = {}
+    if devices:
+        try:
+            for visit in (AndroidAppDeviceVisit.objects.filter(visited_at__gte=since)
+                          .order_by('-visited_at')
+                          .values('device_id', 'ip_address', 'build_identifier',
+                                  'device_model', 'os_version', 'visited_at')[:10000]):
+                latest_visits.setdefault(visit['device_id'], visit)
+        except Exception as exc:
+            logger.warning('active users: device visit query failed: %s', exc)
+    for d in devices:
+        row = _ensure('android', device_uid=d.user_id or ('app%d' % d.android_app_id))
+        row['device_visits'] += d.total_visits or 0
+        if d.device_model and not row['device_model']:
+            row['device_model'] = d.device_model
+        if d.os_version and not row['os_version']:
+            row['os_version'] = d.os_version
+        try:
+            if d.android_app and not row['app_name']:
+                row['app_name'] = d.android_app.name
+        except Exception:
+            pass
+        visit = latest_visits.get(d.id)
+        if visit:
+            if visit['ip_address']:
+                row['ips'].add(visit['ip_address'])
+                if not row['ip']:
+                    row['ip'] = visit['ip_address']
+            if visit['build_identifier'] and not row['app_version']:
+                row['app_version'] = visit['build_identifier']
+            if visit['device_model'] and not row['device_model']:
+                row['device_model'] = visit['device_model']
+            if visit['os_version'] and not row['os_version']:
+                row['os_version'] = visit['os_version']
+            if visit['visited_at'] and (row['last_seen'] is None or visit['visited_at'] > row['last_seen']):
+                row['last_seen'] = visit['visited_at']
+        if d.first_seen_at and (row['first_seen'] is None or d.first_seen_at < row['first_seen']):
+            row['first_seen'] = d.first_seen_at
+
+    # --- account details for the users we saw ------------------------------
+    user_ids = {r['user_id'] for r in rows.values() if r['user_id']}
+    users = {}
+    if user_ids:
+        users = {u.id: u for u in User.objects.filter(id__in=user_ids).only(
+            'id', 'username', 'email', 'date_joined', 'last_login',
+            'is_active', 'is_staff', 'is_superuser')}
+    names_to_ids = {}
+    for uid, u in users.items():
+        names_to_ids.setdefault((u.username or '').lower(), set()).add(uid)
+
+    # --- request-log engagement: clicks + time on page ---------------------
+    ip_index = {}
+    for row in rows.values():
+        for addr in row['ips']:
+            ip_index.setdefault(addr, []).append(row)
+        if row['ip']:
+            ip_index.setdefault(row['ip'], []).append(row)
+    try:
+        log_rows = list(RequestLog.objects.filter(
+            created_at__gte=since, category=RequestLog.CAT_PAGE)
+            .values('username', 'client_ip')
+            .annotate(reqs=Count('id'), clicks=Sum('click_count'),
+                      page_ms=Sum('time_on_page_ms'), last=Max('created_at'))[:5000])
+    except Exception as exc:
+        logger.warning('active users: request log query failed: %s', exc)
+        log_rows = []
+    for agg in log_rows:
+        uname = (agg['username'] or '').strip().lower()
+        if uname and uname in names_to_ids:
+            wanted = names_to_ids[uname]
+            targets = [r for r in rows.values() if r['user_id'] in wanted]
+        elif agg['client_ip']:
+            targets = ip_index.get(agg['client_ip'], [])
+        else:
+            targets = []
+        if not targets:
+            continue
+        target = next((r for r in targets if r['platform'] == 'web'), targets[0])
+        target['clicks'] += agg['clicks'] or 0
+        target['requests'] += agg['reqs'] or 0
+        target['page_time_ms'] += agg['page_ms'] or 0
+        if agg['last'] and (target['last_seen'] is None or agg['last'] > target['last_seen']):
+            target['last_seen'] = agg['last']
+
+    # --- finalise rows ------------------------------------------------------
+    for row in rows.values():
+        last_seen = row['last_seen']
+        row['is_active'] = bool(last_seen and last_seen >= active_cutoff)
+        row['is_user'] = bool(row['user_id'])
+        row['ips'] = sorted(row['ips'])
+        row['ip'] = row['ip'] or (row['ips'][0] if row['ips'] else '')
+        row['avg_time'] = round(row['total_time'] / row['views']) if row['views'] else 0
+        row['time_on_page_s'] = round(row['page_time_ms'] / 1000) if row['page_time_ms'] else 0
+        account = users.get(row['user_id']) if row['user_id'] else None
+        row['username'] = account.username if account else ''
+        row['email'] = account.email if account else ''
+        row['date_joined'] = account.date_joined if account else None
+        row['last_login'] = account.last_login if account else None
+        row['account_active'] = account.is_active if account else None
+        row['is_staff'] = account.is_staff if account else False
+        if row['username']:
+            row['display_name'] = row['username']
+        elif row['device_uid']:
+            row['display_name'] = 'Device ' + str(row['device_uid'])[:16]
+        elif row['visitor_id']:
+            row['display_name'] = 'Visitor ' + str(row['visitor_id'])[:8]
+        else:
+            row['display_name'] = 'Anonymous'
+
+    all_rows = list(rows.values())
+    platform_counts = {}
+    active_platform = {}
+    for row in all_rows:
+        platform_counts[row['platform']] = platform_counts.get(row['platform'], 0) + 1
+        if row['is_active']:
+            active_platform[row['platform']] = active_platform.get(row['platform'], 0) + 1
+    active_total = sum(1 for r in all_rows if r['is_active'])
+
+    # --- filter / sort ------------------------------------------------------
+    filtered = []
+    needle = search.lower()
+    for row in all_rows:
+        if platform != 'all' and row['platform'] != platform:
+            continue
+        if status == 'active' and not row['is_active']:
+            continue
+        if status == 'inactive' and row['is_active']:
+            continue
+        if needle:
+            haystack = ' '.join(str(row.get(f) or '') for f in (
+                'display_name', 'username', 'email', 'ip', 'device_model',
+                'os_version', 'app_version', 'app_name', 'last_path',
+                'last_title', 'user_agent', 'visitor_id', 'device_uid',
+                'platform', 'referrer')).lower()
+            if needle not in haystack:
+                continue
+        filtered.append(row)
+
+    sort_keys = {
+        'user': lambda r: (r['display_name'] or '').lower(),
+        'platform': lambda r: r['platform'],
+        'views': lambda r: r['views'],
+        'time': lambda r: r['total_time'],
+        'clicks': lambda r: r['clicks'],
+        'first_seen': lambda r: r['first_seen'] or epoch,
+        'last_seen': lambda r: r['last_seen'] or epoch,
+    }
+    filtered.sort(key=sort_keys.get(sort, sort_keys['last_seen']),
+                  reverse=(direction != 'asc'))
+
+    max_display = 500
+    displayed = filtered[:max_display]
+
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="active_users.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow(['Status', 'User', 'Email', 'Platform', 'IP', 'Device',
+                         'OS', 'App version', 'Views', 'Total time (s)',
+                         'Avg time (s)', 'Clicks', 'Requests', 'Scroll %',
+                         'Last page', 'Logins', 'Visits', 'First seen',
+                         'Last seen', 'User agent'])
+        for row in filtered:
+            writer.writerow([
+                'Active' if row['is_active'] else 'Inactive', row['display_name'],
+                row['email'], row['platform'], row['ip'], row['device_model'],
+                row['os_version'], row['app_version'], row['views'],
+                row['total_time'], row['avg_time'], row['clicks'],
+                row['requests'], round(row['scroll']), row['last_path'],
+                row['logins'], row['visits'] + row['device_visits'],
+                row['first_seen'].strftime('%Y-%m-%d %H:%M:%S') if row['first_seen'] else '',
+                row['last_seen'].strftime('%Y-%m-%d %H:%M:%S') if row['last_seen'] else '',
+                row['user_agent'],
+            ])
+        return response
+
+    return render(request, 'core/admin_active_users.html', {
+        'rows': displayed,
+        'shown': len(displayed),
+        'row_total': len(filtered),
+        'max_display': max_display,
+        'total_rows': len(all_rows),
+        'active_total': active_total,
+        'inactive_total': len(all_rows) - active_total,
+        'platform_counts': platform_counts,
+        'active_platform': active_platform,
+        'total_time': sum(r['total_time'] for r in all_rows),
+        'total_clicks': sum(r['clicks'] for r in all_rows),
+        'platform': platform,
+        'status': status,
+        'hours': hours,
+        'minutes': minutes,
+        'search': search,
+        'sort': sort,
+        'dir': direction,
+        'active_cutoff': active_cutoff,
+        'now': now,
+        'since': since,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Admin User Management (block, add, edit all fields except email)
 # ---------------------------------------------------------------------------
 
