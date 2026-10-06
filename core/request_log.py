@@ -240,6 +240,10 @@ FIELD_FILTERS = (
     'view_name', 'request_body',
 )
 
+# Sentinel used by the column dropdowns to mean "this field is empty" — e.g.
+# picking '(no user)' to see only anonymous requests.
+NONE_TOKEN = '__none__'
+
 
 def _as_int(value):
     try:
@@ -310,7 +314,10 @@ def filter_requests(category=None, method=None, status=None, status_code=None,
 
     for field in FIELD_FILTERS:
         value = field_filters.get(field)
-        if value:
+        if value == NONE_TOKEN:
+            # '(no user)' / blank selection: rows where the column is empty.
+            qs = qs.filter(Q(**{field: ''}) | Q(**{f'{field}__isnull': True}))
+        elif value:
             # Exact match — the spreadsheet view picks a value from a dropdown
             # of that column's distinct values, so 'contains' would over-match
             # (e.g. '/movies/' also matching '/movies/batman/').
