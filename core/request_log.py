@@ -301,7 +301,10 @@ def filter_requests(category=None, method=None, status=None, status_code=None,
     for field in FIELD_FILTERS:
         value = field_filters.get(field)
         if value:
-            qs = qs.filter(**{f'{field}__icontains': value})
+            # Exact match — the spreadsheet view picks a value from a dropdown
+            # of that column's distinct values, so 'contains' would over-match
+            # (e.g. '/movies/' also matching '/movies/batman/').
+            qs = qs.filter(**{field: value})
 
     if q:
         qs = qs.filter(
@@ -316,6 +319,47 @@ def filter_requests(category=None, method=None, status=None, status_code=None,
 def recent_requests(limit=300, **filters):
     """Newest first, applying any of the filter_requests conditions."""
     return list(filter_requests(**filters)[:limit])
+
+
+# Columns that expose a dropdown of their distinct values as the filter.
+OPTION_FIELDS = (
+    'on_date', 'method', 'status_code', 'category', 'path', 'query',
+    'client_ip', 'username', 'view_name', 'referer', 'user_agent',
+    'request_body',
+)
+
+
+def column_options(records, cap=200):
+    """Distinct values per column, for the spreadsheet's per-column filters.
+
+    Only the ``cap`` most common values are kept so a column with hundreds of
+    unique values (user agents, payloads) cannot bloat the page.
+    """
+    from collections import Counter
+
+    counters = {f: Counter() for f in OPTION_FIELDS}
+    for r in records:
+        try:
+            counters['on_date'][r.created_at.strftime('%Y-%m-%d')] += 1
+        except Exception:
+            pass
+        for field in OPTION_FIELDS:
+            if field == 'on_date':
+                continue
+            value = getattr(r, field, '')
+            if value in (None, ''):
+                continue
+            counters[field][str(value)] += 1
+
+    options = {}
+    for field, counter in counters.items():
+        values = [v for v, _ in counter.most_common(cap)]
+        if field == 'status_code':
+            values.sort(key=lambda s: (len(s), s))
+        else:
+            values.sort(key=lambda s: s.lower())
+        options[field] = values
+    return options
 
 
 def record_page_activity(path, client_ip, time_ms=0, clicks=0, window_minutes=120):

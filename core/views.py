@@ -8538,6 +8538,14 @@ def request_log(request):
 
     records = recent_requests(limit=500, **filters)
 
+    # For the spreadsheet view, populate each column's filter dropdown with the
+    # distinct values actually present in the log (from the unfiltered set, so
+    # choosing one value never blanks out the other columns).
+    options = {}
+    if request.GET.get('view') == 'table' and request.GET.get('format') not in ('json', 'csv'):
+        from .request_log import column_options
+        options = column_options(recent_requests(limit=1000))
+
     if request.GET.get('format') == 'json':
         return JsonResponse({
             'status': 'success',
@@ -8575,6 +8583,7 @@ def request_log(request):
         'total': request_total(),
         'view_mode': view_mode,
         'filters': filters,
+        'options': options,
         'methods': ('GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'),
         # Keep the old context keys so the card view's chips still work.
         'category': category,

@@ -71,28 +71,36 @@
     .rl-chip.active { background: rgba(96,165,250,.18); color: #93c5fd; border-color: rgba(96,165,250,.4); }
 
     /* Spreadsheet / Excel-style table view */
-    .rl-filtergrid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-        gap: .5rem .7rem;
-    }
-    .rl-filtergrid label {
-        display: flex;
-        flex-direction: column;
-        gap: .15rem;
-        font-size: .68rem;
-        color: var(--text-3, #64748b);
-    }
-    .rl-filtergrid input, .rl-filtergrid select {
-        width: 100%;
+    .rl-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .rl-toolbar input[type="text"] {
         background: rgba(148,163,184,.1);
         border: 1px solid var(--border, rgba(148,163,184,.25));
         border-radius: 6px;
         color: inherit;
         font-size: .72rem;
-        padding: .3rem .45rem;
+        padding: .3rem .5rem;
+        min-width: 220px;
     }
-    .rl-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    /* Excel-style filter row sitting directly under the column headers */
+    .rl-table thead tr:first-child th { top: 0; height: 32px; box-sizing: border-box; }
+    .rl-table thead tr.rl-frow th {
+        top: 32px;
+        background: var(--bg-2, #101a2e);
+        padding: .28rem .4rem;
+    }
+    .rl-table thead tr.rl-frow select,
+    .rl-table thead tr.rl-frow input {
+        width: 100%;
+        min-width: 84px;
+        max-width: 220px;
+        background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.3));
+        border-radius: 6px;
+        color: inherit;
+        font-size: .68rem;
+        padding: .15rem .3rem;
+    }
+    .rl-table thead tr.rl-frow input[type="number"] { min-width: 74px; }
     .rl-tablewrap {
         overflow: auto;
         max-height: 72vh;
@@ -138,7 +146,8 @@
     html[data-theme="light"] .rl-tablewrap { background: #ffffff; border-color: rgba(0,0,0,.1); }
     html[data-theme="light"] .rl-table thead th { background: #f1f5f9; color: #334155; }
     html[data-theme="light"] .rl-table th, html[data-theme="light"] .rl-table td { border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .rl-filtergrid input, html[data-theme="light"] .rl-filtergrid select { border-color: rgba(0,0,0,.18); }
+    html[data-theme="light"] .rl-table thead tr.rl-frow th { background: #e2e8f0; }
+    html[data-theme="light"] .rl-table thead tr.rl-frow select, html[data-theme="light"] .rl-table thead tr.rl-frow input { border-color: rgba(0,0,0,.18); }
 </style>
 
 <div class="container py-4" style="max-width:1100px;">
@@ -190,107 +199,55 @@
     </div>
 
 {% if view_mode == 'table' %}
-    <form method="get" class="rl-tableform mb-3">
+    <form method="get" class="rl-tableform mb-2">
         <input type="hidden" name="view" value="table">
-        <div class="rl-filtergrid mb-2">
-            <label>Search all fields
-                <input type="text" name="q" value="{{ filters.q }}" placeholder="any word…">
-            </label>
-            <label>Date
-                <input type="date" name="on_date" value="{{ filters.on_date }}">
-            </label>
-            <label>Method
-                <select name="method">
-                    <option value="">All</option>
-                    {% for m in methods %}<option value="{{ m }}" {% if filters.method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
-                </select>
-            </label>
-            <label>Status class
-                <select name="status">
-                    <option value="">All</option>
-                    <option value="2xx" {% if filters.status == '2xx' %}selected{% endif %}>2xx</option>
-                    <option value="3xx" {% if filters.status == '3xx' %}selected{% endif %}>3xx</option>
-                    <option value="4xx" {% if filters.status == '4xx' %}selected{% endif %}>4xx</option>
-                    <option value="5xx" {% if filters.status == '5xx' %}selected{% endif %}>5xx</option>
-                </select>
-            </label>
-            <label>Status code
-                <input type="number" name="status_code" value="{{ filters.status_code }}" placeholder="e.g. 404">
-            </label>
-            <label>Category
-                <select name="category">
-                    <option value="">All</option>
-                    <option value="page" {% if filters.category == 'page' %}selected{% endif %}>Page</option>
-                    <option value="api" {% if filters.category == 'api' %}selected{% endif %}>API / Ajax</option>
-                    <option value="admin" {% if filters.category == 'admin' %}selected{% endif %}>Admin</option>
-                </select>
-            </label>
-            <label>Path
-                <input type="text" name="path" value="{{ filters.path }}" placeholder="contains…">
-            </label>
-            <label>Query string
-                <input type="text" name="query" value="{{ filters.query }}" placeholder="contains…">
-            </label>
-            <label>Client IP
-                <input type="text" name="client_ip" value="{{ filters.client_ip }}" placeholder="contains…">
-            </label>
-            <label>Username
-                <input type="text" name="username" value="{{ filters.username }}" placeholder="contains…">
-            </label>
-            <label>Min duration (ms)
-                <input type="number" name="min_duration" value="{{ filters.min_duration }}" placeholder="e.g. 1000">
-            </label>
-            <label>Min response size (B)
-                <input type="number" name="min_size" value="{{ filters.min_size }}" placeholder="e.g. 500">
-            </label>
-            <label>Min time on page (ms)
-                <input type="number" name="min_time" value="{{ filters.min_time }}" placeholder="e.g. 30000">
-            </label>
-            <label>Min clicks on page
-                <input type="number" name="min_clicks" value="{{ filters.min_clicks }}" placeholder="e.g. 5">
-            </label>
-            <label>View name
-                <input type="text" name="view_name" value="{{ filters.view_name }}" placeholder="contains…">
-            </label>
-            <label>Referer
-                <input type="text" name="referer" value="{{ filters.referer }}" placeholder="contains…">
-            </label>
-            <label>User-Agent
-                <input type="text" name="user_agent" value="{{ filters.user_agent }}" placeholder="contains…">
-            </label>
-            <label>Payload
-                <input type="text" name="request_body" value="{{ filters.request_body }}" placeholder="contains…">
-            </label>
-        </div>
-        <div class="rl-toolbar">
-            <button type="submit" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply filters</button>
+        <div class="rl-toolbar mb-2">
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="Search all fields…">
+            <button type="submit" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
             <a href="?view=table" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-times me-1"></i>Reset</a>
-            <span style="color:#64748b;font-size:.72rem;">Filters combine (AND). Every field has its own condition.</span>
+            <span style="color:#64748b;font-size:.72rem;">Pick a value under any column header — it filters immediately. Conditions combine (AND).</span>
         </div>
-    </form>
 
-    <div class="rl-tablewrap">
-        <table class="rl-table">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Method</th>
-                    <th>Status</th>
-                    <th>Category</th>
-                    <th>Path</th>
-                    <th>Query</th>
-                    <th>Client IP</th>
-                    <th>Username</th>
-                    <th>Duration (ms)</th>
-                    <th>Size (B)</th>
-                    <th>Time on page (ms)</th>
-                    <th>Clicks</th>
-                    <th>View name</th>
-                    <th>Referer</th>
-                    <th>User-Agent</th>
-                    <th>Payload</th>
-                </tr>
-            </thead>
+        <div class="rl-tablewrap">
+            <table class="rl-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Method</th>
+                        <th>Status</th>
+                        <th>Category</th>
+                        <th>Path</th>
+                        <th>Query</th>
+                        <th>Client IP</th>
+                        <th>Username</th>
+                        <th>Duration (ms)</th>
+                        <th>Size (B)</th>
+                        <th>Time on page (ms)</th>
+                        <th>Clicks</th>
+                        <th>View name</th>
+                        <th>Referer</th>
+                        <th>User-Agent</th>
+                        <th>Payload</th>
+                    </tr>
+                    <tr class="rl-frow">
+                        <th><select name="on_date" onchange="this.form.submit()"><option value="">All</option>{% for v in options.on_date %}<option value="{{ v }}" {% if filters.on_date == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select name="method" onchange="this.form.submit()"><option value="">All</option>{% for v in options.method %}<option value="{{ v }}" {% if filters.method == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select name="status_code" onchange="this.form.submit()"><option value="">All</option>{% for v in options.status_code %}<option value="{{ v }}" {% if filters.status_code == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select name="category" onchange="this.form.submit()"><option value="">All</option><option value="page" {% if filters.category == 'page' %}selected{% endif %}>Page</option><option value="api" {% if filters.category == 'api' %}selected{% endif %}>API / Ajax</option><option value="admin" {% if filters.category == 'admin' %}selected{% endif %}>Admin</option></select></th>
+                        <th><select name="path" onchange="this.form.submit()"><option value="">All</option>{% for v in options.path %}<option value="{{ v }}" {% if filters.path == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select name="query" onchange="this.form.submit()"><option value="">All</option>{% for v in options.query %}<option value="{{ v }}" {% if filters.query == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select name="client_ip" onchange="this.form.submit()"><option value="">All</option>{% for v in options.client_ip %}<option value="{{ v }}" {% if filters.client_ip == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select name="username" onchange="this.form.submit()"><option value="">All</option>{% for v in options.username %}<option value="{{ v }}" {% if filters.username == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><input type="number" name="min_duration" value="{{ filters.min_duration }}" placeholder="min"></th>
+                        <th><input type="number" name="min_size" value="{{ filters.min_size }}" placeholder="min"></th>
+                        <th><input type="number" name="min_time" value="{{ filters.min_time }}" placeholder="min"></th>
+                        <th><input type="number" name="min_clicks" value="{{ filters.min_clicks }}" placeholder="min"></th>
+                        <th><select name="view_name" onchange="this.form.submit()"><option value="">All</option>{% for v in options.view_name %}<option value="{{ v }}" {% if filters.view_name == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select name="referer" onchange="this.form.submit()"><option value="">All</option>{% for v in options.referer %}<option value="{{ v }}" {% if filters.referer == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select name="user_agent" onchange="this.form.submit()"><option value="">All</option>{% for v in options.user_agent %}<option value="{{ v }}" {% if filters.user_agent == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select name="request_body" onchange="this.form.submit()"><option value="">All</option>{% for v in options.request_body %}<option value="{{ v }}" {% if filters.request_body == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                    </tr>
+                </thead>
             <tbody>
                 {% for rec in records %}
                 <tr>
@@ -317,6 +274,7 @@
             </tbody>
         </table>
     </div>
+    </form>
 {% else %}
     <form method="get" class="rl-filters mb-3">
         <a href="?method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
