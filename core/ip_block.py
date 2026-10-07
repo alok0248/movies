@@ -29,6 +29,31 @@ logger = logging.getLogger(__name__)
 # show how many requests the address kept making after the block.
 BLOCKED_STATUS = 403
 
+# Endpoints a blocked visitor must still be able to reach, otherwise signing in
+# (the way out of the block) would be impossible: the site's own auth calls.
+AUTH_EXEMPT_PREFIXES = (
+    '/login', '/logout',
+    '/ajax/login', '/ajax/logout', '/ajax/register', '/ajax/verify',
+    '/ajax/resend-verification', '/ajax/forgot-password', '/ajax/reset-password',
+)
+
+# The auth form lives in the site's home page modal, so the home page stays
+# reachable when it is being opened for signing in or registering.
+AUTH_MODAL_PARAMS = ('login_required', 'register')
+
+
+def is_auth_entry(request):
+    """True for the site's login/register entry points a blocked visitor needs."""
+    try:
+        path = getattr(request, 'path', '') or ''
+        if path.startswith(AUTH_EXEMPT_PREFIXES):
+            return True
+        if path in ('/', ''):
+            return any(param in request.GET for param in AUTH_MODAL_PARAMS)
+    except Exception:
+        return False
+    return False
+
 # Guard rails so a page render can never blow up on a long block list.
 MAX_REPORT_ROWS = 500
 MAX_ACTIVITY_ROWS = 20000
@@ -134,7 +159,11 @@ def unblock_ip(ip_address, unblocked_by=''):
 
 
 def blocked_response(ip_address=''):
-    """The minimal 403 page a blocked address receives."""
+    """The 403 page a blocked address receives.
+
+    It is not a dead end: a blocked visitor is asked to register or sign in, and
+    the sign-in/register entry points stay reachable (see ``is_auth_entry``).
+    """
     body = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -143,13 +172,29 @@ def blocked_response(ip_address=''):
         '<body style="margin:0;min-height:100vh;display:flex;align-items:center;'
         'justify-content:center;background:#0b1020;color:#e2e8f0;'
         'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">'
-        '<div style="text-align:center;padding:32px;max-width:520px">'
-        '<div style="font-size:3.4rem;font-weight:800;letter-spacing:-.03em;'
+        '<div style="text-align:center;padding:36px 24px;max-width:560px">'
+        '<div style="width:64px;height:64px;margin:0 auto 16px;border-radius:18px;'
+        'background:linear-gradient(135deg,#ef4444,#f59e0b);display:flex;'
+        'align-items:center;justify-content:center;font-size:1.7rem">&#128737;</div>'
+        '<div style="font-size:3rem;font-weight:800;letter-spacing:-.03em;'
         'background:linear-gradient(135deg,#f87171,#fbbf24);'
         '-webkit-background-clip:text;background-clip:text;color:transparent">403</div>'
-        '<h1 style="font-size:1.05rem;margin:.6rem 0 .4rem">Access blocked</h1>'
-        '<p style="color:#94a3b8;font-size:.88rem;line-height:1.6;margin:0">'
-        'This address is not allowed to use this site.</p>'
+        '<h1 style="font-size:1.15rem;margin:.6rem 0 .5rem">Access blocked</h1>'
+        '<p style="color:#94a3b8;font-size:.9rem;line-height:1.65;margin:0 0 1.4rem">'
+        'This address was blocked for automated traffic &mdash; for example, repeatedly '
+        'asking for pages that do not exist on this site.</p>'
+        '<p style="color:#cbd5e1;font-size:.9rem;line-height:1.65;margin:0 0 1.2rem">'
+        'If you are a real visitor, create a free account or sign in to continue.</p>'
+        '<div style="display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">'
+        '<a href="/?register=true" style="display:inline-block;padding:.6rem 1.2rem;'
+        'border-radius:10px;font-weight:600;font-size:.9rem;text-decoration:none;'
+        'color:#fff;background:linear-gradient(135deg,#6366f1,#22d3ee)">Create a free account</a>'
+        '<a href="/?login_required=true" style="display:inline-block;padding:.6rem 1.2rem;'
+        'border-radius:10px;font-weight:600;font-size:.9rem;text-decoration:none;'
+        'color:#e2e8f0;border:1px solid rgba(148,163,184,.45)">Sign in</a>'
+        '</div>'
+        '<p style="color:#64748b;font-size:.78rem;margin:1.4rem 0 0;line-height:1.6">'
+        'Already signed in? Reload this page.</p>'
         '</div></body></html>'
     )
     response = HttpResponseForbidden(body)

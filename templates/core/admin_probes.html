@@ -1,0 +1,340 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Probes &amp; Bots - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .pb-head { display: flex; align-items: center; gap: .8rem; }
+    .pb-icon {
+        width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
+        background: linear-gradient(135deg, #f59e0b, #ef4444);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .pb-card {
+        background: var(--card-bg, #1a1a2e);
+        border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px;
+    }
+    .pb-stat { padding: 1rem; }
+    .pb-stat .pb-num { font-size: 1.6rem; font-weight: 700; color: var(--text, #e2e8f0); line-height: 1.1; }
+    .pb-stat .pb-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3, #64748b); }
+    .pb-tablewrap {
+        overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px; background: var(--card-bg, #1a1a2e);
+    }
+    .pb-table { width: 100%; border-collapse: collapse; font-size: .74rem; white-space: nowrap; }
+    .pb-table th, .pb-table td {
+        padding: .5rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
+        text-align: left; vertical-align: top;
+    }
+    .pb-table thead th { background: var(--surface, #16213e); color: var(--text-2, #cbd5e1); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .pb-table tbody tr:hover { background: rgba(148,163,184,.07); }
+    .pb-mono { font-family: Consolas, Menlo, monospace; }
+    .pb-ip { font-family: Consolas, Menlo, monospace; font-weight: 600; font-size: .8rem; color: #fca5a5; }
+    .pb-badge {
+        display: inline-block; font-size: .64rem; font-weight: 700; padding: 2px 8px;
+        border-radius: 4px; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .pb-b-on { background: rgba(239,68,68,.16); color: #f87171; }
+    .pb-b-open { background: rgba(148,163,184,.16); color: #cbd5e1; }
+    .pb-signal { display: inline-block; font-size: .64rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; margin: 0 .2rem .2rem 0; }
+    .pb-s-noagent { background: rgba(251,191,36,.16); color: #fbbf24; }
+    .pb-s-client { background: rgba(239,68,68,.16); color: #f87171; }
+    .pb-s-probe { background: rgba(168,85,247,.18); color: #c084fc; }
+    .pb-s-rate { background: rgba(251,146,60,.18); color: #fb923c; }
+    .pb-num-cell { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text, #e2e8f0); }
+    .pb-hot { color: #fbbf24; }
+    .pb-zero { color: #475569; }
+    .pb-sub { color: var(--text-3, #64748b); font-size: .68rem; }
+    .pb-infolink { color: #7dd3fc; text-decoration: none; border-bottom: 1px dotted rgba(125,211,252,.45); }
+    .pb-infolink:hover { color: #bae6fd; }
+    .pb-paths { display: flex; flex-direction: column; gap: .2rem; white-space: normal; max-width: 440px; }
+    .pb-path {
+        display: inline-flex; align-items: baseline; gap: .4rem; max-width: 440px;
+        font-family: Consolas, Menlo, monospace; font-size: .7rem; color: var(--text-2, #cbd5e1);
+        text-decoration: none;
+    }
+    .pb-path:hover { color: #fbbf24; }
+    .pb-path span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pb-hit {
+        flex: 0 0 auto; font-size: .62rem; font-weight: 700; padding: 0 .35rem;
+        border-radius: 999px; background: rgba(148,163,184,.18); color: #cbd5e1;
+    }
+    .pb-code { flex: 0 0 auto; font-size: .6rem; font-weight: 700; padding: 0 .3rem; border-radius: 4px; background: rgba(239,68,68,.16); color: #f87171; }
+    .pb-more { font-size: .68rem; color: #64748b; }
+    .pb-more summary { cursor: pointer; color: #7dd3fc; }
+    .pb-btn {
+        display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .6rem;
+        border-radius: 8px; font-size: .72rem; font-weight: 600;
+        cursor: pointer; border: 1px solid transparent; background: transparent;
+        text-decoration: none;
+    }
+    .pb-btn-block { color: #f87171; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.32); }
+    .pb-btn-block:hover { background: rgba(239,68,68,.24); border-color: #f87171; }
+    .pb-btn-unblock { color: #34d399; background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.32); }
+    .pb-btn-unblock:hover { background: rgba(52,211,153,.24); border-color: #34d399; }
+    .pb-filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-end; }
+    .pb-filters label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
+    .pb-filters input, .pb-filters select {
+        background: rgba(148,163,184,.1); border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px; color: inherit; font-size: .74rem; padding: .3rem .5rem;
+    }
+    .pb-chip {
+        display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .7rem;
+        border-radius: 999px; font-size: .72rem; font-weight: 600; text-decoration: none;
+        border: 1px solid var(--border, rgba(148,163,184,.25)); color: var(--text-2, #cbd5e1);
+    }
+    .pb-chip.on { background: rgba(251,191,36,.16); border-color: rgba(251,191,36,.45); color: #fcd34d; }
+    .pb-empty { text-align: center; padding: 48px 16px; color: #64748b; }
+    .pb-empty i { font-size: 2.4rem; display: block; margin-bottom: 10px; color: #334155; }
+    html[data-theme="light"] .pb-tablewrap, html[data-theme="light"] .pb-card { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .pb-table thead th { background: #f1f5f9; color: #334155; }
+    html[data-theme="light"] .pb-table th, html[data-theme="light"] .pb-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .pb-stat .pb-num, html[data-theme="light"] .pb-num-cell { color: #0f172a; }
+    html[data-theme="light"] .pb-ip { color: #b91c1c; }
+    html[data-theme="light"] .pb-path { color: #334155; }
+    html[data-theme="light"] .pb-infolink { color: #0369a1; }
+</style>
+
+<div class="container py-4" style="max-width:1600px;">
+    <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Admin Dashboard</a>
+            <div class="pb-head mt-2">
+                <div class="pb-icon"><i class="fas fa-user-secret text-white" style="font-size:1.1rem;"></i></div>
+                <div>
+                    <h3 class="mb-0" style="font-size:1.25rem;">Probes &amp; Bots</h3>
+                    <div style="color:#64748b;font-size:.82rem;">Which IP is asking for pages that are not on the website — and which of them look like scrapers</div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'request_log' %}?status_code=404" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-network-wired me-1"></i>404s in the request log</a>
+            <a href="{% url 'blocked_ips' %}" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;"><i class="fas fa-shield-alt me-1"></i>Blocked IPs</a>
+            <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
+            <a href="{% url 'probes' %}?hours={{ hours }}&amp;min_hits={{ min_hits }}{% if hide_blocked %}&amp;hide_blocked=1{% endif %}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="pb-card pb-stat" title="Addresses that asked for pages the site does not have">
+                <div class="pb-num" style="color:#fbbf24;">{{ totals.ips }}</div>
+                <div class="pb-lbl">IPs probing</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="pb-card pb-stat" title="Requests for missing pages and scanner paths">
+                <div class="pb-num" style="color:#fb923c;">{{ totals.unknown }}</div>
+                <div class="pb-lbl">Unknown pages hit</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="pb-card pb-stat" title="Hits to paths no visitor would ever browse to">
+                <div class="pb-num" style="color:#c084fc;">{{ totals.probes }}</div>
+                <div class="pb-lbl">Scanner paths</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="pb-card pb-stat" title="Distinct missing pages asked for in this window">
+                <div class="pb-num" style="color:#38bdf8;">{{ totals.distinct_paths }}</div>
+                <div class="pb-lbl">Distinct paths</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="pb-card pb-stat" title="Probing addresses that are not blocked yet">
+                <div class="pb-num" style="color:#f87171;">{{ totals.suspicious }}</div>
+                <div class="pb-lbl">Unblocked + flagged</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="pb-card pb-stat" title="Of the addresses above, how many are already blocked">
+                <div class="pb-num" style="color:#9ca3af;">{{ totals.blocked }}</div>
+                <div class="pb-lbl">Already blocked</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="pb-card p-3 mb-3">
+        <form method="get" class="pb-filters">
+            <label>Window
+                <select name="hours" onchange="this.form.submit()">
+                    <option value="1" {% if hours == 1 %}selected{% endif %}>Last hour</option>
+                    <option value="6" {% if hours == 6 %}selected{% endif %}>Last 6 hours</option>
+                    <option value="24" {% if hours == 24 %}selected{% endif %}>Last 24 hours</option>
+                    <option value="72" {% if hours == 72 %}selected{% endif %}>Last 3 days</option>
+                    <option value="168" {% if hours == 168 %}selected{% endif %}>Last 7 days</option>
+                    <option value="720" {% if hours == 720 %}selected{% endif %}>Last 30 days</option>
+                </select>
+            </label>
+            <label>At least this many unknown pages
+                <input type="number" name="min_hits" min="1" value="{{ min_hits }}" style="width:120px;">
+            </label>
+            <label>Search IP
+                <input type="text" name="q" value="{{ q }}" placeholder="203.0.113…" maxlength="64">
+            </label>
+            {% if hide_blocked %}<input type="hidden" name="hide_blocked" value="1">{% endif %}
+            <label>&nbsp;
+                <button type="submit" class="pb-btn" style="color:#fcd34d;background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.3);"><i class="fas fa-filter"></i>Apply</button>
+            </label>
+            <a class="pb-chip {% if not hide_blocked %}on{% endif %}" href="?hours={{ hours }}&amp;min_hits={{ min_hits }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}"><i class="fas fa-list"></i> Show all</a>
+            <a class="pb-chip {% if hide_blocked %}on{% endif %}" href="?hours={{ hours }}&amp;min_hits={{ min_hits }}&amp;hide_blocked=1{% if q %}&amp;q={{ q|urlencode }}{% endif %}"><i class="fas fa-shield-alt"></i> Hide blocked</a>
+            <a class="pb-chip" href="{% url 'probes' %}?hours={{ hours }}"><i class="fas fa-eraser"></i> Reset</a>
+        </form>
+        <div class="pb-sub mt-2">
+            A page that is not on the website answers <span class="pb-mono">404</span> and the request log keeps it, so that is the signal used here; scanner paths (<span class="pb-mono">/.env</span>, <span class="pb-mono">/wp-login.php</span>, …) count even when they did not 404. Window counts come from the {{ total_stored }} requests currently retained by the log.
+        </div>
+    </div>
+
+    <div class="pb-tablewrap mb-3">
+        <table class="pb-table">
+            <thead>
+                <tr>
+                    <th>IP address</th>
+                    <th>Status</th>
+                    <th title="Missing pages + scanner paths hit in the window">Unknown hits</th>
+                    <th>Distinct</th>
+                    <th title="Hits to paths a real visitor never browses">Scanner paths</th>
+                    <th title="Responses answered 404">404s</th>
+                    <th title="All requests from this IP in the window">Requests</th>
+                    <th>Per hour</th>
+                    <th>Signals</th>
+                    <th>Last seen</th>
+                    <th>Pages requested that do not exist</th>
+                    <th>User agent</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td class="pb-ip">
+                        <a class="pb-infolink" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>
+                        <div class="pb-sub"><a class="pb-infolink" href="{% url 'request_log' %}?view=table&amp;client_ip={{ r.ip|urlencode }}" title="Every request logged from this IP">all requests <i class="fas fa-external-link-alt"></i></a></div>
+                    </td>
+                    <td>
+                        {% if r.blocked %}<span class="pb-badge pb-b-on">Blocked</span>
+                        {% else %}<span class="pb-badge pb-b-open">Open</span>{% endif %}
+                    </td>
+                    <td class="pb-num-cell"><span class="pb-hot">{{ r.unknown }}</span></td>
+                    <td class="pb-num-cell">{{ r.path_total }}</td>
+                    <td class="{% if r.probes %}pb-num-cell{% else %}pb-zero{% endif %}">{{ r.probes }}</td>
+                    <td class="{% if r.not_found %}pb-num-cell{% else %}pb-zero{% endif %}">{{ r.not_found }}</td>
+                    <td class="pb-num-cell">{{ r.requests }}</td>
+                    <td class="{% if r.per_hour >= 60 %}pb-hot{% endif %}">{{ r.per_hour }}</td>
+                    <td style="white-space:normal;max-width:210px;">
+                        {% for s in r.signals %}
+                            <span class="pb-signal {% if s == 'no user agent' %}pb-s-noagent{% elif s == 'scraper client' %}pb-s-client{% elif s == 'probe paths' %}pb-s-probe{% else %}pb-s-rate{% endif %}">{{ s }}</span>
+                        {% empty %}
+                            <span class="pb-zero">—</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        <div title="{{ r.last_seen|date:'Y-m-d H:i:s' }}">{{ r.last_seen|timesince }} ago</div>
+                        <div class="pb-sub">{{ r.last_seen|date:"M d, H:i:s" }}</div>
+                    </td>
+                    <td style="white-space:normal;">
+                        <div class="pb-paths">
+                            {% for p in r.paths|slice:":6" %}
+                            <a class="pb-path" href="{{ p.path }}" target="_blank" rel="noopener noreferrer" title="{{ p.path }} — last {{ p.last|date:'Y-m-d H:i:s' }}">
+                                <span>{{ p.path }}</span><span class="pb-code">{{ p.status }}</span><span class="pb-hit">{{ p.count }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% if r.paths|length > 6 %}
+                        <details class="pb-more">
+                            <summary>+{{ r.paths|length|add:"-6" }} more of {{ r.path_total }} distinct</summary>
+                            <div class="pb-paths mt-1">
+                                {% for p in r.paths|slice:"6:40" %}
+                                <a class="pb-path" href="{{ p.path }}" target="_blank" rel="noopener noreferrer" title="{{ p.path }}">
+                                    <span>{{ p.path }}</span><span class="pb-code">{{ p.status }}</span><span class="pb-hit">{{ p.count }}</span>
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </details>
+                        {% endif %}
+                    </td>
+                    <td class="pb-sub" style="white-space:normal;max-width:220px;" title="{{ r.user_agent }}">{% if r.user_agent %}{{ r.user_agent|truncatechars:60 }}{% else %}<span class="pb-hot">none</span>{% endif %}</td>
+                    <td>
+                        {% if r.blocked %}
+                        <button type="button" class="pb-btn pb-btn-unblock" onclick="pbUnblockIP('{{ r.ip|escapejs }}')" title="Unblock this IP"><i class="fas fa-unlock"></i>Unblock</button>
+                        {% else %}
+                        <button type="button" class="pb-btn pb-btn-block" onclick="pbBlockIP('{{ r.ip|escapejs }}')" title="Block this IP — it gets a 403 and can still register or sign in"><i class="fas fa-ban"></i>Block</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="13">
+                        <div class="pb-empty">
+                            <i class="fas fa-user-secret"></i>
+                            <div style="font-size:.95rem;color:#94a3b8;">Nobody asked for a missing page in this window</div>
+                            <div style="font-size:.82rem;margin-top:4px;">Either the site is quiet, or the window is too short — try the last 7 days.</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pb-card p-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div style="font-weight:600;font-size:.86rem;"><i class="fas fa-crosshairs me-2" style="color:#fb923c;"></i>Most hunted pages that do not exist (last {{ hours }}h)</div>
+            <span class="pb-sub">{{ totals.not_found }} answered 404 · {{ totals.probes }} scanner-path hits</span>
+        </div>
+        <table class="pb-table">
+            <thead>
+                <tr>
+                    <th>Path</th>
+                    <th>Hits</th>
+                    <th>IPs</th>
+                    <th>Last seen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in top_paths %}
+                <tr>
+                    <td class="pb-mono">{% if p.probe %}<span class="pb-signal pb-s-probe">scanner</span>{% endif %} {{ p.path }}</td>
+                    <td class="pb-num-cell">{{ p.count }}</td>
+                    <td>{{ p.ips }}</td>
+                    <td class="pb-sub">{{ p.last|date:"M d, H:i:s" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="pb-sub" style="padding:20px;">No missing-page requests in this window.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Block / unblock without leaving the list — same flow as the Requests & Users page. #}
+<form id="pb-block-form" method="post" action="{% url 'ip_block_action' %}" style="display:none;">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="">
+    <input type="hidden" name="ip" value="">
+    <input type="hidden" name="reason" value="">
+    <input type="hidden" name="next" value="">
+</form>
+<script>
+    function pbSubmitBlock(action, ip, reason) {
+        var f = document.getElementById('pb-block-form');
+        if (!f) return;
+        f.querySelector('input[name="action"]').value = action;
+        f.querySelector('input[name="ip"]').value = ip;
+        f.querySelector('input[name="reason"]').value = reason || '';
+        f.querySelector('input[name="next"]').value =
+            window.location.pathname + window.location.search;
+        f.submit();
+    }
+    function pbBlockIP(ip) {
+        if (!ip) return;
+        if (confirm('Block IP ' + ip + '?\n\nIt will get a 403 on public pages but can ' +
+                    'still register or sign in. Its attempts keep being logged.')) {
+            pbSubmitBlock('block', ip, 'probe / scraper traffic');
+        }
+    }
+    function pbUnblockIP(ip) {
+        if (!ip) return;
+        if (confirm('Unblock IP ' + ip + '?')) pbSubmitBlock('unblock', ip);
+    }
+</script>
+{% endblock %}

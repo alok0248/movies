@@ -55,6 +55,9 @@
                 <i class="fas fa-shield-alt"></i> Blocked IPs
                 {% if blocked_total %}<span class="rq-count">{{ blocked_total }}</span>{% endif %}
             </a>
+            <a class="rq-tab" href="{% url 'probes' %}" title="Which IP is asking for pages that are not on the website">
+                <i class="fas fa-user-secret"></i> Probes &amp; Bots
+            </a>
         </div>
     </div>
 

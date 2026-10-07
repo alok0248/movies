@@ -83,8 +83,11 @@ class IPBlockMiddleware:
     lets the Blocked IPs page show how many requests an address kept making
     after the block and which pages it kept asking for.
 
-    Staff / superuser requests and the Django admin are exempt, so a mistyped
-    block can never lock the operator out of the dashboard.
+    A blocked address is not sealed off completely: signing in or registering
+    lifts the block (that is what the block page asks a visitor to do), the
+    login/register endpoints stay reachable so that is actually possible, and
+    staff plus the Django admin are exempt so a mistyped block can never lock
+    the operator out of the dashboard.
     """
 
     def __init__(self, get_response):
@@ -95,9 +98,14 @@ class IPBlockMiddleware:
         path = getattr(request, 'path', '') or ''
         if path.startswith('/admin') or path.startswith('/static/') or path.startswith('/media/'):
             return True
+        from .ip_block import is_auth_entry
+        if is_auth_entry(request):
+            return True
         user = getattr(request, 'user', None)
         try:
-            if user is not None and user.is_authenticated and (user.is_staff or user.is_superuser):
+            # A signed-in visitor is not an anonymous scraper: logging in or
+            # registering is the way out of the block the 403 page offers.
+            if user is not None and user.is_authenticated:
                 return True
         except Exception:
             return True

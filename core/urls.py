@@ -33,6 +33,8 @@ urlpatterns = [
     path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
     # Every blocked IP, with the requests it made after the block.
     path('admin-dashboard/blocked-ips/', views.admin_blocked_ips, name='blocked_ips'),
+    # Who is asking for pages that are not on the website (404s and scanner paths).
+    path('admin-dashboard/probes/', views.admin_probes, name='probes'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
     path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),

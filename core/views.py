@@ -10415,25 +10415,10 @@ def _au_int_param(request, name, default, low, high):
 
 
 # Signatures of scanners, crawlers and command-line clients that hammer the
-# site without ever being a real visitor.
-_AU_BOT_UA_MARKERS = (
-    'bot', 'crawler', 'spider', 'scrapy', 'curl', 'wget', 'python-requests',
-    'python-urllib', 'go-http-client', 'java/', 'okhttp', 'libwww', 'axios',
-    'headlesschrome', 'phantomjs', 'masscan', 'zgrab', 'nmap', 'nuclei',
-    'l9explore', 'expanse', 'censys', 'shodan', 'internetmeasurement',
-)
-
-# Paths that real users never browse to: exploit probes and framework files.
-_AU_BOT_PATH_MARKERS = (
-    '/index.php', '/wp-', '/.env', '/.git', '/vendor/', '/phpunit',
-    '/xmlrpc.php', '/admin.php', '/config.php', '/cgi-bin/', '/shell',
-    '/actuator', '/docker', '/credentials', '/.aws', '/.ssh', '/boaform',
-    '/hudson', '/solr/', '/jenkins', '/telescope', '/containers/json',
-    '/sdk/', '/userportal/', '/_ignition', '/.vscode', '/.idea', '/.svn',
-    '/.htaccess', '/.htpasswd', '/.ds_store', '/server-status', '/phpinfo',
-    '/info.php', '/test.php', '/db.php', '/owa/', '/autodiscover', '/cgi',
-    '/gponform', '/.dockerenv', '/wp-content',
-)
+# site without ever being a real visitor. Single source of truth shared with the
+# Probes & Bots page (a scanner should be classified the same in both places).
+from .probes import (SCRAPER_UA_MARKERS as _AU_BOT_UA_MARKERS,
+                     PROBE_PATH_MARKERS as _AU_BOT_PATH_MARKERS)
 
 
 def _au_looks_like_bot(row):
@@ -10971,6 +10956,65 @@ def admin_blocked_ips(request):
         'q': search,
         # Counts on this page are derived from the retained request log, so say
         # how big that window currently is.
+        'total_stored': request_total(),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_probes(request):
+    """Probes & Bots — who is asking for pages that are not on the website.
+
+    One row per address: how many unknown pages it asked for (404s and scanner
+    paths), exactly which ones, its request rate, and the signals that make it
+    look automated. Every row can be blocked straight from here, and the bottom
+    table shows which non-existent pages are being hunted for most.
+    """
+    import csv
+    from django.http import HttpResponse
+    from .probes import probe_report
+    from .request_log import request_total
+
+    hours = _au_int_param(request, 'hours', 24, 1, 720)
+    min_hits = _au_int_param(request, 'min_hits', 1, 1, 100000)
+    hide_blocked = request.GET.get('hide_blocked') == '1'
+    search = (request.GET.get('q') or '').strip()[:64]
+    rows, totals, top_paths = probe_report(
+        hours=hours, min_hits=min_hits, hide_blocked=hide_blocked, search=search,
+    )
+
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="probes.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow([
+            'IP', 'Blocked', 'Unknown pages', 'Distinct unknown pages',
+            'Scanner paths', '404s', 'Requests in window', 'Per hour',
+            'Signals', 'First seen', 'Last seen', 'User agent', 'Pages requested',
+        ])
+
+        def _stamp(value):
+            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else ''
+
+        for r in rows:
+            writer.writerow([
+                r['ip'], 'Yes' if r['blocked'] else 'No', r['unknown'],
+                r['path_total'], r['probes'], r['not_found'], r['requests'],
+                r['per_hour'], ', '.join(r['signals']), _stamp(r['first_seen']),
+                _stamp(r['last_seen']), r['user_agent'],
+                ' | '.join(f"{p['path']} x{p['count']}" for p in r['paths']),
+            ])
+        return response
+
+    return render(request, 'core/admin_probes.html', {
+        'rows': rows,
+        'totals': totals,
+        'top_paths': top_paths,
+        'hours': hours,
+        'min_hits': min_hits,
+        'hide_blocked': hide_blocked,
+        'q': search,
         'total_stored': request_total(),
     })
 

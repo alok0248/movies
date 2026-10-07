@@ -2721,6 +2721,13 @@
                 url.searchParams.delete('login_required');
                 url.searchParams.delete('next');
                 window.history.replaceState({}, '', url);
+            } else if (urlParams.get('register') === 'true') {
+                // CTA of the blocked-address page: open straight on the
+                // registration form so a blocked visitor can get in.
+                openAuthModal('register');
+                const rurl = new URL(window.location.href);
+                rurl.searchParams.delete('register');
+                window.history.replaceState({}, '', rurl);
             }
 
             updateAllWatchlistButtons();
