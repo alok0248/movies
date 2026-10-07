@@ -9524,6 +9524,225 @@ def synced_users_list(request):
     })
 
 
+# Media keys the Android app stores in the cloud payload. Three shapes are seen
+# in real data: 'movie_<id>_<season>_<episode>', 'tv_<id>_<season>_<episode>' and
+# 'seen_<id>_<isTv>_<season>_<episode>'. Plain ids are accepted too.
+def _cloud_media_from_key(key):
+    """Decode a cloud-data media key into (tmdb_id, is_tv, season, episode)."""
+    if isinstance(key, bool):
+        return None, None, None, None
+    if isinstance(key, int):
+        return (key, None, None, None)
+    if isinstance(key, float):
+        # Only an integral float is a usable id; never silently truncate.
+        return ((int(key), None, None, None) if key.is_integer()
+                else (None, None, None, None))
+    if not isinstance(key, str):
+        return None, None, None, None
+    parts = key.strip().split('_')
+    if not parts or not parts[0]:
+        return None, None, None, None
+    if parts[0].isdigit():
+        return (int(parts[0]), None, None, None)
+    if parts[0] not in ('movie', 'tv', 'seen') or len(parts) < 2:
+        return None, None, None, None
+    try:
+        tmdb_id = int(parts[1])
+    except (IndexError, ValueError):
+        return None, None, None, None
+
+    def _num(value):
+        try:
+            n = int(value)
+            return n if n > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    if parts[0] == 'seen':
+        is_tv = len(parts) > 2 and parts[2].lower() == 'true'
+        rest = parts[3:]
+    else:
+        is_tv = parts[0] == 'tv'
+        rest = parts[2:]
+    season = _num(rest[0]) if rest else None
+    episode = _num(rest[1]) if len(rest) > 1 else None
+    return tmdb_id, is_tv, season, episode
+
+
+def _cloud_item(raw=None, key=None, rating=None):
+    """One cloud-sync entry as {key, tmdb_id, is_tv, season, episode, ...}.
+
+    Values in the entry win over what the key says, because the app writes the
+    authoritative mediaId/isTv/season/episode inside the entry itself.
+    """
+    data = raw if isinstance(raw, dict) else {}
+    if key is None and not data and raw is not None:
+        key = raw
+    k_id, k_tv, k_season, k_episode = _cloud_media_from_key(key)
+
+    def _pos(value):
+        n = _safe_int(value)
+        return n if n > 0 else None
+
+    tmdb_id = (_pos(data.get('mediaId')) or _pos(data.get('tmdbId'))
+               or _pos(data.get('id')) or k_id)
+    is_tv = data.get('isTv')
+    if not isinstance(is_tv, bool):
+        is_tv = k_tv
+    return {
+        'key': key if key is not None else (str(tmdb_id) if tmdb_id else ''),
+        'tmdb_id': tmdb_id,
+        'is_tv': is_tv,
+        'season': _pos(data.get('season')) or k_season,
+        'episode': _pos(data.get('episode')) or k_episode,
+        'title': (data.get('title') or data.get('name') or '').strip(),
+        'poster_path': (data.get('posterPath') or data.get('poster_path') or '').strip(),
+        'position_ms': _safe_int(data.get('positionMs')),
+        'duration_ms': _safe_int(data.get('durationMs')),
+        'last_updated': data.get('lastUpdated') or data.get('lastWatchedEpoch') or '',
+        'rating': rating if rating is not None else data.get('rating'),
+    }
+
+
+def _ms_label(ms):
+    """Milliseconds as a short human label ('1h 12m', '43s')."""
+    try:
+        total = int(ms) // 1000
+    except (TypeError, ValueError):
+        return ''
+    if total <= 0:
+        return ''
+    if total < 60:
+        return '%ss' % total
+    if total < 3600:
+        return '%sm %ss' % (total // 60, total % 60)
+    return '%sh %sm' % (total // 3600, (total % 3600) // 60)
+
+
+def _cloud_ts_label(value):
+    """An app timestamp (epoch ms for most fields, epoch s or text otherwise)
+    as a readable IST stamp."""
+    if value in (None, '', 0, '0'):
+        return ''
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return str(value)[:40]
+    if n <= 0:
+        return ''
+    seconds = n / 1000.0 if n > 10 ** 11 else float(n)
+    try:
+        stamp = datetime.datetime.fromtimestamp(seconds, tz=datetime.timezone.utc)
+        return timezone.localtime(stamp).strftime('%b %d, %Y %H:%M')
+    except Exception:
+        return ''
+
+
+# Keep a page render bounded even if a user's cloud payload is enormous.
+MAX_CLOUD_ITEMS = 400
+
+
+def _cloud_sync_sections(cloud, linked_user=None):
+    """The Cloud Sync Data boxes as clickable lists of openable items.
+
+    Every box on the synced-user page becomes a section whose items carry the
+    link to that title's details page and to the web player, so the admin goes
+    from a stored key straight to the real movie/series and can play it. Titles
+    and posters come from the entry itself when the app sent them, otherwise from
+    that user's own PlayHistory rows (no network call).
+    """
+    if cloud is None:
+        return []
+
+    known = {}
+    if linked_user is not None:
+        try:
+            for ph in PlayHistory.objects.filter(user=linked_user).order_by('-last_played_at')[:500]:
+                if ph.tmdb_id and ph.tmdb_id not in known:
+                    known[ph.tmdb_id] = {'title': ph.title or '', 'poster': ph.poster_path or ''}
+        except Exception:
+            logger.debug('cloud sync: play history lookup failed', exc_info=True)
+
+    def _as_list(value):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):   # some app versions store a map here
+            return list(value.values())
+        return []
+
+    def _finish(items):
+        for item in items[:MAX_CLOUD_ITEMS]:
+            hit = known.get(item['tmdb_id']) if item['tmdb_id'] else None
+            if hit:
+                if not item['title']:
+                    item['title'] = hit['title']
+                if not item['poster_path']:
+                    item['poster_path'] = hit['poster']
+            # What to show when the app never sent a title: the type + id is far
+            # more useful to the admin than the raw stored key.
+            if item['title']:
+                item['label'] = item['title']
+            elif item['tmdb_id']:
+                item['label'] = '%s #%s' % ('Series' if item['is_tv'] else 'Movie',
+                                           item['tmdb_id'])
+            else:
+                item['label'] = item['key'] or '—'
+            item['detail_url'] = ''
+            item['play_url'] = ''
+            item['position_label'] = _ms_label(item['position_ms'])
+            item['duration_label'] = _ms_label(item['duration_ms'])
+            item['updated_label'] = _cloud_ts_label(item['last_updated'])
+            item['progress_pct'] = 0
+            if item['duration_ms'] and item['position_ms']:
+                item['progress_pct'] = min(100, round(item['position_ms'] * 100.0 / item['duration_ms']))
+            if item['tmdb_id']:
+                is_tv = bool(item['is_tv'])
+                try:
+                    item['detail_url'] = reverse(
+                        'series_detail_by_id' if is_tv else 'movie_detail_by_id',
+                        args=[item['tmdb_id']])
+                    params = {'tmdb_id': item['tmdb_id'], 'type': 'tv' if is_tv else 'movie'}
+                    if is_tv:
+                        params['season'] = item['season'] or 1
+                        params['episode'] = item['episode'] or 1
+                    item['play_url'] = reverse('videasy_player') + '?' + _urlencode(params)
+                except Exception:
+                    logger.debug('cloud sync: could not build links for %s', item['tmdb_id'],
+                                 exc_info=True)
+        return items
+
+    progress = getattr(cloud, 'playback_progress', None)
+    progress = progress if isinstance(progress, dict) else {}
+    playback = _finish([_cloud_item(entry, key=key) for key, entry in progress.items()])
+    playback.sort(key=lambda i: _safe_int(i['last_updated']), reverse=True)
+    seen = _finish([_cloud_item(key=key) for key in _as_list(getattr(cloud, 'seen_keys', None))])
+    history = _finish([_cloud_item(raw=entry)
+                       for entry in _as_list(getattr(cloud, 'watch_history', None))])
+    history.sort(key=lambda i: _safe_int(i['last_updated']), reverse=True)
+    favorites = _finish([_cloud_item(raw=entry)
+                         for entry in _as_list(getattr(cloud, 'favorites', None))])
+    watchlist = _finish([_cloud_item(raw=entry)
+                         for entry in _as_list(getattr(cloud, 'watchlist_ids', None))])
+    ratings = getattr(cloud, 'user_ratings', None)
+    ratings = ratings if isinstance(ratings, dict) else {}
+    rated = _finish([_cloud_item(raw=value if isinstance(value, dict) else None,
+                                 key=key if not isinstance(value, dict) else None,
+                                 rating=value if not isinstance(value, dict) else None)
+                     for key, value in ratings.items()])
+
+    sections = [
+        ('playback', 'Playback Entries', 'play-circle', '#38bdf8', playback),
+        ('seen', 'Seen Items', 'eye', '#a855f7', seen),
+        ('history', 'Watch History', 'history', '#fbbf24', history),
+        ('favorites', 'Favorites', 'heart', '#22c55e', favorites),
+        ('watchlist', 'Watchlist', 'bookmark', '#ef4444', watchlist),
+        ('ratings', 'Ratings', 'star', '#94a3b8', rated),
+    ]
+    return [{'key': key, 'label': label, 'icon': icon, 'color': color,
+             'items': items, 'count': len(items)}
+            for key, label, icon, color, items in sections]
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def synced_user_detail(request, user_id):
@@ -9547,6 +9766,9 @@ def synced_user_detail(request, user_id):
         'user_obj': user_obj,
         'linked_user': linked_user,
         'cloud_data': cloud_data,
+        # Clickable item lists behind each Cloud Sync box (details + play links).
+        'cloud_sections': _cloud_sync_sections(cloud_data, linked_user),
+        'max_cloud_items': MAX_CLOUD_ITEMS,
     })
 
 

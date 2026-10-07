@@ -181,42 +181,113 @@
         <div class="card-body">
             <div class="row g-4">
                 <div class="col-md-4 text-center">
-                    <div class="p-3 rounded" style="background:rgba(56,189,248,0.1);">
+                    <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="playback" onclick="syncShowSection('playback')" style="background:rgba(56,189,248,0.1);">
                         <div class="h3 text-info mb-1">{{ cloud_data.playback_progress|length }}</div>
                         <div class="text-secondary small">Playback Entries</div>
-                    </div>
+                        <div class="cloud-hint">Click to open</div>
+                    </button>
                 </div>
                 <div class="col-md-4 text-center">
-                    <div class="p-3 rounded" style="background:rgba(168,85,247,0.1);">
+                    <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="seen" onclick="syncShowSection('seen')" style="background:rgba(168,85,247,0.1);">
                         <div class="h3 mb-1" style="color:#a855f7;">{{ cloud_data.seen_keys|length }}</div>
                         <div class="text-secondary small">Seen Items</div>
-                    </div>
+                        <div class="cloud-hint">Click to open</div>
+                    </button>
                 </div>
                 <div class="col-md-4 text-center">
-                    <div class="p-3 rounded" style="background:rgba(251,191,36,0.1);">
+                    <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="history" onclick="syncShowSection('history')" style="background:rgba(251,191,36,0.1);">
                         <div class="h3 text-warning mb-1">{{ cloud_data.watch_history|length }}</div>
                         <div class="text-secondary small">Watch History</div>
-                    </div>
+                        <div class="cloud-hint">Click to open</div>
+                    </button>
                 </div>
                 <div class="col-md-4 text-center">
-                    <div class="p-3 rounded" style="background:rgba(34,197,94,0.1);">
+                    <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="favorites" onclick="syncShowSection('favorites')" style="background:rgba(34,197,94,0.1);">
                         <div class="h3 text-success mb-1">{{ cloud_data.favorites|length }}</div>
                         <div class="text-secondary small">Favorites</div>
-                    </div>
+                        <div class="cloud-hint">Click to open</div>
+                    </button>
                 </div>
                 <div class="col-md-4 text-center">
-                    <div class="p-3 rounded" style="background:rgba(239,68,68,0.1);">
+                    <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="watchlist" onclick="syncShowSection('watchlist')" style="background:rgba(239,68,68,0.1);">
                         <div class="h3 text-danger mb-1">{{ cloud_data.watchlist_ids|length }}</div>
                         <div class="text-secondary small">Watchlist</div>
-                    </div>
+                        <div class="cloud-hint">Click to open</div>
+                    </button>
                 </div>
                 <div class="col-md-4 text-center">
-                    <div class="p-3 rounded" style="background:rgba(100,116,139,0.1);">
+                    <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="ratings" onclick="syncShowSection('ratings')" style="background:rgba(100,116,139,0.1);">
                         <div class="h3 text-secondary mb-1">{{ cloud_data.user_ratings|length }}</div>
                         <div class="text-secondary small">Ratings</div>
-                    </div>
+                        <div class="cloud-hint">Click to open</div>
+                    </button>
                 </div>
             </div>
+            <style>
+                .cloud-box { border:1px solid rgba(148,163,184,.22); cursor:pointer; color:inherit; transition:transform .15s, box-shadow .15s, border-color .15s; }
+                .cloud-box:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,0,0,.35); border-color:rgba(148,163,184,.55); }
+                .cloud-box.on { border-color:#38bdf8; box-shadow:inset 0 0 0 1px rgba(56,189,248,.5); }
+                .cloud-hint { font-size:.66rem; text-transform:uppercase; letter-spacing:.06em; color:#64748b; margin-top:.35rem; }
+                .cloud-box:hover .cloud-hint, .cloud-box.on .cloud-hint { color:#38bdf8; }
+                .cloud-panel { background:rgba(2,6,23,.55); border:1px solid rgba(148,163,184,.2); border-radius:12px; padding:.85rem .9rem; }
+                .cloud-panel-head { display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; margin-bottom:.6rem; }
+                .sync-item { display:flex; align-items:center; gap:.7rem; padding:.5rem; border-radius:10px; border:1px solid rgba(148,163,184,.14); background:rgba(15,23,42,.5); }
+                .sync-item + .sync-item { margin-top:.4rem; }
+                .sync-item:hover { border-color:rgba(148,163,184,.4); }
+                .sync-poster { width:44px; height:64px; object-fit:cover; border-radius:6px; flex:0 0 auto; background:rgba(148,163,184,.15); }
+                .sync-poster-none { display:flex; align-items:center; justify-content:center; color:#64748b; font-size:1.1rem; }
+                .sync-main { min-width:0; flex:1 1 auto; }
+                .sync-title { font-weight:600; color:#e2e8f0; font-size:.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+                .sync-title a { color:#e2e8f0; text-decoration:none; border-bottom:1px dotted rgba(226,232,240,.35); }
+                .sync-title a:hover { color:#93c5fd; }
+                .sync-meta { font-size:.72rem; color:#94a3b8; display:flex; flex-wrap:wrap; gap:.15rem .5rem; align-items:center; }
+                .sync-chip { font-size:.62rem; font-weight:700; padding:1px 6px; border-radius:4px; background:rgba(148,163,184,.18); color:#cbd5e1; text-transform:uppercase; letter-spacing:.03em; }
+                .sync-bar { height:5px; border-radius:3px; background:rgba(148,163,184,.2); overflow:hidden; margin-top:.3rem; }
+                .sync-bar > span { display:block; height:100%; background:linear-gradient(90deg,#38bdf8,#22d3ee); }
+                .sync-actions { display:flex; gap:.35rem; flex:0 0 auto; }
+                .sync-empty { color:#64748b; font-size:.8rem; text-align:center; padding:1.2rem; }
+            </style>
+
+            <div id="cloudItems" class="cloud-panel mt-3">
+                {% for s in cloud_sections %}
+                <div class="cloud-section" data-sync-panel="{{ s.key }}" data-sync-count="{{ s.count }}" {% if not forloop.first %}style="display:none;"{% endif %}>
+                    <div class="cloud-panel-head">
+                        <div class="text-white fw-semibold"><i class="fas fa-{{ s.icon }} me-2" style="color:{{ s.color }};"></i>{{ s.label }}
+                            <span class="badge ms-1" style="background:{{ s.color }}33;color:{{ s.color }};">{{ s.count }}</span>
+                            {% if s.count > max_cloud_items %}<span class="text-secondary small ms-2">showing the first {{ max_cloud_items }}</span>{% endif %}
+                        </div>
+                        <div class="text-secondary small">Click any item to open its details page or play it — both open in a new tab</div>
+                    </div>
+                    {% for it in s.items %}
+                    <div class="sync-item">
+                        {% if it.poster_path %}<img class="sync-poster" src="https://image.tmdb.org/t/p/w92{{ it.poster_path }}" alt="" loading="lazy">{% else %}<div class="sync-poster sync-poster-none"><i class="fas {% if it.is_tv %}fa-tv{% else %}fa-film{% endif %}"></i></div>{% endif %}
+                        <div class="sync-main">
+                            <div class="sync-title" title="{{ it.key }}">{% if it.detail_url %}<a href="{{ it.detail_url }}" target="_blank" rel="noopener">{{ it.label }}</a>{% else %}{{ it.label }}{% endif %}</div>
+                            <div class="sync-meta">
+                                <span class="sync-chip">{% if it.is_tv %}Series{% else %}Movie{% endif %}</span>
+                                {# Season/episode only means something for a series; the app leaves 1_1 on movie keys. #}
+                                {% if it.is_tv and it.season %}<span>S{{ it.season }}{% if it.episode %}E{{ it.episode }}{% endif %}</span>{% endif %}
+                                {% if it.tmdb_id %}<span>TMDB #{{ it.tmdb_id }}</span>{% endif %}
+                                {% if it.rating %}<span><i class="fas fa-star" style="color:#fbbf24;"></i> {{ it.rating }}</span>{% endif %}
+                                {% if it.position_label %}<span>{{ it.position_label }}{% if it.duration_label %} of {{ it.duration_label }}{% endif %}</span>{% endif %}
+                                {% if it.updated_label %}<span>updated {{ it.updated_label }}</span>{% endif %}
+                            </div>
+                            {% if it.progress_pct %}<div class="sync-bar"><span style="width:{{ it.progress_pct }}%;"></span></div>{% endif %}
+                        </div>
+                        <div class="sync-actions">
+                            {% if it.detail_url %}
+                            <a class="btn btn-sm btn-outline-info" href="{{ it.detail_url }}" target="_blank" rel="noopener" title="Open the details page"><i class="fas fa-info-circle"></i> Details</a>
+                            <a class="btn btn-sm btn-danger" href="{{ it.play_url }}" target="_blank" rel="noopener" title="Play this title"><i class="fas fa-play"></i> Play</a>
+                            {% else %}<span class="text-secondary small">no link</span>{% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="sync-empty">Nothing stored in this box.</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+
             {% if cloud_data.playback_progress %}
             <hr class="border-secondary">
             <h6 class="text-white mb-3"><i class="fas fa-play-circle me-2 text-info"></i>Playback Progress</h6>
@@ -236,6 +307,45 @@
                 </table>
             </div>
             {% endif %}
+            <script>
+                // One Cloud Sync box open at a time — the card stays readable.
+                function syncShowSection(key) {
+                    var panels = document.querySelectorAll('[data-sync-panel]');
+                    var boxes = document.querySelectorAll('.cloud-box');
+                    var target = document.querySelector('[data-sync-panel="' + key + '"]');
+                    if (!target) return;
+                    var alreadyOpen = target.style.display !== 'none';
+                    for (var i = 0; i < panels.length; i++) panels[i].style.display = 'none';
+                    for (var j = 0; j < boxes.length; j++) boxes[j].classList.remove('on');
+                    if (alreadyOpen) return;
+                    target.style.display = '';
+                    for (var k = 0; k < boxes.length; k++) {
+                        if (boxes[k].getAttribute('data-sync-section') === key) boxes[k].classList.add('on');
+                    }
+                    var wrap = document.getElementById('cloudItems');
+                    if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+                // Open whichever box actually holds something, so the list is
+                // usable without a first click.
+                (function () {
+                    var panels = document.querySelectorAll('[data-sync-panel]');
+                    var want = null;
+                    for (var i = 0; i < panels.length; i++) {
+                        if (panels[i].getAttribute('data-sync-count') !== '0' && panels[i].querySelector('.sync-item')) {
+                            want = panels[i].getAttribute('data-sync-panel');
+                            break;
+                        }
+                    }
+                    if (!want) return;
+                    for (var j = 0; j < panels.length; j++) panels[j].style.display = 'none';
+                    var t = document.querySelector('[data-sync-panel="' + want + '"]');
+                    if (t) t.style.display = '';
+                    var boxes = document.querySelectorAll('.cloud-box');
+                    for (var k = 0; k < boxes.length; k++) {
+                        boxes[k].classList.toggle('on', boxes[k].getAttribute('data-sync-section') === want);
+                    }
+                })();
+            </script>
             <div class="text-secondary small mt-2"><i class="fas fa-clock me-1"></i>Last synced: {{ cloud_data.last_synced_at }} &middot; Data version: {{ cloud_data.data_version }}</div>
         </div>
     </div>
