@@ -51,8 +51,22 @@
                 <i class="fas fa-network-wired"></i> Request Log
                 {% if panel != 'users' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
             </a>
+            <a class="rq-tab" href="{% url 'blocked_ips' %}" title="Every blocked IP, with the requests it kept making after the block">
+                <i class="fas fa-shield-alt"></i> Blocked IPs
+                {% if blocked_total %}<span class="rq-count">{{ blocked_total }}</span>{% endif %}
+            </a>
         </div>
     </div>
+
+    {# One shared POST form for the per-row Block / Unblock buttons in both panels.
+       Kept outside the panels so it never nests inside a filter form. #}
+    <form id="rq-block-form" method="post" action="{% url 'ip_block_action' %}" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="">
+        <input type="hidden" name="ip" value="">
+        <input type="hidden" name="reason" value="">
+        <input type="hidden" name="next" value="">
+    </form>
 
     {% if panel == 'users' %}
         {% include 'core/admin_active_users.html' %}
@@ -60,4 +74,32 @@
         {% include 'core/admin_request_log.html' %}
     {% endif %}
 </div>
+
+<script>
+    // Block / unblock an IP straight from the list, then land back on the exact
+    // filtered view so the surrounding context is not lost.
+    function rqSubmitBlock(action, ip, reason) {
+        var f = document.getElementById('rq-block-form');
+        if (!f) return;
+        f.querySelector('input[name="action"]').value = action;
+        f.querySelector('input[name="ip"]').value = ip;
+        f.querySelector('input[name="reason"]').value = reason || '';
+        f.querySelector('input[name="next"]').value =
+            window.location.pathname + window.location.search;
+        f.submit();
+    }
+    function rqBlockIP(ip) {
+        if (!ip) return;
+        var ok = confirm('Block IP ' + ip + '?\n\n' +
+            'Every request from this address will get a 403. The attempts are ' +
+            'still logged, so the Blocked IPs page can show what it tries next.');
+        if (ok) rqSubmitBlock('block', ip);
+    }
+    function rqUnblockIP(ip) {
+        if (!ip) return;
+        if (confirm('Unblock IP ' + ip + '?\n\nRequests from it will be served again.')) {
+            rqSubmitBlock('unblock', ip);
+        }
+    }
+</script>
 {% endblock %}

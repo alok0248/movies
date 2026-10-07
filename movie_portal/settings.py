@@ -65,6 +65,9 @@ MIDDLEWARE = [
     'core.browser_cache.BrowserCacheMiddleware',
     'core.error_monitor.ErrorMonitoringMiddleware',
     'core.middleware.RequestLogMiddleware',
+    # Last on purpose: it runs *inside* RequestLogMiddleware, so a request from
+    # a blocked IP is denied (403) but still recorded in the request log.
+    'core.middleware.IPBlockMiddleware',
 ]
 
 ROOT_URLCONF = 'movie_portal.urls'

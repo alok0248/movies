@@ -75,6 +75,49 @@ class URLBlockMiddleware:
         return self.get_response(request)
 
 
+class IPBlockMiddleware:
+    """Deny every public request from an IP the admin has blocked.
+
+    Placed LAST in MIDDLEWARE — inside RequestLogMiddleware — so a blocked
+    request is still written to the request log. That is deliberate: it is what
+    lets the Blocked IPs page show how many requests an address kept making
+    after the block and which pages it kept asking for.
+
+    Staff / superuser requests and the Django admin are exempt, so a mistyped
+    block can never lock the operator out of the dashboard.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    @staticmethod
+    def _exempt(request):
+        path = getattr(request, 'path', '') or ''
+        if path.startswith('/admin') or path.startswith('/static/') or path.startswith('/media/'):
+            return True
+        user = getattr(request, 'user', None)
+        try:
+            if user is not None and user.is_authenticated and (user.is_staff or user.is_superuser):
+                return True
+        except Exception:
+            return True
+        return False
+
+    def __call__(self, request):
+        try:
+            if self._exempt(request):
+                return self.get_response(request)
+            client_ip = get_client_ip(request)
+            if client_ip:
+                from .ip_block import blocked_ip_for, blocked_response
+                if blocked_ip_for(client_ip) is not None:
+                    return blocked_response(client_ip)
+        except Exception:
+            # Blocking must never break the site; on any doubt, serve the request.
+            pass
+        return self.get_response(request)
+
+
 class EmailSettingsMiddleware:
     """Apply email settings from SiteSettings, but only update Django's global
     settings when values actually change to avoid unnecessary global-state
@@ -130,6 +173,16 @@ class WebsiteVisitorTrackingMiddleware:
 
         client_ip = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        # A blocked address still gets served (it will be denied a 403 further
+        # down the stack) but is kept out of the visitor tables so it cannot
+        # inflate the Active Users list.
+        try:
+            from .ip_block import is_ip_blocked
+            if client_ip and is_ip_blocked(client_ip):
+                return self.get_response(request)
+        except Exception:
+            pass
 
         # Determine bot status once and early-exit for bots
         is_bot = False

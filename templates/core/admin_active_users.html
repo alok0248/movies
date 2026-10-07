@@ -31,6 +31,22 @@
     .au-table thead th.sortable:hover { color: #93c5fd; }
     .au-table tbody tr:hover { background: rgba(148,163,184,.07); }
     .au-mono { font-family: Consolas, Menlo, monospace; }
+    /* Per-row Block / Unblock control, right next to the IP */
+    .au-blockbtn {
+        display: inline-flex; align-items: center; gap: .25rem;
+        margin-left: .3rem; padding: .02rem .45rem; border-radius: 999px;
+        border: 1px solid rgba(248,113,113,.4); background: rgba(239,68,68,.1);
+        color: #f87171; font-size: .66rem; line-height: 1.5; cursor: pointer;
+        white-space: nowrap;
+    }
+    .au-blockbtn:hover { background: rgba(239,68,68,.24); border-color: #f87171; color: #fca5a5; }
+    .au-blockbtn.on { border-color: rgba(52,211,153,.45); background: rgba(52,211,153,.14); color: #34d399; }
+    .au-blockbtn.on:hover { background: rgba(52,211,153,.26); border-color: #34d399; color: #6ee7b7; }
+    .au-blockbtn i { font-size: .58rem; }
+    html[data-theme="light"] .au-blockbtn { border-color: rgba(185,28,28,.35); background: rgba(220,38,38,.08); color: #b91c1c; }
+    html[data-theme="light"] .au-blockbtn:hover { background: rgba(220,38,38,.18); border-color: #b91c1c; color: #991b1b; }
+    html[data-theme="light"] .au-blockbtn.on { border-color: rgba(5,150,105,.4); background: rgba(5,150,105,.12); color: #047857; }
+    html[data-theme="light"] .au-blockbtn.on:hover { background: rgba(5,150,105,.22); border-color: #047857; }
     .au-trunc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
     .au-user { font-weight: 600; color: var(--text, #e2e8f0); text-decoration: none; }
     .au-user:hover { color: #93c5fd; }
@@ -233,7 +249,7 @@
                         </span>
                     </td>
                     <td class="au-mono">
-                        {% if r.ip %}<a class="au-infolink" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
+                        {% if r.ip %}<a class="au-infolink" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>{% if r.ip in blocked_ips %}<button type="button" class="au-blockbtn on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="au-blockbtn" onclick="rqBlockIP('{{ r.ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
                         {% if r.ips|length > 1 %}<div class="au-sub" title="{{ r.ips|join:', ' }}">+{{ r.ips|length|add:"-1" }} more IPs</div>{% endif %}
                     </td>
                     <td>

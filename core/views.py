@@ -8818,12 +8818,18 @@ def _request_log_tab(request):
             ])
         return response
 
+    from .ip_block import active_blocked_ips
+    blocked = active_blocked_ips()
+
     view_mode = 'table' if request.GET.get('view') == 'table' else 'cards'
     return render(request, 'core/admin_requests.html', {
         'panel': 'log',
         'records': records,
         'count': len(records),
         'total': request_total(),
+        # Every currently blocked address, so each row can offer Block or Unblock.
+        'blocked_ips': blocked,
+        'blocked_total': len(blocked),
         'view_mode': view_mode,
         'filters': filters,
         'options': options,
@@ -10827,9 +10833,14 @@ def admin_active_users(request):
             ])
         return response
 
+    from .ip_block import active_blocked_ips
+    blocked = active_blocked_ips()
+
     return render(request, 'core/admin_requests.html', {
         'panel': 'users',
         'rows': displayed,
+        'blocked_ips': blocked,
+        'blocked_total': len(blocked),
         'shown': len(displayed),
         'row_total': len(filtered),
         'max_display': max_display,
@@ -10855,6 +10866,112 @@ def admin_active_users(request):
         'active_cutoff': active_cutoff,
         'now': now,
         'since': since,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def ip_block_action(request):
+    """Block or unblock one IP, then return to the view the admin came from.
+
+    One endpoint serves both the Requests & Users page (per-row button) and the
+    Blocked IPs page (unblock / add): ``action`` is ``block`` or ``unblock``,
+    ``ip`` the address and ``reason`` an optional note. ``next`` is honoured
+    only when it is a local path, so a crafted form cannot bounce elsewhere.
+    """
+    from .ip_block import block_ip, unblock_ip, normalize_ip
+
+    action = (request.POST.get('action') or '').strip()
+    raw_ip = (request.POST.get('ip') or '').strip()
+    ip = normalize_ip(raw_ip)
+    reason = (request.POST.get('reason') or '').strip()[:300]
+    who = (request.user.username or '')[:150]
+
+    if not raw_ip:
+        messages.error(request, 'No IP address given.')
+    elif not ip:
+        messages.error(request, f'“{raw_ip[:64]}” is not a valid IP address — '
+                                'use a single IPv4 or IPv6 address.')
+    elif action == 'unblock':
+        if unblock_ip(ip, who) is not None:
+            messages.success(request, f'Unblocked {ip}. Requests from it are served again.')
+        else:
+            messages.warning(request, f'{ip} was not blocked.')
+    elif action == 'block':
+        _, created = block_ip(ip, who, reason)
+        if created:
+            messages.success(request,
+                             f'Blocked {ip}. Requests from it now get a 403 — and are '
+                             'still logged, so you can see what it tries next.')
+        else:
+            messages.success(request, f'Re-blocked {ip}. Its block clock was reset.')
+    else:
+        messages.error(request, 'Unknown action.')
+
+    nxt = (request.POST.get('next') or '').strip()
+    if not (nxt.startswith('/') and not nxt.startswith('//')):
+        nxt = reverse('blocked_ips')
+    return redirect(nxt)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_blocked_ips(request):
+    """Blocked IPs — every address the site refuses, and what it tried anyway.
+
+    A blocked address answers 403 on every public request, but the request is
+    still recorded: this page counts the requests it has made and the requests
+    that kept arriving *after* the block, and lists the pages it asked for. A
+    block can be added or lifted straight from here.
+    """
+    import csv
+    from django.http import HttpResponse
+    from .ip_block import blocked_ip_report
+
+    show_all = (request.GET.get('show') or 'active') == 'all'
+    search = (request.GET.get('q') or '').strip()[:64]
+    rows, totals = blocked_ip_report(include_unblocked=show_all, search=search)
+
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="blocked_ips.csv"'
+        # BOM so Excel opens the UTF-8 file without mangling accented data.
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow([
+            'IP', 'Status', 'Blocked at', 'Blocked by', 'Reason',
+            'Unblocked at', 'Unblocked by', 'Requests (total)',
+            'Requests after block', '403s served', 'Pages after block',
+            'Distinct pages', 'First seen', 'Last seen',
+            'Last seen after block', 'Users', 'User agent',
+        ])
+
+        def _stamp(value):
+            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else ''
+
+        for r in rows:
+            writer.writerow([
+                r['ip'], 'Blocked' if r['is_active'] else 'Unblocked',
+                _stamp(r['blocked_at']), r['blocked_by'], r['reason'],
+                _stamp(r['unblocked_at']), r['unblocked_by'], r['total'],
+                r['after'], r['after_403'],
+                ' | '.join(f"{p['path']} x{p['count']}" for p in r['paths']),
+                r['path_total'], _stamp(r['first_seen']), _stamp(r['last_seen']),
+                _stamp(r['last_after']), ', '.join(r['top_users']), r['user_agent'],
+            ])
+        return response
+
+    from .request_log import request_total
+
+    return render(request, 'core/admin_blocked_ips.html', {
+        'rows': rows,
+        'totals': totals,
+        'show_all': show_all,
+        'q': search,
+        # Counts on this page are derived from the retained request log, so say
+        # how big that window currently is.
+        'total_stored': request_total(),
     })
 
 

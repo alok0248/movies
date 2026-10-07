@@ -29,6 +29,10 @@ urlpatterns = [
     path('admin-dashboard/api-errors/', views.api_error_log, name='api_error_log'),
     # Requests & Users: ?tab=log (raw request log, default) or ?tab=users (visitors).
     path('admin-dashboard/requests/', views.admin_requests, name='request_log'),
+    # Block/unblock one IP (POST) — used by the Requests & Users and Blocked IPs pages.
+    path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
+    # Every blocked IP, with the requests it made after the block.
+    path('admin-dashboard/blocked-ips/', views.admin_blocked_ips, name='blocked_ips'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
     path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),

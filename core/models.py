@@ -2621,6 +2621,34 @@ class RequestLogPreset(models.Model):
         return self.name
 
 
+class BlockedIP(models.Model):
+    """One row per IP address the admin has blocked from the public site.
+
+    The row survives an unblock (``is_active`` goes False) so the history —
+    who blocked it, when, and what the address did while blocked — stays
+    available; re-blocking the same address reuses the row and resets
+    ``blocked_at``, which is the cut-off used to count the requests the IP made
+    *after* it was blocked. Blocked requests still answer 403 and are still
+    written to RequestLog, so those counts can be shown on the Blocked IPs page.
+    """
+
+    ip_address = models.CharField(max_length=64, unique=True)
+    reason = models.CharField(max_length=300, blank=True, default='')
+    blocked_by = models.CharField(max_length=150, blank=True, default='')
+    blocked_at = models.DateTimeField(default=timezone.now)
+    is_active = models.BooleanField(default=True)
+    unblocked_at = models.DateTimeField(blank=True, null=True)
+    unblocked_by = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        ordering = ['-blocked_at']
+        verbose_name = 'Blocked IP'
+        verbose_name_plural = 'Blocked IPs'
+
+    def __str__(self):
+        return f'{self.ip_address} ({"blocked" if self.is_active else "unblocked"})'
+
+
 class ApkDownload(models.Model):
     """One record per APK download, so the admin can see who took the app.
 
