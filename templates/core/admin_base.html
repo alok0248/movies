@@ -649,6 +649,9 @@
             <a href="{% url 'blocked_ips' %}" class="sb-item {% if 'admin-dashboard/blocked-ips' in request.path %}active{% endif %}">
                 <i class="fas fa-shield-alt"></i> Blocked IPs
             </a>
+            <a href="{% url 'blocked_headers' %}" class="sb-item {% if 'admin-dashboard/blocked-headers' in request.path %}active{% endif %}">
+                <i class="fas fa-heading"></i> Blocked Headers
+            </a>
             <a href="{% url 'probes' %}" class="sb-item {% if 'admin-dashboard/probes' in request.path %}active{% endif %}">
                 <i class="fas fa-user-secret"></i> Probes &amp; Bots
             </a>

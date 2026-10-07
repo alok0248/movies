@@ -2657,6 +2657,47 @@ class BlockedIP(models.Model):
         return f'{self.ip_address} ({"blocked" if self.is_active else "unblocked"})'
 
 
+class BlockedHeader(models.Model):
+    """A request header the site refuses, whatever address sends it.
+
+    An IP block answers one address; a header block answers the *program*, from
+    wherever it runs. That is what stops a crawler that announces itself in its
+    User-Agent — ClaudeBot, GPTBot and the rest — even when it moves to a new
+    address for every request.
+
+    ``value`` is matched case-insensitively anywhere inside the header, so
+    ``ClaudeBot`` covers ``ClaudeBot/1.0 (+https://claude.ai/...)`` and any
+    later version of it. Rows survive an unblock (``is_active`` goes False) so
+    the rule and its history stay, and ``robots_disallow`` publishes the rule in
+    robots.txt as well, which is the polite half of the same decision: the
+    crawlers that honour robots.txt stay away, and the ones that do not are
+    answered 403 by the rule.
+    """
+
+    header_name = models.CharField(max_length=100, default='User-Agent')
+    value = models.CharField(max_length=400)
+    reason = models.CharField(max_length=300, blank=True, default='')
+    blocked_by = models.CharField(max_length=150, blank=True, default='')
+    blocked_at = models.DateTimeField(default=timezone.now)
+    is_active = models.BooleanField(default=True)
+    unblocked_at = models.DateTimeField(blank=True, null=True)
+    unblocked_by = models.CharField(max_length=150, blank=True, default='')
+    # Also list this rule in robots.txt as ``User-agent: <token>`` / ``Disallow: /``.
+    robots_disallow = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-blocked_at']
+        constraints = [
+            models.UniqueConstraint(fields=['header_name', 'value'],
+                                    name='unique_blocked_header'),
+        ]
+        verbose_name = 'Blocked header'
+        verbose_name_plural = 'Blocked headers'
+
+    def __str__(self):
+        return f'{self.header_name}: {self.value} ({"blocked" if self.is_active else "off"})'
+
+
 class ApkDownload(models.Model):
     """One record per APK download, so the admin can see who took the app.
 

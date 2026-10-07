@@ -81,6 +81,12 @@
         border: 1px solid var(--border, rgba(148,163,184,.25)); color: var(--text-2, #cbd5e1);
     }
     .bi-chip.on { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.45); color: #93c5fd; }
+    .bi-hdrinput {
+        display: block; width: 100%; margin: .25rem 0 0; padding: .25rem .4rem;
+        background: rgba(148,163,184,.1); border: 1px solid rgba(148,163,184,.25);
+        border-radius: 6px; color: inherit; font-size: .68rem;
+        font-family: Consolas, Menlo, monospace;
+    }
     .bi-empty { text-align: center; padding: 48px 16px; color: #475569; }
     .bi-empty i { font-size: 2.4rem; display: block; margin-bottom: 10px; color: #334155; }
     html[data-theme="light"] .bi-tablewrap { background: #fff; border-color: rgba(0,0,0,.1); }
@@ -108,6 +114,7 @@
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-network-wired me-1"></i>Requests &amp; Users</a>
+            <a href="{% url 'blocked_headers' %}" class="btn btn-sm" style="color:#a5b4fc;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;"><i class="fas fa-heading me-1"></i>Blocked Headers{% if header_rules_total %} ({{ header_rules_total }}){% endif %}</a>
             <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
             <a href="{% url 'blocked_ips' %}{% if show_all %}?show=all{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
         </div>
@@ -210,6 +217,7 @@
             {% if totals.active_after %}<span class="bi-hot">{{ totals.active_after }}</span> blocked address{{ totals.active_after|pluralize:"es are, is" }} still sending requests.{% endif %}
             A blocked address sees <span class="bi-mono">only the sign-in and registration page</span> on every public request, but the attempt is still written to the request log — that is what the counts and page lists below are built from. Counts cover the {{ total_stored }} requests currently retained by the log.
             Signing in or registering lifts a normal block (and arms the warning: scraping again makes it permanent); a <span class="bi-badge bi-b-perm">permanent</span> block stays. <span class="bi-badge bi-b-bot">bot</span> marks a block the request-rate watch raised on its own.
+            An address is one visitor; when the same kind of traffic keeps coming back from new addresses, block its <span class="bi-mono">User-Agent</span> instead — every row below carries the header field it sent, and one click turns it into a rule that answers 403 from anywhere (<a href="{% url 'blocked_headers' %}">Blocked Headers</a>).
         </div>
     </div>
 
@@ -293,9 +301,23 @@
                             <span class="bi-zero">nothing since the block</span>
                         {% endif %}
                     </td>
-                    <td style="white-space:normal;max-width:240px;">
+                    <td style="white-space:normal;max-width:260px;">
                         {% for u in r.top_users %}<div>{{ u }}</div>{% endfor %}
-                        {% if r.user_agent %}<div class="bi-sub" title="{{ r.user_agent }}">{{ r.user_agent|truncatechars:60 }}</div>{% else %}<span class="bi-zero">—</span>{% endif %}
+                        {% if r.user_agent %}
+                            <div class="bi-sub" title="{{ r.user_agent }}">{{ r.user_agent|truncatechars:56 }}</div>
+                            {% if r.header_rule %}
+                                <div class="bi-sub"><span class="bi-badge bi-b-perm" title="Already refused by the header rule “{{ r.header_rule.value }}”, from any address">header blocked</span></div>
+                            {% else %}
+                            <form method="post" action="{% url 'header_block_action' %}" style="margin:.4rem 0 0;" onsubmit="return confirm('Block every request whose User-Agent contains this text, from any address?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="block">
+                                <input type="hidden" name="header_name" value="User-Agent">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input class="bi-hdrinput" type="text" name="value" value="{{ r.user_agent }}" maxlength="400" title="As recorded — trim it to a shorter piece (just the crawler name) to block its whole family">
+                                <button type="submit" class="bi-btn bi-btn-block" style="margin-top:.3rem;"><i class="fas fa-heading"></i>Block this header</button>
+                            </form>
+                            {% endif %}
+                        {% else %}<span class="bi-zero">—</span>{% endif %}
                     </td>
                     <td>
                         {% if r.is_active %}

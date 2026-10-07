@@ -93,6 +93,11 @@ class IPBlockMiddleware:
     far more pages in a few minutes than a person could is treated as a bot and
     blocked, permanently when it was signed in. Scraping again after being
     warned by the block page escalates a block to permanent too.
+
+    Finally it enforces the header rules (see core.header_block): a request
+    whose User-Agent — or any other header — matches a rule the admin created is
+    refused whatever address it came from, which is what stops a crawler that
+    announces itself from scraping by simply changing address.
     """
 
     def __init__(self, get_response):
@@ -144,16 +149,28 @@ class IPBlockMiddleware:
                                is_bot_block)
         client_ip = get_client_ip(request)
         signed_in = self._signed_in(request)
+        operator = self._operator(request)
         # Watch the request rate *before* the exemptions, so a signed-in
         # scraper is caught too. should_count_for_bot_rate() keeps the app's own
         # user-data polling, assets and the dashboard out of the count, and staff
         # traffic is skipped outright.
-        if client_ip and not self._operator(request):
+        if client_ip and not operator:
             if should_count_for_bot_rate(getattr(request, 'path', '') or ''):
                 if note_request(client_ip):
                     auto_block_bot(client_ip, signed_in=signed_in)
         if self._hard_exempt(request):
             return self.get_response(request)
+        # A header rule names a program, not a person, so it is enforced for
+        # every non-staff request whatever the address is — even a signed-in one
+        # that an IP block would let through. The app's own account endpoints
+        # are left out so a rule can never take the mobile app down.
+        if not operator:
+            from .header_block import rule_for_request, normalize_path
+            if normalize_path(request):
+                rule = rule_for_request(request)
+                if rule is not None:
+                    return blocked_response(request, client_ip, None,
+                                            header_rule=rule)
         if not client_ip:
             return self.get_response(request)
         row = blocked_ip_for(client_ip)

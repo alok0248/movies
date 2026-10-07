@@ -1,0 +1,307 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Blocked Headers - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .bh-head { display: flex; align-items: center; gap: .8rem; }
+    .bh-icon {
+        width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
+        background: linear-gradient(135deg, #6366f1, #22d3ee);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .bh-card {
+        background: var(--card-bg, #1a1a2e);
+        border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px;
+    }
+    .bh-stat { padding: 1rem; }
+    .bh-stat .bh-num { font-size: 1.6rem; font-weight: 700; color: var(--text, #e2e8f0); line-height: 1.1; }
+    .bh-stat .bh-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3, #64748b); }
+    .bh-tablewrap {
+        overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px; background: var(--card-bg, #1a1a2e);
+    }
+    .bh-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+    .bh-table th, .bh-table td {
+        padding: .5rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
+        text-align: left; vertical-align: top;
+    }
+    .bh-table thead th { background: var(--surface, #16213e); color: var(--text-2, #cbd5e1); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .bh-table tbody tr:hover { background: rgba(148,163,184,.07); }
+    .bh-table tbody tr.bh-off { opacity: .6; }
+    .bh-mono { font-family: Consolas, Menlo, monospace; }
+    .bh-val { font-family: Consolas, Menlo, monospace; font-weight: 600; font-size: .78rem; color: #a5b4fc; word-break: break-all; max-width: 320px; }
+    .bh-badge { display: inline-block; font-size: .64rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+    .bh-b-on { background: rgba(99,102,241,.18); color: #a5b4fc; }
+    .bh-b-off { background: rgba(107,114,128,.2); color: #9ca3af; }
+    .bh-b-bot { background: rgba(167,139,250,.18); color: #c4b5fd; }
+    .bh-b-robots { background: rgba(52,211,153,.16); color: #34d399; }
+    .bh-num-cell { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text, #e2e8f0); }
+    .bh-sub { color: var(--text-3, #64748b); font-size: .68rem; }
+    .bh-zero { color: #475569; }
+    .bh-btn {
+        display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .6rem;
+        border-radius: 8px; font-size: .72rem; font-weight: 600; text-decoration: none;
+        cursor: pointer; border: 1px solid transparent; background: transparent;
+    }
+    .bh-btn-on { color: #34d399; background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.32); }
+    .bh-btn-on:hover { background: rgba(52,211,153,.24); }
+    .bh-btn-off { color: #f87171; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.32); }
+    .bh-btn-off:hover { background: rgba(239,68,68,.24); }
+    .bh-btn-quiet { color: #93c5fd; background: rgba(96,165,250,.12); border-color: rgba(96,165,250,.3); }
+    .bh-btn-quiet:hover { background: rgba(96,165,250,.22); }
+    .bh-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-end; }
+    .bh-form label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
+    .bh-form input[type="text"] {
+        background: rgba(148,163,184,.1); border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px; color: inherit; font-size: .74rem; padding: .32rem .5rem; min-width: 190px;
+    }
+    .bh-form input[type="text"].bh-wide { min-width: 330px; }
+    .bh-chip {
+        display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .7rem;
+        border-radius: 999px; font-size: .72rem; font-weight: 600; text-decoration: none;
+        border: 1px solid var(--border, rgba(148,163,184,.25)); color: var(--text-2, #cbd5e1);
+        cursor: pointer; background: transparent;
+    }
+    .bh-chip.on { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.45); color: #93c5fd; }
+    .bh-chip.suggest { color: #c4b5fd; border-color: rgba(167,139,250,.35); background: rgba(167,139,250,.1); }
+    .bh-empty { text-align: center; padding: 48px 16px; color: #475569; }
+    .bh-empty i { font-size: 2.4rem; display: block; margin-bottom: 10px; color: #334155; }
+    html[data-theme="light"] .bh-tablewrap, html[data-theme="light"] .bh-card { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .bh-table thead th { background: #f1f5f9; color: #334155; }
+    html[data-theme="light"] .bh-table th, html[data-theme="light"] .bh-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .bh-val { color: #4338ca; }
+</style>
+
+<div class="container py-4" style="max-width:1600px;">
+    <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Admin Dashboard</a>
+            <div class="bh-head mt-2">
+                <div class="bh-icon"><i class="fas fa-heading text-white" style="font-size:1.1rem;"></i></div>
+                <div>
+                    <h3 class="mb-0" style="font-size:1.25rem;">Blocked headers</h3>
+                    <div style="color:#64748b;font-size:.82rem;">Refuse a whole kind of traffic by its header — a crawler that names itself is blocked from any address</div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'blocked_ips' %}" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;"><i class="fas fa-shield-alt me-1"></i>Blocked IPs</a>
+            <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-network-wired me-1"></i>Requests &amp; Users</a>
+            <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
+            <a href="{% url 'blocked_headers' %}{% if show_all %}?show=all{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="bh-card bh-stat" title="Rules currently refusing requests">
+                <div class="bh-num" style="color:#a5b4fc;">{{ totals.rules }}</div>
+                <div class="bh-lbl">Rules on</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="bh-card bh-stat" title="Requests these rules answered with a 403, counted inside the retained request log">
+                <div class="bh-num" style="color:#f87171;">{{ totals.refused }}</div>
+                <div class="bh-lbl">Requests refused</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="bh-card bh-stat" title="User-Agent rules also listed in robots.txt">
+                <div class="bh-num" style="color:#34d399;">{{ totals.published }}</div>
+                <div class="bh-lbl">In robots.txt</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="bh-card bh-stat" title="Rules that were switched off — kept so the history survives">
+                <div class="bh-num" style="color:#9ca3af;">{{ totals.off }}</div>
+                <div class="bh-lbl">Rules off</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bh-card p-3 mb-3">
+        <form method="post" action="{% url 'header_block_action' %}" class="bh-form" style="margin:0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="block">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <label>Header
+                <input type="text" name="header_name" value="User-Agent" list="bh-headers" maxlength="100">
+            </label>
+            <datalist id="bh-headers">
+                {% for h in common_headers %}<option value="{{ h }}"></option>{% endfor %}
+            </datalist>
+            <label>Text to block (matched anywhere in that header, case-insensitive)
+                <input type="text" id="bhValue" class="bh-wide" name="value" placeholder="e.g. ClaudeBot" required minlength="{{ min_value_length }}" maxlength="400">
+            </label>
+            <label>Reason (optional)
+                <input type="text" name="reason" placeholder="AI crawler, scraper…" maxlength="300">
+            </label>
+            <label title="Publish this rule in robots.txt as well">
+                <span style="display:flex;align-items:center;gap:.3rem;">
+                    <input type="checkbox" name="robots" value="1" style="margin:0;"> Also add to robots.txt
+                </span>
+            </label>
+            <label>&nbsp;
+                <button type="submit" class="bh-btn bh-btn-off"><i class="fas fa-ban"></i>Block this header and its requests</button>
+            </label>
+        </form>
+        <div class="bh-sub mt-2">
+            A rule is matched anywhere inside its header, so <span class="bh-mono">ClaudeBot</span> also refuses
+            <span class="bh-mono">ClaudeBot/1.0 (+https://claude.ai/…)</span>. Requests are refused from every address —
+            the rule names the program, not the visitor — while staff, the dashboard, the block page's own
+            sign-in forms and the app's account endpoints are never touched. A rule needs at least
+            {{ min_value_length }} characters; shorter text would refuse the whole site.
+        </div>
+        <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+            <span class="bh-sub">One-click suggestions:</span>
+            {% for name, note in suggested %}
+            <button type="button" class="bh-chip suggest" title="{{ note }}" onclick="bhSuggest('{{ name|escapejs }}')">{{ name }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="bh-card p-3 mb-3 d-flex flex-wrap gap-2 align-items-center">
+        <form method="get" class="bh-form" style="margin:0;">
+            {% if show_all %}<input type="hidden" name="show" value="all">{% endif %}
+            <label>Search
+                <input type="text" name="q" value="{{ q }}" placeholder="part of a header name or value…">
+            </label>
+            <label>&nbsp;
+                <button type="submit" class="bh-btn bh-btn-quiet"><i class="fas fa-search"></i>Search</button>
+            </label>
+        </form>
+        <a class="bh-chip {% if not show_all %}on{% endif %}" href="{% url 'blocked_headers' %}{% if q %}?q={{ q|urlencode }}{% endif %}"><i class="fas fa-shield-alt"></i> Rules on</a>
+        <a class="bh-chip {% if show_all %}on{% endif %}" href="{% url 'blocked_headers' %}?show=all{% if q %}&amp;q={{ q|urlencode }}{% endif %}"><i class="fas fa-history"></i> Include rules off</a>
+        {% if q %}<a class="bh-chip" href="{% url 'blocked_headers' %}{% if show_all %}?show=all{% endif %}"><i class="fas fa-times"></i> Clear search</a>{% endif %}
+        {% if totals.uncounted %}<span class="bh-sub">{{ totals.uncounted }} rule{{ totals.uncounted|pluralize }} cannot be counted from the request log — it names a header the log does not keep.</span>{% endif %}
+    </div>
+
+    <div class="bh-tablewrap">
+        <table class="bh-table">
+            <thead>
+                <tr>
+                    <th>Header</th>
+                    <th>Value</th>
+                    <th>Status</th>
+                    <th>robots.txt</th>
+                    <th title="Requests this rule answered 403, counted inside the retained request log">Requests refused</th>
+                    <th>Last refused</th>
+                    <th>Addresses seen</th>
+                    <th>Top pages refused</th>
+                    <th>Blocked</th>
+                    <th>Reason</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr class="{% if not r.is_active %}bh-off{% endif %}">
+                    <td class="bh-mono">{{ r.header_name }}</td>
+                    <td class="bh-val">{{ r.value }}</td>
+                    <td>
+                        {% if r.is_active %}<span class="bh-badge bh-b-on">Blocked</span>{% else %}<span class="bh-badge bh-b-off">Off</span>{% endif %}
+                        {% if r.robots_disallow %}<div class="bh-sub"><span class="bh-badge bh-b-robots">robots</span></div>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.robots_token %}
+                            {% if r.robots_disallow %}
+                                <form method="post" action="{% url 'header_block_action' %}" style="margin:0;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="no-robots">
+                                    <input type="hidden" name="id" value="{{ r.id }}">
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="bh-btn bh-btn-quiet"><i class="fas fa-times-circle"></i>Remove</button>
+                                </form>
+                                <div class="bh-sub bh-mono">User-agent: {{ r.robots_token }}<br>Disallow: /</div>
+                            {% else %}
+                                <form method="post" action="{% url 'header_block_action' %}" style="margin:0;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="robots">
+                                    <input type="hidden" name="id" value="{{ r.id }}">
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="bh-btn bh-btn-on"><i class="fas fa-plus-circle"></i>Add</button>
+                                </form>
+                            {% endif %}
+                        {% else %}
+                            <span class="bh-zero" title="Only a plain agent token can be published — this value is not one">not a token</span>
+                        {% endif %}
+                    </td>
+                    <td class="{% if r.refused %}bh-num-cell{% else %}bh-zero{% endif %}">
+                        {% if r.counted %}{{ r.refused }}{% else %}<span class="bh-zero" title="This header is not kept in the request log">—</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.last_refused %}
+                            <div title="{{ r.last_refused|date:'Y-m-d H:i:s' }}">{{ r.last_refused|timesince }} ago</div>
+                            <div class="bh-sub">{{ r.last_refused|date:"M d, H:i:s" }}</div>
+                        {% else %}<span class="bh-zero">nothing yet</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.ip_total %}<div class="bh-num-cell">{{ r.ip_total }}</div><div class="bh-sub bh-mono">{% for ip in r.top_ips %}{{ ip }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% else %}<span class="bh-zero">—</span>{% endif %}
+                    </td>
+                    <td style="white-space:normal;max-width:320px;">
+                        {% if r.top_paths %}
+                            {% for p in r.top_paths %}<div class="bh-mono bh-sub" style="word-break:break-all;">{{ p }}</div>{% endfor %}
+                        {% else %}<span class="bh-zero">—</span>{% endif %}
+                    </td>
+                    <td>
+                        <div title="{{ r.blocked_at|date:'Y-m-d H:i:s' }}">{{ r.blocked_at|date:"M d, Y H:i" }}</div>
+                        {% if r.blocked_by %}<div class="bh-sub">by {{ r.blocked_by }}</div>{% endif %}
+                        {% if not r.is_active and r.unblocked_at %}<div class="bh-sub">off {{ r.unblocked_at|date:"M d, H:i" }}{% if r.unblocked_by %} by {{ r.unblocked_by }}{% endif %}</div>{% endif %}
+                    </td>
+                    <td style="white-space:normal;max-width:200px;">{% if r.reason %}{{ r.reason }}{% else %}<span class="bh-zero">—</span>{% endif %}</td>
+                    <td>
+                        <div style="display:flex;gap:.3rem;flex-wrap:wrap;">
+                            {% if r.is_active %}
+                            <form method="post" action="{% url 'header_block_action' %}" style="margin:0;" onsubmit="return confirm('Serve requests carrying this header again?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="unblock">
+                                <input type="hidden" name="id" value="{{ r.id }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="bh-btn bh-btn-on"><i class="fas fa-unlock"></i>Unblock</button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="{% url 'header_block_action' %}" style="margin:0;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="block">
+                                <input type="hidden" name="header_name" value="{{ r.header_name }}">
+                                <input type="hidden" name="value" value="{{ r.value }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="bh-btn bh-btn-off"><i class="fas fa-ban"></i>Block again</button>
+                            </form>
+                            {% endif %}
+                            <form method="post" action="{% url 'header_block_action' %}" style="margin:0;" onsubmit="return confirm('Delete this rule? The history of it goes too.');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="id" value="{{ r.id }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="bh-btn" style="color:#9ca3af;border-color:rgba(148,163,184,.3);"><i class="fas fa-trash"></i>Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="11">
+                        <div class="bh-empty">
+                            <i class="fas fa-heading"></i>
+                            <div style="font-size:.95rem;color:#94a3b8;">{% if q %}No rule matches “{{ q }}”{% elif show_all %}No header rule has ever been created{% else %}No header is blocked right now{% endif %}</div>
+                            <div style="font-size:.82rem;margin-top:4px;">Block one with the field above, or straight from a row on the Blocked IPs page.</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function bhSuggest(name) {
+    var field = document.getElementById('bhValue');
+    if (!field) return;
+    field.value = name;
+    field.focus();
+    field.scrollIntoView({block: 'center'});
+}
+</script>
+{% endblock %}

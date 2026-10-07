@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>{% if permanent %}Permanently blocked{% else %}Sign in or register{% endif %}</title>
+<title>{% if header_rule %}Blocked header{% elif permanent %}Permanently blocked{% else %}Sign in or register{% endif %}</title>
 <style>
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
@@ -30,6 +30,9 @@
   .tab.active{background:rgba(99,102,241,.9);color:#fff}
   .pane{display:block}
   .pane[hidden]{display:none}
+  .hd-label{display:block;font-size:.76rem;font-weight:600;color:#9fb0c7;margin:0 0 .7rem;
+        text-transform:uppercase;letter-spacing:.05em}
+  input[readonly]{cursor:text}
   label{display:block;font-size:.76rem;font-weight:600;color:#9fb0c7;margin:0 0 .7rem;
         text-transform:uppercase;letter-spacing:.05em}
   input{display:block;width:100%;margin-top:.35rem;padding:.72rem .85rem;border-radius:11px;
@@ -50,11 +53,33 @@
   <div class="head">
     <div class="shield">&#128737;</div>
     <div>
-      <div class="eyebrow">{% if permanent %}Permanent block{% else %}IP blocked{% endif %}</div>
-      <h1>{% if permanent %}This IP address is blocked permanently{% else %}This IP address is blocked{% endif %}</h1>
+      <div class="eyebrow">{% if header_rule %}Header blocked{% elif permanent %}Permanent block{% else %}IP blocked{% endif %}</div>
+      <h1>{% if header_rule %}Requests carrying this header are blocked{% elif permanent %}This IP address is blocked permanently{% else %}This IP address is blocked{% endif %}</h1>
     </div>
   </div>
 
+  {% if header_rule %}
+    <p class="lead">
+      This request was refused because its
+      <code>{{ header_name|default:"User-Agent" }}</code> carries
+      <code>{{ header_value }}</code> — a header the site blocks, whatever address sends it.
+    </p>
+    {% if reason %}<p class="reason">Recorded reason: {{ reason }}</p>{% endif %}
+    <label class="hd-label">{{ header_name|default:"User-Agent" }} blocked
+      <input type="text" value="{{ header_value }}" readonly onclick="this.select()">
+    </label>
+    {% if request_user_agent %}
+    <label class="hd-label">Header this request carried
+      <input type="text" value="{{ request_user_agent }}" readonly onclick="this.select()">
+    </label>
+    {% endif %}
+    <div class="alert alert-red">
+      A blocked header is not lifted by signing in or registering: it names the kind of program
+      making the request, not a person. Requests without it are served normally. If this is a
+      mistake, contact the site owner and quote the value above — the rule is managed in the
+      dashboard, under Blocked headers.
+    </div>
+  {% else %}
   <p class="lead">
     Requests from <code>{{ blocked_ip|default:"your address" }}</code> were stopped because they
     looked like automated scraping{% if auto_bot %} — far more requests in a short time than a person
@@ -100,11 +125,12 @@
       <div class="msg" id="registerMsg" hidden></div>
     </form>
   {% endif %}
+  {% endif %}
 
-  <p class="foot">Your address is used only to enforce this block. This page is never cached.</p>
+  <p class="foot">{% if header_rule %}This page is never cached.{% else %}Your address is used only to enforce this block. This page is never cached.{% endif %}</p>
 </main>
 
-{% if not permanent %}
+{% if not permanent and not header_rule %}
 <script>
 function blockedTab(which) {
   var login = which !== 'register';

@@ -358,8 +358,8 @@ def set_permanent(ip_address, permanent=True, by=''):
     return row
 
 
-def blocked_response(request, ip_address='', row=None):
-    """The 403 page a blocked address receives.
+def blocked_response(request, ip_address='', row=None, header_rule=None):
+    """The 403 page a blocked request receives.
 
     A blocked visitor sees one thing only: the sign-in form and the registration
     form, with a short note saying the address is blocked and why. Signing in or
@@ -367,6 +367,10 @@ def blocked_response(request, ip_address='', row=None):
     and the page carries the warning that scraping again means a permanent
     block. The auth entry points the forms post to stay reachable
     (see ``is_auth_entry``).
+
+    When the refusal came from a header rule instead (``header_rule``), the page
+    names the header and the value that matched and offers no way in: a rule
+    names a program, so signing in would not change the answer.
     """
     ip = normalize_ip(ip_address) or client_ip_of(request)
     if row is None:
@@ -374,6 +378,13 @@ def blocked_response(request, ip_address='', row=None):
     permanent = bool(row is not None and row.is_permanent)
     reason = (row.reason if row is not None else '') or ''
     auto_bot = is_bot_block(row)
+    rule = header_rule or None
+    if rule is not None:
+        reason = rule.get('reason') or ''
+    try:
+        user_agent = (request.headers.get('User-Agent', '') or '')[:300]
+    except Exception:
+        user_agent = ''
     try:
         from django.shortcuts import render
         response = render(request, 'core/ip_blocked.html', {
@@ -381,6 +392,10 @@ def blocked_response(request, ip_address='', row=None):
             'permanent': permanent,
             'reason': reason[:300],
             'auto_bot': auto_bot,
+            'header_rule': rule,
+            'header_name': (rule or {}).get('header_name', ''),
+            'header_value': (rule or {}).get('value', ''),
+            'request_user_agent': user_agent,
         }, status=BLOCKED_STATUS)
     except Exception:
         logger.warning('IPBlock: falling back to the plain block page', exc_info=True)

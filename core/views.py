@@ -8292,10 +8292,21 @@ def serve_robots_txt(request):
     Google can crawl and index every movie, series, and public content page.
     """
     from django.http import HttpResponse
+    from .header_block import robots_disallow_lines
     lines = [
         'User-agent: *',
         'Allow: /',
         '',
+    ]
+    # The rules the admin chose to publish: an address block is invisible to a
+    # crawler that reads robots.txt, but a header rule can be published, and the
+    # ones that ignore the file are then read by the same rule and refused.
+    published = robots_disallow_lines()
+    if published:
+        lines += [
+            '# Crawlers the site blocks (Blocked headers in the dashboard)',
+        ] + published
+    lines += [
         'Sitemap: ' + SEO_SITE_URL + '/sitemap.xml',
         '',
     ]
@@ -11219,6 +11230,12 @@ def admin_blocked_ips(request):
         return response
 
     from .request_log import request_total
+    from .header_block import active_rules, rule_for_value
+
+    # Each row's recorded User-Agent can be blocked as a header rule from right
+    # here, and a row already covered by one is marked instead of offered twice.
+    for row in rows:
+        row['header_rule'] = rule_for_value(row['user_agent'])
 
     return render(request, 'core/admin_blocked_ips.html', {
         'rows': rows,
@@ -11227,6 +11244,144 @@ def admin_blocked_ips(request):
         'q': search,
         # Counts on this page are derived from the retained request log, so say
         # how big that window currently is.
+        'total_stored': request_total(),
+        'header_rules_total': len(active_rules()),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def header_block_action(request):
+    """Block, lift, publish or delete one header rule, then return where we came from.
+
+    One endpoint serves every page that shows a header: ``block`` takes the
+    ``value`` (plus an optional ``header_name`` and ``reason``) and refuses every
+    request carrying that text, whatever the address; ``unblock`` switches a rule
+    off, ``delete`` removes it, and ``robots`` / ``no-robots`` publish it in
+    robots.txt. ``next`` is honoured only when it is a local path.
+    """
+    from .header_block import (MIN_VALUE_LENGTH, block_header, delete_header_rule,
+                               set_robots_disallow, unblock_header)
+
+    action = (request.POST.get('action') or '').strip()
+    who = (request.user.username or '')[:150]
+    header_name = (request.POST.get('header_name') or 'User-Agent').strip()
+    raw_value = (request.POST.get('value') or '').strip()
+    reason = (request.POST.get('reason') or '').strip()[:300]
+    robots = (request.POST.get('robots') or '').strip().lower() in ('1', 'on', 'true', 'yes')
+    try:
+        rule_id = int(request.POST.get('id') or 0)
+    except (TypeError, ValueError):
+        rule_id = 0
+
+    if action == 'block':
+        if not raw_value:
+            messages.error(request, 'Enter the header text to block — for example ClaudeBot.')
+        else:
+            row, created = block_header(raw_value, header_name, who, reason,
+                                        robots_disallow=robots)
+            if row is None:
+                messages.error(
+                    request,
+                    f'“{raw_value[:60]}” is too short or unusable as a rule — it needs at '
+                    f'least {MIN_VALUE_LENGTH} characters, otherwise it would match everything.')
+            elif created:
+                extra = ' It is published in robots.txt as well.' if row.robots_disallow else ''
+                messages.success(
+                    request,
+                    f'Blocked every request whose {row.header_name} contains '
+                    f'“{row.value}”, whatever address it comes from.{extra}')
+            else:
+                messages.success(request, f'The rule for {row.header_name} “{row.value}” is on.')
+    elif action == 'unblock':
+        row = unblock_header(rule_id, who)
+        if row is not None:
+            messages.success(request, f'Lifted the rule on “{row.value}” — requests carrying it are served again.')
+        else:
+            messages.warning(request, 'That rule was not switched on.')
+    elif action == 'delete':
+        if delete_header_rule(rule_id):
+            messages.success(request, 'Rule deleted.')
+        else:
+            messages.warning(request, 'That rule no longer exists.')
+    elif action in ('robots', 'no-robots'):
+        row = set_robots_disallow(rule_id, action == 'robots', who)
+        if row is None:
+            messages.warning(request, 'That rule no longer exists.')
+        elif action == 'robots':
+            messages.success(request, f'“{row.value}” is now listed in robots.txt as well.')
+        else:
+            messages.success(request, f'“{row.value}” is no longer listed in robots.txt.')
+    else:
+        messages.error(request, 'Unknown action.')
+
+    nxt = (request.POST.get('next') or '').strip()
+    if not (nxt.startswith('/') and not nxt.startswith('//')):
+        nxt = reverse('blocked_headers')
+    return redirect(nxt)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_blocked_headers(request):
+    """Blocked headers — the header rules every request is read against.
+
+    An IP block answers one address. A rule here answers the program, so a
+    crawler that announces itself in its User-Agent is refused from any address,
+    including one that has never been seen. A rule can also be published in
+    robots.txt, which is the polite half of the same decision.
+    """
+    import csv
+    from django.http import HttpResponse
+    from .header_block import (COMMON_HEADERS, MIN_VALUE_LENGTH, SUGGESTED_RULES,
+                               blocked_header_report)
+
+    show_all = (request.GET.get('show') or 'active') == 'all'
+    search = (request.GET.get('q') or '').strip()[:100]
+    rows, totals = blocked_header_report(include_inactive=show_all, search=search)
+
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="blocked_headers.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow([
+            'Header', 'Value', 'Status', 'In robots.txt', 'Requests refused',
+            'Counted', 'First refused', 'Last refused', 'Addresses seen',
+            'Top addresses', 'Top pages', 'Blocked at', 'Blocked by', 'Reason',
+            'Switched off at', 'Switched off by',
+        ])
+
+        def _stamp(value):
+            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else ''
+
+        for r in rows:
+            writer.writerow([
+                r['header_name'], r['value'],
+                'Blocked' if r['is_active'] else 'Off',
+                'Yes' if (r['robots_disallow'] and r['robots_token']) else 'No',
+                r['refused'] if r['counted'] else '',
+                'Yes' if r['counted'] else 'No', _stamp(r['first_refused']),
+                _stamp(r['last_refused']), r['ip_total'],
+                ', '.join(r['top_ips']), ' | '.join(r['top_paths']),
+                _stamp(r['blocked_at']), r['blocked_by'], r['reason'],
+                _stamp(r['unblocked_at']), r['unblocked_by'],
+            ])
+        return response
+
+    from .request_log import request_total
+
+    return render(request, 'core/admin_blocked_headers.html', {
+        'rows': rows,
+        'totals': totals,
+        'show_all': show_all,
+        'q': search,
+        'common_headers': COMMON_HEADERS,
+        'suggested': SUGGESTED_RULES,
+        'min_value_length': MIN_VALUE_LENGTH,
+        # The rule counts come from the retained request log, so say how big
+        # that window currently is.
         'total_stored': request_total(),
     })
 
