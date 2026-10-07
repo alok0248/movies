@@ -6900,7 +6900,6 @@ def _get_web_management_dashboard_payload():
     one_hour_ago = now - datetime.timedelta(hours=1)
 
     human_visits = WebsiteVisitorVisit.objects.filter(is_bot=False)
-    bot_visits = WebsiteVisitorVisit.objects.filter(is_bot=True)
 
     total_visitors = WebsiteVisitor.objects.filter(
         models.Q(visits__isnull=True) | models.Q(visits__is_bot=False)
@@ -6912,16 +6911,56 @@ def _get_web_management_dashboard_payload():
     ).distinct().count()
     pageviews_today = human_visits.filter(visited_at__date=today).count()
 
-    bot_total_visits = bot_visits.count()
-    bot_visits_today = bot_visits.filter(visited_at__date=today).count()
-    bot_visits_last_hour = bot_visits.filter(visited_at__gte=one_hour_ago).count()
-    bot_unique_ips = list(
-        bot_visits.exclude(ip_address__isnull=True)
-        .exclude(ip_address='')
-        .values_list('ip_address', flat=True)
-        .distinct()
-        .order_by('ip_address')
+    # Bots: the visitor tracker never records bot visits (the middleware
+    # skips them to keep the visitor tables human-only), so counting
+    # WebsiteVisitorVisit rows with is_bot=True would always show 0. The
+    # request log is the real source, and its scraper signals are the same
+    # ones the Probes & Bots page uses, so every admin page agrees.
+    from collections import Counter
+    from .models import BlockedIP, RequestLog
+    from .probes import is_probe_path, is_scraper_agent
+
+    one_day_ago = now - datetime.timedelta(hours=24)
+    bot_total_visits = bot_visits_today = bot_visits_last_hour = 0
+    bot_ip_counts = Counter()
+    probe_requests_24h = 0
+    blocked_responses_24h = 0
+    try:
+        for rec in (RequestLog.objects.order_by('-created_at')
+                    .values('client_ip', 'path', 'status_code', 'created_at',
+                            'user_agent')[:5000]):
+            ua = (rec['user_agent'] or '').strip()
+            when = rec['created_at']
+            ip = (rec['client_ip'] or '').strip()
+            if not ua or is_scraper_agent(ua):
+                bot_total_visits += 1
+                if timezone.localtime(when).date() == today:
+                    bot_visits_today += 1
+                if when >= one_hour_ago:
+                    bot_visits_last_hour += 1
+                if ip:
+                    bot_ip_counts[ip] += 1
+            if when >= one_day_ago:
+                status = rec['status_code']
+                if status == 403:
+                    blocked_responses_24h += 1
+                if status == 404 or is_probe_path(rec['path']):
+                    probe_requests_24h += 1
+    except Exception:
+        logger.debug('web management: request-log bot scan failed', exc_info=True)
+
+    bot_unique_ips = sorted(bot_ip_counts)
+    bot_top_ips = list(
+        {'ip_address': ip, 'request_count': count}
+        for ip, count in sorted(bot_ip_counts.items(),
+                                key=lambda item: (-item[1], item[0]))[:10]
     )
+
+    # Blocking totals — the same numbers the Blocked IPs page cards show.
+    from .ip_block import is_bot_block
+    active_block_rows = BlockedIP.objects.filter(is_active=True)
+    active_blocks = active_block_rows.count()
+    bot_blocks = sum(1 for row in active_block_rows if is_bot_block(row))
 
     daily_visits = (
         human_visits
@@ -6957,14 +6996,6 @@ def _get_web_management_dashboard_payload():
             'is_bot': activity.is_bot,
         })
 
-    bot_top_ips = list(
-        bot_visits.exclude(ip_address__isnull=True)
-        .exclude(ip_address='')
-        .values('ip_address')
-        .annotate(request_count=Count('id'))
-        .order_by('-request_count', 'ip_address')[:10]
-    )
-
     return {
         'metrics': {
             'total_visitors': total_visitors,
@@ -6975,6 +7006,10 @@ def _get_web_management_dashboard_payload():
             'bot_visits_today': bot_visits_today,
             'bot_visits_last_hour': bot_visits_last_hour,
             'bot_unique_ip_count': len(bot_unique_ips),
+            'bot_blocks': bot_blocks,
+            'active_blocks': active_blocks,
+            'blocked_responses_24h': blocked_responses_24h,
+            'probe_requests_24h': probe_requests_24h,
         },
         'charts': {
             'labels': chart_labels,
@@ -7007,6 +7042,10 @@ def web_management_dashboard(request):
         'bot_visits_today': dashboard['metrics']['bot_visits_today'],
         'bot_visits_last_hour': dashboard['metrics']['bot_visits_last_hour'],
         'bot_unique_ip_count': dashboard['metrics']['bot_unique_ip_count'],
+        'bot_blocks': dashboard['metrics']['bot_blocks'],
+        'active_blocks': dashboard['metrics']['active_blocks'],
+        'blocked_responses_24h': dashboard['metrics']['blocked_responses_24h'],
+        'probe_requests_24h': dashboard['metrics']['probe_requests_24h'],
         'chart_labels_json': json.dumps(dashboard['charts']['labels']),
         'unique_chart_values_json': json.dumps(dashboard['charts']['unique_visitors']),
         'pageview_chart_values_json': json.dumps(dashboard['charts']['pageviews']),

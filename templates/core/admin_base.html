@@ -558,6 +558,30 @@
         <div class="sb-divider"></div>
 
         <div class="sb-section">
+            <div class="sb-section-title">Security &amp; Traffic</div>
+            <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
+                <i class="fas fa-network-wired"></i> Requests &amp; Users
+            </a>
+            <a href="{% url 'probes' %}" class="sb-item {% if 'admin-dashboard/probes' in request.path %}active{% endif %}">
+                <i class="fas fa-user-secret"></i> Probes &amp; Bots
+            </a>
+            <a href="{% url 'blocked_ips' %}" class="sb-item {% if 'admin-dashboard/blocked-ips' in request.path %}active{% endif %}">
+                <i class="fas fa-shield-alt"></i> Blocked IPs
+            </a>
+            <a href="{% url 'blocked_headers' %}" class="sb-item {% if 'admin-dashboard/blocked-headers' in request.path %}active{% endif %}">
+                <i class="fas fa-heading"></i> Blocked Headers
+            </a>
+            <a href="{% url 'url_blocking_settings' %}" class="sb-item {% if 'url-blocking' in request.path %}active{% endif %}">
+                <i class="fas fa-ban"></i> URL Blocking
+            </a>
+            <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
+                <i class="fas fa-bug"></i> API Errors
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
             <div class="sb-section-title">Configuration</div>
             <a href="{% url 'branding_settings' %}" class="sb-item {% if 'branding' in request.path %}active{% endif %}">
                 <i class="fas fa-palette"></i> Branding
@@ -567,9 +591,6 @@
             </a>
             <a href="{% url 'footer_settings' %}" class="sb-item {% if 'footer' in request.path %}active{% endif %}">
                 <i class="fas fa-window-maximize"></i> Footer
-            </a>
-            <a href="{% url 'url_blocking_settings' %}" class="sb-item {% if 'url-blocking' in request.path %}active{% endif %}">
-                <i class="fas fa-shield-alt"></i> URL Blocking
             </a>
             <a href="{% url 'player_settings' %}" class="sb-item {% if 'player' in request.path %}active{% endif %}">
                 <i class="fas fa-play-circle"></i> Player
@@ -639,21 +660,6 @@
             </a>
             <a href="{% url 'navbar_item_list' %}" class="sb-item {% if 'navbar-items' in request.path %}active{% endif %}">
                 <i class="fas fa-bars"></i> Navbar
-            </a>
-            <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
-                <i class="fas fa-bug"></i> API Errors
-            </a>
-            <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
-                <i class="fas fa-network-wired"></i> Requests &amp; Users
-            </a>
-            <a href="{% url 'blocked_ips' %}" class="sb-item {% if 'admin-dashboard/blocked-ips' in request.path %}active{% endif %}">
-                <i class="fas fa-shield-alt"></i> Blocked IPs
-            </a>
-            <a href="{% url 'blocked_headers' %}" class="sb-item {% if 'admin-dashboard/blocked-headers' in request.path %}active{% endif %}">
-                <i class="fas fa-heading"></i> Blocked Headers
-            </a>
-            <a href="{% url 'probes' %}" class="sb-item {% if 'admin-dashboard/probes' in request.path %}active{% endif %}">
-                <i class="fas fa-user-secret"></i> Probes &amp; Bots
             </a>
             <a href="{% url 'api_documentation' %}" class="sb-item {% if 'api-docs' in request.path %}active{% endif %}">
                 <i class="fas fa-book"></i> API Docs

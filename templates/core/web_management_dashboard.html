@@ -4,7 +4,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
             <h1 class="text-white mb-1"><i class="fas fa-chart-line me-2 text-blue-400"></i>Web Management</h1>
-            <p class="text-secondary mb-0">Track public website visitors and pageview analytics in real-time.</p>
+            <p class="text-secondary mb-0">Track public website visitors, bot traffic and security blocks in real-time.</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light">&larr; Admin Dashboard</a>
@@ -81,6 +81,53 @@
         </div>
     </div>
 
+    <div class="row g-4 mt-1">
+        <div class="col-md-3">
+            <a href="{% url 'blocked_ips' %}" class="text-decoration-none">
+                <div class="card bg-dark border-secondary shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Active IP Blocks</div>
+                        <div id="active-blocks" class="display-6 text-danger">{{ active_blocks }}</div>
+                        <div class="text-secondary small">Blocked IPs page &rarr;</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{% url 'blocked_ips' %}" class="text-decoration-none">
+                <div class="card bg-dark border-secondary shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Blocked Bots (auto)</div>
+                        <div id="bot-blocks" class="display-6 text-danger">{{ bot_blocks }}</div>
+                        <div class="text-secondary small">Blocked IPs page &rarr;</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{% url 'request_log' %}?status_code=403" class="text-decoration-none">
+                <div class="card bg-dark border-secondary shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Blocked Responses (24h)</div>
+                        <div id="blocked-24h" class="display-6 text-warning">{{ blocked_responses_24h }}</div>
+                        <div class="text-secondary small">403s in request log &rarr;</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{% url 'probes' %}" class="text-decoration-none">
+                <div class="card bg-dark border-secondary shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-secondary small">Probe Requests (24h)</div>
+                        <div id="probes-24h" class="display-6 text-warning">{{ probe_requests_24h }}</div>
+                        <div class="text-secondary small">Probes &amp; Bots page &rarr;</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
     <div class="card bg-dark border-secondary shadow-sm mt-4">
         <div class="card-body">
             <h5 class="text-white mb-1">Daily Unique Visitors</h5>
@@ -130,6 +177,7 @@
             <div class="card bg-dark border-secondary shadow-sm h-100">
                 <div class="card-body">
                     <h5 class="text-white mb-3">Bot IP Frequency</h5>
+                    <div class="text-secondary small mb-2">Bot requests seen in the request log (same signals as the Probes &amp; Bots page).</div>
                     {% if bot_top_ips %}
                     <div class="table-responsive">
                         <table class="table table-dark table-hover mb-0 align-middle small">
@@ -304,6 +352,10 @@ function updateDashboard(data) {
     document.getElementById('bot-visits-today').textContent = data.metrics.bot_visits_today;
     document.getElementById('bot-visits-last-hour').textContent = data.metrics.bot_visits_last_hour;
     document.getElementById('bot-unique-ip-count').textContent = data.metrics.bot_unique_ip_count;
+    document.getElementById('active-blocks').textContent = data.metrics.active_blocks;
+    document.getElementById('bot-blocks').textContent = data.metrics.bot_blocks;
+    document.getElementById('blocked-24h').textContent = data.metrics.blocked_responses_24h;
+    document.getElementById('probes-24h').textContent = data.metrics.probe_requests_24h;
 
     // Update charts
     if (uniqueVisitorsChart) {
