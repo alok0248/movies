@@ -9638,6 +9638,11 @@ def _cloud_ts_label(value):
         return ''
 
 
+# Highest TMDB id worth building a link for. The app sometimes syncs a key whose
+# id is garbage (e.g. seen_2136685465_false_1_1); a link to it could only ever
+# land on a 404, so those entries are listed without Details/Play buttons.
+MAX_TMDB_ID = 10000000
+
 # Keep a page render bounded even if a user's cloud payload is enormous.
 MAX_CLOUD_ITEMS = 400
 
@@ -9695,7 +9700,7 @@ def _cloud_sync_sections(cloud, linked_user=None):
             item['progress_pct'] = 0
             if item['duration_ms'] and item['position_ms']:
                 item['progress_pct'] = min(100, round(item['position_ms'] * 100.0 / item['duration_ms']))
-            if item['tmdb_id']:
+            if item['tmdb_id'] and item['tmdb_id'] <= MAX_TMDB_ID:
                 is_tv = bool(item['is_tv'])
                 try:
                     item['detail_url'] = reverse(
