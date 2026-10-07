@@ -1,6 +1,4 @@
-{% extends 'core/admin_base.html' %}
-{% block title %}Request Log - Admin{% endblock %}
-{% block admin_content %}
+{# Request Log panel — embedded by core/admin_requests.html (Requests & Users page). #}
 <style>
     .rl-card {
         background: var(--card-bg, #1a1a2e);
@@ -210,21 +208,7 @@
     html[data-theme="light"] .rl-table thead tr.rl-frow select, html[data-theme="light"] .rl-table thead tr.rl-frow input { border-color: rgba(0,0,0,.18); }
 </style>
 
-<div class="container py-4" style="max-width:1100px;">
-    <div class="mb-4">
-        <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;"><i class="fas fa-arrow-left me-1"></i> Back to Admin Dashboard</a>
-        <div class="d-flex align-items-center gap-3 mt-2">
-            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#22d3ee,#3b82f6);display:flex;align-items:center;justify-content:center;">
-                <i class="fas fa-network-wired text-white" style="font-size:1.1rem;"></i>
-            </div>
-            <div>
-                <h3 class="mb-0" style="font-size:1.25rem;">Request Log</h3>
-                <div style="color:#64748b;font-size:.82rem;">Every incoming request — IP, page, method, status and response time</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.8rem;">{{ count }} shown</span>
             <span class="badge" style="background:rgba(52,211,153,.15);color:#34d399;font-size:.8rem;">{{ total }} stored</span>
@@ -460,5 +444,3 @@
     </div>
     {% endfor %}
 {% endif %}
-</div>
-{% endblock %}

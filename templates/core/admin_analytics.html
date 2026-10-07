@@ -288,7 +288,7 @@
     <div class="row g-3">
         {% for p in platform_data %}
         <div class="col-md-4">
-            <a class="conn-card" href="{% url 'admin_active_users' %}?platform={{ p.platform|urlencode }}" title="Open the active / inactive user list for {{ p.platform }}">
+            <a class="conn-card" href="{% url 'request_log' %}?tab=users&amp;platform={{ p.platform|urlencode }}" title="Open the Requests &amp; Users page on the active / inactive list for {{ p.platform }}">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     {% if p.platform == 'web' %}
                     <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
@@ -317,7 +317,7 @@
         </div>
         {% empty %}
         <div class="col-md-4">
-            <a class="conn-card" href="{% url 'admin_active_users' %}?platform=web" title="Open the active / inactive user list for web">
+            <a class="conn-card" href="{% url 'request_log' %}?tab=users&amp;platform=web" title="Open the Requests &amp; Users page on the active / inactive list for web">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
                     <div>
@@ -329,7 +329,7 @@
             </a>
         </div>
         <div class="col-md-4">
-            <a class="conn-card" href="{% url 'admin_active_users' %}?platform=android" title="Open the active / inactive user list for android">
+            <a class="conn-card" href="{% url 'request_log' %}?tab=users&amp;platform=android" title="Open the Requests &amp; Users page on the active / inactive list for android">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
                     <div>

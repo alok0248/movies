@@ -27,7 +27,8 @@ urlpatterns = [
     path('admin-dashboard/settings/email/', views.email_settings, name='email_settings'),
     path('admin-dashboard/settings/email/logs/', views.ajax_email_logs, name='ajax_email_logs'),
     path('admin-dashboard/api-errors/', views.api_error_log, name='api_error_log'),
-    path('admin-dashboard/requests/', views.request_log, name='request_log'),
+    # Requests & Users: ?tab=log (raw request log, default) or ?tab=users (visitors).
+    path('admin-dashboard/requests/', views.admin_requests, name='request_log'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
     path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),
@@ -257,7 +258,9 @@ urlpatterns = [
     path('admin-dashboard/analytics/', views.admin_analytics, name='admin_analytics'),
     path('admin-dashboard/analytics/engagement/', views.admin_engagement_analytics, name='admin_engagement_analytics'),
     path('admin-dashboard/analytics/user/<int:user_id>/', views.admin_user_analytics_detail, name='admin_user_analytics_detail'),
-    path('admin-dashboard/analytics/active-users/', views.admin_active_users, name='admin_active_users'),
+    # Kept for old links/bookmarks — the active-users view now lives on the
+    # merged Requests & Users page above.
+    path('admin-dashboard/analytics/active-users/', views.admin_active_users_redirect, name='admin_active_users'),
 
     # CinePlayer - browser-based TMDB player
     path('cineplayer/', cineplayer_views.cineplayer_index, name='cineplayer_index'),

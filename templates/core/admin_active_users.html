@@ -1,6 +1,4 @@
-{% extends 'core/admin_base.html' %}
-{% block title %}Active Users - Admin{% endblock %}
-{% block admin_content %}
+{# Active / Inactive Users panel — embedded by core/admin_requests.html (Requests & Users page). #}
 <style>
     .au-card {
         background: var(--card-bg, #1a1a2e);
@@ -63,26 +61,14 @@
     html[data-theme="light"] .au-infolink:hover { color: #075985; }
 </style>
 
-<div class="container-fluid py-4" style="max-width:1600px;">
-    <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
-        <div>
-            <a href="{% url 'admin_analytics' %}?days=7" class="text-decoration-none" style="color:#38bdf8;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Analytics</a>
-            <div class="d-flex align-items-center gap-3 mt-2">
-                <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#38bdf8,#818cf8);display:flex;align-items:center;justify-content:center;">
-                    <i class="fas fa-users-viewfinder text-white" style="font-size:1.1rem;"></i>
-                </div>
-                <div>
-                    <h3 class="mb-0" style="font-size:1.25rem;">Active &amp; Inactive Users</h3>
-                    <div style="color:#64748b;font-size:.82rem;">
-                        {% if platform != 'all' %}<span class="text-capitalize fw-bold" style="color:#93c5fd;">{{ platform }}</span> connections · {% endif %}
-                        Last {{ hours }}h window · active = seen in the last {{ minutes }} min
-                    </div>
-                </div>
-            </div>
+    <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div style="color:#64748b;font-size:.78rem;">
+            {% if platform != 'all' %}<span class="text-capitalize fw-bold" style="color:#93c5fd;">{{ platform }}</span> connections · {% endif %}
+            Last {{ hours }}h window · active = seen in the last {{ minutes }} min
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
-            <a href="{{ request.path }}?{% if platform != 'all' %}platform={{ platform }}&amp;{% endif %}status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+            <a href="{{ request.path }}?tab=users&amp;{% if platform != 'all' %}platform={{ platform }}&amp;{% endif %}status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
         </div>
     </div>
 
@@ -134,13 +120,14 @@
     <div class="au-card p-3 mb-3">
         <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
             <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">Platform</span>
-            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ scope_total }}</span> <span style="color:#22c55e;">{{ scope_active }} live</span></a>
-            <a class="au-chip {% if platform == 'web' %}on{% endif %}" href="?platform=web&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web <span style="opacity:.6;">{{ platform_counts.web|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.web|default:0 }} live</span></a>
-            <a class="au-chip {% if platform == 'android' %}on{% endif %}" href="?platform=android&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-android" style="color:#22c55e;"></i> Android <span style="opacity:.6;">{{ platform_counts.android|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.android|default:0 }} live</span></a>
-            <a class="au-chip {% if platform == 'ios' %}on{% endif %}" href="?platform=ios&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-apple" style="color:#c084fc;"></i> iOS <span style="opacity:.6;">{{ platform_counts.ios|default:0 }}</span></a>
-            {% if platform_counts.unknown %}<a class="au-chip {% if platform == 'unknown' %}on{% endif %}" href="?platform=unknown&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-question"></i> Unknown <span style="opacity:.6;">{{ platform_counts.unknown }}</span></a>{% endif %}
+            <a class="au-chip {% if platform == 'all' %}on{% endif %}" href="?tab=users&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-layer-group"></i> All <span style="opacity:.6;">{{ scope_total }}</span> <span style="color:#22c55e;">{{ scope_active }} live</span></a>
+            <a class="au-chip {% if platform == 'web' %}on{% endif %}" href="?tab=users&amp;platform=web&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web <span style="opacity:.6;">{{ platform_counts.web|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.web|default:0 }} live</span></a>
+            <a class="au-chip {% if platform == 'android' %}on{% endif %}" href="?tab=users&amp;platform=android&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-android" style="color:#22c55e;"></i> Android <span style="opacity:.6;">{{ platform_counts.android|default:0 }}</span> <span style="color:#22c55e;">{{ active_platform.android|default:0 }} live</span></a>
+            <a class="au-chip {% if platform == 'ios' %}on{% endif %}" href="?tab=users&amp;platform=ios&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fab fa-apple" style="color:#c084fc;"></i> iOS <span style="opacity:.6;">{{ platform_counts.ios|default:0 }}</span></a>
+            {% if platform_counts.unknown %}<a class="au-chip {% if platform == 'unknown' %}on{% endif %}" href="?tab=users&amp;platform=unknown&amp;status={{ status }}&amp;bots={{ bots }}&amp;hours={{ hours }}&amp;minutes={{ minutes }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}"><i class="fas fa-question"></i> Unknown <span style="opacity:.6;">{{ platform_counts.unknown }}</span></a>{% endif %}
         </div>
         <form method="get" class="au-filtergrid">
+            <input type="hidden" name="tab" value="users">
             <input type="hidden" name="platform" value="{{ platform }}">
             <label>Visitors
                 <select name="bots">
@@ -185,7 +172,7 @@
                 <button type="submit" class="btn btn-sm" style="color:#93c5fd;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
             </label>
             <label>&nbsp;
-                <a href="{% url 'admin_active_users' %}" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-eraser me-1"></i>Reset</a>
+                <a href="{% url 'request_log' %}?tab=users" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-eraser me-1"></i>Reset</a>
             </label>
         </form>
     </div>
@@ -275,7 +262,6 @@
             </tbody>
         </table>
     </div>
-</div>
 
 <script>
     function auSort(field) {
@@ -287,4 +273,3 @@
         window.location.search = params.toString();
     }
 </script>
-{% endblock %}

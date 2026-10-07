@@ -23,7 +23,7 @@ from django.db import models
 import http.cookiejar
 import urllib.request as _urlreq
 import urllib.error as _urlerr
-from urllib.parse import urlparse as _urlparse
+from urllib.parse import urlparse as _urlparse, urlencode as _urlencode
 import json
 import logging
 import datetime
@@ -8696,8 +8696,21 @@ def api_error_log(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
-def request_log(request):
-    """Admin page: every incoming request — IP, page, method, status, timing.
+def admin_requests(request):
+    """Requests & Users — one admin page holding both traffic views.
+
+    ``?tab=log`` (the default) is the raw request log, ``?tab=users`` is the
+    aggregated active / inactive visitor list. The sidebar tile and the
+    analytics Web vs Android cards both land here, and only the tab being
+    shown is computed, so the page stays as fast as either list was alone.
+    """
+    if request.GET.get('tab') == 'users':
+        return admin_active_users(request)
+    return _request_log_tab(request)
+
+
+def _request_log_tab(request):
+    """Request Log tab: every incoming request — IP, page, method, status, timing.
 
     Renders as cards or as a spreadsheet-style table (``?view=table``) with a
     filter condition on every column, and exports JSON or CSV with the same
@@ -8806,7 +8819,8 @@ def request_log(request):
         return response
 
     view_mode = 'table' if request.GET.get('view') == 'table' else 'cards'
-    return render(request, 'core/admin_request_log.html', {
+    return render(request, 'core/admin_requests.html', {
+        'panel': 'log',
         'records': records,
         'count': len(records),
         'total': request_total(),
@@ -10813,7 +10827,8 @@ def admin_active_users(request):
             ])
         return response
 
-    return render(request, 'core/admin_active_users.html', {
+    return render(request, 'core/admin_requests.html', {
+        'panel': 'users',
         'rows': displayed,
         'shown': len(displayed),
         'row_total': len(filtered),
@@ -10841,6 +10856,21 @@ def admin_active_users(request):
         'now': now,
         'since': since,
     })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_active_users_redirect(request):
+    """Legacy active-users URL → the merged Requests & Users page.
+
+    Keeps old bookmarks (and the analytics cards' previous target) working
+    without a second copy of the page.
+    """
+    # 'tab' first so the resulting link reads like the one the analytics
+    # cards generate: ?tab=users&platform=web
+    pairs = [('tab', 'users')]
+    pairs += [(key, value) for key, value in request.GET.items() if key != 'tab']
+    return redirect('%s?%s' % (reverse('request_log'), _urlencode(pairs)))
 
 
 # ---------------------------------------------------------------------------

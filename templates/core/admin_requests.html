@@ -1,0 +1,63 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Requests & Users - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .rq-head { display: flex; align-items: center; gap: .8rem; }
+    .rq-icon {
+        width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
+        background: linear-gradient(135deg, #22d3ee, #6366f1);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .rq-tabs {
+        display: flex; flex-wrap: wrap; gap: .35rem; padding: .35rem;
+        border: 1px solid var(--border, rgba(255,255,255,.08));
+        border-radius: 12px; background: var(--card-bg, #1a1a2e);
+    }
+    .rq-tab {
+        display: inline-flex; align-items: center; gap: .45rem;
+        padding: .45rem .9rem; border-radius: 9px;
+        font-size: .8rem; font-weight: 600; text-decoration: none;
+        color: var(--text-2, #cbd5e1);
+    }
+    .rq-tab:hover { background: rgba(148,163,184,.12); color: var(--text, #e2e8f0); }
+    .rq-tab.on { background: rgba(96,165,250,.18); color: #93c5fd; box-shadow: inset 0 0 0 1px rgba(96,165,250,.45); }
+    .rq-count {
+        font-size: .68rem; font-weight: 700; padding: 1px 7px;
+        border-radius: 999px; background: rgba(148,163,184,.2); color: inherit;
+    }
+    html[data-theme="light"] .rq-tabs { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .rq-tab { color: #475569; }
+    html[data-theme="light"] .rq-tab.on { background: rgba(37,99,235,.12); color: #1d4ed8; box-shadow: inset 0 0 0 1px rgba(37,99,235,.35); }
+</style>
+
+<div class="container py-4" style="max-width:1600px;">
+    <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Admin Dashboard</a>
+            <div class="rq-head mt-2">
+                <div class="rq-icon"><i class="fas fa-network-wired text-white" style="font-size:1.1rem;"></i></div>
+                <div>
+                    <h3 class="mb-0" style="font-size:1.25rem;">Requests &amp; Users</h3>
+                    <div style="color:#64748b;font-size:.82rem;">Every incoming request, and the web / Android visitors behind them — one page, two views</div>
+                </div>
+            </div>
+        </div>
+        <div class="rq-tabs">
+            <a class="rq-tab {% if panel == 'users' %}on{% endif %}" href="{% url 'request_log' %}?tab=users" title="Who is on the site right now — one row per visitor">
+                <i class="fas fa-users-viewfinder"></i> Active Users
+                {% if panel == 'users' and total_rows %}<span class="rq-count">{{ total_rows }}</span>{% endif %}
+            </a>
+            <a class="rq-tab {% if panel != 'users' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
+                <i class="fas fa-network-wired"></i> Request Log
+                {% if panel != 'users' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
+            </a>
+        </div>
+    </div>
+
+    {% if panel == 'users' %}
+        {% include 'core/admin_active_users.html' %}
+    {% else %}
+        {% include 'core/admin_request_log.html' %}
+    {% endif %}
+</div>
+{% endblock %}
