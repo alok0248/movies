@@ -77,8 +77,14 @@ SUGGESTED_RULES = (
     ('Bingbot', 'Bing (also indexes for search)'),
 )
 
+# The rule list is cached per worker for a moment so a busy site does not read
+# it from the database on every request. Only a non-empty list is cached: while
+# there are no rules (the usual case) every request looks, so the very first
+# rule takes effect everywhere at once instead of waiting out a stale empty
+# list. Nothing is cached for long, because lifting a rule should stop the
+# refusals promptly on every worker, not just the one the admin touched.
 CACHE_KEY = 'blocked_headers_active'
-CACHE_SECONDS = 30
+CACHE_SECONDS = 15
 
 _TOKEN_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{1,}$')
 
@@ -130,7 +136,7 @@ def active_rules():
         cached = cache.get(CACHE_KEY)
     except Exception:
         cached = None
-    if cached is not None:
+    if cached:
         return cached
     try:
         rules = list(BlockedHeader.objects.filter(is_active=True)
@@ -143,10 +149,11 @@ def active_rules():
     for rule in rules:
         rule['needle'] = rule['value'].lower()
         rule['header_key'] = (rule['header_name'] or DEFAULT_HEADER).lower()
-    try:
-        cache.set(CACHE_KEY, rules, CACHE_SECONDS)
-    except Exception:
-        pass
+    if rules:
+        try:
+            cache.set(CACHE_KEY, rules, CACHE_SECONDS)
+        except Exception:
+            pass
     return rules
 
 
