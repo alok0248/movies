@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% if permanent %}Permanently blocked{% else %}Sign in or register{% endif %}</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:radial-gradient(1200px 600px at 50% -10%,#1e293b 0%,#0b1020 60%,#070b16 100%);
+       color:#e2e8f0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px}
+  .card{width:100%;max-width:460px;background:rgba(15,23,42,.86);border:1px solid rgba(148,163,184,.22);
+        border-radius:20px;padding:26px 24px 20px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .shield{flex:0 0 auto;width:52px;height:52px;border-radius:15px;display:flex;align-items:center;
+          justify-content:center;font-size:1.4rem;background:linear-gradient(135deg,#ef4444,#f59e0b)}
+  .eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#f87171}
+  h1{font-size:1.02rem;margin:.15rem 0 0;line-height:1.35;font-weight:700}
+  .lead{font-size:.86rem;line-height:1.65;color:#a9b6c9;margin:0 0 .5rem}
+  .lead code{background:rgba(148,163,184,.16);padding:.1rem .38rem;border-radius:6px;font-size:.82rem;color:#e2e8f0}
+  .reason{font-size:.78rem;color:#8b98ab;margin:.1rem 0 .9rem;word-break:break-word}
+  .alert{font-size:.82rem;line-height:1.6;border-radius:12px;padding:.75rem .85rem;margin:0 0 .6rem;border:1px solid transparent}
+  .alert-blue{background:rgba(37,99,235,.16);border-color:rgba(59,130,246,.4);color:#dbeafe}
+  .alert-amber{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.42);color:#fde68a}
+  .alert-red{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.45);color:#fecaca}
+  .tabs{display:flex;gap:.4rem;background:rgba(148,163,184,.1);padding:.28rem;border-radius:12px;margin:.9rem 0 1rem}
+  .tab{flex:1;border:0;background:transparent;color:#a9b6c9;font-size:.86rem;font-weight:600;
+       padding:.55rem .4rem;border-radius:9px;cursor:pointer;font-family:inherit}
+  .tab.active{background:rgba(99,102,241,.9);color:#fff}
+  .pane{display:block}
+  .pane[hidden]{display:none}
+  label{display:block;font-size:.76rem;font-weight:600;color:#9fb0c7;margin:0 0 .7rem;
+        text-transform:uppercase;letter-spacing:.05em}
+  input{display:block;width:100%;margin-top:.35rem;padding:.72rem .85rem;border-radius:11px;
+        border:1px solid rgba(148,163,184,.32);background:rgba(2,6,23,.6);color:#e8eefb;
+        font-size:.92rem;font-family:inherit;text-transform:none;letter-spacing:normal}
+  input:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.25)}
+  .btn{width:100%;margin-top:.35rem;padding:.8rem 1rem;border:0;border-radius:12px;font-size:.92rem;
+       font-weight:700;color:#fff;background:linear-gradient(135deg,#6366f1,#22d3ee);cursor:pointer;font-family:inherit}
+  .btn[disabled]{opacity:.6;cursor:default}
+  .msg{font-size:.82rem;line-height:1.55;border-radius:11px;padding:.7rem .8rem;margin-top:.75rem}
+  .msg.ok{background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.4);color:#bbf7d0}
+  .msg.bad{background:rgba(239,68,68,.13);border:1px solid rgba(239,68,68,.4);color:#fecaca}
+  .foot{font-size:.73rem;line-height:1.6;color:#67748b;margin:1.1rem 0 0;text-align:center}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="head">
+    <div class="shield">&#128737;</div>
+    <div>
+      <div class="eyebrow">{% if permanent %}Permanent block{% else %}IP blocked{% endif %}</div>
+      <h1>{% if permanent %}This IP address is blocked permanently{% else %}This IP address is blocked{% endif %}</h1>
+    </div>
+  </div>
+
+  <p class="lead">
+    Requests from <code>{{ blocked_ip|default:"your address" }}</code> were stopped because they
+    looked like automated scraping{% if auto_bot %} — far more requests in a short time than a person
+    browsing the site makes{% endif %}.
+  </p>
+  {% if reason %}<p class="reason">Recorded reason: {{ reason }}</p>{% endif %}
+
+  {% if permanent %}
+    <div class="alert alert-red">
+      This block is permanent: registering or signing in cannot lift it. If you believe this is a
+      mistake, contact the site owner and quote the address shown above.
+    </div>
+  {% else %}
+    <div class="alert alert-blue">
+      <b>Sign in, or create a free account below, and this block is removed right away.</b>
+      These two forms are the only thing this address can open at the moment.
+    </div>
+    <div class="alert alert-amber">
+      <b>Warning:</b> if this address scrapes the site again, it will be blocked
+      <b>permanently</b> — with no way back in. Scraping the site is not allowed.
+    </div>
+
+    <div class="tabs">
+      <button type="button" class="tab active" id="tabLogin" onclick="blockedTab('login')">Sign in</button>
+      <button type="button" class="tab" id="tabRegister" onclick="blockedTab('register')">Create account</button>
+    </div>
+
+    <form id="blockedLoginForm" class="pane" onsubmit="return blockedAuth(event,'login')">
+      {% csrf_token %}
+      <label>Username or email<input type="text" name="username" autocomplete="username" required></label>
+      <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+      <button type="submit" class="btn" id="loginSubmit">Sign in and continue</button>
+      <div class="msg" id="loginMsg" hidden></div>
+    </form>
+
+    <form id="blockedRegisterForm" class="pane" hidden onsubmit="return blockedAuth(event,'register')">
+      {% csrf_token %}
+      <label>Username<input type="text" name="username" autocomplete="username" required></label>
+      <label>Email (Gmail or Yahoo)<input type="email" name="email" autocomplete="email" required></label>
+      <label>Password (6 characters or more)<input type="password" name="password" autocomplete="new-password" required minlength="6"></label>
+      <label>Confirm password<input type="password" name="confirm_password" autocomplete="new-password" required minlength="6"></label>
+      <button type="submit" class="btn" id="registerSubmit">Create account and continue</button>
+      <div class="msg" id="registerMsg" hidden></div>
+    </form>
+  {% endif %}
+
+  <p class="foot">Your address is used only to enforce this block. This page is never cached.</p>
+</main>
+
+{% if not permanent %}
+<script>
+function blockedTab(which) {
+  var login = which !== 'register';
+  document.getElementById('blockedLoginForm').hidden = !login;
+  document.getElementById('blockedRegisterForm').hidden = login;
+  document.getElementById('tabLogin').classList.toggle('active', login);
+  document.getElementById('tabRegister').classList.toggle('active', !login);
+}
+function blockedMsg(id, text, ok) {
+  var el = document.getElementById(id);
+  el.hidden = false;
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'ok' : 'bad');
+}
+async function blockedAuth(event, which) {
+  event.preventDefault();
+  var form = event.target;
+  var isLogin = which === 'login';
+  var btn = document.getElementById(isLogin ? 'loginSubmit' : 'registerSubmit');
+  var msgId = isLogin ? 'loginMsg' : 'registerMsg';
+  var data = new FormData(form);
+  var label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Please wait...';
+  try {
+    var res = await fetch(isLogin ? '/ajax/login/' : '/ajax/register/', {
+      method: 'POST',
+      headers: {'X-CSRFToken': data.get('csrfmiddlewaretoken') || '', 'X-Requested-With': 'XMLHttpRequest'},
+      body: data,
+      credentials: 'same-origin'
+    });
+    var json = {};
+    try { json = await res.json(); } catch (e) {}
+    if (json.success) {
+      blockedMsg(msgId, isLogin
+        ? 'Signed in. Removing the block on this address...'
+        : 'Account created and the block on this address is removed. Check your inbox for the verification code, then sign in.', true);
+      setTimeout(function () { window.location.reload(); }, isLogin ? 900 : 3000);
+      return false;
+    }
+    blockedMsg(msgId, json.message || json.detail || 'That did not work. Please check your details and try again.', false);
+  } catch (err) {
+    blockedMsg(msgId, 'Network error. Please try again.', false);
+  }
+  btn.disabled = false;
+  btn.textContent = label;
+  return false;
+}
+</script>
+{% endif %}
+</body>
+</html>

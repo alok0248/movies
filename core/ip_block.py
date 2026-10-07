@@ -1,11 +1,23 @@
 """IP blocking for the public site.
 
 The admin blocks an address straight from the Requests & Users page (or from
-the Blocked IPs page). From then on every public request from that address
-answers 403 — but the request is *still* written to RequestLog, because the
-blocking middleware sits inside RequestLogMiddleware. That is what makes the
-Blocked IPs page possible: it can show how many requests the address kept
-making after the block and exactly which pages it asked for.
+the Blocked IPs page). From then on every public request from that address is
+answered with a sign-in / sign-up page instead of the site — and the request is
+*still* written to RequestLog, because the blocking middleware sits inside
+RequestLogMiddleware. That is what makes the Blocked IPs page possible: it can
+show how many requests the address kept making after the block and exactly
+which pages it asked for.
+
+A blocked visitor is not sealed off: the block page shows the login and
+registration forms, and signing in or registering lifts a normal block right
+away — that is the way out a real visitor has, and the page warns that scraping
+again will block the address permanently. A block becomes permanent when the
+address is blocked again after such a lift, when an address that is already
+signed in crosses the bot rate, or when the admin marks it permanent.
+
+Nothing is left to the admin's eye alone either: a rolling per-address rate
+watch blocks an address that asks for far more pages than a person could, which
+is what a scraper does when it starts from a fresh address every time.
 
 Safety: staff / superuser requests and the Django admin are never blocked, and
 a blocked address is kept out of the visitor tables, so a mistyped block can
@@ -17,6 +29,7 @@ blocking rule is local to the portal and never touches the external user DB.
 
 import ipaddress
 import logging
+import time
 from collections import Counter
 
 from django.http import HttpResponseForbidden
@@ -30,12 +43,81 @@ logger = logging.getLogger(__name__)
 BLOCKED_STATUS = 403
 
 # Endpoints a blocked visitor must still be able to reach, otherwise signing in
-# (the way out of the block) would be impossible: the site's own auth calls.
+# (the way out of the block) would be impossible: the site's own auth calls, for
+# both the website and the Android app.
 AUTH_EXEMPT_PREFIXES = (
     '/login', '/logout',
     '/ajax/login', '/ajax/logout', '/ajax/register', '/ajax/verify',
     '/ajax/resend-verification', '/ajax/forgot-password', '/ajax/reset-password',
+    '/api/user/login', '/api/user/register', '/api/user/verify-email',
+    '/api/user/resend-verification', '/api/user/forgot-password',
+    '/api/user/reset-password', '/api/user/verify-reset-otp',
 )
+
+# --- bot-rate watch -------------------------------------------------------
+# A visitor asking for this many non-user-API requests inside the window looks
+# like a scraper rather than a person, and is blocked as a bot. Tuned where a
+# genuine visitor cannot reach it: 150 requests in 5 minutes is 30 a minute,
+# sustained. The app's own sync endpoints are excluded because mobile carriers
+# put many real devices behind one address — blocking one of those would take
+# out thousands of genuine users.
+BOT_WINDOW_SECONDS = 300
+BOT_MAX_REQUESTS = 150
+# Paths that never count towards the bot rate (the app's user-data polling).
+BOT_RATE_SKIP_PREFIXES = (
+    '/api/user/', '/ajax/page-activity', '/static/', '/media/',
+)
+# Keep the in-process watch bounded; oldest addresses are dropped first.
+BOT_WATCH_MAX_IPS = 4000
+_bot_watch = {}
+
+
+def should_count_for_bot_rate(path):
+    """False for chatty app endpoints and assets that are not scraping."""
+    p = path or ''
+    if not p or p.startswith(BOT_RATE_SKIP_PREFIXES):
+        return False
+    # The admin dashboard is the operator's own traffic, never a bot.
+    return not (p.startswith('/admin') or p.startswith('/django-admin'))
+
+
+def note_request(ip_address, now=None):
+    """Count one request for this address; True when it crosses the bot limit.
+
+    A small in-process rolling window per worker. It only has to be accurate
+    enough to notice a scraper: once an address is blocked the block is in the
+    database, so every worker enforces it immediately.
+    """
+    from collections import deque
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    now = now if now is not None else time.monotonic()
+    if len(_bot_watch) > BOT_WATCH_MAX_IPS:
+        # Cheap eviction: drop the oldest inserted entries.
+        for old in list(_bot_watch)[:BOT_WATCH_MAX_IPS // 4]:
+            _bot_watch.pop(old, None)
+    window = _bot_watch.get(ip)
+    if window is None:
+        window = _bot_watch[ip] = deque()
+    cutoff = now - BOT_WINDOW_SECONDS
+    while window and window[0] < cutoff:
+        window.popleft()
+    window.append(now)
+    if len(window) < BOT_MAX_REQUESTS:
+        return False
+    # Over the limit: forget this window so the check starts clean after the
+    # block is lifted again.
+    _bot_watch.pop(ip, None)
+    return True
+
+
+def reset_bot_watch(ip_address=None):
+    """Clear the rolling window (all addresses, or just one)."""
+    if ip_address is None:
+        _bot_watch.clear()
+        return
+    _bot_watch.pop(normalize_ip(ip_address), None)
 
 # The auth form lives in the site's home page modal, so the home page stays
 # reachable when it is being opened for signing in or registering.
@@ -80,6 +162,17 @@ def normalize_ip(value):
         return ''
 
 
+def client_ip_of(request):
+    """The canonical client IP of a request, or '' — same first-hop rule as the
+    request log (X-Forwarded-For first, then REMOTE_ADDR)."""
+    try:
+        forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+        raw = forwarded.split(',')[0] if forwarded else request.META.get('REMOTE_ADDR', '')
+    except Exception:
+        return ''
+    return normalize_ip(raw)
+
+
 def active_blocked_ips():
     """{ip: BlockedIP} for every currently blocked address (for UI badges)."""
     try:
@@ -108,12 +201,16 @@ def is_ip_blocked(ip_address):
     return blocked_ip_for(ip_address) is not None
 
 
-def block_ip(ip_address, blocked_by='', reason=''):
+def block_ip(ip_address, blocked_by='', reason='', permanent=False):
     """Block an address (or re-block one that was previously unblocked).
 
     Returns ``(row, created)``; reusing the row keeps the reason/history and
     resets ``blocked_at``, which is the cut-off the activity report counts from.
     Returns ``(None, False)`` when the address is not valid.
+
+    A fresh block on an address that was already blocked before escalates:
+    ``offense_count`` goes up, and if the previous block had been lifted by the
+    visitor signing in — i.e. they were warned — the new block is permanent.
     """
     ip = normalize_ip(ip_address)
     if not ip:
@@ -128,8 +225,18 @@ def block_ip(ip_address, blocked_by='', reason=''):
             blocked_by=(blocked_by or '')[:150],
             blocked_at=now,
             is_active=True,
+            is_permanent=bool(permanent),
+            offense_count=1,
         )
         return row, True
+
+    was_blocked = row.is_active
+    if not was_blocked:
+        # A new block on an address we have blocked before, not a repeat call
+        # while it is already blocked.
+        row.offense_count = max(1, (row.offense_count or 1) + 1)
+        if row.lifted_by_signup:
+            permanent = True
     row.is_active = True
     row.blocked_at = now
     row.blocked_by = (blocked_by or '')[:150]
@@ -137,8 +244,11 @@ def block_ip(ip_address, blocked_by='', reason=''):
         row.reason = reason[:300]
     row.unblocked_at = None
     row.unblocked_by = ''
+    row.lifted_by_signup = False
+    row.is_permanent = bool(row.is_permanent or permanent)
     row.save(update_fields=['is_active', 'blocked_at', 'blocked_by', 'reason',
-                            'unblocked_at', 'unblocked_by'])
+                            'unblocked_at', 'unblocked_by', 'is_permanent',
+                            'offense_count', 'lifted_by_signup'])
     return row, False
 
 
@@ -155,49 +265,131 @@ def unblock_ip(ip_address, unblocked_by=''):
     row.unblocked_at = timezone.now()
     row.unblocked_by = (unblocked_by or '')[:150]
     row.save(update_fields=['is_active', 'unblocked_at', 'unblocked_by'])
+    reset_bot_watch(ip)
     return row
 
 
-def blocked_response(ip_address=''):
+def lift_block_for_signup(ip_address):
+    """Lift a non-permanent block because a visitor signed in or registered.
+
+    This is the way out the block page offers. The row is marked so a later
+    block on the same address is escalated to permanent (the warning the page
+    shows). A permanent block is never lifted here. Returns the row or None.
+    """
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return None
+    from .models import BlockedIP
+    row = BlockedIP.objects.filter(ip_address=ip, is_active=True).first()
+    if row is None or row.is_permanent:
+        return None
+    row.is_active = False
+    row.unblocked_at = timezone.now()
+    row.unblocked_by = 'signup'
+    row.lifted_by_signup = True
+    row.offense_count = max(1, row.offense_count or 1)
+    row.save(update_fields=['is_active', 'unblocked_at', 'unblocked_by',
+                            'lifted_by_signup', 'offense_count'])
+    reset_bot_watch(ip)
+    logger.info('IPBlock: lifted the block on %s after a signup/login', ip)
+    return row
+
+
+def note_auth_success(request):
+    """Lift a normal block because this request just signed in or registered.
+
+    Called by the sign-in / registration views once they succeed, so a blocked
+    visitor who follows the block page's way out is unblocked straight away.
+    Returns the lifted row, or None when the address was not blocked (or the
+    block is permanent, which is never lifted this way).
+    """
+    ip = client_ip_of(request)
+    if not ip:
+        return None
+    row = blocked_ip_for(ip)
+    if row is None:
+        return None
+    if row.is_permanent:
+        logger.info('IPBlock: ignored a signup from permanently blocked %s', ip)
+        return None
+    return lift_block_for_signup(ip)
+
+
+def auto_block_bot(ip_address, signed_in=False, requests=None):
+    """Block an address that crossed the bot rate, as a bot.
+
+    An address that crossed the limit while *signed in* is a repeat offender by
+    definition — it already had the access the block page offers — so that block
+    is permanent. An anonymous one gets the normal way out (register or sign in)
+    plus the warning.
+    """
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return None, False
+    detail = ('%s requests inside %s minutes' % (requests or BOT_MAX_REQUESTS,
+                                                BOT_WINDOW_SECONDS // 60))
+    if signed_in:
+        detail += ' while signed in'
+    return block_ip(ip, 'auto:bot-detector',
+                    'looks like a bot: ' + detail,
+                    permanent=bool(signed_in))
+
+
+def is_bot_block(row):
+    """True when an auto-bot block (rather than a hand-made one) made this row."""
+    return bool(row is not None and (row.blocked_by or '').startswith('auto:bot'))
+
+
+def set_permanent(ip_address, permanent=True, by=''):
+    """Make a block permanent (or allow signup to lift it again)."""
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return None
+    from .models import BlockedIP
+    row = BlockedIP.objects.filter(ip_address=ip, is_active=True).first()
+    if row is None:
+        return None
+    row.is_permanent = bool(permanent)
+    if not permanent:
+        row.lifted_by_signup = False
+    row.save(update_fields=['is_permanent', 'lifted_by_signup'])
+    logger.info('IPBlock: %s marked %s by %s', ip,
+                'permanent' if permanent else 'temporary', by or 'admin')
+    return row
+
+
+def blocked_response(request, ip_address='', row=None):
     """The 403 page a blocked address receives.
 
-    It is not a dead end: a blocked visitor is asked to register or sign in, and
-    the sign-in/register entry points stay reachable (see ``is_auth_entry``).
+    A blocked visitor sees one thing only: the sign-in form and the registration
+    form, with a short note saying the address is blocked and why. Signing in or
+    registering is the way out — either one lifts a normal block immediately —
+    and the page carries the warning that scraping again means a permanent
+    block. The auth entry points the forms post to stay reachable
+    (see ``is_auth_entry``).
     """
-    body = (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        '<meta name="robots" content="noindex">'
-        '<title>403 &mdash; Access blocked</title></head>'
-        '<body style="margin:0;min-height:100vh;display:flex;align-items:center;'
-        'justify-content:center;background:#0b1020;color:#e2e8f0;'
-        'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">'
-        '<div style="text-align:center;padding:36px 24px;max-width:560px">'
-        '<div style="width:64px;height:64px;margin:0 auto 16px;border-radius:18px;'
-        'background:linear-gradient(135deg,#ef4444,#f59e0b);display:flex;'
-        'align-items:center;justify-content:center;font-size:1.7rem">&#128737;</div>'
-        '<div style="font-size:3rem;font-weight:800;letter-spacing:-.03em;'
-        'background:linear-gradient(135deg,#f87171,#fbbf24);'
-        '-webkit-background-clip:text;background-clip:text;color:transparent">403</div>'
-        '<h1 style="font-size:1.15rem;margin:.6rem 0 .5rem">Access blocked</h1>'
-        '<p style="color:#94a3b8;font-size:.9rem;line-height:1.65;margin:0 0 1.4rem">'
-        'This address was blocked for automated traffic &mdash; for example, repeatedly '
-        'asking for pages that do not exist on this site.</p>'
-        '<p style="color:#cbd5e1;font-size:.9rem;line-height:1.65;margin:0 0 1.2rem">'
-        'If you are a real visitor, create a free account or sign in to continue.</p>'
-        '<div style="display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">'
-        '<a href="/?register=true" style="display:inline-block;padding:.6rem 1.2rem;'
-        'border-radius:10px;font-weight:600;font-size:.9rem;text-decoration:none;'
-        'color:#fff;background:linear-gradient(135deg,#6366f1,#22d3ee)">Create a free account</a>'
-        '<a href="/?login_required=true" style="display:inline-block;padding:.6rem 1.2rem;'
-        'border-radius:10px;font-weight:600;font-size:.9rem;text-decoration:none;'
-        'color:#e2e8f0;border:1px solid rgba(148,163,184,.45)">Sign in</a>'
-        '</div>'
-        '<p style="color:#64748b;font-size:.78rem;margin:1.4rem 0 0;line-height:1.6">'
-        'Already signed in? Reload this page.</p>'
-        '</div></body></html>'
-    )
-    response = HttpResponseForbidden(body)
+    ip = normalize_ip(ip_address) or client_ip_of(request)
+    if row is None:
+        row = blocked_ip_for(ip)
+    permanent = bool(row is not None and row.is_permanent)
+    reason = (row.reason if row is not None else '') or ''
+    auto_bot = is_bot_block(row)
+    try:
+        from django.shortcuts import render
+        response = render(request, 'core/ip_blocked.html', {
+            'blocked_ip': ip,
+            'permanent': permanent,
+            'reason': reason[:300],
+            'auto_bot': auto_bot,
+        }, status=BLOCKED_STATUS)
+    except Exception:
+        logger.warning('IPBlock: falling back to the plain block page', exc_info=True)
+        response = HttpResponseForbidden(
+            '<!doctype html><meta name="robots" content="noindex">'
+            '<title>403 - Access blocked</title>'
+            '<p>This IP address is blocked. Sign in or register to continue.'
+            ' Scraping again will block this address permanently.</p>'
+        )
     response['Cache-Control'] = 'no-store'
     return response
 
@@ -244,6 +436,13 @@ def blocked_ip_report(include_unblocked=False, search=''):
             'last_after': None,
             'user_agent': '',
             'usernames': Counter(),
+            # Escalation state: a permanent block (or one the visitor was
+            # warned about and repeated anyway) and how often this address has
+            # been blocked at all.
+            'is_permanent': bool(row.is_permanent),
+            'offense_count': row.offense_count or 1,
+            'lifted_by_signup': bool(row.lifted_by_signup),
+            'is_bot': is_bot_block(row),
         })
 
     if blocked:
@@ -298,5 +497,8 @@ def blocked_ip_report(include_unblocked=False, search=''):
         'served_403': sum(s['after_403'] for s in rows),
         'requests': sum(s['total'] for s in rows),
         'unblocked': sum(1 for s in rows if not s['is_active']),
+        'permanent': sum(1 for s in rows if s['is_permanent'] and s['is_active']),
+        'bots': sum(1 for s in rows if s['is_bot'] and s['is_active']),
+        'repeat': sum(1 for s in rows if (s['offense_count'] or 1) > 1),
     }
     return rows, totals

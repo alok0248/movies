@@ -4349,6 +4349,7 @@ def ajax_login(request):
         if user:
             login(request, user)
             _record_session(user, 'web', request)
+            _lift_block_after_auth(request)
             return JsonResponse({'success': True, 'message': 'Login successful'})
         # If no password provided, try email-based login for synced users
         if not password and '@' in username:
@@ -4362,6 +4363,7 @@ def ajax_login(request):
                         user.save()
                         login(request, user)
                         _record_session(user, 'web', request)
+                        _lift_block_after_auth(request)
                         return JsonResponse({'success': True, 'message': 'Password set and login successful'})
                     return JsonResponse({
                         'success': False,
@@ -4495,6 +4497,7 @@ def ajax_register(request):
                 existing_user.is_active = False
                 existing_user.save()
                 _issue_verification_email(existing_user, request, display_name=username)
+                _lift_block_after_auth(request)
                 return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
         
         if User.objects.filter(username=username).exists():
@@ -4505,6 +4508,7 @@ def ajax_register(request):
         user.is_active = False
         user.save()
         _issue_verification_email(user, request, display_name=username)
+        _lift_block_after_auth(request)
 
         return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
@@ -8500,6 +8504,21 @@ def _record_session(user, source, request, device_model='', os_version='', app_v
     )
 
 
+def _lift_block_after_auth(request):
+    """Lift a normal IP block once a blocked visitor signs in or registers.
+
+    The block page a blocked address receives shows only the login and
+    registration forms and promises that either one removes the block; this is
+    where that promise is kept. A permanent block is never lifted here, and a
+    failure is swallowed so it can never break a login or a registration.
+    """
+    try:
+        from .ip_block import note_auth_success
+        note_auth_success(request)
+    except Exception:
+        logger.warning('IPBlock: could not lift the block after auth', exc_info=True)
+
+
 def _validate_android_auth(request):
     """Validate Basic Auth + Android headers. Returns (app_match, error_response)."""
     from .models import AndroidApp
@@ -8948,6 +8967,7 @@ def api_user_register(request):
 
     # Send verification email with link token + 6-digit OTP (app can verify via OTP)
     _token, otp = _issue_verification_email(django_user, request, display_name=display_name)
+    _lift_block_after_auth(request)
 
     resp = {
         'status': 'success',
@@ -9044,6 +9064,7 @@ def api_user_login(request):
         user_obj.save()
 
     _record_session(auth_user, 'android', request, device_model=body.get('deviceModel', ''), os_version=body.get('osVersion', ''), app_version=body.get('appVersion', ''))
+    _lift_block_after_auth(request)
 
     return JsonResponse(_build_user_response(auth_user, user_obj, {
         'message': 'Login successful',
@@ -11092,13 +11113,14 @@ def ip_block_action(request):
     ``ip`` the address and ``reason`` an optional note. ``next`` is honoured
     only when it is a local path, so a crafted form cannot bounce elsewhere.
     """
-    from .ip_block import block_ip, unblock_ip, normalize_ip
+    from .ip_block import block_ip, unblock_ip, normalize_ip, set_permanent
 
     action = (request.POST.get('action') or '').strip()
     raw_ip = (request.POST.get('ip') or '').strip()
     ip = normalize_ip(raw_ip)
     reason = (request.POST.get('reason') or '').strip()[:300]
     who = (request.user.username or '')[:150]
+    permanent = (request.POST.get('permanent') or '').strip().lower() in ('1', 'on', 'true', 'yes')
 
     if not raw_ip:
         messages.error(request, 'No IP address given.')
@@ -11111,13 +11133,31 @@ def ip_block_action(request):
         else:
             messages.warning(request, f'{ip} was not blocked.')
     elif action == 'block':
-        _, created = block_ip(ip, who, reason)
-        if created:
+        row, created = block_ip(ip, who, reason, permanent=permanent)
+        if row is not None and row.is_permanent:
             messages.success(request,
-                             f'Blocked {ip}. Requests from it now get a 403 — and are '
-                             'still logged, so you can see what it tries next.')
+                             f'Blocked {ip} permanently. It gets the block page on every '
+                             'request and signing in or registering will not lift it.')
+        elif created:
+            messages.success(request,
+                             f'Blocked {ip}. It now sees only the sign-in / register page — '
+                             'and its requests are still logged, so you can see what it tries next.')
         else:
             messages.success(request, f'Re-blocked {ip}. Its block clock was reset.')
+    elif action == 'permanent':
+        if set_permanent(ip, True, who) is not None:
+            messages.success(request,
+                             f'{ip} is now blocked permanently — signing in or registering '
+                             'will not lift it.')
+        else:
+            messages.warning(request, f'{ip} is not blocked, so it cannot be made permanent.')
+    elif action == 'temporary':
+        if set_permanent(ip, False, who) is not None:
+            messages.success(request,
+                             f'{ip} is a normal block again — signing in or registering '
+                             'will lift it.')
+        else:
+            messages.warning(request, f'{ip} is not blocked.')
     else:
         messages.error(request, 'Unknown action.')
 
@@ -11152,7 +11192,8 @@ def admin_blocked_ips(request):
         response.write('\ufeff')
         writer = csv.writer(response)
         writer.writerow([
-            'IP', 'Status', 'Blocked at', 'Blocked by', 'Reason',
+            'IP', 'Status', 'Permanent', 'Blocked times', 'Auto-bot',
+            'Lifted by signup', 'Blocked at', 'Blocked by', 'Reason',
             'Unblocked at', 'Unblocked by', 'Requests (total)',
             'Requests after block', '403s served', 'Pages after block',
             'Distinct pages', 'First seen', 'Last seen',
@@ -11165,6 +11206,9 @@ def admin_blocked_ips(request):
         for r in rows:
             writer.writerow([
                 r['ip'], 'Blocked' if r['is_active'] else 'Unblocked',
+                'Yes' if r['is_permanent'] else 'No', r['offense_count'],
+                'Yes' if r['is_bot'] else 'No',
+                'Yes' if r['lifted_by_signup'] else 'No',
                 _stamp(r['blocked_at']), r['blocked_by'], r['reason'],
                 _stamp(r['unblocked_at']), r['unblocked_by'], r['total'],
                 r['after'], r['after_403'],

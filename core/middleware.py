@@ -83,47 +83,88 @@ class IPBlockMiddleware:
     lets the Blocked IPs page show how many requests an address kept making
     after the block and which pages it kept asking for.
 
-    A blocked address is not sealed off completely: signing in or registering
-    lifts the block (that is what the block page asks a visitor to do), the
-    login/register endpoints stay reachable so that is actually possible, and
-    staff plus the Django admin are exempt so a mistyped block can never lock
-    the operator out of the dashboard.
+    A blocked address is not sealed off completely: the block page shows only
+    the sign-in and registration forms, signing in or registering lifts a normal
+    block right away, the auth endpoints stay reachable so that is actually
+    possible, and staff plus the Django admin are exempt so a mistyped block can
+    never lock the operator out of the dashboard.
+
+    The same middleware also watches the request rate: an address that asks for
+    far more pages in a few minutes than a person could is treated as a bot and
+    blocked, permanently when it was signed in. Scraping again after being
+    warned by the block page escalates a block to permanent too.
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     @staticmethod
-    def _exempt(request):
+    def _hard_exempt(request):
+        """True for paths that stay reachable even from a blocked address.
+
+        The dashboard (so a mistyped block can never lock the operator out),
+        static and media files, and the site's own sign-in / registration
+        endpoints — the block page posts to those, so blocking them would close
+        the way out the page offers.
+        """
         path = getattr(request, 'path', '') or ''
         if path.startswith('/admin') or path.startswith('/static/') or path.startswith('/media/'):
             return True
         from .ip_block import is_auth_entry
-        if is_auth_entry(request):
-            return True
-        user = getattr(request, 'user', None)
+        return is_auth_entry(request)
+
+    @staticmethod
+    def _operator(request):
+        """True for staff / superuser traffic, which is never rate-watched."""
         try:
-            # A signed-in visitor is not an anonymous scraper: logging in or
-            # registering is the way out of the block the 403 page offers.
-            if user is not None and user.is_authenticated:
-                return True
+            user = getattr(request, 'user', None)
+            return bool(user is not None and user.is_authenticated
+                        and (user.is_staff or user.is_superuser))
         except Exception:
-            return True
-        return False
+            return False
+
+    @staticmethod
+    def _signed_in(request):
+        try:
+            user = getattr(request, 'user', None)
+            return bool(user is not None and user.is_authenticated)
+        except Exception:
+            return False
 
     def __call__(self, request):
         try:
-            if self._exempt(request):
-                return self.get_response(request)
-            client_ip = get_client_ip(request)
-            if client_ip:
-                from .ip_block import blocked_ip_for, blocked_response
-                if blocked_ip_for(client_ip) is not None:
-                    return blocked_response(client_ip)
+            return self._check(request)
         except Exception:
             # Blocking must never break the site; on any doubt, serve the request.
-            pass
-        return self.get_response(request)
+            return self.get_response(request)
+
+    def _check(self, request):
+        from .ip_block import (should_count_for_bot_rate, note_request,
+                               auto_block_bot, blocked_ip_for, blocked_response,
+                               is_bot_block)
+        client_ip = get_client_ip(request)
+        signed_in = self._signed_in(request)
+        # Watch the request rate *before* the exemptions, so a signed-in
+        # scraper is caught too. should_count_for_bot_rate() keeps the app's own
+        # user-data polling, assets and the dashboard out of the count, and staff
+        # traffic is skipped outright.
+        if client_ip and not self._operator(request):
+            if should_count_for_bot_rate(getattr(request, 'path', '') or ''):
+                if note_request(client_ip):
+                    auto_block_bot(client_ip, signed_in=signed_in)
+        if self._hard_exempt(request):
+            return self.get_response(request)
+        if not client_ip:
+            return self.get_response(request)
+        row = blocked_ip_for(client_ip)
+        if row is None:
+            return self.get_response(request)
+        # A signed-in visitor already followed the block page's way out, so a
+        # hand-made block does not stop them — but a bot block, or a permanent
+        # one, is not something holding a session gets to bypass.
+        if signed_in and not (row.is_permanent or is_bot_block(row)):
+            return self.get_response(request)
+        return blocked_response(request, client_ip, row)
 
 
 class EmailSettingsMiddleware:

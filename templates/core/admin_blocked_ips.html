@@ -37,6 +37,9 @@
     .bi-b-on { background: rgba(239,68,68,.16); color: #f87171; }
     .bi-b-off { background: rgba(107,114,128,.2); color: #9ca3af; }
     .bi-b-hot { background: rgba(251,191,36,.16); color: #fbbf24; }
+    .bi-b-perm { background: rgba(236,72,153,.18); color: #f472b6; }
+    .bi-b-bot { background: rgba(167,139,250,.18); color: #c4b5fd; }
+    .bi-b-warn { background: rgba(148,163,184,.18); color: #cbd5e1; }
     .bi-num-cell { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text, #e2e8f0); }
     .bi-sub { color: var(--text-3, #64748b); font-size: .68rem; }
     .bi-zero { color: #475569; }
@@ -147,6 +150,24 @@
                 <div class="bi-lbl">Past blocks</div>
             </div>
         </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="bi-card bi-stat" title="Blocks that signing in or registering can no longer lift">
+                <div class="bi-num" style="color:#f472b6;">{{ totals.permanent }}</div>
+                <div class="bi-lbl">Permanent</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="bi-card bi-stat" title="Blocks raised automatically by the request-rate watch">
+                <div class="bi-num" style="color:#c4b5fd;">{{ totals.bots }}</div>
+                <div class="bi-lbl">Auto-bot</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="bi-card bi-stat" title="Addresses that have been blocked more than once">
+                <div class="bi-num" style="color:#fbbf24;">{{ totals.repeat }}</div>
+                <div class="bi-lbl">Repeat offenders</div>
+            </div>
+        </div>
     </div>
 
     <div class="bi-card p-3 mb-3">
@@ -160,6 +181,12 @@
                 </label>
                 <label>Reason (optional)
                     <input type="text" name="reason" placeholder="scraper, brute force…" maxlength="300">
+                </label>
+                <label title="A permanent block cannot be lifted by signing in or registering">
+                    <span style="display:flex;align-items:center;gap:.3rem;">
+                        <input type="checkbox" name="permanent" value="1" style="margin:0;">
+                        Block permanently
+                    </span>
                 </label>
                 <label>&nbsp;
                     <button type="submit" class="bi-btn bi-btn-block"><i class="fas fa-ban"></i>Block this IP</button>
@@ -181,7 +208,8 @@
         </div>
         <div class="bi-sub mt-2">
             {% if totals.active_after %}<span class="bi-hot">{{ totals.active_after }}</span> blocked address{{ totals.active_after|pluralize:"es are, is" }} still sending requests.{% endif %}
-            A blocked address gets a <span class="bi-mono">403</span> on every public request, but the attempt is still written to the request log — that is what the counts and page lists below are built from. Counts cover the {{ total_stored }} requests currently retained by the log.
+            A blocked address sees <span class="bi-mono">only the sign-in and registration page</span> on every public request, but the attempt is still written to the request log — that is what the counts and page lists below are built from. Counts cover the {{ total_stored }} requests currently retained by the log.
+            Signing in or registering lifts a normal block (and arms the warning: scraping again makes it permanent); a <span class="bi-badge bi-b-perm">permanent</span> block stays. <span class="bi-badge bi-b-bot">bot</span> marks a block the request-rate watch raised on its own.
         </div>
     </div>
 
@@ -212,10 +240,14 @@
                     <td>
                         {% if r.is_active %}
                             <span class="bi-badge bi-b-on">Blocked</span>
+                            {% if r.is_permanent %}<span class="bi-badge bi-b-perm" title="Signing in or registering will not lift this block">permanent</span>{% endif %}
+                            {% if r.is_bot %}<span class="bi-badge bi-b-bot" title="Raised automatically by the request-rate watch">bot</span>{% endif %}
                             {% if r.after %}<div class="bi-sub"><span class="bi-badge bi-b-hot">still hitting</span></div>{% endif %}
                         {% else %}
                             <span class="bi-badge bi-b-off">Unblocked</span>
+                            {% if r.lifted_by_signup %}<span class="bi-badge bi-b-warn" title="The visitor did what the block page asked; scraping again makes the next block permanent">lifted by signup</span>{% endif %}
                         {% endif %}
+                        {% if r.offense_count > 1 %}<div class="bi-sub">blocked {{ r.offense_count }}×</div>{% endif %}
                     </td>
                     <td>
                         <div title="{{ r.blocked_at|date:'Y-m-d H:i:s' }}">{{ r.blocked_at|date:"M d, Y H:i" }}</div>
@@ -267,13 +299,32 @@
                     </td>
                     <td>
                         {% if r.is_active %}
-                        <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Unblock {{ r.ip|escapejs }}? Requests from it will be served again.');">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="unblock">
-                            <input type="hidden" name="ip" value="{{ r.ip }}">
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button type="submit" class="bi-btn bi-btn-unblock"><i class="fas fa-unlock"></i>Unblock</button>
-                        </form>
+                        <div style="display:flex;gap:.3rem;flex-wrap:wrap;">
+                            <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Unblock {{ r.ip|escapejs }}? Requests from it will be served again.');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="unblock">
+                                <input type="hidden" name="ip" value="{{ r.ip }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="bi-btn bi-btn-unblock"><i class="fas fa-unlock"></i>Unblock</button>
+                            </form>
+                            {% if r.is_permanent %}
+                            <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Allow {{ r.ip|escapejs }} to be unblocked by signing in again?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="temporary">
+                                <input type="hidden" name="ip" value="{{ r.ip }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="bi-btn" style="color:#fbbf24;background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.32);"><i class="fas fa-clock"></i>Not permanent</button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Block {{ r.ip|escapejs }} permanently? Signing in or registering will no longer lift it.');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="permanent">
+                                <input type="hidden" name="ip" value="{{ r.ip }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="bi-btn bi-btn-block"><i class="fas fa-lock"></i>Make permanent</button>
+                            </form>
+                            {% endif %}
+                        </div>
                         {% else %}
                         <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Block {{ r.ip|escapejs }} again? Its block clock restarts now.');">
                             {% csrf_token %}

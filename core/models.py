@@ -2639,6 +2639,14 @@ class BlockedIP(models.Model):
     is_active = models.BooleanField(default=True)
     unblocked_at = models.DateTimeField(blank=True, null=True)
     unblocked_by = models.CharField(max_length=150, blank=True, default='')
+    # A blocked visitor is shown a sign-in / sign-up page: doing either lifts a
+    # normal block (that is the way out a real visitor has). A permanent block
+    # is never lifted that way — it is what a repeat offender gets.
+    is_permanent = models.BooleanField(default=False)
+    # How many times this address has been blocked, and whether the previous
+    # block was lifted by signing up (which is what the warning refers to).
+    offense_count = models.PositiveSmallIntegerField(default=1)
+    lifted_by_signup = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-blocked_at']

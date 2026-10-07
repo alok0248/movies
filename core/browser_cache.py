@@ -16,6 +16,11 @@ class BrowserCacheMiddleware:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return response
 
+        # A response that already asked not to be stored at all (the blocked-IP
+        # page) keeps its own header — never soften it into a revalidating one.
+        if 'no-store' in (response.get('Cache-Control') or ''):
+            return response
+
         # All HTML pages: always revalidate so changes appear on reload
         content_type = response.get('Content-Type', '')
         if 'text/html' in content_type:
