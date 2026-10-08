@@ -90,8 +90,13 @@
                     try { console.log('[ad-guard] blocked popup:', String(url).slice(0, 140)); } catch (e) {}
                     return null;
                 }
+                /* Never let an allowed popup replace the page the visitor is
+                   on: force a new tab unless the caller asked for a same-origin
+                   same-page target. */
+                var target = name || '_blank';
+                if (target !== '_blank' && !sameOrigin(url)) target = '_blank';
                 var w = null;
-                try { w = realOpen.call(window, url, name, features); } catch (e) {}
+                try { w = realOpen.call(window, url, target, features); } catch (e) {}
                 keepPageFocused(w);
                 return w;
             };
