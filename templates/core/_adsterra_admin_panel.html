@@ -62,21 +62,6 @@
     .as-actions-cell form { display: inline; margin: 0; }
 </style>
 
-<div class="as-wrap">
-    <div class="as-head">
-        <div>
-            <h1>Adsterra Ads</h1>
-            <p>Everything in one place — each unit's URL or JS code, how it behaves, and its enable/disable control.</p>
-        </div>
-        <a href="{% url 'ad_list' %}" class="as-back ms-auto">&larr; Back to Ads</a>
-    </div>
-
-    {% if messages %}
-        {% for message in messages %}
-            <div class="as-flash{% if message.tags == 'error' %} error{% endif %}">{{ message }}</div>
-        {% endfor %}
-    {% endif %}
-
     <div class="as-card">
         <h2>Adsterra units ({{ links|length }})</h2>
         {% for link in links %}
