@@ -520,6 +520,38 @@ class AdsterraSettingsForm(forms.ModelForm):
         return value
 
 
+class AdSwitchesForm(forms.ModelForm):
+    """The one-click master switches shown on the Ads control centre.
+
+    Only the on/off switches live here, so the control centre can save them
+    without touching any of the numeric settings.
+    """
+
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'enable_autoclick_ads',
+            'enable_adsterra_links',
+            'enable_tile_click_gating',
+            'adsterra_show_banner',
+            'require_ad_consent',
+        ]
+        labels = {
+            'enable_autoclick_ads': 'Auto-click ads (open a sponsor after N clicks)',
+            'enable_adsterra_links': 'Adsterra direct-link ads (open after N clicks)',
+            'enable_tile_click_gating': 'Tile click gating (first card click opens a sponsor)',
+            'adsterra_show_banner': 'Adsterra sponsor block on movie & series pages',
+            'require_ad_consent': 'Require ad consent before any ad loads',
+        }
+        widgets = {
+            'enable_autoclick_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'enable_adsterra_links': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'enable_tile_click_gating': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'adsterra_show_banner': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'require_ad_consent': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
 class AdMonetizationSettingsForm(forms.ModelForm):
     """AdSense, auto-click / consent and tile-ad settings, grouped for the single Ads page."""
 

@@ -1,7 +1,7 @@
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
-from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, StreamingHttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, StreamingHttpResponse
 from django.http.request import UnreadablePostError
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
@@ -36,7 +36,7 @@ from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
 import platform
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, AmazonAffiliateProduct, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -44,7 +44,8 @@ logger = logging.getLogger(__name__)
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm
+    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm,
+    AdSwitchesForm
 )
 
 
@@ -1208,13 +1209,75 @@ def ajax_get_autoclick_ads(request):
 
 
 # Ad views
+def _ad_inventory():
+    """One row per ad unit from every ad source, active units first.
+
+    The Ads page shows this so an administrator can see - and flip - every ad
+    the site can serve from a single place.
+    """
+    rows = []
+    for ad in Ad.objects.all().order_by('order', 'name'):
+        rows.append({
+            'kind': 'ad',
+            'kind_label': 'Ad unit',
+            'id': ad.id,
+            'name': ad.name or 'Untitled ad unit',
+            'detail': '%s \u00b7 %s' % (ad.get_provider_display(), ad.get_position_display()),
+            'is_active': ad.is_active,
+            'edit_url': reverse('ad_edit', args=[ad.id]),
+        })
+    for link in AdsterraLink.objects.all().order_by('order', 'id'):
+        detail = 'Adsterra'
+        if link.ad_type:
+            detail += ' \u00b7 ' + link.ad_type
+        if link.url:
+            detail += ' \u00b7 link unit (opens after the click threshold)'
+        if (link.code or '').strip():
+            detail += ' \u00b7 JS unit (loaded on every public page)'
+        if not link.url and not (link.code or '').strip():
+            detail += ' \u00b7 no URL or code saved yet'
+        rows.append({
+            'kind': 'adsterra',
+            'kind_label': 'Adsterra',
+            'id': link.id,
+            'name': link.name or link.ad_type or 'Untitled Adsterra unit',
+            'detail': detail,
+            'is_active': link.is_active,
+            'edit_url': reverse('admin_adsterra'),
+        })
+    for product in AmazonAffiliateProduct.objects.all().order_by('order', 'title'):
+        rows.append({
+            'kind': 'amazon',
+            'kind_label': 'Amazon product',
+            'id': product.id,
+            'name': product.title or product.affiliate_url[:80],
+            'detail': 'Amazon Affiliate \u00b7 in-grid tile / gating source',
+            'is_active': product.is_active,
+            'edit_url': '',
+        })
+    rows.sort(key=lambda r: (not r['is_active'], r['kind_label'], str(r['name']).lower()))
+    return rows
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def ad_list(request):
-    """Single Ads page: ad units, Adsterra units and monetization settings."""
+    """Single Ads page: ad control centre, ad units, Adsterra, monetization settings."""
     site_settings = SiteSettings.get_settings()
 
     if request.method == 'POST':
+        if request.POST.get('form') == 'switches':
+            switches_form = AdSwitchesForm(request.POST, instance=site_settings)
+            if switches_form.is_valid():
+                switches_form.save()
+                messages.success(request, 'Ad switches updated.')
+            else:
+                messages.error(request, 'Could not save ad switches: %s' % '; '.join(
+                    '%s: %s' % (name, ', '.join(errs))
+                    for name, errs in switches_form.errors.items()
+                ))
+            return HttpResponseRedirect(reverse('ad_list') + '#ad-control')
+
         ads_form = AdMonetizationSettingsForm(request.POST, instance=site_settings)
         if ads_form.is_valid():
             ads_form.save()
@@ -1227,14 +1290,51 @@ def ad_list(request):
         return redirect('ad_list')
 
     ads = Ad.objects.all().order_by('order', 'name')
+    inventory = _ad_inventory()
+    inventory_sources = []
+    for kind, label in (('ad', 'Ad unit'), ('adsterra', 'Adsterra'), ('amazon', 'Amazon product')):
+        rows_of_kind = [r for r in inventory if r['kind'] == kind]
+        inventory_sources.append({
+            'kind': kind,
+            'label': label,
+            'total': len(rows_of_kind),
+            'active': len([r for r in rows_of_kind if r['is_active']]),
+        })
     return render(request, 'core/ad_list.html', {
         'ads': ads,
+        'inventory': inventory,
+        'inventory_sources': inventory_sources,
+        'inventory_active': len([r for r in inventory if r['is_active']]),
         'links': AdsterraLink.objects.all().order_by('order', 'id'),
         'link_form': AdsterraLinkForm(),
         'adsterra_form': AdsterraSettingsForm(instance=site_settings),
         'ads_form': AdMonetizationSettingsForm(instance=site_settings),
+        'switches_form': AdSwitchesForm(instance=site_settings),
         'site_settings': site_settings,
     })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_toggle_any(request, kind, obj_id):
+    """Enable/disable one ad unit of any source from the Ads control centre."""
+    sources = {
+        'ad': (Ad, 'Ad unit'),
+        'adsterra': (AdsterraLink, 'Adsterra unit'),
+        'amazon': (AmazonAffiliateProduct, 'Amazon product'),
+    }
+    if request.method != 'POST':
+        return redirect('ad_list')
+    if kind not in sources:
+        messages.error(request, 'Unknown ad source.')
+        return redirect('ad_list')
+    model, label = sources[kind]
+    obj = get_object_or_404(model, id=obj_id)
+    obj.is_active = not obj.is_active
+    obj.save()
+    messages.success(request, '%s "%s" is now %s.' % (
+        label, str(obj)[:80], 'enabled' if obj.is_active else 'disabled'))
+    return HttpResponseRedirect(reverse('ad_list') + '#ad-control')
 
 
 @login_required

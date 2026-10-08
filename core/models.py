@@ -295,6 +295,14 @@ class SiteSettings(models.Model):
         default=True,
         help_text="Show the Adsterra sponsor block on movies and series pages."
     )
+    enable_adsterra_links = models.BooleanField(
+        default=True,
+        help_text="Master switch for the Adsterra direct-link units: when unchecked, URL units never open automatically, even if the click threshold is reached."
+    )
+    enable_autoclick_ads = models.BooleanField(
+        default=True,
+        help_text="Master switch for click-count auto-click ads: when unchecked, no ad is opened from page clicks, whatever auto_click_every_clicks is set to."
+    )
 
     IDM_VISIBILITY_CHOICES = [
         ('hide', 'Hide IDM (Disabled)'),

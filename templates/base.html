@@ -2289,6 +2289,9 @@
             }
 
             function countClickIfEligible(event) {
+                /* Master switch from the Ads page control centre: when off, no
+                   click is counted, so no auto-click ad is ever triggered. */
+                if (DEFERRED_SETTINGS.autoclick_enabled === false) return;
                 if (!hasEligibleAds()) return;
                 if (isFormControl(event.target)) return;
                 if (isInsidePlayerArea(event.target)) return;
@@ -4515,6 +4518,9 @@
         (function () {
             var ADSTERRA_LINKS = {{ adsterra_links_json|safe }} || [];
             var ADSTERRA_THRESHOLD = parseInt({{ adsterra_clicks_required|default:0 }}, 10) || 0;
+            /* Master switch from the Ads page control centre. */
+            var ADSTERRA_LINKS_ENABLED = {{ enable_adsterra_links|yesno:"true,false" }};
+            if (!ADSTERRA_LINKS_ENABLED) return;
             if (!ADSTERRA_LINKS.length || ADSTERRA_THRESHOLD < 1) return;
 
             var KEY = 'adsterra_clicks';

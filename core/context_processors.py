@@ -35,6 +35,7 @@ def site_settings(request):
         'max_ad_load_retries': ss.max_ad_load_retries or 3,
         'consent_given': _ad_consent_value(request) == 'given',
         'consent_denied': _ad_consent_value(request) == 'denied',
+        'autoclick_enabled': bool(ss.enable_autoclick_ads),
     }
 
     # Tile ads
@@ -126,4 +127,6 @@ def site_settings(request):
         'adsterra_has_links': bool(adsterra_links),
         'adsterra_clicks_required': int(ss.adsterra_clicks_required or 0),
         'adsterra_show_banner': bool(ss.adsterra_show_banner),
+        'enable_adsterra_links': bool(ss.enable_adsterra_links),
+        'enable_autoclick_ads': bool(ss.enable_autoclick_ads),
     }

@@ -57,6 +57,7 @@ urlpatterns = [
     path('admin-dashboard/ads/adsterra/<int:link_id>/toggle/', views.admin_adsterra_link_toggle, name='admin_adsterra_link_toggle'),
     path('admin-dashboard/ads/adsterra/<int:link_id>/delete/', views.admin_adsterra_link_delete, name='admin_adsterra_link_delete'),
     path('admin-dashboard/ads/adsterra/<int:link_id>/reset/', views.admin_adsterra_link_reset, name='admin_adsterra_link_reset'),
+    path('admin-dashboard/ads/toggle/<str:kind>/<int:obj_id>/', views.ad_toggle_any, name='ad_toggle_any'),
     path('admin-dashboard/ads/<int:ad_id>/edit/', views.ad_edit, name='ad_edit'),
     path('admin-dashboard/ads/<int:ad_id>/delete/', views.ad_delete, name='ad_delete'),
     path('admin-dashboard/ads/<int:ad_id>/toggle/', views.ad_toggle, name='ad_toggle'),
