@@ -1194,10 +1194,21 @@ _pcIds.forEach(function(id) {
 /* Export the admin-ordered id list for dropdown building */
 window._pcOrderedIds = _pcIds;
 
-/* Popup shield: block ALL window.open calls silently.
-   No new tabs, no popups, no redirects — everything stays invisible. */
+/* Popup shield: allow window.open only during a real user gesture.
+   Genuine taps/clicks (the Adsterra popunder and the site's own
+   click-threshold ad links) open normally; ad-driven / timed / synthetic
+   popups (from extraction callbacks or any injected script) stay blocked. */
 (function() {
-    window.open = function() { return null; };
+    var realOpen = window.open;
+    window.open = function(url, name, features) {
+        var ok = false;
+        try { ok = !!(navigator.userActivation && navigator.userActivation.isActive); } catch (e) { ok = true; }
+        if (!ok) {
+            try { console.log('[shield] blocked popup:', String(url).slice(0, 120)); } catch (e) {}
+            return null;
+        }
+        return realOpen.call(window, url, name, features);
+    };
 })();
 
 const SERIES_TMDB_ID = {{ series_id }};
