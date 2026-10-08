@@ -1580,6 +1580,106 @@
             </div>
         </div>
     </div>
+    <!-- Ad-blocker notice (only shown when the ad host is unreachable or ad slots are hidden) -->
+    <div id="adBlockNotice" style="display:none; position:fixed; left:1rem; right:1rem; bottom:1rem; z-index:9993; max-width:720px; margin:0 auto; background:rgba(17,24,39,0.98); border:1px solid rgba(255,255,255,0.15); color:#fff; border-radius:14px; padding:1rem 1.25rem; box-shadow:0 16px 48px rgba(0,0,0,0.55); backdrop-filter:blur(8px);">
+        <div class="d-flex flex-column flex-md-row gap-3 align-items-start align-items-md-center justify-content-between">
+            <div style="flex:1; min-width:0;">
+                <div class="fw-bold mb-1">Ads are blocked on this device</div>
+                <div class="text-white-50 small">Ads keep {{ site_settings.brand_name }} free. Please allow ads for this site in your ad blocker, then reload the page.</div>
+            </div>
+            <div class="d-flex gap-2 flex-shrink-0">
+                <button class="btn btn-outline-light btn-sm" id="adBlockDismissBtn" type="button">Dismiss</button>
+                <button class="btn btn-success btn-sm" id="adBlockAllowBtn" type="button">I've allowed ads</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        /* Ad-blocker notice.
+           Two independent checks: a bait element that cosmetic filters hide, and a
+           no-cors probe of the configured ad host (a blocked request rejects).
+           Skipped for visitors who explicitly declined ads, and never nagged twice. */
+        (function () {
+            var notice = document.getElementById('adBlockNotice');
+            if (!notice) return;
+            var DISMISS_KEY = 'ads_block_notice_dismissed';
+            var ADS = {{ deferred_ads_settings_json|safe }} || {};
+            var CONSENT_BANNER = 'adConsentBanner';
+
+            function blockedLocally() {
+                try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) { return false; }
+            }
+            function consentUndecided() {
+                var b = document.getElementById(CONSENT_BANNER);
+                return !!(b && b.style.display !== 'none');
+            }
+
+            if (blockedLocally()) return;
+            if (ADS.require_ad_consent && ADS.consent_denied) return;
+
+            function show() {
+                /* Do not stack on top of the consent prompt. */
+                if (consentUndecided()) return;
+                notice.style.display = 'block';
+            }
+
+            function probeCosmetic(cb) {
+                var bait = document.createElement('div');
+                var control = document.createElement('div');
+                bait.className = 'adsbox ad-placement banner_ad text-ad advertisement';
+                bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:300px;height:250px;';
+                control.style.cssText = bait.style.cssText;
+                document.body.appendChild(bait);
+                document.body.appendChild(control);
+                setTimeout(function () {
+                    var hidden = false;
+                    try {
+                        var cs = window.getComputedStyle(bait);
+                        hidden = bait.offsetHeight === 0 || bait.offsetWidth === 0 || cs.display === 'none' || cs.visibility === 'hidden';
+                    } catch (e) {}
+                    var controlVisible = control.offsetHeight > 0 || control.offsetWidth > 0;
+                    try { bait.parentNode.removeChild(bait); } catch (e) {}
+                    try { control.parentNode.removeChild(control); } catch (e) {}
+                    cb(hidden && controlVisible);
+                }, 350);
+            }
+
+            function probeHost(cb) {
+                var url = '{{ adsterra_probe_url|default:""|escapejs }}';
+                if (!url || typeof fetch !== 'function') return cb(false);
+                var settled = false;
+                var timer = setTimeout(function () { if (!settled) { settled = true; cb(false); } }, 4000);
+                try {
+                    fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
+                        .then(function () { if (!settled) { settled = true; clearTimeout(timer); cb(false); } })
+                        .catch(function () { if (!settled) { settled = true; clearTimeout(timer); cb(true); } });
+                } catch (e) { clearTimeout(timer); cb(true); }
+            }
+
+            function start() {
+                probeCosmetic(function (hidden) {
+                    if (hidden) return show();
+                    probeHost(function (unreachable) { if (unreachable) show(); });
+                });
+            }
+
+            try {
+                var dismissBtn = document.getElementById('adBlockDismissBtn');
+                if (dismissBtn) dismissBtn.addEventListener('click', function (e) {
+                    e.preventDefault(); e.stopPropagation();
+                    try { localStorage.setItem(DISMISS_KEY, '1'); } catch (err) {}
+                    notice.style.display = 'none';
+                }, true);
+                var allowBtn = document.getElementById('adBlockAllowBtn');
+                if (allowBtn) allowBtn.addEventListener('click', function (e) {
+                    e.preventDefault(); e.stopPropagation();
+                    window.location.reload();
+                }, true);
+            } catch (e) {}
+
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+            else start();
+        })();
+    </script>
     {% endif %}
 
     {% if site_settings.footer_enabled and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}

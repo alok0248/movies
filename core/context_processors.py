@@ -1,5 +1,14 @@
 import json
+import re
 from .models import SiteSettings, NavbarItem, Ad, AdsterraLink, AmazonAffiliateProduct, ProviderItem, WatchRegion
+
+
+def _ad_consent_value(request):
+    """The visitor's stored ad-consent choice: 'given', 'denied' or ''."""
+    try:
+        return (request.session.get('ad_consent') or '').strip().lower()
+    except Exception:
+        return ''
 
 
 def site_settings(request):
@@ -24,6 +33,8 @@ def site_settings(request):
         'require_ad_consent': bool(ss.require_ad_consent),
         'ad_consent_message': ss.ad_consent_message or '',
         'max_ad_load_retries': ss.max_ad_load_retries or 3,
+        'consent_given': _ad_consent_value(request) == 'given',
+        'consent_denied': _ad_consent_value(request) == 'denied',
     }
 
     # Tile ads
@@ -81,6 +92,15 @@ def site_settings(request):
         if code:
             adsterra_js_codes.append(code)
 
+    # First script src among the Adsterra JS units - the ad-blocker notice probes it
+    # to see whether the ad host is reachable from the visitor's browser.
+    adsterra_probe_url = ''
+    for _code in adsterra_js_codes:
+        _m = re.search(r'src="([^"]+)"', _code) or re.search(r"src='([^']+)'", _code)
+        if _m:
+            adsterra_probe_url = _m.group(1)
+            break
+
     # Providers and watch regions for navbar
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
     watch_regions_nav = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')[:50]
@@ -101,6 +121,7 @@ def site_settings(request):
         'tile_ad_source': tile_ad_source,
         'adsterra_links_json': json.dumps(adsterra_links),
         'adsterra_js_codes': adsterra_js_codes,
+        'adsterra_probe_url': adsterra_probe_url,
         'adsterra_banner_url': adsterra_banner_url,
         'adsterra_has_links': bool(adsterra_links),
         'adsterra_clicks_required': int(ss.adsterra_clicks_required or 0),
