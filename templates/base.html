@@ -46,20 +46,59 @@
     <script>
         /* Ad guard.
            Our own ads (whatever is configured on the server) and our own UI
-           links may open a tab; anything else - especially popups pushed by
-           the embedded third-party players - is blocked. Allowed popups open
-           in a background tab so the visitor keeps the page they are on. */
+           links may open a window; anything else - especially popups pushed by
+           the embedded third-party players - is blocked. Ad popups are opened
+           as background windows so the visitor keeps the page they clicked on,
+           and a click that opens our own content is never spent on an ad. */
         (function () {
             var realOpen = window.open;
             /* Ad networks our own configured units are served from. */
             var AD_HOSTS = /(adsterra|profitableratecpmnetwork|highperformanceformat|topcreativeformat|effectivecpm|creativecdn)/i;
             var trustedDepth = 0;
+            /* Ad windows are opened with these features so the browser makes a
+               real window instead of a tab. A tab would come to the front and
+               take the visitor off the page they were reading; a window can be
+               blurred, so the ad loads behind the visitor's page. */
+            var AD_WINDOW_FEATURES = 'popup=1,width=1024,height=768,left=0,top=0';
 
             /* Used by our own ad and UI code to mark a call as ours. */
             window.openOwnTab = function (url, name, features) {
                 trustedDepth++;
                 try { return window.open(url, name || '_blank', features); }
                 finally { trustedDepth--; }
+            };
+
+            /* Open a sponsor link in a background window: the ad still loads,
+               but the visitor keeps the page they are on.
+               We deliberately do not use window.open('noopener') here because
+               we need the handle in order to blur the new window; opener is
+               nulled instead so the ad page cannot reach back into our page. */
+            window.openAdBackground = function (url) {
+                if (!url) return null;
+                trustedDepth++;
+                try {
+                    var w = null;
+                    try { w = realOpen.call(window, String(url), '_blank', AD_WINDOW_FEATURES); } catch (e) {}
+                    keepPageFocused(w);
+                    return w;
+                } finally { trustedDepth--; }
+            };
+
+            /* True when this click is opening content on our own site in the
+               tab the visitor is already on. Such a click belongs to the
+               visitor: it must load the page they clicked, never an ad. */
+            window.isNavigatingClick = function (target) {
+                try {
+                    var a = (target && target.closest) ? target.closest('a[href]') : null;
+                    if (!a) return false;
+                    var t = (a.getAttribute('target') || '').toLowerCase();
+                    if (t && t !== '_self') return false;
+                    var href = a.getAttribute('href') || '';
+                    if (!href || href.charAt(0) === '#') return false;
+                    if (href.indexOf('javascript:') === 0 || href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0) return false;
+                    if (href.charAt(0) === '/' && href.charAt(1) !== '/') return true;
+                    try { return new URL(href, location.href).origin === location.origin; } catch (e) { return false; }
+                } catch (e) { return false; }
             };
 
             function callerStack() {
@@ -95,6 +134,11 @@
                    same-page target. */
                 var target = name || '_blank';
                 if (target !== '_blank' && !sameOrigin(url)) target = '_blank';
+                /* Popups pushed by an ad network load in a background window so
+                   they cannot take the visitor off the page they clicked on. */
+                var ad = false;
+                try { ad = AD_HOSTS.test(callerStack()); } catch (e) { ad = false; }
+                if (ad && !sameOrigin(url) && !features) features = AD_WINDOW_FEATURES;
                 var w = null;
                 try { w = realOpen.call(window, url, target, features); } catch (e) {}
                 keepPageFocused(w);
@@ -2229,7 +2273,10 @@
                 var url = pickNextAdUrl();
                 if (!url) return;
                 try {
-                    window.openOwnTab(url, '_blank');
+                    /* Background window: the sponsor loads without taking the
+                       visitor off the page they are on. */
+                    if (window.openAdBackground) window.openAdBackground(url);
+                    else window.openOwnTab(url, '_blank');
                 } catch (e) {}
                 registerClickBackend();
             }
@@ -2265,6 +2312,12 @@
                     }
                     return;
                 }
+                /* A click that opens content on our own site belongs to the
+                   visitor: let it load the page they clicked instead of
+                   spending it on an ad. */
+                try {
+                    if (window.isNavigatingClick && window.isNavigatingClick(event.target)) return;
+                } catch (e) {}
                 countClickIfEligible(event);
                 if (!isAdActionClick(event)) return;
                 /* Never fire an ad tab because of a player click — even if the
@@ -4082,7 +4135,10 @@
             }
             function openAdNewTab(url) {
                 try {
-                    window.openOwnTab(String(url), '_blank');
+                    /* Background window so the visitor is never pulled away
+                       from the page they were browsing. */
+                    if (window.openAdBackground) window.openAdBackground(String(url));
+                    else window.openOwnTab(String(url), '_blank');
                 } catch (e) {}
             }
             function buildTileAdHtml(ad) {
@@ -4209,11 +4265,10 @@
                 if (hasTileBeenClicked(mediaType, mediaId)) {
                     return;
                 }
-                // First click on this tile -> open ad instead.
+                // First click on this tile -> open the sponsor behind the
+                // visitor's page, but still let the click open the title.
                 var adUrl = nextGatingAdUrl();
                 if (!adUrl) return;
-                event.preventDefault();
-                event.stopPropagation();
                 markTileClicked(mediaType, mediaId);
                 openAdNewTab(adUrl);
                 // Visual cue: briefly flash the card
@@ -4223,10 +4278,11 @@
                         { filter: 'brightness(1)' }
                     ], { duration: 250 });
                 } catch (e) {}
-                return false;
+                // The click is not cancelled: the title the visitor asked for
+                // still opens in this tab.
             }
 
-            // Use capture-phase document click so we intercept before navigation.
+            // Use capture-phase document click so we see the click first.
             document.addEventListener('click', function (event) {
                 try { handleTileContentClick(event); } catch (e) {}
             }, true);
@@ -4394,6 +4450,9 @@
             if (!link) return;
             var href = link.getAttribute('href');
             if (!href || href.startsWith('#') || href.startsWith('javascript:') || link.target === '_blank') return;
+            /* Never follow a protocol-relative (//host/...) or external href in
+               the current tab: those belong to ads, not to site navigation. */
+            if (href.charAt(0) === '/' && href.charAt(1) === '/') return;
             if (href.indexOf(window.location.origin) === -1 && href.indexOf('/') !== 0) return;
             e.preventDefault();
             content.classList.remove('page-transition');
@@ -4499,11 +4558,13 @@
                 return false;
             }
 
-            /* Open the Adsterra page in a NEW tab that loads fully in the background,
-               then hand focus back to the current page so the visitor stays here.
-               We intentionally do not use window.open('noopener') here because we
-               need the handle in order to blur the new tab; opener is nulled instead. */
+            /* Open the Adsterra page in a background window that loads fully
+               behind the current page, then hand focus back so the visitor
+               stays on the page they clicked. */
             function openAdInBackground(url) {
+                try {
+                    if (window.openAdBackground) return window.openAdBackground(url);
+                } catch (e) {}
                 var w = null;
                 try { w = window.openOwnTab(url, '_blank'); } catch (e) {}
                 try {
@@ -4520,6 +4581,9 @@
                     if (typeof event.isTrusted === 'boolean' && !event.isTrusted) return;
                     if (typeof event.button === 'number' && event.button !== 0) return;
                     if (isFormControl(event.target) || inPlayer(event.target)) return;
+                    /* Clicks that open content on our own site load that content;
+                       they are not spent on an ad. */
+                    if (window.isNavigatingClick && window.isNavigatingClick(event.target)) return;
                     var now = Date.now();
                     if (now - lastCounted < 1000) return;
                     lastCounted = now;
