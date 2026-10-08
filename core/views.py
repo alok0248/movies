@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 from .forms import (
     SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm
+    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm
 )
 
 
@@ -1211,8 +1211,30 @@ def ajax_get_autoclick_ads(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def ad_list(request):
+    """Single Ads page: ad units, Adsterra units and monetization settings."""
+    site_settings = SiteSettings.get_settings()
+
+    if request.method == 'POST':
+        ads_form = AdMonetizationSettingsForm(request.POST, instance=site_settings)
+        if ads_form.is_valid():
+            ads_form.save()
+            messages.success(request, 'Ad settings saved.')
+        else:
+            messages.error(request, 'Could not save ad settings: %s' % '; '.join(
+                '%s: %s' % (name, ', '.join(errs))
+                for name, errs in ads_form.errors.items()
+            ))
+        return redirect('ad_list')
+
     ads = Ad.objects.all().order_by('order', 'name')
-    return render(request, 'core/ad_list.html', {'ads': ads})
+    return render(request, 'core/ad_list.html', {
+        'ads': ads,
+        'links': AdsterraLink.objects.all().order_by('order', 'id'),
+        'link_form': AdsterraLinkForm(),
+        'adsterra_form': AdsterraSettingsForm(instance=site_settings),
+        'ads_form': AdMonetizationSettingsForm(instance=site_settings),
+        'site_settings': site_settings,
+    })
 
 
 @login_required
@@ -1282,7 +1304,7 @@ def admin_adsterra(request):
 
     def render_page():
         return render(request, 'core/admin_adsterra.html', {
-            'form': AdsterraSettingsForm(instance=site_settings),
+            'adsterra_form': AdsterraSettingsForm(instance=site_settings),
             'link_form': AdsterraLinkForm(),
             'links': links,
             'site_settings': site_settings,
@@ -1297,32 +1319,32 @@ def admin_adsterra(request):
             if link_form.is_valid():
                 link_form.save()
                 messages.success(request, '%s updated.' % (link.name or link.ad_type or 'Unit'))
-                return redirect('admin_adsterra')
+                return redirect('ad_list')
             messages.error(request, 'Could not save that unit: %s' % '; '.join(
                 '%s: %s' % (field, ', '.join(errs))
                 for field, errs in link_form.errors.items()
             ))
-            return redirect('admin_adsterra')
+            return redirect('ad_list')
 
         if action == 'add_link':
             link_form = AdsterraLinkForm(request.POST)
             if link_form.is_valid():
                 link_form.save()
                 messages.success(request, 'Adsterra unit added.')
-                return redirect('admin_adsterra')
+                return redirect('ad_list')
             messages.error(request, 'Could not add that unit: %s' % '; '.join(
                 '%s: %s' % (field, ', '.join(errs))
                 for field, errs in link_form.errors.items()
             ))
-            return redirect('admin_adsterra')
+            return redirect('ad_list')
 
         settings_form = AdsterraSettingsForm(request.POST, instance=site_settings)
         if settings_form.is_valid():
             settings_form.save()
             messages.success(request, 'Adsterra settings saved.')
-            return redirect('admin_adsterra')
+            return redirect('ad_list')
         messages.error(request, 'Could not save Adsterra settings.')
-        return redirect('admin_adsterra')
+        return redirect('ad_list')
 
     return render_page()
 
@@ -1336,7 +1358,7 @@ def admin_adsterra_link_toggle(request, link_id):
     link.is_active = not link.is_active
     link.save(update_fields=['is_active', 'updated_at'])
     messages.success(request, 'Adsterra link %s.' % ('enabled' if link.is_active else 'disabled'))
-    return redirect('admin_adsterra')
+    return redirect('ad_list')
 
 
 @login_required
@@ -1347,7 +1369,7 @@ def admin_adsterra_link_delete(request, link_id):
     link = get_object_or_404(AdsterraLink, id=link_id)
     link.delete()
     messages.success(request, 'Adsterra link deleted.')
-    return redirect('admin_adsterra')
+    return redirect('ad_list')
 
 
 @login_required
@@ -1357,7 +1379,7 @@ def admin_adsterra_link_reset(request, link_id):
     """Reset the click counter of a saved Adsterra link."""
     AdsterraLink.objects.filter(id=link_id).update(click_count=0)
     messages.success(request, 'Adsterra link click count reset.')
-    return redirect('admin_adsterra')
+    return redirect('ad_list')
 
 
 @csrf_exempt

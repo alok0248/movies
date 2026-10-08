@@ -1,0 +1,241 @@
+<style>
+    .as-wrap { max-width: 1080px; margin: 0 auto; }
+    .as-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .as-head h1 { font-size: 1.6rem; font-weight: 800; color: var(--text); margin: 0; }
+    .as-head p { color: var(--text-2); margin: .25rem 0 0; font-size: .9rem; }
+    .as-back { color: var(--brand); text-decoration: none; font-size: .85rem; }
+    .as-back:hover { text-decoration: underline; }
+    .as-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .as-card h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; }
+    .as-field { margin-bottom: 1.1rem; }
+    .as-label { display: block; font-size: .85rem; font-weight: 600; color: var(--text); margin-bottom: .4rem; }
+    .as-help { display: block; font-size: .75rem; color: var(--text-2); margin-top: .35rem; }
+    .as-input, .as-card input[type="text"], .as-card input[type="url"], .as-card input[type="number"], .as-card textarea, .as-card select {
+        width: 100%; padding: .6rem .8rem; border-radius: 8px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--text); font-size: .9rem;
+    }
+    .as-card input::placeholder, .as-card textarea::placeholder { color: var(--text-3); }
+    .as-card input:focus, .as-card textarea:focus { outline: none; border-color: var(--brand); }
+    .as-card textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; resize: vertical; }
+    .as-inline { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+    .as-inline .as-field { margin-bottom: 0; }
+    .as-check { display: flex; align-items: center; gap: .6rem; }
+    .as-check input { width: auto; }
+    .as-check label { color: var(--text); font-size: .9rem; margin: 0; }
+    .as-actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+    .as-btn { padding: .55rem 1.2rem; border-radius: 8px; font-size: .82rem; font-weight: 600; cursor: pointer;
+        border: 1px solid var(--border); background: var(--surface-hover); color: var(--text); text-decoration: none; display: inline-block; white-space: nowrap; }
+    .as-btn:hover { background: var(--surface); color: var(--text); }
+    .as-btn-primary { background: var(--brand); color: #fff; border: none; }
+    .as-btn-primary:hover { filter: brightness(1.08); color: #fff; }
+    .as-btn-danger { border-color: rgba(185, 28, 28, .4); color: #dc2626; background: transparent; }
+    .as-btn-sm { padding: .3rem .8rem; font-size: .76rem; border-radius: 7px; }
+    .as-btn-on { border-color: rgba(22, 163, 74, .45); color: #16a34a; background: transparent; }
+    .as-btn-off { border-color: rgba(148, 163, 184, .5); color: var(--text-2); background: transparent; }
+    .as-unit { border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; margin-bottom: .8rem; background: var(--bg); }
+    .as-unit-head { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .as-unit-title { font-weight: 700; color: var(--text); font-size: .95rem; }
+    .as-unit-sub { font-size: .74rem; color: var(--text-2); margin-top: .15rem; word-break: break-all; }
+    .as-unit-right { margin-left: auto; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .as-badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .68rem; font-weight: 700; }
+    .as-badge-on { background: rgba(22, 163, 74, .15); color: #16a34a; }
+    .as-badge-off { background: rgba(148, 163, 184, .18); color: var(--text-2); }
+    .as-badge-js { background: rgba(99, 102, 241, .16); color: #6366f1; }
+    .as-badge-url { background: rgba(56, 189, 248, .16); color: #0284c7; }
+    .as-badge-type { background: rgba(148, 163, 184, .16); color: var(--text-2); }
+    .as-opens { font-size: .76rem; color: var(--text-2); }
+    .as-link-url { color: var(--brand); text-decoration: none; word-break: break-all; }
+    .as-link-url:hover { text-decoration: underline; }
+    details.as-edit { margin-top: .8rem; }
+    details.as-edit > summary { cursor: pointer; font-size: .8rem; font-weight: 600; color: var(--brand); list-style: none; }
+    details.as-edit > summary::-webkit-details-marker { display: none; }
+    details.as-edit > summary::before { content: "\25B8 "; }
+    details.as-edit[open] > summary::before { content: "\25BE "; }
+    .as-edit-body { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .as-grid2 { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .as-grid2 > .as-field { flex: 1; min-width: 200px; }
+    .as-err { color: #dc2626; font-size: .8rem; margin-top: .35rem; }
+    .as-note { font-size: .8rem; color: var(--text-2); }
+    .as-flash { padding: .7rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: .85rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .as-flash.error { border-color: rgba(185,28,28,.5); color: #dc2626; }
+    .as-actions-cell { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+    .as-actions-cell form { display: inline; margin: 0; }
+</style>
+
+<div class="as-wrap">
+    <div class="as-head">
+        <div>
+            <h1>Adsterra Ads</h1>
+            <p>Everything in one place — each unit's URL or JS code, how it behaves, and its enable/disable control.</p>
+        </div>
+        <a href="{% url 'ad_list' %}" class="as-back ms-auto">&larr; Back to Ads</a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="as-flash{% if message.tags == 'error' %} error{% endif %}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="as-card">
+        <h2>Adsterra units ({{ links|length }})</h2>
+        {% for link in links %}
+        <div class="as-unit">
+            <div class="as-unit-head">
+                <div>
+                    <div class="as-unit-title">{{ link.name|default:link.ad_type|default:"Untitled unit" }}</div>
+                    <div class="as-unit-sub">
+                        {% if link.ad_type %}{{ link.ad_type }}{% endif %}
+                        {% if link.unit_id %} · ID {{ link.unit_id }}{% endif %}
+                        {% if link.is_js %} · JS code{% endif %}
+                        {% if link.url %} · <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="as-link-url">{{ link.url }}</a>{% endif %}
+                        {% if not link.is_js and not link.url %} · <span style="color:#dc2626">No URL or code yet</span>{% endif %}
+                    </div>
+                </div>
+                <div class="as-unit-right">
+                    {% if link.is_js %}<span class="as-badge as-badge-js">JS</span>{% endif %}
+                    {% if link.url %}<span class="as-badge as-badge-url">URL</span>{% endif %}
+                    {% if link.is_active %}<span class="as-badge as-badge-on">Enabled</span>{% else %}<span class="as-badge as-badge-off">Disabled</span>{% endif %}
+                    <span class="as-opens">{{ link.click_count }} open{{ link.click_count|pluralize }}</span>
+                    <div class="as-actions-cell">
+                        <form method="post" action="{% url 'admin_adsterra_link_toggle' link.id %}">
+                            {% csrf_token %}
+                            {% if link.is_active %}
+                                <button type="submit" class="as-btn as-btn-sm as-btn-off">Disable</button>
+                            {% else %}
+                                <button type="submit" class="as-btn as-btn-sm as-btn-on">Enable</button>
+                            {% endif %}
+                        </form>
+                        <form method="post" action="{% url 'admin_adsterra_link_reset' link.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="as-btn as-btn-sm">Reset</button>
+                        </form>
+                        <form method="post" action="{% url 'admin_adsterra_link_delete' link.id %}" onsubmit="return confirm('Delete this Adsterra unit?');">
+                            {% csrf_token %}
+                            <button type="submit" class="as-btn as-btn-sm as-btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <details class="as-edit">
+                <summary>Edit URL / JS code &amp; settings</summary>
+                <div class="as-edit-body">
+                    <form method="post" action="{% url 'admin_adsterra' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="edit_link">
+                        <input type="hidden" name="link_id" value="{{ link.id }}">
+                        <div class="as-grid2">
+                            <div class="as-field">
+                                <label class="as-label">Name</label>
+                                <input type="text" name="name" value="{{ link.name|default:'' }}" placeholder="e.g. Popunder_1">
+                            </div>
+                            <div class="as-field">
+                                <label class="as-label">Ad Type</label>
+                                <input type="text" name="ad_type" value="{{ link.ad_type|default:'' }}" placeholder="e.g. Popunder, Smartlink, Social Bar, Native Banner, Banner 320x50">
+                            </div>
+                            <div class="as-field" style="max-width:180px;">
+                                <label class="as-label">Unit ID</label>
+                                <input type="text" name="unit_id" value="{{ link.unit_id|default:'' }}" placeholder="e.g. 30866764">
+                            </div>
+                        </div>
+                        <div class="as-field">
+                            <label class="as-label">Adsterra Ad URL <span style="color:var(--text-3);font-weight:400">(link units, e.g. Smartlink)</span></label>
+                            <input type="url" name="url" value="{{ link.url|default:'' }}" placeholder="https://beta.publishers.adsterra.com/links/... or your direct link">
+                            <small class="as-help">Opens full-page in a background tab when the click threshold is reached.</small>
+                        </div>
+                        <div class="as-field">
+                            <label class="as-label">Adsterra JS / HTML code <span style="color:var(--text-3);font-weight:400">(script units: Popunder, Social Bar, Native Banner, Banner 320x50)</span></label>
+                            <textarea name="code" rows="6" placeholder="&lt;script type=&quot;text/javascript&quot;&gt; ... Adsterra code ... &lt;/script&gt;">{{ link.code|default:'' }}</textarea>
+                            <small class="as-help">Rendered on the movie and series pages. Add a URL, JS code, or both.</small>
+                        </div>
+                        <div class="as-actions">
+                            <div class="as-field" style="max-width:140px;margin:0;">
+                                <label class="as-label">Order</label>
+                                <input type="number" name="order" step="1" value="{{ link.order }}">
+                            </div>
+                            <div class="as-check">
+                                <input type="checkbox" name="is_active" value="on" id="act-{{ link.id }}" {% if link.is_active %}checked{% endif %}>
+                                <label for="act-{{ link.id }}">Enabled</label>
+                            </div>
+                            <button type="submit" class="as-btn as-btn-primary">Save changes</button>
+                        </div>
+                    </form>
+                </div>
+            </details>
+        </div>
+        {% empty %}
+        <div class="as-note">No Adsterra units yet. Add one below.</div>
+        {% endfor %}
+    </div>
+
+    <div class="as-card">
+        <h2>Add a new unit</h2>
+        <form method="post" action="{% url 'admin_adsterra' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_link">
+            <div class="as-grid2">
+                <div class="as-field">
+                    <label class="as-label" for="{{ link_form.name.id_for_label }}">Name</label>
+                    {{ link_form.name }}
+                </div>
+                <div class="as-field">
+                    <label class="as-label" for="{{ link_form.ad_type.id_for_label }}">Ad Type</label>
+                    {{ link_form.ad_type }}
+                </div>
+                <div class="as-field" style="max-width:180px;">
+                    <label class="as-label" for="{{ link_form.unit_id.id_for_label }}">Unit ID</label>
+                    {{ link_form.unit_id }}
+                </div>
+            </div>
+            <div class="as-field">
+                <label class="as-label" for="{{ link_form.url.id_for_label }}">Adsterra Ad URL <span style="color:var(--text-3);font-weight:400">(link units, e.g. Smartlink)</span></label>
+                {{ link_form.url }}
+            </div>
+            <div class="as-field">
+                <label class="as-label" for="{{ link_form.code.id_for_label }}">Adsterra JS / HTML code <span style="color:var(--text-3);font-weight:400">(script units)</span></label>
+                {{ link_form.code }}
+                <small class="as-help">Add a URL, JS code, or both.</small>
+                {% if link_form.non_field_errors %}<div class="as-err">{{ link_form.non_field_errors|join:", " }}</div>{% endif %}
+            </div>
+            <div class="as-inline">
+                <div class="as-field" style="max-width:140px;">
+                    <label class="as-label" for="{{ link_form.order.id_for_label }}">Order</label>
+                    {{ link_form.order }}
+                </div>
+                <div class="as-field as-check">
+                    {{ link_form.is_active }}
+                    <label for="{{ link_form.is_active.id_for_label }}">Enabled</label>
+                </div>
+                <button type="submit" class="as-btn as-btn-primary">Add unit</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="as-card">
+        <h2>Clicks &amp; display settings</h2>
+        <form method="post" action="{% url 'admin_adsterra' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_settings">
+            <div class="as-field">
+                <label class="as-label" for="{{ adsterra_form.adsterra_clicks_required.id_for_label }}">Open the Adsterra page after how many clicks?</label>
+                {{ adsterra_form.adsterra_clicks_required }}
+                <small class="as-help">Example: 5 = the next enabled URL unit opens every 5th click. Set 0 to disable auto-open. URL units rotate in order.</small>
+                {% if adsterra_form.adsterra_clicks_required.errors %}<div class="as-err">{{ adsterra_form.adsterra_clicks_required.errors|join:", " }}</div>{% endif %}
+            </div>
+            <p class="as-note" style="margin-top:-.4rem;">
+                Only units with an <strong>Adsterra Ad URL</strong> use this click threshold. Units with only
+                <strong>JS code</strong> (Popunder, Social Bar, Native Banner, Banner 320x50) are loaded on the movie and
+                series pages and are opened by Adsterra's own script when the visitor interacts with the page &mdash;
+                they do not consume the click count.
+            </p>
+            <div class="as-field as-check">
+                {{ adsterra_form.adsterra_show_banner }}
+                <label for="{{ adsterra_form.adsterra_show_banner.id_for_label }}">Show the Adsterra sponsor block on movies and series pages</label>
+            </div>
+            <div class="as-actions">
+                <button type="submit" class="as-btn as-btn-primary">Save settings</button>
+                <a href="{% url 'ad_list' %}" class="as-btn">Cancel</a>
+            </div>
+        </form>
+    </div>

@@ -520,6 +520,37 @@ class AdsterraSettingsForm(forms.ModelForm):
         return value
 
 
+class AdMonetizationSettingsForm(forms.ModelForm):
+    """AdSense, auto-click / consent and tile-ad settings, grouped for the single Ads page."""
+
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'adsense_verification_meta',
+            'adsense_client_id',
+            'auto_click_every_clicks',
+            'require_ad_consent',
+            'ad_consent_message',
+            'max_ad_load_retries',
+            'tile_ad_every_n',
+            'enable_tile_click_gating',
+            'tile_ad_source',
+            'tile_gating_source',
+        ]
+        widgets = {
+            'adsense_verification_meta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'googlea1b2c3d4e5f6a7b8'}),
+            'adsense_client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ca-pub-1234567890123456'}),
+            'auto_click_every_clicks': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'step': '1', 'placeholder': 'e.g., 10'}),
+            'require_ad_consent': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'ad_consent_message': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'max_ad_load_retries': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1', 'placeholder': 'e.g., 3'}),
+            'tile_ad_every_n': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1', 'placeholder': 'e.g., 10'}),
+            'enable_tile_click_gating': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'tile_ad_source': forms.Select(attrs={'class': 'form-select'}),
+            'tile_gating_source': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
 class AdsterraLinkForm(forms.ModelForm):
     """Add / edit a saved Adsterra direct link."""
 
