@@ -8904,6 +8904,97 @@ def admin_requests(request):
     return _request_log_tab(request)
 
 
+def _admin_apply_subscription_edit(request):
+    """Admin-only POST: set one account's subscription window and plan.
+
+    Writes the ``SyncedUser`` record the Android app already reads through
+    ``subscription_payload()``, so an extension made here shows up in the app on
+    its next sync. Only ``admin_user_details`` calls this and that view is
+    already staff-gated, so the caller enforces who may edit.
+
+    Always redirects back to the filtered tab, with a toast either way.
+    """
+    from datetime import datetime
+    from .models import SyncedUser
+
+    def _back():
+        # Only ever bounce back to a path on this site (never an open redirect).
+        nxt = request.POST.get('next') or ''
+        if nxt.startswith('/') and not nxt.startswith('//'):
+            return redirect(nxt)
+        return redirect('request_log')
+
+    try:
+        uid = int((request.POST.get('user_id') or '').strip())
+    except (TypeError, ValueError):
+        messages.error(request, 'Unknown account.')
+        return _back()
+
+    account = User.objects.filter(id=uid).first()
+    if account is None:
+        messages.error(request, 'That account no longer exists.')
+        return _back()
+
+    is_subscribed = (request.POST.get('is_subscribed') or '').lower() in (
+        '1', 'on', 'true', 'yes')
+    plan = (request.POST.get('plan') or '').strip()[:100]
+
+    valid_until = None
+    raw_until = (request.POST.get('valid_until') or '').strip()
+    if raw_until:
+        try:
+            valid_until = datetime.strptime(raw_until, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Subscribed-till must be a valid date (YYYY-MM-DD).')
+            return _back()
+
+    features = [f.strip()[:50]
+                for f in (request.POST.get('features') or '').split(',')]
+    features = [f for f in features if f][:20]
+
+    # Prefer the record already linked to this account; otherwise adopt the one
+    # synced under the same email so we never trip the unique email constraint.
+    profile = SyncedUser.objects.filter(user_id=uid).first()
+    if profile is None and account.email:
+        profile = SyncedUser.objects.filter(email__iexact=account.email).first()
+        if profile is not None and not profile.user_id:
+            profile.user = account
+    if profile is None:
+        email = (account.email or '').strip()
+        if not email:
+            messages.error(request, 'Add an email to this account before setting a subscription.')
+            return _back()
+        profile = SyncedUser(user_id=uid, email=email)
+
+    profile.is_subscribed = is_subscribed
+    profile.plan = plan if is_subscribed else ''
+    profile.valid_until = valid_until if is_subscribed else None
+    profile.features = features if is_subscribed else []
+    if not profile.display_name:
+        profile.display_name = (account.get_full_name() or account.username or '')[:255]
+    try:
+        profile.save()
+    except Exception as exc:
+        logger.warning('subscription edit failed for user %s: %s', uid, exc)
+        messages.error(request, 'Could not save the subscription: %s' % exc)
+        return _back()
+
+    who = request.user.get_username()
+    if is_subscribed:
+        until = valid_until.isoformat() if valid_until else 'no end date'
+        logger.info('admin %s set subscription for user %s: plan=%r until=%s',
+                    who, uid, plan, until)
+        messages.success(
+            request,
+            'Subscription for %s saved — %s%s.' % (
+                account.username, plan or 'no plan',
+                (' till ' + valid_until.isoformat()) if valid_until else ''))
+    else:
+        logger.info('admin %s cleared subscription for user %s', who, uid)
+        messages.success(request, 'Subscription for %s cleared.' % account.username)
+    return _back()
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_user_details(request):
@@ -8919,6 +9010,9 @@ def admin_user_details(request):
     while ``auth.User`` stays on the default one, so a cross-database SQL join
     is not available.
     """
+    if request.method == 'POST':
+        return _admin_apply_subscription_edit(request)
+
     import csv
     from datetime import timedelta
     from django.db.models import Min, Max

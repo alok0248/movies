@@ -58,6 +58,22 @@
     .ud-kv { display: grid; grid-template-columns: 130px 1fr; gap: .2rem .6rem; font-size: .72rem; }
     .ud-kv .ud-k { color: #64748b; }
     .ud-devbox { border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 8px; padding: .5rem .6rem; margin-top: .4rem; }
+    .ud-subform { margin-top: .5rem; padding: .6rem .7rem; border: 1px solid rgba(96,165,250,.35); border-radius: 10px; background: rgba(96,165,250,.06); }
+    .ud-subform label { display: block; font-size: .68rem; color: #64748b; margin-bottom: .4rem; }
+    .ud-subform label input[type="text"], .ud-subform label input[type="date"] {
+        display: block; width: 100%; margin-top: .12rem; background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.3)); border-radius: 6px;
+        color: inherit; font-size: .72rem; padding: .28rem .45rem;
+    }
+    .ud-subform .ud-check { display: flex; align-items: center; gap: .4rem; font-size: .74rem; color: var(--text-2, #cbd5e1); }
+    .ud-subform .ud-check input { margin: 0; }
+    .ud-subform-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .5rem; }
+    .ud-savebtn {
+        border: 1px solid rgba(52,211,153,.45); background: rgba(52,211,153,.14); color: #34d399;
+        border-radius: 8px; font-size: .74rem; font-weight: 600; padding: .3rem .8rem; cursor: pointer;
+    }
+    .ud-savebtn:hover { background: rgba(52,211,153,.26); border-color: #34d399; color: #6ee7b7; }
+    .ud-subform.highlight { box-shadow: 0 0 0 2px rgba(96,165,250,.5); }
     html[data-theme="light"] .ud-tablewrap { background: #fff; border-color: rgba(0,0,0,.1); }
     html[data-theme="light"] .ud-table thead th { background: #f1f5f9; color: #334155; }
     html[data-theme="light"] .ud-table th, html[data-theme="light"] .ud-table td { border-color: rgba(0,0,0,.08); }
@@ -209,6 +225,7 @@
                     <div class="ud-sub">till {{ r.valid_until|date:"M d, Y" }}{% if r.days_left is not None %} · {{ r.days_left }}d{% endif %}</div>
                     {% endif %}
                     {% if r.plan %}<div class="ud-sub ud-trunc" title="{{ r.plan }}">{{ r.plan }}</div>{% endif %}
+                    <button type="button" class="ud-toggle" onclick="udEditSub('{{ r.user_id }}')" title="Set the subscription window and plan for this account"><i class="fas fa-pen"></i> Edit</button>
                 </td>
                 <td class="fw-bold">{{ r.movies }}</td>
                 <td class="fw-bold">{{ r.shows }}</td>
@@ -262,6 +279,29 @@
                                 <span class="ud-k">Subscribed till</span><span>{{ r.valid_until|date:"Y-m-d"|default:"—" }}{% if r.days_left is not None %} <span class="ud-sub">({{ r.days_left }} days left)</span>{% endif %}</span>
                                 <span class="ud-k">Features</span><span>{% for f in r.features %}<span class="ud-pill">{{ f }}</span>{% empty %}—{% endfor %}</span>
                             </div>
+                            <form method="post" class="ud-subform" id="ud-subform-{{ r.user_id }}">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_subscription">
+                                <input type="hidden" name="user_id" value="{{ r.user_id }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:.6rem 0 .3rem;">Edit subscription (admin)</div>
+                                <label class="ud-check">
+                                    <input type="checkbox" name="is_subscribed" value="1" {% if r.is_subscribed %}checked{% endif %}> Subscribed
+                                </label>
+                                <label>Plan
+                                    <input type="text" name="plan" value="{{ r.plan }}" maxlength="100" placeholder="monthly / yearly / premium">
+                                </label>
+                                <label>Subscribed till
+                                    <input type="date" name="valid_until" value="{{ r.valid_until|date:'Y-m-d' }}">
+                                </label>
+                                <label>Features (comma separated)
+                                    <input type="text" name="features" value="{{ r.features|join:', ' }}" placeholder="hd, downloads">
+                                </label>
+                                <div class="ud-subform-actions">
+                                    <button type="submit" class="ud-savebtn"><i class="fas fa-save"></i> Save subscription</button>
+                                    <span class="ud-sub">Uncheck and save to clear. The app picks this up on its next sync.</span>
+                                </div>
+                            </form>
                             {% if r.android_devices %}
                             <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:.6rem 0 .3rem;">Android device(s)</div>
                             {% for d in r.android_devices %}
@@ -299,5 +339,22 @@
         var open = row.style.display !== 'none';
         row.style.display = open ? 'none' : '';
         btn.innerHTML = '<i class="fas fa-chevron-' + (open ? 'down' : 'up') + '"></i> Details';
+    }
+    // Reveal the subscription editor for one account, opening its detail row
+    // first if it is collapsed, then highlight the form so it is obvious.
+    function udEditSub(id) {
+        var row = document.getElementById('ud-detail-' + id);
+        var form = document.getElementById('ud-subform-' + id);
+        if (!row || !form) return;
+        if (row.style.display === 'none') {
+            row.style.display = '';
+            var toggle = row.previousElementSibling && row.previousElementSibling.querySelector('.ud-toggle');
+            if (toggle) toggle.innerHTML = '<i class="fas fa-chevron-up"></i> Details';
+        }
+        form.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        form.classList.add('highlight');
+        setTimeout(function () { form.classList.remove('highlight'); }, 1600);
+        var input = form.querySelector('input[name="plan"]');
+        if (input) input.focus({ preventScroll: true });
     }
 </script>
