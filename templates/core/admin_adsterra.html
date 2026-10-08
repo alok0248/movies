@@ -226,6 +226,12 @@
                 <small class="as-help">Example: 5 = the next enabled URL unit opens every 5th click. Set 0 to disable auto-open. URL units rotate in order.</small>
                 {% if form.adsterra_clicks_required.errors %}<div class="as-err">{{ form.adsterra_clicks_required.errors|join:", " }}</div>{% endif %}
             </div>
+            <p class="as-note" style="margin-top:-.4rem;">
+                Only units with an <strong>Adsterra Ad URL</strong> use this click threshold. Units with only
+                <strong>JS code</strong> (Popunder, Social Bar, Native Banner, Banner 320x50) are loaded on the movie and
+                series pages and are opened by Adsterra's own script when the visitor interacts with the page &mdash;
+                they do not consume the click count.
+            </p>
             <div class="as-field as-check">
                 {{ form.adsterra_show_banner }}
                 <label for="{{ form.adsterra_show_banner.id_for_label }}">Show the Adsterra sponsor block on movies and series pages</label>
