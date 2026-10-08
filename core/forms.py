@@ -538,7 +538,7 @@ class AdSwitchesForm(forms.ModelForm):
         ]
         labels = {
             'enable_autoclick_ads': 'Auto-click ads (open a sponsor after N clicks)',
-            'enable_adsterra_links': 'Adsterra direct-link ads (open after N clicks)',
+            'enable_adsterra_links': 'Adsterra ads (popunder, JS units and direct links)',
             'enable_tile_click_gating': 'Tile click gating (first card click opens a sponsor)',
             'adsterra_show_banner': 'Adsterra sponsor block on movie & series pages',
             'require_ad_consent': 'Require ad consent before any ad loads',

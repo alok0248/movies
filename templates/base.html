@@ -1587,8 +1587,9 @@
         {% endif %}
     </div>
     
-    <!-- Adsterra units (configured on the Ads page) - loaded on every public page -->
-    {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    <!-- Adsterra units (configured on the Ads page) - loaded on every public page,
+         and switched off together from the Ads control centre -->
+    {% if enable_adsterra_links and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
     <div class="container mt-3 mb-3">
         {% include 'core/_adsterra_ads.html' %}
     </div>
@@ -2094,12 +2095,28 @@
             var EVERY_N_CLICKS = Number(DEFAULT_EVERY_CLICKS);
             if (!Number.isFinite(EVERY_N_CLICKS) || EVERY_N_CLICKS < 1) EVERY_N_CLICKS = 10;
 
-            var clicksSinceLastAd = 0;
+            /* Clicks are counted across the whole visit, not once per page:
+               the saved cadence means "open an ad every N clicks", so the
+               count has to survive page loads like the Adsterra rotation does. */
+            var AD_CLICK_COUNT_KEY = 'ad_click_count';
+            function pendingClicks() {
+                try {
+                    var raw = window.sessionStorage ? window.sessionStorage.getItem(AD_CLICK_COUNT_KEY) : null;
+                    var n = parseInt(raw || '0', 10);
+                    return (Number.isFinite(n) && n > 0) ? n : 0;
+                } catch (e) { return 0; }
+            }
+            function storePendingClicks(n) {
+                try {
+                    if (window.sessionStorage) window.sessionStorage.setItem(AD_CLICK_COUNT_KEY, String(n > 0 ? n : 0));
+                } catch (e) {}
+            }
+
+            var clicksSinceLastAd = pendingClicks();
             var adIndex = 0;
             var adLastTriggeredAt = 0;
             var lastCountedClickAt = 0;
             var fetchingAds = false;
-
             var maxRetries = Number(DEFERRED_SETTINGS.max_ad_load_retries);
             if (!Number.isFinite(maxRetries) || maxRetries < 0) maxRetries = 3;
 
@@ -2157,10 +2174,23 @@
                 return !!(autoclickAdUrls && autoclickAdUrls.length);
             }
 
+            syncClicksToCadence();
+
             function applyEveryClicksFromServer(n) {
                 var val = Number(n);
                 if (!Number.isFinite(val) || val < 1) val = 10;
                 EVERY_N_CLICKS = val;
+                syncClicksToCadence();
+            }
+
+            /* The saved cadence always wins over a click count carried over from
+               an earlier page load, so raising the number never fires an ad on
+               the very next click. */
+            function syncClicksToCadence() {
+                if (clicksSinceLastAd >= EVERY_N_CLICKS) {
+                    clicksSinceLastAd = 0;
+                    storePendingClicks(0);
+                }
             }
 
             function isTrustedUserClick(event) {
@@ -2304,6 +2334,7 @@
                 if (now - lastCountedClickAt <= 1000) return;
                 lastCountedClickAt = now;
                 clicksSinceLastAd += 1;
+                storePendingClicks(clicksSinceLastAd);
             }
 
             // Capture-phase click handler for click-count based ad auto-open
@@ -2328,6 +2359,7 @@
                 if (isInsidePlayerArea(event.target)) return;
                 adLastTriggeredAt = Date.now();
                 clicksSinceLastAd = 0;
+                storePendingClicks(0);
                 triggerAdAction();
             }, true);
 
