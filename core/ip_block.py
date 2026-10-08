@@ -66,6 +66,12 @@ BOT_MAX_REQUESTS = 150
 # Paths that never count towards the bot rate (the app's user-data polling).
 BOT_RATE_SKIP_PREFIXES = (
     '/api/user/', '/ajax/page-activity', '/static/', '/media/',
+    # Endpoints a normal visitor produces by clicking and watching. Counting
+    # them let an enthusiastic human reach the bot limit on their own.
+    '/ajax/track-click/', '/ajax/click-status/', '/ajax/adsterra/click/',
+    '/ajax/record-ad-event/', '/ajax/autoclick-ads/', '/ajax/ad-consent/',
+    '/ajax/toggle-watchlist/', '/ajax/check-watchlist/',
+    '/ajax/record-play/', '/ajax/play-progress/', '/ajax/resume-position/',
 )
 # Keep the in-process watch bounded; oldest addresses are dropped first.
 BOT_WATCH_MAX_IPS = 4000
@@ -315,7 +321,7 @@ def note_auth_success(request):
     return lift_block_for_signup(ip)
 
 
-def auto_block_bot(ip_address, signed_in=False, requests=None):
+def auto_block_bot(ip_address, signed_in=False, requests=None, reason=''):
     """Block an address that crossed the bot rate, as a bot.
 
     An address that crossed the limit while *signed in* is a repeat offender by
@@ -328,11 +334,57 @@ def auto_block_bot(ip_address, signed_in=False, requests=None):
         return None, False
     detail = ('%s requests inside %s minutes' % (requests or BOT_MAX_REQUESTS,
                                                 BOT_WINDOW_SECONDS // 60))
+    if reason:
+        detail += '; ' + reason
     if signed_in:
         detail += ' while signed in'
     return block_ip(ip, 'auto:bot-detector',
                     'looks like a bot: ' + detail,
                     permanent=bool(signed_in))
+
+
+# --- bot confirmation -----------------------------------------------------
+# A rate spike on its own is not proof of a bot: a person clicking through the
+# site can produce one too, and blocking that person is exactly what we must
+# not do. Only an unambiguous signal counts.
+SCRAPER_UA_SIGNATURES = (
+    'curl/', 'wget/', 'python-requests', 'python-urllib', 'httpx/', 'aiohttp/',
+    'scrapy', 'libwww-perl', 'node-fetch', 'axios/', 'headlesschrome',
+    'phantomjs', 'puppeteer', 'playwright', 'selenium', 'masscan', 'nmap',
+    'zgrab', 'nikto', 'sqlmap', 'httrack', 'wpscan', 'gobuster',
+)
+# Crawlers we deliberately never auto-block: taking them out costs the site its
+# search visibility and they are not the threat this guard is for.
+FRIENDLY_CRAWLER_UA = (
+    'googlebot', 'bingbot', 'duckduckbot', 'slurp', 'yandexbot', 'baiduspider',
+    'applebot', 'adsbot-google', 'google-inspectiontool', 'facebookexternalhit',
+    'twitterbot', 'linkedinbot', 'whatsapp', 'telegrambot', 'discordbot',
+)
+
+
+def bot_verdict(user_agent, configured_bot_uas=(), known_bot_ip=False):
+    """Confirm a program rather than a person. Returns (is_bot, reason).
+
+    Only unambiguous signals qualify, so a human who clicks a lot is never
+    blocked: the address listed as a bot for this site, a configured bot
+    User-Agent, a missing User-Agent, or a known scraping tool's User-Agent.
+    """
+    if known_bot_ip:
+        return True, 'address is listed in the site bot list'
+    ua = (user_agent or '').strip()
+    lowered = ua.lower()
+    for signature in configured_bot_uas:
+        if signature and signature in lowered:
+            return True, 'user agent matches a configured bot signature'
+    if not ua:
+        return True, 'no User-Agent header'
+    for crawler in FRIENDLY_CRAWLER_UA:
+        if crawler in lowered:
+            return False, 'known search-engine crawler'
+    for signature in SCRAPER_UA_SIGNATURES:
+        if signature in lowered:
+            return True, 'user agent looks like a scraping tool (%s)' % signature
+    return False, 'user agent looks like a browser'
 
 
 def is_bot_block(row):

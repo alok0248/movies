@@ -1,10 +1,14 @@
 
+import logging
+
 from django.shortcuts import redirect
 from django.conf import settings
 from django.utils import timezone
 from django.core.cache import cache
 from .models import SiteSettings, WebsiteVisitor, WebsiteVisitorVisit
 import uuid
+
+logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
@@ -136,6 +140,30 @@ class IPBlockMiddleware:
         except Exception:
             return False
 
+    @staticmethod
+    def _confirm_bot(request, client_ip):
+        """Confirm a program before blocking - a rate spike alone is not proof.
+
+        A person clicking hard can cross the rate too, so the block only happens
+        when the request identifies a bot: its address or User-Agent is listed as
+        a bot for this site, it sends no User-Agent, or it matches a known
+        scraping tool. Search-engine crawlers are left alone.
+        """
+        from .ip_block import bot_verdict
+        try:
+            site_settings = SiteSettings.get_settings()
+        except Exception:
+            site_settings = None
+        if site_settings is not None and is_bot_request(request, client_ip, site_settings):
+            return True, 'address or user agent is listed as a bot for this site'
+        configured_uas = []
+        try:
+            configured_uas = [v.lower() for v in _split_bot_config(site_settings.bot_user_agents)]
+        except Exception:
+            configured_uas = []
+        return bot_verdict(request.META.get('HTTP_USER_AGENT', ''),
+                           configured_bot_uas=configured_uas)
+
     def __call__(self, request):
         try:
             return self._check(request)
@@ -157,7 +185,15 @@ class IPBlockMiddleware:
         if client_ip and not operator:
             if should_count_for_bot_rate(getattr(request, 'path', '') or ''):
                 if note_request(client_ip):
-                    auto_block_bot(client_ip, signed_in=signed_in)
+                    # Only block a confirmed bot. A human who clicks a lot must
+                    # never lose access, so the spike is logged and served.
+                    is_bot, verdict = self._confirm_bot(request, client_ip)
+                    if is_bot:
+                        auto_block_bot(client_ip, signed_in=signed_in, reason=verdict)
+                    else:
+                        logger.warning(
+                            'IPBlock: %s crossed the request rate but looks human '
+                            '(%s) - not blocked', client_ip, verdict)
         if self._hard_exempt(request):
             return self.get_response(request)
         # A header rule names a program, not a person, so it is enforced for
