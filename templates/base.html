@@ -1543,6 +1543,13 @@
         {% endif %}
     </div>
     
+    <!-- Adsterra units (configured on the Ads page) - loaded on every public page -->
+    {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    <div class="container mt-3 mb-3">
+        {% include 'core/_adsterra_ads.html' %}
+    </div>
+    {% endif %}
+
     <!-- Deferred ad slot placeholders (no ad HTML loaded until click threshold + consent OK) -->
     {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
         <div class="container mt-4 mb-4">
