@@ -877,22 +877,8 @@ _pcIds.forEach(function(id) {
 /* Export the admin-ordered id list for dropdown building */
 window._pcOrderedIds = _pcIds;
 
-/* Popup shield: allow window.open only during a real user gesture.
-   Genuine taps/clicks (the Adsterra popunder and the site's own
-   click-threshold ad links) open normally; ad-driven / timed / synthetic
-   popups (from extraction callbacks or any injected script) stay blocked. */
-(function() {
-    var realOpen = window.open;
-    window.open = function(url, name, features) {
-        var ok = false;
-        try { ok = !!(navigator.userActivation && navigator.userActivation.isActive); } catch (e) { ok = true; }
-        if (!ok) {
-            try { console.log('[shield] blocked popup:', String(url).slice(0, 120)); } catch (e) {}
-            return null;
-        }
-        return realOpen.call(window, url, name, features);
-    };
-})();
+/* Popups are governed by the site-wide ad guard in base.html: our own ads
+   and our own UI open in a background tab, everything else is blocked. */
 
 const movieId = "{{ movie_id }}";
 const movieImdbId = "{{ movie.imdb_id|default:''|escapejs }}";
@@ -1395,7 +1381,7 @@ function downloadMovie() {
         if (data.success && data.sources && data.sources.length > 0) {
             var sorted = data.sources.slice().sort(function(a, b) { var p = {mp4:6,m4v:5,webm:4,mkv:3,mov:3,m3u8:2,ts:2,mpd:2,stream:1}; return (p[b.type]||0)-(p[a.type]||0); });
             var best = sorted[0];
-            if (best.url.indexOf('.m3u8') !== -1 || best.url.indexOf('.mpd') !== -1) { window.open(best.url, '_blank'); showMsg('play', 'Stream opened', 3000); }
+            if (best.url.indexOf('.m3u8') !== -1 || best.url.indexOf('.mpd') !== -1) { window.openOwnTab(best.url, '_blank'); showMsg('play', 'Stream opened', 3000); }
             else { window.location.href = '/ajax/download-proxy/?url=' + encodeURIComponent(best.url) + '&filename=' + encodeURIComponent(movieTitle + '.mp4'); showMsg('check', 'Download starting...', 3000); }
         } else { showMsg('exclamation-triangle', 'No source found', 5000); }
     })

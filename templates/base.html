@@ -43,6 +43,60 @@
             document.documentElement.setAttribute('data-brand', b);
         })();
     </script>
+    <script>
+        /* Ad guard.
+           Our own ads (whatever is configured on the server) and our own UI
+           links may open a tab; anything else - especially popups pushed by
+           the embedded third-party players - is blocked. Allowed popups open
+           in a background tab so the visitor keeps the page they are on. */
+        (function () {
+            var realOpen = window.open;
+            /* Ad networks our own configured units are served from. */
+            var AD_HOSTS = /(adsterra|profitableratecpmnetwork|highperformanceformat|topcreativeformat|effectivecpm|creativecdn)/i;
+            var trustedDepth = 0;
+
+            /* Used by our own ad and UI code to mark a call as ours. */
+            window.openOwnTab = function (url, name, features) {
+                trustedDepth++;
+                try { return window.open(url, name || '_blank', features); }
+                finally { trustedDepth--; }
+            };
+
+            function callerStack() {
+                try { return (new Error()).stack || ''; } catch (e) { return ''; }
+            }
+            function sameOrigin(url) {
+                try { return new URL(String(url), location.href).origin === location.origin; }
+                catch (e) { return false; }
+            }
+            function isTrusted(url) {
+                if (trustedDepth > 0) return true;
+                if (AD_HOSTS.test(callerStack())) return true;
+                return sameOrigin(url);
+            }
+            function keepPageFocused(w) {
+                try {
+                    if (!w) return;
+                    try { w.opener = null; } catch (e) {}
+                    try { w.blur(); } catch (e) {}
+                    try { window.focus(); } catch (e) {}
+                } catch (e) {}
+            }
+
+            window.open = function (url, name, features) {
+                var ok = false;
+                try { ok = isTrusted(url); } catch (e) { ok = false; }
+                if (!ok) {
+                    try { console.log('[ad-guard] blocked popup:', String(url).slice(0, 140)); } catch (e) {}
+                    return null;
+                }
+                var w = null;
+                try { w = realOpen.call(window, url, name, features); } catch (e) {}
+                keepPageFocused(w);
+                return w;
+            };
+        })();
+    </script>
     <style>
         :root {
             --brand: {{ theme_primary|default:'#e50914' }};
@@ -2063,7 +2117,7 @@
                 var url = pickNextAdUrl();
                 if (!url) return;
                 try {
-                    window.open(url, '_blank', 'noopener,noreferrer');
+                    window.openOwnTab(url, '_blank');
                 } catch (e) {}
                 registerClickBackend();
             }
@@ -3916,7 +3970,7 @@
             }
             function openAdNewTab(url) {
                 try {
-                    window.open(String(url), '_blank', 'noopener,noreferrer');
+                    window.openOwnTab(String(url), '_blank');
                 } catch (e) {}
             }
             function buildTileAdHtml(ad) {
@@ -4339,7 +4393,7 @@
                need the handle in order to blur the new tab; opener is nulled instead. */
             function openAdInBackground(url) {
                 var w = null;
-                try { w = window.open(url, '_blank'); } catch (e) {}
+                try { w = window.openOwnTab(url, '_blank'); } catch (e) {}
                 try {
                     if (w) {
                         try { w.opener = null; } catch (e) {}

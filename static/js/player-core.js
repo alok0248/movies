@@ -624,7 +624,8 @@ function _setActiveByUrl(url) {
 
 function _openPopup() {
   var match = _findBestMatch();
-  if (match) window.open(match.url, '_blank', 'width=1200,height=700,menubar=no,toolbar=no');
+  var open = window.openOwnTab || window.open;
+  if (match) open(match.url, '_blank', 'width=1200,height=700,menubar=no,toolbar=no');
 }
 
 /* ===== Language detection from source metadata ===== */
