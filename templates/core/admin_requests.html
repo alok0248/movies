@@ -47,9 +47,13 @@
                 <i class="fas fa-users-viewfinder"></i> Active Users
                 {% if panel == 'users' and total_rows %}<span class="rq-count">{{ total_rows }}</span>{% endif %}
             </a>
-            <a class="rq-tab {% if panel != 'users' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
+            <a class="rq-tab {% if panel == 'details' %}on{% endif %}" href="{% url 'request_log' %}?tab=details" title="Per-account profile — devices, watch counts, logins and subscription">
+                <i class="fas fa-id-card"></i> User Details
+                {% if panel == 'details' and summary.total_users %}<span class="rq-count">{{ summary.total_users }}</span>{% endif %}
+            </a>
+            <a class="rq-tab {% if panel != 'users' and panel != 'details' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
                 <i class="fas fa-network-wired"></i> Request Log
-                {% if panel != 'users' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
+                {% if panel != 'users' and panel != 'details' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
             </a>
             <a class="rq-tab" href="{% url 'blocked_ips' %}" title="Every blocked IP, with the requests it kept making after the block">
                 <i class="fas fa-shield-alt"></i> Blocked IPs
@@ -61,8 +65,8 @@
         </div>
     </div>
 
-    {# One shared POST form for the per-row Block / Unblock buttons in both panels.
-       Kept outside the panels so it never nests inside a filter form. #}
+    {% comment %}One shared POST form for the per-row Block / Unblock buttons in
+    both panels. Kept outside the panels so it never nests inside a filter form.{% endcomment %}
     <form id="rq-block-form" method="post" action="{% url 'ip_block_action' %}" style="display:none;">
         {% csrf_token %}
         <input type="hidden" name="action" value="">
@@ -73,6 +77,8 @@
 
     {% if panel == 'users' %}
         {% include 'core/admin_active_users.html' %}
+    {% elif panel == 'details' %}
+        {% include 'core/admin_user_details.html' %}
     {% else %}
         {% include 'core/admin_request_log.html' %}
     {% endif %}

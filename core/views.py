@@ -8888,16 +8888,457 @@ def api_error_log(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_requests(request):
-    """Requests & Users — one admin page holding both traffic views.
+    """Requests & Users — one admin page holding the traffic and user views.
 
     ``?tab=log`` (the default) is the raw request log, ``?tab=users`` is the
-    aggregated active / inactive visitor list. The sidebar tile and the
-    analytics Web vs Android cards both land here, and only the tab being
-    shown is computed, so the page stays as fast as either list was alone.
+    aggregated active / inactive visitor list, and ``?tab=details`` is the
+    per-account profile (devices, watch counts, logins, subscription). Only the
+    tab being shown is computed, so the page stays as fast as either list was
+    alone.
     """
-    if request.GET.get('tab') == 'users':
+    tab = (request.GET.get('tab') or '').strip().lower()
+    if tab == 'users':
         return admin_active_users(request)
+    if tab == 'details':
+        return admin_user_details(request)
     return _request_log_tab(request)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_user_details(request):
+    """Per-account profile tab: devices, watch counts, logins and subscription.
+
+    One row per registered account, joining the identity (``auth.User`` and its
+    ``SyncedUser`` profile) with everything we know about how it is used: every
+    IP and device it logged in from, how many movies / series / episodes it
+    watched (from ``PlayHistory``), first and last login (``UserSession``),
+    time on site (``UserPageView``), and the subscription window
+    (``SyncedUser.valid_until``). All aggregations key on ``user_id`` and are
+    folded together in Python because the user models live on the external DB
+    while ``auth.User`` stays on the default one, so a cross-database SQL join
+    is not available.
+    """
+    import csv
+    from datetime import timedelta
+    from django.db.models import Min, Max
+    from .models import (PlayHistory, UserSession, UserPageView, WatchList,
+                         SyncedUser, WebsiteVisitor, AndroidAppDevice,
+                         AndroidAppDeviceVisit)
+
+    def clean(name, maxlen=200):
+        return (request.GET.get(name) or '').strip()[:maxlen]
+
+    def _fmt(value):
+        if not value:
+            return ''
+        try:
+            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return str(value)
+
+    search = clean('q')
+    sub_filter = clean('sub', 12).lower()
+    if sub_filter not in ('', 'subscribed', 'expiring', 'expired', 'free'):
+        sub_filter = ''
+    platform_filter = clean('platform', 10).lower()
+    if platform_filter not in ('', 'web', 'android'):
+        platform_filter = ''
+    sort = clean('sort', 20) or 'last_seen'
+    direction = clean('dir', 4).lower()
+    if direction not in ('asc', 'desc'):
+        direction = 'desc'
+    sortable = {'user', 'joined', 'first_login', 'last_login', 'last_seen',
+                'movies', 'series', 'episodes', 'watch_time', 'views',
+                'devices', 'sub_until'}
+    if sort not in sortable:
+        sort = 'last_seen'
+
+    today = timezone.localdate()
+    expiring_cutoff = today + timedelta(days=7)
+
+    # --- identity: every Django account, plus its SyncedUser profile --------
+    try:
+        accounts = list(User.objects.all().only(
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'date_joined', 'last_login', 'is_active', 'is_staff', 'is_superuser'))
+    except Exception as exc:
+        logger.warning('user details: account query failed: %s', exc)
+        accounts = []
+
+    profiles = {}
+    try:
+        for sp in SyncedUser.objects.all():
+            if sp.user_id:
+                profiles[sp.user_id] = sp
+    except Exception as exc:
+        logger.warning('user details: synced profile query failed: %s', exc)
+
+    # --- watch activity (movies / series / episodes), keyed by user_id ----
+    watch = {}
+    last_watch_title = {}
+    try:
+        watch_agg = (PlayHistory.objects.values('user_id').annotate(
+            movies=Count('id', filter=Q(media_type='movie'), distinct=True),
+            movie_rows=Count('id', filter=Q(media_type='movie')),
+            shows=Count('tmdb_id', filter=Q(media_type='tv'), distinct=True),
+            episodes=Count('id', filter=Q(media_type='tv')),
+            completed=Count('id', filter=Q(completed=True)),
+            watch_seconds=Sum('duration_seconds'),
+            last_played=Max('last_played_at'),
+        ))
+        for row in watch_agg:
+            watch[row['user_id']] = row
+    except Exception as exc:
+        logger.warning('user details: watch aggregate failed: %s', exc)
+    try:
+        for ph in (PlayHistory.objects.order_by('user_id', '-last_played_at')
+                   .values('user_id', 'title', 'media_type', 'season_number',
+                           'episode_number', 'last_played_at')):
+            if ph['user_id'] not in last_watch_title:
+                last_watch_title[ph['user_id']] = ph
+    except Exception as exc:
+        logger.warning('user details: last watch query failed: %s', exc)
+
+    # --- login sessions: counts + first/last login -------------------------
+    sess = {}
+    try:
+        sess_agg = (UserSession.objects.values('user_id').annotate(
+            logins=Count('id'),
+            first_login=Min('logged_in_at'),
+            last_login=Max('logged_in_at'),
+            last_seen=Max('last_seen_at'),
+            open_sessions=Count('id', filter=Q(is_active=True)),
+        ))
+        for row in sess_agg:
+            sess[row['user_id']] = row
+    except Exception as exc:
+        logger.warning('user details: session aggregate failed: %s', exc)
+
+    # --- IPs + device signatures, from sessions and page views -------------
+    ips = {}
+    device_sigs = {}
+    platforms = {}
+    try:
+        for s in (UserSession.objects.values('user_id', 'source', 'ip_address',
+                                             'device_model', 'os_version',
+                                             'app_version').distinct()[:50000]):
+            uid = s['user_id']
+            if not uid:
+                continue
+            if s['ip_address']:
+                ips.setdefault(uid, set()).add(s['ip_address'])
+            if s['source']:
+                platforms.setdefault(uid, set()).add(s['source'])
+            sig = ' · '.join(x for x in (s['device_model'],
+                                         ('OS ' + s['os_version']) if s['os_version'] else '',
+                                         ('v' + s['app_version']) if s['app_version'] else '') if x)
+            if sig:
+                device_sigs.setdefault(uid, set()).add(sig)
+    except Exception as exc:
+        logger.warning('user details: session detail query failed: %s', exc)
+
+    pv_stats = {}
+    try:
+        for pv in (UserPageView.objects.exclude(user_id=None)
+                   .values('user_id').annotate(
+                       views=Count('id'),
+                       total_time=Sum('time_spent_seconds'),
+                       last_view=Max('viewed_at'))):
+            pv_stats[pv['user_id']] = pv
+    except Exception as exc:
+        logger.warning('user details: page view aggregate failed: %s', exc)
+    try:
+        for pv in (UserPageView.objects.exclude(ip_address=None)
+                   .values('user_id', 'ip_address').distinct()[:50000]):
+            uid = pv['user_id']
+            if uid and pv['ip_address']:
+                ips.setdefault(uid, set()).add(pv['ip_address'])
+    except Exception as exc:
+        logger.warning('user details: page view IP query failed: %s', exc)
+
+    # --- website visitor rows (anonymous sessions tied to an account) ------
+    visitors = {}
+    try:
+        for v in (WebsiteVisitor.objects.exclude(user_id=None)
+                  .values('user_id', 'visitor_id', 'first_seen_at',
+                          'last_seen_at', 'total_visits', 'last_path',
+                          'last_ip_address', 'user_agent')):
+            uid = v['user_id']
+            prev = visitors.get(uid)
+            if prev is None or (v['last_seen_at'] and
+                                (prev['last_seen_at'] is None or v['last_seen_at'] > prev['last_seen_at'])):
+                visitors[uid] = v
+            if uid and v['last_ip_address']:
+                ips.setdefault(uid, set()).add(v['last_ip_address'])
+    except Exception as exc:
+        logger.warning('user details: website visitor query failed: %s', exc)
+
+    # --- Android devices, resolved through the SyncedUser device_id --------
+    android_devices = {}
+    try:
+        device_ids = {sp.device_id for sp in profiles.values() if sp.device_id}
+        if device_ids:
+            latest_visit = {}
+            for dv in (AndroidAppDeviceVisit.objects.filter(device_id__in=list(device_ids))
+                       .order_by('-visited_at')
+                       .values('device_id', 'ip_address', 'device_model',
+                               'os_version', 'visited_at')[:20000]):
+                latest_visit.setdefault(dv['device_id'], dv)
+            for d in (AndroidAppDevice.objects.filter(user_id__in=list(device_ids))
+                      .only('user_id', 'device_model', 'os_version',
+                            'first_seen_at', 'last_seen_at', 'total_visits')):
+                visit = latest_visit.get(d.user_id)
+                android_devices.setdefault(d.user_id, []).append({
+                    'device_id': d.user_id,
+                    'device_model': d.device_model,
+                    'os_version': d.os_version,
+                    'first_seen': d.first_seen_at,
+                    'last_seen': d.last_seen_at,
+                    'visits': d.total_visits,
+                    'ip': (visit or {}).get('ip_address') or '',
+                })
+    except Exception as exc:
+        logger.warning('user details: android device query failed: %s', exc)
+
+    # --- watchlist / cloud favourites -------------------------------------
+    watchlist_counts = {}
+    try:
+        for row in WatchList.objects.values('user_id').annotate(n=Count('id')):
+            watchlist_counts[row['user_id']] = row['n']
+    except Exception as exc:
+        logger.warning('user details: watchlist aggregate failed: %s', exc)
+
+    # --- fold everything into one row per account --------------------------
+    rows = []
+    seen_uids = set()
+    for account in accounts:
+        uid = account.id
+        seen_uids.add(uid)
+        profile = profiles.get(uid)
+        w = watch.get(uid) or {}
+        s = sess.get(uid) or {}
+        pv = pv_stats.get(uid) or {}
+        v = visitors.get(uid)
+        user_ips = sorted(ips.get(uid) or [])
+        dev_sigs = sorted(device_sigs.get(uid) or [])
+        plat = platforms.get(uid) or set()
+
+        is_subscribed = bool(profile.is_subscribed) if profile else False
+        valid_until = profile.valid_until if profile else None
+        days_left = None
+        if valid_until:
+            days_left = (valid_until - today).days
+        if not is_subscribed:
+            sub_state = 'free'
+        elif valid_until and valid_until < today:
+            sub_state = 'expired'
+        elif valid_until and valid_until <= expiring_cutoff:
+            sub_state = 'expiring'
+        else:
+            sub_state = 'subscribed'
+
+        last_watch = last_watch_title.get(uid)
+        last_watch_label = ''
+        if last_watch:
+            last_watch_label = last_watch['title'] or ''
+            if last_watch['media_type'] == 'tv' and last_watch['season_number'] and last_watch['episode_number']:
+                last_watch_label += f" S{last_watch['season_number']}E{last_watch['episode_number']}"
+
+        last_seen = None
+        for candidate in (s.get('last_seen'), pv.get('last_view'),
+                          (v or {}).get('last_seen_at'), account.last_login):
+            if candidate and (last_seen is None or candidate > last_seen):
+                last_seen = candidate
+
+        devices = len(dev_sigs) + len(android_devices.get(uid, []))
+        rows.append({
+            'user_id': uid,
+            'username': account.username,
+            'email': account.email or (profile.email if profile else ''),
+            'full_name': (account.get_full_name() or '').strip(),
+            'display_name': ((profile.display_name if profile else '') or account.get_full_name() or account.username),
+            'is_staff': account.is_staff,
+            'is_superuser': account.is_superuser,
+            'is_active': account.is_active,
+            'date_joined': account.date_joined,
+            'photo_url': (profile.photo_url if profile else '') or '',
+            'google_id': (profile.google_id if profile else '') or '',
+            'app_version': (profile.app_version if profile else '') or '',
+            # subscription
+            'is_subscribed': is_subscribed,
+            'plan': (profile.plan if profile else '') or '',
+            'valid_until': valid_until,
+            'days_left': days_left,
+            'sub_state': sub_state,
+            'features': (profile.features if profile else []) or [],
+            'last_synced_at': (profile.last_synced_at if profile else None),
+            # watch activity
+            'movies': w.get('movies') or 0,
+            'shows': w.get('shows') or 0,
+            'episodes': w.get('episodes') or 0,
+            'completed': w.get('completed') or 0,
+            'watch_seconds': w.get('watch_seconds') or 0,
+            'last_played': w.get('last_played'),
+            'last_watch_label': last_watch_label,
+            'watchlist': watchlist_counts.get(uid, 0),
+            # sessions
+            'logins': s.get('logins') or 0,
+            'open_sessions': s.get('open_sessions') or 0,
+            'first_login': s.get('first_login') or account.last_login,
+            'last_login': s.get('last_login') or account.last_login,
+            'last_seen': last_seen,
+            # engagement
+            'views': pv.get('views') or 0,
+            'total_time': pv.get('total_time') or 0,
+            # devices / network
+            'ips': user_ips,
+            'ip_count': len(user_ips),
+            'ip': user_ips[-1] if user_ips else ((v or {}).get('last_ip_address') or ''),
+            'device_sigs': dev_sigs,
+            'device_count': devices,
+            'platforms': sorted(plat),
+            'android_devices': android_devices.get(uid, []),
+            'visits': (v or {}).get('total_visits') or 0,
+            'last_path': (v or {}).get('last_path') or '',
+        })
+
+    # Accounts that only exist as a SyncedUser (no local Django account yet).
+    for uid, profile in profiles.items():
+        if uid in seen_uids:
+            continue
+        rows.append({
+            'user_id': uid, 'username': '', 'email': profile.email,
+            'full_name': '', 'display_name': profile.display_name or profile.email,
+            'is_staff': False, 'is_superuser': False, 'is_active': False,
+            'date_joined': profile.created_at, 'photo_url': profile.photo_url or '',
+            'google_id': profile.google_id or '', 'app_version': profile.app_version or '',
+            'is_subscribed': bool(profile.is_subscribed), 'plan': profile.plan or '',
+            'valid_until': profile.valid_until, 'days_left': None,
+            'sub_state': 'subscribed' if profile.is_subscribed else 'free',
+            'features': profile.features or [], 'last_synced_at': profile.last_synced_at,
+            'movies': 0, 'shows': 0, 'episodes': 0, 'completed': 0,
+            'watch_seconds': 0, 'last_played': None, 'last_watch_label': '',
+            'watchlist': 0, 'logins': 0, 'open_sessions': 0,
+            'first_login': None, 'last_login': None, 'last_seen': profile.last_synced_at,
+            'views': 0, 'total_time': 0, 'ips': [], 'ip_count': 0, 'ip': '',
+            'device_sigs': [], 'device_count': 0, 'platforms': ['android'],
+            'android_devices': [], 'visits': 0, 'last_path': '',
+        })
+
+    # --- summary cards (computed over all rows, before filtering) ----------
+    summary = {
+        'total_users': len(rows),
+        'subscribed': sum(1 for r in rows if r['sub_state'] in ('subscribed', 'expiring')),
+        'expiring': sum(1 for r in rows if r['sub_state'] == 'expiring'),
+        'expired': sum(1 for r in rows if r['sub_state'] == 'expired'),
+        'free': sum(1 for r in rows if r['sub_state'] == 'free'),
+        'staff': sum(1 for r in rows if r['is_staff']),
+        'movies': sum(r['movies'] for r in rows),
+        'shows': sum(r['shows'] for r in rows),
+        'episodes': sum(r['episodes'] for r in rows),
+        'watch_seconds': sum(r['watch_seconds'] for r in rows),
+        'with_devices': sum(1 for r in rows if r['device_count'] or r['ip_count']),
+    }
+
+    # --- filters -----------------------------------------------------------
+    needle = search.lower()
+
+    def _matches(r):
+        if not needle:
+            return True
+        haystack = ' '.join(str(x or '') for x in (
+            r['username'], r['email'], r['display_name'], r['full_name'],
+            r['ip'], ' '.join(r['ips']), ' '.join(r['device_sigs']),
+            r['plan'], r['last_path'], ' '.join(r['platforms']))).lower()
+        return needle in haystack
+
+    def _in_scope(r):
+        if sub_filter:
+            if sub_filter == 'subscribed' and r['sub_state'] not in ('subscribed', 'expiring'):
+                return False
+            if sub_filter == 'expiring' and r['sub_state'] != 'expiring':
+                return False
+            if sub_filter == 'expired' and r['sub_state'] != 'expired':
+                return False
+            if sub_filter == 'free' and r['sub_state'] != 'free':
+                return False
+        if platform_filter == 'web' and 'web' not in r['platforms']:
+            return False
+        if platform_filter == 'android' and 'android' not in r['platforms']:
+            return False
+        return _matches(r)
+
+    filtered = [r for r in rows if _in_scope(r)]
+
+    epoch = timezone.now() - timedelta(days=3650)
+    sort_keys = {
+        'user': lambda r: (r['display_name'] or '').lower(),
+        'joined': lambda r: r['date_joined'] or epoch,
+        'first_login': lambda r: r['first_login'] or epoch,
+        'last_login': lambda r: r['last_login'] or epoch,
+        'last_seen': lambda r: r['last_seen'] or epoch,
+        'movies': lambda r: r['movies'],
+        'series': lambda r: r['shows'],
+        'episodes': lambda r: r['episodes'],
+        'watch_time': lambda r: r['watch_seconds'],
+        'views': lambda r: r['views'],
+        'devices': lambda r: r['device_count'],
+        'sub_until': lambda r: r['valid_until'] or epoch.date(),
+    }
+    filtered.sort(key=sort_keys.get(sort, sort_keys['last_seen']),
+                  reverse=(direction != 'asc'))
+    max_display = 500
+    displayed = filtered[:max_display]
+
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="user_details.csv"'
+
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow(['User', 'Email', 'Plan', 'Subscribed till', 'Days left',
+                         'Movies watched', 'Series watched', 'Episodes watched',
+                         'Watch time (min)', 'First login', 'Last login',
+                         'Last seen', 'Logins', 'IPs', 'Devices', 'App version',
+                         'Page views', 'Time on site (s)', 'Watchlist',
+                         'Joined', 'Staff', 'Account active'])
+        for r in filtered:
+            writer.writerow([
+                r['display_name'], r['email'], r['plan'],
+                r['valid_until'].isoformat() if r['valid_until'] else '',
+                r['days_left'] if r['days_left'] is not None else '',
+                r['movies'], r['shows'], r['episodes'],
+                round(r['watch_seconds'] / 60), _fmt(r['first_login']),
+                _fmt(r['last_login']), _fmt(r['last_seen']), r['logins'],
+                ', '.join(r['ips']), ' | '.join(r['device_sigs']),
+                r['app_version'], r['views'], r['total_time'], r['watchlist'],
+                _fmt(r['date_joined']), 'yes' if r['is_staff'] else 'no',
+                'yes' if r['is_active'] else 'no',
+            ])
+        return response
+
+    from .ip_block import active_blocked_ips
+    blocked = active_blocked_ips()
+
+    return render(request, 'core/admin_requests.html', {
+        'panel': 'details',
+        'rows': displayed,
+        'blocked_ips': blocked,
+        'blocked_total': len(blocked),
+        'shown': len(displayed),
+        'row_total': len(filtered),
+        'max_display': max_display,
+        'summary': summary,
+        'search': search,
+        'sub_filter': sub_filter,
+        'platform_filter': platform_filter,
+        'sort': sort,
+        'dir': direction,
+        'expiring_cutoff': expiring_cutoff,
+        'today': today,
+        'now': timezone.now(),
+    })
 
 
 def _request_log_tab(request):

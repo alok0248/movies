@@ -1,0 +1,303 @@
+{# User Details panel — embedded by core/admin_requests.html (Requests & Users page). #}
+<style>
+    .ud-card { background: var(--card-bg, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; }
+    .ud-stat { padding: .85rem 1rem; }
+    .ud-stat .ud-num { font-size: 1.45rem; font-weight: 700; color: var(--text, #e2e8f0); line-height: 1.1; }
+    .ud-stat .ud-lbl { font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3, #64748b); }
+    .ud-sub { color: var(--text-3, #64748b); font-size: .68rem; }
+    .ud-badge { display: inline-block; font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+    .ud-b-subscribed { background: rgba(34,197,94,.16); color: #22c55e; }
+    .ud-b-expiring { background: rgba(245,158,11,.16); color: #f59e0b; }
+    .ud-b-expired { background: rgba(239,68,68,.16); color: #f87171; }
+    .ud-b-free { background: rgba(148,163,184,.18); color: #94a3b8; }
+    .ud-b-staff { background: rgba(168,85,247,.16); color: #c084fc; }
+    .ud-b-disabled { background: rgba(239,68,68,.14); color: #f87171; }
+    .ud-b-web { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .ud-b-android { background: rgba(34,197,94,.15); color: #34d399; }
+    .ud-tablewrap { overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; background: var(--card-bg, #1a1a2e); }
+    .ud-table { width: 100%; border-collapse: collapse; font-size: .74rem; white-space: nowrap; }
+    .ud-table th, .ud-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06)); text-align: left; vertical-align: top; }
+    .ud-table thead th { background: var(--surface, #16213e); color: var(--text-2, #cbd5e1); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .ud-table thead th.sortable { cursor: pointer; user-select: none; }
+    .ud-table thead th.sortable:hover { color: #93c5fd; }
+    .ud-table tbody tr.ud-row:hover { background: rgba(148,163,184,.07); }
+    .ud-table tr.ud-detail > td { background: rgba(0,0,0,.22); padding: .8rem 1rem; white-space: normal; }
+    .ud-mono { font-family: Consolas, Menlo, monospace; }
+    .ud-user { font-weight: 600; color: var(--text, #e2e8f0); text-decoration: none; }
+    .ud-user:hover { color: #93c5fd; }
+    .ud-trunc { max-width: 230px; overflow: hidden; text-overflow: ellipsis; }
+    .ud-infolink { color: #7dd3fc; text-decoration: none; border-bottom: 1px dotted rgba(125,211,252,.45); }
+    .ud-infolink:hover { color: #bae6fd; }
+    .ud-infolink i { font-size: .58rem; }
+    .ud-blockbtn {
+        display: inline-flex; align-items: center; gap: .25rem; margin-left: .3rem;
+        padding: .02rem .45rem; border-radius: 999px; border: 1px solid rgba(248,113,113,.4);
+        background: rgba(239,68,68,.1); color: #f87171; font-size: .64rem; line-height: 1.5;
+        cursor: pointer; white-space: nowrap;
+    }
+    .ud-blockbtn:hover { background: rgba(239,68,68,.24); border-color: #f87171; color: #fca5a5; }
+    .ud-blockbtn.on { border-color: rgba(52,211,153,.45); background: rgba(52,211,153,.14); color: #34d399; }
+    .ud-blockbtn.on:hover { background: rgba(52,211,153,.26); border-color: #34d399; color: #6ee7b7; }
+    .ud-blockbtn i { font-size: .56rem; }
+    .ud-filtergrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem .7rem; }
+    .ud-filtergrid label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
+    .ud-filtergrid input, .ud-filtergrid select {
+        width: 100%; background: rgba(148,163,184,.1);
+        border: 1px solid var(--border, rgba(148,163,184,.25));
+        border-radius: 6px; color: inherit; font-size: .72rem; padding: .3rem .45rem;
+    }
+    .ud-chip {
+        display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .7rem;
+        border-radius: 8px; font-size: .72rem; font-weight: 600; text-decoration: none;
+        border: 1px solid var(--border, rgba(148,163,184,.25)); color: var(--text-2, #cbd5e1);
+    }
+    .ud-chip.on { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.45); color: #93c5fd; }
+    .ud-pill { display: inline-block; padding: .05rem .4rem; border-radius: 999px; background: rgba(148,163,184,.14); color: var(--text-2, #cbd5e1); font-size: .66rem; margin: 0 .15rem .15rem 0; }
+    .ud-toggle { cursor: pointer; color: #7dd3fc; border: none; background: transparent; font-size: .68rem; padding: 0; }
+    .ud-toggle:hover { color: #bae6fd; }
+    .ud-kv { display: grid; grid-template-columns: 130px 1fr; gap: .2rem .6rem; font-size: .72rem; }
+    .ud-kv .ud-k { color: #64748b; }
+    .ud-devbox { border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 8px; padding: .5rem .6rem; margin-top: .4rem; }
+    html[data-theme="light"] .ud-tablewrap { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .ud-table thead th { background: #f1f5f9; color: #334155; }
+    html[data-theme="light"] .ud-table th, html[data-theme="light"] .ud-table td { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .ud-table tr.ud-detail > td { background: #f8fafc; }
+    html[data-theme="light"] .ud-user, html[data-theme="light"] .ud-stat .ud-num { color: #0f172a; }
+    html[data-theme="light"] .ud-infolink { color: #0369a1; }
+    html[data-theme="light"] .ud-devbox { border-color: rgba(0,0,0,.1); }
+</style>
+
+<div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <div style="color:#64748b;font-size:.78rem;">
+        One row per account · subscription “expiring” = valid till within 7 days ({{ expiring_cutoff|date:"M d" }})
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ request.path }}?tab=details{% if search %}&amp;q={{ search|urlencode }}{% endif %}{% if sub_filter %}&amp;sub={{ sub_filter }}{% endif %}{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
+        <a href="{{ request.path }}?tab=details{% if search %}&amp;q={{ search|urlencode }}{% endif %}{% if sub_filter %}&amp;sub={{ sub_filter }}{% endif %}{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num">{{ summary.total_users }}</div><div class="ud-lbl">Accounts</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat" title="Subscribed and not expiring within 7 days"><div class="ud-num" style="color:#22c55e;">{{ summary.subscribed }}</div><div class="ud-lbl">Subscribed</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat" title="Subscription ends within 7 days"><div class="ud-num" style="color:#f59e0b;">{{ summary.expiring }}</div><div class="ud-lbl">Expiring soon</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num" style="color:#f87171;">{{ summary.expired }}</div><div class="ud-lbl">Expired</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num" style="color:#94a3b8;">{{ summary.free }}</div><div class="ud-lbl">Free / no plan</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat" title="Accounts that have at least one IP or device on record"><div class="ud-num" style="color:#38bdf8;">{{ summary.with_devices }}</div><div class="ud-lbl">With devices</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num" style="color:#60a5fa;">{{ summary.movies }}</div><div class="ud-lbl">Movies watched</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num" style="color:#c084fc;">{{ summary.shows }}</div><div class="ud-lbl">Series watched</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num" style="color:#a855f7;">{{ summary.episodes }}</div><div class="ud-lbl">Episodes watched</div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="ud-card ud-stat"><div class="ud-num" style="color:#22d3ee;">{{ summary.watch_seconds|floatformat:0 }}s</div><div class="ud-lbl">Total watch time</div></div>
+    </div>
+</div>
+
+<div class="ud-card p-3 mb-3">
+    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">Subscription</span>
+        <a class="ud-chip {% if not sub_filter %}on{% endif %}" href="?tab=details{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}">All</a>
+        <a class="ud-chip {% if sub_filter == 'subscribed' %}on{% endif %}" href="?tab=details&amp;sub=subscribed{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}">Subscribed</a>
+        <a class="ud-chip {% if sub_filter == 'expiring' %}on{% endif %}" href="?tab=details&amp;sub=expiring{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}">Expiring soon</a>
+        <a class="ud-chip {% if sub_filter == 'expired' %}on{% endif %}" href="?tab=details&amp;sub=expired{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}">Expired</a>
+        <a class="ud-chip {% if sub_filter == 'free' %}on{% endif %}" href="?tab=details&amp;sub=free{% if platform_filter %}&amp;platform={{ platform_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}">Free</a>
+        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
+        <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">Platform</span>
+        <a class="ud-chip {% if not platform_filter %}on{% endif %}" href="?tab=details{% if sub_filter %}&amp;sub={{ sub_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}">All</a>
+        <a class="ud-chip {% if platform_filter == 'web' %}on{% endif %}" href="?tab=details&amp;platform=web{% if sub_filter %}&amp;sub={{ sub_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}"><i class="fas fa-globe" style="color:#3b82f6;"></i> Web</a>
+        <a class="ud-chip {% if platform_filter == 'android' %}on{% endif %}" href="?tab=details&amp;platform=android{% if sub_filter %}&amp;sub={{ sub_filter }}{% endif %}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;sort={{ sort }}&amp;dir={{ dir }}"><i class="fab fa-android" style="color:#22c55e;"></i> Android</a>
+    </div>
+    <form method="get" class="ud-filtergrid">
+        <input type="hidden" name="tab" value="details">
+        <input type="hidden" name="sub" value="{{ sub_filter }}">
+        <input type="hidden" name="platform" value="{{ platform_filter }}">
+        <label>Sort by
+            <select name="sort">
+                <option value="last_seen" {% if sort == 'last_seen' %}selected{% endif %}>Last seen</option>
+                <option value="last_login" {% if sort == 'last_login' %}selected{% endif %}>Last login</option>
+                <option value="first_login" {% if sort == 'first_login' %}selected{% endif %}>First login</option>
+                <option value="joined" {% if sort == 'joined' %}selected{% endif %}>Joined</option>
+                <option value="user" {% if sort == 'user' %}selected{% endif %}>Name</option>
+                <option value="movies" {% if sort == 'movies' %}selected{% endif %}>Movies watched</option>
+                <option value="series" {% if sort == 'series' %}selected{% endif %}>Series watched</option>
+                <option value="episodes" {% if sort == 'episodes' %}selected{% endif %}>Episodes watched</option>
+                <option value="watch_time" {% if sort == 'watch_time' %}selected{% endif %}>Watch time</option>
+                <option value="views" {% if sort == 'views' %}selected{% endif %}>Page views</option>
+                <option value="devices" {% if sort == 'devices' %}selected{% endif %}>Devices</option>
+                <option value="sub_until" {% if sort == 'sub_until' %}selected{% endif %}>Subscribed till</option>
+            </select>
+        </label>
+        <label>Direction
+            <select name="dir">
+                <option value="desc" {% if dir == 'desc' %}selected{% endif %}>Descending</option>
+                <option value="asc" {% if dir == 'asc' %}selected{% endif %}>Ascending</option>
+            </select>
+        </label>
+        <label>Search (user / email / IP / device / plan)
+            <input type="text" name="q" value="{{ search }}" placeholder="name, email, IP, device...">
+        </label>
+        <label>&nbsp;
+            <button type="submit" class="btn btn-sm" style="color:#93c5fd;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
+        </label>
+        <label>&nbsp;
+            <a href="{% url 'request_log' %}?tab=details" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-eraser me-1"></i>Reset</a>
+        </label>
+    </form>
+</div>
+
+<div class="mb-2" style="font-size:.72rem;color:#64748b;">
+    {{ row_total }} account{{ row_total|pluralize }} match{% if row_total > shown %} · showing first {{ shown }} (sorted by {{ sort }} {{ dir }}){% endif %}
+</div>
+
+<div class="ud-tablewrap">
+    <table class="ud-table">
+        <thead>
+            <tr>
+                <th class="sortable" onclick="udSort('user')">User</th>
+                <th>Platform</th>
+                <th class="sortable" onclick="udSort('sub_until')">Subscription</th>
+                <th class="sortable" onclick="udSort('movies')">Movies</th>
+                <th class="sortable" onclick="udSort('series')">Series</th>
+                <th class="sortable" onclick="udSort('episodes')">Episodes</th>
+                <th class="sortable" onclick="udSort('watch_time')">Watch time</th>
+                <th class="sortable" onclick="udSort('first_login')">First login</th>
+                <th class="sortable" onclick="udSort('last_login')">Last login</th>
+                <th class="sortable" onclick="udSort('last_seen')">Last seen</th>
+                <th class="sortable" onclick="udSort('views')">Views</th>
+                <th class="sortable" onclick="udSort('devices')">IPs / devices</th>
+                <th>Last watched</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr class="ud-row">
+                <td>
+                    <a class="ud-user" href="{% url 'admin_user_analytics_detail' user_id=r.user_id %}">{{ r.display_name }}</a>
+                    {% if r.is_staff %}<span class="ud-badge ud-b-staff">staff</span>{% endif %}
+                    {% if not r.is_active %}<span class="ud-badge ud-b-disabled">disabled</span>{% endif %}
+                    {% if r.email %}<div class="ud-sub ud-trunc" title="{{ r.email }}">{{ r.email }}</div>{% endif %}
+                    {% if r.username and r.username != r.display_name %}<div class="ud-sub ud-mono">@{{ r.username }}</div>{% endif %}
+                </td>
+                <td>
+                    {% for p in r.platforms %}
+                        <span class="ud-badge {% if p == 'web' %}ud-b-web{% elif p == 'android' %}ud-b-android{% else %}ud-b-free{% endif %}">{{ p }}</span>
+                    {% empty %}—{% endfor %}
+                </td>
+                <td>
+                    <span class="ud-badge ud-b-{{ r.sub_state }}">
+                        {% if r.sub_state == 'subscribed' %}Subscribed{% elif r.sub_state == 'expiring' %}Expiring{% elif r.sub_state == 'expired' %}Expired{% else %}Free{% endif %}
+                    </span>
+                    {% if r.valid_until %}
+                    <div class="ud-sub">till {{ r.valid_until|date:"M d, Y" }}{% if r.days_left is not None %} · {{ r.days_left }}d{% endif %}</div>
+                    {% endif %}
+                    {% if r.plan %}<div class="ud-sub ud-trunc" title="{{ r.plan }}">{{ r.plan }}</div>{% endif %}
+                </td>
+                <td class="fw-bold">{{ r.movies }}</td>
+                <td class="fw-bold">{{ r.shows }}</td>
+                <td>{{ r.episodes }}</td>
+                <td>{{ r.watch_seconds|floatformat:0 }}s{% if r.completed %}<div class="ud-sub">{{ r.completed }} completed</div>{% endif %}</td>
+                <td class="ud-sub" title="{{ r.first_login|date:'Y-m-d H:i:s' }}">{% if r.first_login %}{{ r.first_login|date:"M d Y" }}{% else %}—{% endif %}</td>
+                <td class="ud-sub" title="{{ r.last_login|date:'Y-m-d H:i:s' }}">{% if r.last_login %}{{ r.last_login|timesince }} ago{% else %}—{% endif %}</td>
+                <td class="ud-sub" title="{{ r.last_seen|date:'Y-m-d H:i:s' }}">{% if r.last_seen %}{{ r.last_seen|timesince }} ago{% else %}—{% endif %}</td>
+                <td>{{ r.views }}{% if r.total_time %}<div class="ud-sub">{{ r.total_time }}s</div>{% endif %}</td>
+                <td>
+                    {% if r.ip %}<a class="ud-infolink ud-mono" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
+                    {% if r.ip in blocked_ips %}<button type="button" class="ud-blockbtn on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')"><i class="fas fa-lock"></i>Blocked</button>{% elif r.ip %}<button type="button" class="ud-blockbtn" onclick="rqBlockIP('{{ r.ip|escapejs }}')"><i class="fas fa-ban"></i>Block</button>{% endif %}
+                    <div class="ud-sub">{{ r.ip_count }} IP{{ r.ip_count|pluralize }} · {{ r.device_count }} device{{ r.device_count|pluralize }}</div>
+                </td>
+                <td class="ud-sub">
+                    {% if r.last_watch_label %}<div class="ud-trunc" title="{{ r.last_watch_label }}">{{ r.last_watch_label }}</div>
+                    <div class="ud-sub">{{ r.last_played|timesince }} ago</div>{% else %}—{% endif %}
+                </td>
+                <td><button type="button" class="ud-toggle" onclick="udToggle('{{ r.user_id }}', this)"><i class="fas fa-chevron-down"></i> Details</button></td>
+            </tr>
+            <tr class="ud-detail" id="ud-detail-{{ r.user_id }}" style="display:none;">
+                <td colspan="14">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="ud-kv">
+                                <span class="ud-k">Account</span><span>{{ r.display_name }} <span class="ud-sub">(#{{ r.user_id }})</span></span>
+                                <span class="ud-k">Email</span><span>{{ r.email|default:"—" }}</span>
+                                <span class="ud-k">Google linked</span><span>{% if r.google_id %}yes{% else %}no{% endif %}</span>
+                                <span class="ud-k">Joined</span><span>{{ r.date_joined|date:"Y-m-d H:i"|default:"—" }}</span>
+                                <span class="ud-k">Last app sync</span><span>{{ r.last_synced_at|date:"Y-m-d H:i"|default:"—" }}</span>
+                                <span class="ud-k">App version</span><span>{{ r.app_version|default:"—" }}</span>
+                                <span class="ud-k">Watchlist</span><span>{{ r.watchlist }} item{{ r.watchlist|pluralize }}</span>
+                                <span class="ud-k">Open sessions</span><span>{{ r.open_sessions }} of {{ r.logins }} login{{ r.logins|pluralize }}</span>
+                                <span class="ud-k">Website visits</span><span>{{ r.visits }}{% if r.last_path %} · last {{ r.last_path }}{% endif %}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:.3rem;">IPs ({{ r.ip_count }})</div>
+                            {% for ip in r.ips %}
+                                <span class="ud-pill"><a class="ud-infolink ud-mono" href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer">{{ ip }}</a>{% if ip in blocked_ips %} <i class="fas fa-lock" style="color:#34d399;"></i>{% endif %}</span>
+                            {% empty %}<span class="ud-sub">No IPs on record.</span>{% endfor %}
+                            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:.6rem 0 .3rem;">Device signatures ({{ r.device_sigs|length }})</div>
+                            {% for d in r.device_sigs %}<span class="ud-pill">{{ d }}</span>
+                            {% empty %}<span class="ud-sub">No device info captured.</span>{% endfor %}
+                        </div>
+                        <div class="col-md-4">
+                            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:.3rem;">Subscription</div>
+                            <div class="ud-kv">
+                                <span class="ud-k">Status</span><span><span class="ud-badge ud-b-{{ r.sub_state }}">{{ r.sub_state }}</span></span>
+                                <span class="ud-k">Plan</span><span>{{ r.plan|default:"—" }}</span>
+                                <span class="ud-k">Subscribed till</span><span>{{ r.valid_until|date:"Y-m-d"|default:"—" }}{% if r.days_left is not None %} <span class="ud-sub">({{ r.days_left }} days left)</span>{% endif %}</span>
+                                <span class="ud-k">Features</span><span>{% for f in r.features %}<span class="ud-pill">{{ f }}</span>{% empty %}—{% endfor %}</span>
+                            </div>
+                            {% if r.android_devices %}
+                            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:.6rem 0 .3rem;">Android device(s)</div>
+                            {% for d in r.android_devices %}
+                            <div class="ud-devbox">
+                                <div class="ud-mono" style="font-size:.7rem;">{{ d.device_id }}</div>
+                                <div class="ud-sub">{{ d.device_model|default:"Unknown model" }}{% if d.os_version %} · OS {{ d.os_version }}{% endif %} · {{ d.visits }} visit{{ d.visits|pluralize }}</div>
+                                <div class="ud-sub">First {{ d.first_seen|date:"Y-m-d"|default:"—" }} · Last {{ d.last_seen|date:"Y-m-d"|default:"—" }}{% if d.ip %} · {{ d.ip }}{% endif %}</div>
+                            </div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="14" class="text-center text-secondary py-4">No accounts matched these filters.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function udSort(field) {
+        var params = new URLSearchParams(window.location.search);
+        var current = params.get('sort');
+        var dir = params.get('dir') === 'asc' ? 'asc' : 'desc';
+        params.set('tab', 'details');
+        params.set('sort', field);
+        params.set('dir', (current === field && dir === 'desc') ? 'asc' : 'desc');
+        window.location.search = params.toString();
+    }
+    function udToggle(id, btn) {
+        var row = document.getElementById('ud-detail-' + id);
+        if (!row) return;
+        var open = row.style.display !== 'none';
+        row.style.display = open ? 'none' : '';
+        btn.innerHTML = '<i class="fas fa-chevron-' + (open ? 'down' : 'up') + '"></i> Details';
+    }
+</script>
