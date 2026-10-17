@@ -1,0 +1,11 @@
+{# Which list is on screen. The view renders (and sends) exactly one of these —
+   the page stays small and switching tabs is a fragment fetch, not a reload. #}
+{% if active_tab == 'devices' %}
+{% include 'core/_users_full_devices.html' %}
+{% elif active_tab == 'signedout' %}
+{% include 'core/_users_full_signedout.html' %}
+{% elif active_tab == 'visits' %}
+{% include 'core/_users_full_visits.html' %}
+{% else %}
+{% include 'core/_users_full_accounts.html' %}
+{% endif %}

@@ -1,0 +1,55 @@
+{% load custom_filters %}
+    <!-- ========================= RECENT VISITS ========================= -->
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+        <div class="sect-title"><i class="fas fa-history text-info me-2"></i>Recent visits</div>
+        <div class="sub">{{ counts.visits }} requests &middot; kept {{ selected_app.data_retention_days }} days (older ones are auto-deleted) &middot; expand <strong>Request</strong> for the full HTTP headers</div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Device ID</th>
+                    <th>Account</th>
+                    <th>Model</th>
+                    <th>OS</th>
+                    <th>Build ID</th>
+                    <th>IP address</th>
+                    <th style="min-width:110px;">Request</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in visits_page %}
+                {% with acct=email_by_device|get_item:v.device.user_id %}
+                <tr>
+                    <td class="sub">{{ v.visited_at|date:'Y-m-d H:i:s' }}</td>
+                    <td><code class="mono {% if acct %}text-info{% else %}text-warning{% endif %}">{{ v.device.user_id }}</code></td>
+                    <td>{% if acct %}<span class="sub">{{ acct }}</span>{% else %}<span class="pill bg-warning text-dark">No account</span>{% endif %}</td>
+                    <td>{{ v.device_model|default:'-' }}</td>
+                    <td class="sub">{{ v.os_version|default:'-' }}</td>
+                    <td class="sub">{{ v.build_identifier|default:'—' }}</td>
+                    <td class="mono sub">{{ v.ip_address|default:'—' }}</td>
+                    <td>
+                        {% if v.full_request %}
+                        <details>
+                            <summary class="fbtn" style="cursor:pointer;display:inline-block;">Details</summary>
+                            <pre class="mb-0 mono" style="white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto;background:rgba(0,0,0,.45);padding:8px;border-radius:6px;margin-top:6px;min-width:320px;">{{ v.full_request }}</pre>
+                        </details>
+                        {% else %}<span class="sub">&mdash;</span>{% endif %}
+                    </td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr><td colspan="8" class="text-center text-secondary py-4">No visits recorded yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if visits_page.has_other_pages %}
+    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
+        {% if visits_page.has_previous %}<a class="fbtn" href="?tab=visits&vpage={{ visits_page.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
+        <span class="sub">Visits {{ visits_page.number }} of {{ visits_page.paginator.num_pages }} &middot; {{ visits_page.paginator.count }} requests</span>
+        {% if visits_page.has_next %}<a class="fbtn" href="?tab=visits&vpage={{ visits_page.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
+    </nav>
+    {% endif %}

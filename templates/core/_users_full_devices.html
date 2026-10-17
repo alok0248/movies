@@ -1,0 +1,170 @@
+{% load custom_filters %}
+    <!-- ============================ DEVICES ============================ -->
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+        <div class="sect-title"><i class="fas fa-mobile-alt text-warning me-2"></i>Devices</div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <a class="fbtn {% if not no_account_only %}active{% endif %}" href="?tab=devices&dn=0{% if q %}&q={{ q|urlencode }}{% endif %}{% if view != 'all' %}&f={{ view }}{% endif %}">All devices</a>
+            <a class="fbtn {% if no_account_only %}active{% endif %}" href="?tab=devices&dn=1{% if q %}&q={{ q|urlencode }}{% endif %}">No account only</a>
+            <span class="sub">{{ counts.devices }} devices &middot; {{ counts.anonymous_devices }} with no account</span>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Device ID</th>
+                    <th>Account</th>
+                    <th>Model</th>
+                    <th>OS</th>
+                    <th>Visits</th>
+                    <th>First seen</th>
+                    <th>Last seen</th>
+                    <th>Last build</th>
+                    <th>Last IP</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in device_rows %}
+                {% with d=r.device v=r.visit %}
+                <tr>
+                    <td>
+                        <button type="button" class="fbtn" style="padding:.02rem .34rem;line-height:1.1;" aria-expanded="false"
+                                onclick="toggleDevice({{ d.id }}, this)" title="Show this device's account, visits and logs">&#9656;</button>
+                        <code class="mono {% if r.email %}text-info{% else %}text-warning{% endif %}">{{ d.user_id }}</code>
+                    </td>
+                    <td>
+                        {% if r.email %}
+                            <a class="text-info sub" href="?tab=accounts&q={{ r.email|urlencode }}">{{ r.email }}</a>
+                        {% else %}
+                            <span class="pill bg-warning text-dark">No account</span>
+                        {% endif %}
+                    </td>
+                    <td><i class="fab fa-android text-success me-1"></i>{{ d.device_model|default:'unknown' }}</td>
+                    <td class="sub">{{ d.os_version|default:'-' }}</td>
+                    <td>{{ d.total_visits }}</td>
+                    <td class="sub">{{ d.first_seen_at|date:'Y-m-d H:i' }}</td>
+                    <td>
+                        <span class="text-white">{{ d.last_seen_at|timesince }} ago</span>
+                        <div class="sub">{{ d.last_seen_at|date:'Y-m-d H:i' }}</div>
+                    </td>
+                    <td class="sub">{{ v.build_identifier|default:'-' }}</td>
+                    <td class="mono sub">{{ v.ip_address|default:'-' }}</td>
+                    <td><a class="btn btn-sm btn-outline-light act-btn" href="{{ r.log_url }}"><i class="fas fa-terminal me-1"></i>Logs</a></td>
+                </tr>
+
+                <!-- Drill-down: account, visit history and log lines for this device -->
+                <tr id="dev-detail-{{ d.id }}" style="display:none;">
+                    <td colspan="10" style="background:rgba(15,23,42,.55);border-top:2px solid rgba(148,163,184,.25);">
+                        <div class="row g-3">
+
+                            <div class="col-lg-4">
+                                <div class="sect-title mb-1" style="font-size:.8rem;"><i class="fas fa-user me-1 text-info"></i>Account</div>
+                                {% if r.synced %}
+                                    <div class="text-white">{{ r.synced.display_name|default:r.synced.email }}</div>
+                                    <div class="sub"><code class="mono">{{ r.synced.email }}</code></div>
+                                    <div class="d-flex gap-1 flex-wrap mt-1">
+                                        {% if r.synced.is_subscribed %}
+                                            <span class="pill bg-success"><i class="fas fa-check me-1"></i>{{ r.synced.plan|default:'VIP' }}</span>
+                                        {% else %}
+                                            <span class="pill bg-secondary">Free</span>
+                                        {% endif %}
+                                        {% if r.synced.block_mode %}
+                                            <span class="pill bg-danger">{{ r.synced.get_block_mode_display }}</span>
+                                        {% else %}
+                                            <span class="pill bg-success">Active</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if r.synced.is_subscribed and r.synced.valid_until %}
+                                        <div class="sub mt-1">subscribed until {{ r.synced.valid_until|date:'Y-m-d' }}</div>
+                                    {% endif %}
+                                    {% if r.synced.blocked_reason %}<div class="sub text-danger">block reason: {{ r.synced.blocked_reason }}</div>{% endif %}
+                                    <div class="sub mt-1">app v{{ r.synced.app_version|default:'-' }} &middot; {{ r.synced.device_model|default:'-' }} &middot; synced {{ r.synced.last_synced_at|timesince }} ago</div>
+                                    {% if r.account %}
+                                        <div class="sub">login <code class="mono">{{ r.account.username }}</code> &middot; joined {{ r.account.date_joined|date:'Y-m-d' }} &middot; last login {{ r.account.last_login|date:'Y-m-d H:i'|default:'never' }}</div>
+                                        <div class="mt-1">{% if r.account.is_active %}<span class="pill bg-success">Verified</span>{% else %}<span class="pill bg-warning text-dark">Not verified</span>{% endif %}</div>
+                                        <div class="d-flex gap-1 flex-wrap mt-2">
+                                            <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'synced_user_detail' r.synced.id %}"><i class="fas fa-id-card me-1"></i>Profile</a>
+                                            <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'admin_user_detail' r.account.pk %}"><i class="fas fa-user me-1"></i>Login</a>
+                                        </div>
+                                    {% else %}
+                                        <div class="sub mt-1">No login account linked to this profile.</div>
+                                        <div class="mt-2"><a class="btn btn-sm btn-outline-light act-btn" href="{% url 'synced_user_detail' r.synced.id %}"><i class="fas fa-id-card me-1"></i>Profile</a></div>
+                                    {% endif %}
+                                {% elif r.email %}
+                                    <div class="sub">Only a heartbeat from this device &mdash; email <code class="mono">{{ r.email }}</code>, no synced profile, no subscription.</div>
+                                {% else %}
+                                    <div class="sub">Nobody is signed in on this device: no synced profile, no login account, no heartbeat.</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-lg-4">
+                                <div class="sect-title mb-1" style="font-size:.8rem;"><i class="fas fa-history me-1 text-warning"></i>Visits</div>
+                                {% if r.visits %}
+                                    <div class="sub mb-1">last {{ r.visits|length }} of {{ d.total_visits }} &middot; first seen {{ d.first_seen_at|date:'Y-m-d H:i' }}</div>
+                                    <table class="table table-sm table-dark mb-1" style="--bs-table-bg:transparent;">
+                                        <thead><tr><th>Time</th><th>Build</th><th>IP</th><th>Request</th></tr></thead>
+                                        <tbody>
+                                            {% for dv in r.visits %}
+                                            <tr>
+                                                <td class="sub">{{ dv.visited_at|date:'m-d H:i:s' }}</td>
+                                                <td class="sub">{{ dv.build_identifier|default:'-' }}</td>
+                                                <td class="mono sub">{{ dv.ip_address|default:'-' }}</td>
+                                                <td>
+                                                    {% if dv.full_request %}
+                                                    <details>
+                                                        <summary class="fbtn" style="cursor:pointer;display:inline-block;">Details</summary>
+                                                        <pre class="mb-0 mono" style="white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto;background:rgba(0,0,0,.45);padding:8px;border-radius:6px;margin-top:6px;min-width:320px;">{{ dv.full_request }}</pre>
+                                                    </details>
+                                                    {% else %}<span class="sub">&mdash;</span>{% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                {% else %}
+                                    <div class="sub">No visits recorded for this device.</div>
+                                {% endif %}
+                                <a class="fbtn" href="{{ r.log_url }}"><i class="fas fa-list me-1"></i>All requests for this device</a>
+                            </div>
+
+                            <div class="col-lg-4">
+                                <div class="sect-title mb-1" style="font-size:.8rem;"><i class="fas fa-scroll me-1 text-success"></i>Log lines</div>
+                                {% if r.logs %}
+                                    <table class="table table-sm table-dark mb-0" style="--bs-table-bg:transparent;">
+                                        <thead><tr><th>Time</th><th>Level</th><th>Tag</th><th>Message</th></tr></thead>
+                                        <tbody>
+                                            {% for lg in r.logs %}
+                                            <tr>
+                                                <td class="sub">{{ lg.timestamp|date:'m-d H:i' }}</td>
+                                                <td><span class="badge {% if lg.level == 'error' or lg.level == 'fatal' %}bg-danger{% elif lg.level == 'warn' %}bg-warning text-dark{% elif lg.level == 'debug' %}bg-secondary{% else %}bg-info{% endif %}" style="font-size:.6rem;">{{ lg.get_level_display }}</span></td>
+                                                <td class="mono sub">{{ lg.tag|default:'-' }}</td>
+                                                <td class="sub" style="max-width:340px;">{{ lg.message|truncatechars:160|linebreaksbr }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                {% else %}
+                                    <div class="sub">No app logs captured for this device.</div>
+                                {% endif %}
+                            </div>
+
+                        </div>
+                    </td>
+                </tr>
+                {% endwith %}
+
+                {% empty %}
+                <tr><td colspan="10" class="text-center text-secondary py-4">{% if no_account_only %}Every device seen by this app belongs to a signed-in account.{% else %}No devices recorded yet.{% endif %}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if device_page.has_other_pages %}
+    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
+        {% if device_page.has_previous %}<a class="fbtn" href="?tab=devices&dpage={{ device_page.previous_page_number }}&dn={% if no_account_only %}1{% else %}0{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if view != 'all' %}&f={{ view }}{% endif %}">&laquo; Prev</a>{% endif %}
+        <span class="sub">Devices {{ device_page.number }} of {{ device_page.paginator.num_pages }} &middot; {{ device_page.paginator.count }} shown</span>
+        {% if device_page.has_next %}<a class="fbtn" href="?tab=devices&dpage={{ device_page.next_page_number }}&dn={% if no_account_only %}1{% else %}0{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if view != 'all' %}&f={{ view }}{% endif %}">Next &raquo;</a>{% endif %}
+    </nav>
+    {% endif %}

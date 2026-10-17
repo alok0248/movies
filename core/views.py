@@ -3766,8 +3766,6 @@ def android_app_dashboard(request, app_id=None):
     build_chart_labels = []
     build_chart_values = []
     failed_attempts = []
-    recent_devices = []
-    recent_visits = []
     recent_logs = []
     total_unique_visitors = 0
     if selected_app:
@@ -3792,9 +3790,8 @@ def android_app_dashboard(request, app_id=None):
         unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
         unique_chart_values = [log.unique_visitor_count for log in unique_logs]
         
-        # Get recent devices and visits
-        recent_devices = selected_app.devices.select_related().all()[:10]
-        recent_visits = selected_app.device_visits.select_related('device').all()[:20]
+        # Recent devices and visits moved to the full-screen user/device page,
+        # so this dashboard no longer loads either list.
         # Last 20 app logs so Users / Android / Logs live on this one page.
         recent_logs = selected_app.app_logs.select_related('device').all()[:20]
         
@@ -3833,8 +3830,6 @@ def android_app_dashboard(request, app_id=None):
         'app_endpoint': app_endpoint,
         'failed_attempts': failed_attempts,
         'total_unique_visitors': total_unique_visitors,
-        'recent_devices': recent_devices,
-        'recent_visits': recent_visits,
         'recent_logs': recent_logs,
         'hb_map': hb_map,
         'synced_users': synced_users,
@@ -3842,6 +3837,10 @@ def android_app_dashboard(request, app_id=None):
         'synced_subscribed': synced_subscribed,
         'synced_free': synced_free,
     })
+
+
+# How many visits / log lines a device row shows when it is expanded.
+DRILLDOWN_LIMIT = 10
 
 
 @login_required
@@ -3859,7 +3858,9 @@ def android_app_users_full(request, app_id):
     using the app is invisible.
 
     The template extends base.html (not admin_base) deliberately: no admin
-    side nav, just the list.
+    side nav, just the list. The device table and the recent-visits table
+    (with the full-request expander) live here too, so the analytics page can
+    stay a dashboard instead of carrying four more lists.
     """
     from django.core.paginator import Paginator
     from .models import (PlayHistory, UserActivity, UserCloudData,  # noqa: F401
@@ -3897,6 +3898,20 @@ def android_app_users_full(request, app_id):
         else:
             users_qs = users_qs.exclude(email__in=list(online_emails))
 
+    # ---------------------------------------------------------------- tabs
+    # One list per tab. Only the open tab's rows are built and only its markup
+    # is sent: this page used to render the accounts table, the devices table
+    # with its per-device drill-downs, the whole recent-visits dump and the
+    # signed-out list at the same time, which is what made it heavy. The tab
+    # bar asks for ?partial=1 when the admin switches, so that swap needs no
+    # page load — and with JS off the links still work as plain ?tab=… URLs.
+    TABS = ('accounts', 'devices', 'signedout', 'visits')
+    tab = (request.GET.get('tab') or '').strip().lower()
+    if tab not in TABS:
+        tab = 'accounts'
+    partial = request.GET.get('partial') == '1'
+
+
     # ------------------------------------------------------------ headline counts
     all_users = SyncedUser.objects.all()
     total_users = all_users.count()
@@ -3907,106 +3922,207 @@ def android_app_users_full(request, app_id):
         'free': all_users.filter(is_subscribed=False).count(),
     }
 
-    # ------------------------------------------------------------- user rows
-    paginator = Paginator(users_qs, 25)
-    page_obj = paginator.get_page(request.GET.get('page') or 1)
+    # ---------------------------------------------------------- shared bits
+    # Built for every tab: the six header badges, plus which device id belongs
+    # to which account (the badge counts devices with none, and the devices /
+    # visits tabs label each device with its account).
 
-    page_ids = [u.user_id for u in page_obj.object_list if u.user_id]
-    page_emails = [u.email for u in page_obj.object_list if u.email]
-    page_device_ids = [u.device_id for u in page_obj.object_list if u.device_id]
+    email_by_device = {}
+    for email, dev_id in SyncedUser.objects.exclude(device_id='').values_list('email', 'device_id'):
+        if dev_id:
+            email_by_device.setdefault(dev_id, email)
+    for email, dev_id in UserHeartbeat.objects.exclude(device_id='').values_list('email', 'device_id'):
+        if dev_id:
+            email_by_device.setdefault(dev_id, email)
+    linked_device_ids = list(email_by_device)
 
-    hb_map = {h.email: h for h in UserHeartbeat.objects.filter(email__in=page_emails)}
-    account_map = {u.pk: u for u in User.objects.filter(pk__in=page_ids)} if page_ids else {}
-
-    def _counts_for(model):
-        if not page_ids:
-            return {}
-        try:
-            return dict(model.objects.filter(user_id__in=page_ids)
-                        .values_list('user_id').annotate(n=Count('id')))
-        except Exception:
-            return {}
-
-    history_counts = _counts_for(PlayHistory)
-    watchlist_counts = _counts_for(WatchList)
-    activity_counts = _counts_for(UserActivity)
-
-    cloud_map = {}
-    if page_ids:
-        for c in UserCloudData.objects.filter(user_id__in=page_ids):
-            cloud_map[c.user_id] = {
-                'history': len(c.watch_history or []),
-                'watchlist': len(c.watchlist_ids or []),
-                'favorites': len(c.favorites or []),
-                'playlists': len(c.playlists or []),
-                'downloads': len(c.downloads or []),
-                'progress': len(c.playback_progress or {}),
-                'version': c.data_version,
-            }
-
-    device_map = {}
-    if page_device_ids:
-        device_map = {d.user_id: d for d in AndroidAppDevice.objects.filter(user_id__in=page_device_ids)}
-
-    rows = []
-    for u in page_obj.object_list:
-        hb = hb_map.get(u.email)
-        acct = account_map.get(u.user_id)
-        rows.append({
-            'obj': u,
-            'hb': hb,
-            'account': acct,
-            'device': device_map.get(u.device_id),
-            'history': history_counts.get(u.user_id, 0),
-            'watchlist': watchlist_counts.get(u.user_id, 0),
-            'activity': activity_counts.get(u.user_id, 0),
-            'cloud': cloud_map.get(u.user_id),
-        })
-
-    # ------------------------------------------- devices using the app, no account
-    linked_device_ids = set(SyncedUser.objects.exclude(device_id='').values_list('device_id', flat=True))
-    linked_device_ids |= set(UserHeartbeat.objects.exclude(device_id='').values_list('device_id', flat=True))
-
-    anon_qs = AndroidAppDevice.objects.filter(android_app=selected_app)
-    if linked_device_ids:
-        anon_qs = anon_qs.exclude(user_id__in=list(linked_device_ids))
-    if q:
-        anon_qs = anon_qs.filter(Q(user_id__icontains=q) | Q(device_model__icontains=q)
-                                 | Q(os_version__icontains=q))
-    anon_qs = anon_qs.order_by('-last_seen_at')
-    counts['anonymous_devices'] = AndroidAppDevice.objects.filter(android_app=selected_app).exclude(
-        user_id__in=list(linked_device_ids) if linked_device_ids else ['']
+    all_devices = AndroidAppDevice.objects.filter(android_app=selected_app)
+    counts['devices'] = all_devices.count()
+    counts['anonymous_devices'] = all_devices.exclude(
+        user_id__in=linked_device_ids if linked_device_ids else ['']
     ).count()
 
-    anon_paginator = Paginator(anon_qs, 25)
-    anon_page = anon_paginator.get_page(request.GET.get('dpage') or 1)
-    anon_devices = list(anon_page.object_list)
-    anon_last_visit = {}
-    if anon_devices:
-        # Latest visit per device (one query) for IP + build + exact last hit.
-        for v in (AndroidAppDeviceVisit.objects
-                  .filter(device__in=anon_devices).order_by('-visited_at')
-                  .values('device_id', 'ip_address', 'build_identifier', 'visited_at')[:5000]):
-            anon_last_visit.setdefault(v['device_id'], v)
 
-    # ------------------------------------------------- sessions signed out of the app
-    signed_out = list(UserHeartbeat.objects.filter(is_logged_in=False)
-                      .order_by('-last_seen_at')[:50])
+    # Latest visit per device is not needed here; only the counts are.
+    visits_count_qs = AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
+    if q:
+        visits_count_qs = visits_count_qs.filter(
+            Q(device__user_id__icontains=q) | Q(device_model__icontains=q)
+            | Q(os_version__icontains=q) | Q(ip_address__icontains=q)
+            | Q(build_identifier__icontains=q))
+    counts['visits'] = visits_count_qs.count()
     counts['signed_out'] = UserHeartbeat.objects.filter(is_logged_in=False).count()
 
-    return render(request, 'core/android_app_users_full.html', {
+    ctx = {
         'selected_app': selected_app,
-        'rows': rows,
-        'page_obj': page_obj,
         'q': q,
         'view': view,
         'counts': counts,
-        'anon_devices': anon_devices,
-        'anon_page': anon_page,
-        'anon_last_visit': anon_last_visit,
-        'signed_out': signed_out,
-        'device_count': AndroidAppDevice.objects.filter(android_app=selected_app).count(),
-    })
+        'active_tab': tab,
+        'email_by_device': email_by_device,
+    }
+
+    if tab == 'accounts':
+        # ------------------------------------------------------------- user rows
+        paginator = Paginator(users_qs, 25)
+        page_obj = paginator.get_page(request.GET.get('page') or 1)
+
+        page_ids = [u.user_id for u in page_obj.object_list if u.user_id]
+        page_emails = [u.email for u in page_obj.object_list if u.email]
+        page_device_ids = [u.device_id for u in page_obj.object_list if u.device_id]
+
+        hb_map = {h.email: h for h in UserHeartbeat.objects.filter(email__in=page_emails)}
+        account_map = {u.pk: u for u in User.objects.filter(pk__in=page_ids)} if page_ids else {}
+
+        def _counts_for(model):
+            if not page_ids:
+                return {}
+            try:
+                return dict(model.objects.filter(user_id__in=page_ids)
+                            .values_list('user_id').annotate(n=Count('id')))
+            except Exception:
+                return {}
+
+        history_counts = _counts_for(PlayHistory)
+        watchlist_counts = _counts_for(WatchList)
+        activity_counts = _counts_for(UserActivity)
+
+        cloud_map = {}
+        if page_ids:
+            for c in UserCloudData.objects.filter(user_id__in=page_ids):
+                cloud_map[c.user_id] = {
+                    'history': len(c.watch_history or []),
+                    'watchlist': len(c.watchlist_ids or []),
+                    'favorites': len(c.favorites or []),
+                    'playlists': len(c.playlists or []),
+                    'downloads': len(c.downloads or []),
+                    'progress': len(c.playback_progress or {}),
+                    'version': c.data_version,
+                }
+
+        device_map = {}
+        if page_device_ids:
+            device_map = {d.user_id: d for d in AndroidAppDevice.objects.filter(user_id__in=page_device_ids)}
+
+        rows = []
+        for u in page_obj.object_list:
+            hb = hb_map.get(u.email)
+            acct = account_map.get(u.user_id)
+            rows.append({
+                'obj': u,
+                'hb': hb,
+                'account': acct,
+                'device': device_map.get(u.device_id),
+                'history': history_counts.get(u.user_id, 0),
+                'watchlist': watchlist_counts.get(u.user_id, 0),
+                'activity': activity_counts.get(u.user_id, 0),
+                'cloud': cloud_map.get(u.user_id),
+            })
+
+        ctx.update({
+            'rows': rows,
+            'page_obj': page_obj,
+        })
+
+    elif tab == 'devices':
+        devices_qs = all_devices.order_by('-last_seen_at')
+        # The tab IS "devices with no account", so that is what shows unless
+        # the "All devices" chip asks for everything (dn=0).
+        no_account_only = request.GET.get('dn') != '0'
+        if no_account_only and linked_device_ids:
+            devices_qs = devices_qs.exclude(user_id__in=linked_device_ids)
+        if q:
+            devices_qs = devices_qs.filter(Q(user_id__icontains=q) | Q(device_model__icontains=q)
+                                           | Q(os_version__icontains=q))
+
+        device_page = Paginator(devices_qs, 25).get_page(request.GET.get('dpage') or 1)
+        page_devices = list(device_page.object_list)
+        last_visit = {}
+        if page_devices:
+            # Latest visit per device (one query) for IP + build + exact last hit.
+            for v in (AndroidAppDeviceVisit.objects
+                      .filter(device__in=page_devices).order_by('-visited_at')
+                      .values('device_id', 'ip_address', 'build_identifier', 'visited_at')[:5000]):
+                last_visit.setdefault(v['device_id'], v)
+
+        # Everything each row expands into: the account behind the device, its
+        # last visits (with the full request) and its last app-log lines. Two
+        # queries pull the freshest few hundred visits/logs for the devices on
+        # this page and they are grouped in Python — no window functions, so it
+        # behaves the same on SQLite, MySQL and Oracle.
+        def _drill_lists(devices):
+            device_pks = [d.pk for d in devices]
+            visits, logs = {}, {}
+            if not device_pks:
+                return visits, logs
+            for v in (AndroidAppDeviceVisit.objects.filter(device_id__in=device_pks)
+                      .order_by('-visited_at')[:DRILLDOWN_LIMIT * len(device_pks)]):
+                bucket = visits.setdefault(v.device_id, [])
+                if len(bucket) < DRILLDOWN_LIMIT:
+                    bucket.append(v)
+            for entry in (AndroidAppLog.objects.filter(device_id__in=device_pks)
+                          .order_by('-timestamp')[:DRILLDOWN_LIMIT * len(device_pks)]):
+                bucket = logs.setdefault(entry.device_id, [])
+                if len(bucket) < DRILLDOWN_LIMIT:
+                    bucket.append(entry)
+            return visits, logs
+
+        drill_visits, drill_logs = _drill_lists(page_devices)
+
+        # The synced profile behind each device (plan, block state, last sync) and
+        # the Django login it belongs to, keyed by the device id the app sends.
+        synced_by_device = {}
+        for su in SyncedUser.objects.exclude(device_id='').order_by('-last_synced_at'):
+            synced_by_device.setdefault(su.device_id, su)
+        account_ids = [su.user_id for su in synced_by_device.values() if su.user_id]
+        account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
+                         if account_ids else {})
+
+        device_rows = []
+        for d in page_devices:
+            su = synced_by_device.get(d.user_id)
+            device_rows.append({
+                'device': d,
+                'email': email_by_device.get(d.user_id),
+                'visit': last_visit.get(d.id),
+                'synced': su,
+                'account': account_by_id.get(su.user_id) if su else None,
+                'visits': drill_visits.get(d.pk, []),
+                'logs': drill_logs.get(d.pk, []),
+                'log_url': reverse('android_device_logs', args=[selected_app.id, d.user_id]),
+            })
+
+        ctx.update({
+            'device_rows': device_rows,
+            'device_page': device_page,
+            'no_account_only': no_account_only,
+        })
+
+    elif tab == 'visits':
+        # ---------------------------------------------------------------- visits
+        # The analytics page's "Recent Visits" plus its "Full Request Debug"
+        # expander, both moved here so the endpoint page stays a dashboard.
+        # visits_count_qs (built in the shared block above, for the header badge)
+        # already carries the search filter.
+        visits_qs = visits_count_qs.select_related('device')
+        visits_page = Paginator(visits_qs.order_by('-visited_at'), 25).get_page(
+            request.GET.get('vpage') or 1)
+
+        ctx['visits_page'] = visits_page
+
+    else:  # signed-out sessions
+        # Still using the app as a guest (heartbeat says is_logged_in=False).
+        # ------------------------------------------------- sessions signed out of the app
+        signed_out = list(UserHeartbeat.objects.filter(is_logged_in=False)
+                          .order_by('-last_seen_at')[:50])
+
+        ctx['signed_out'] = signed_out
+
+    if partial:
+        # The tab bar asked for this one list: send the markup and nothing else.
+        return HttpResponse(
+            render_to_string('core/_users_full_panels.html', ctx, request=request))
+    return render(request, 'core/android_app_users_full.html', ctx)
 
 
 @login_required
@@ -4066,19 +4182,9 @@ def ajax_android_app_dashboard(request, app_id):
         attempt['attempted_at'] = timezone.localtime(attempt['attempted_at']).isoformat()
         attempt['failure_reason_display'] = dict(AndroidAppFailedAttempt.FAILURE_REASON_CHOICES).get(attempt['failure_reason'])
 
-    recent_devices = list(selected_app.devices.all()[:10].values(
-        'user_id', 'device_model', 'os_version', 'total_visits', 'last_seen_at', 'first_seen_at'
-    ))
-    for device in recent_devices:
-        device['last_seen_at'] = timezone.localtime(device['last_seen_at']).isoformat()
-        device['first_seen_at'] = timezone.localtime(device['first_seen_at']).isoformat()
-
-    recent_visits = list(selected_app.device_visits.select_related('device').all()[:20].values(
-        'visited_at', 'device__user_id', 'device_model', 'os_version', 'build_identifier', 'ip_address', 'full_request'
-    ))
-    for visit in recent_visits:
-        visit['visited_at'] = timezone.localtime(visit['visited_at']).isoformat()
-
+    # The devices / visits lists these polls used to carry are gone from the
+    # page (and their full_request dumps are the bulkiest part of the payload),
+    # so the poll only sends what the dashboard still renders.
     unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
     unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
     unique_chart_values = [log.unique_visitor_count for log in unique_logs]
@@ -4093,8 +4199,6 @@ def ajax_android_app_dashboard(request, app_id):
         'build_chart_labels': build_chart_labels,
         'build_chart_values': build_chart_values,
         'failed_attempts': failed_attempts,
-        'recent_devices': recent_devices,
-        'recent_visits': recent_visits,
         'last_accessed_at': timezone.localtime(selected_app.last_accessed_at).isoformat() if selected_app.last_accessed_at else None
     })
 

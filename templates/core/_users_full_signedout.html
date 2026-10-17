@@ -1,0 +1,33 @@
+{% load custom_filters %}
+    {% if signed_out %}
+    <hr class="border-secondary my-4">
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+        <div class="sect-title"><i class="fas fa-user-lock text-info me-2"></i>Accounts currently signed out of the app</div>
+        <div class="sub">Still using the app as a guest — their heartbeat says <code>is_logged_in=false</code>.</div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0">
+            <thead>
+                <tr><th>Email</th><th>Device</th><th>Last seen</th><th>Screens</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for h in signed_out %}
+                <tr>
+                    <td><code class="mono">{{ h.email }}</code></td>
+                    <td>
+                        <div class="text-white">{{ h.device_model|default:'-' }}</div>
+                        <div class="sub">v{{ h.app_version|default:'-' }} · {{ h.os_version|default:'-' }}</div>
+                    </td>
+                    <td>{{ h.last_seen_at|timesince }} ago</td>
+                    <td class="sub">{{ h.current_screen|default:'—' }}{% if h.recent_actions %} · {{ h.recent_actions|length }} actions{% endif %}</td>
+                    <td>
+                        {% if h.user_id %}
+                            <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'admin_user_detail' h.user_id %}"><i class="fas fa-id-card me-1"></i>Detail</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}

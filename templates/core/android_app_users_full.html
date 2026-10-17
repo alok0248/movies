@@ -55,268 +55,46 @@
 
     <div class="full-users-head">
         <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
                 <a class="fbtn" href="{% url 'android_app_dashboard_detail' selected_app.id %}#users-block"><i class="fas fa-arrow-left me-1"></i>Back</a>
                 <h1 class="text-white"><i class="fas fa-users-cog text-danger me-2"></i>All Users &amp; Devices</h1>
                 <span class="pill bg-success">Total {{ counts.total }}</span>
                 <span class="pill bg-info">{{ counts.subscribed }} subscribed</span>
                 <span class="pill bg-secondary">{{ counts.free }} free</span>
                 <span class="pill bg-danger">{{ counts.blocked }} blocked</span>
-                <span class="pill bg-warning text-dark">{{ counts.anonymous_devices }} devices no account</span>
-                <span class="pill bg-dark border border-secondary">{{ counts.signed_out }} signed out</span>
             </div>
             <form class="d-flex gap-2 flex-wrap" method="get" action="">
                 <input type="hidden" name="f" value="{{ view }}">
+                <input type="hidden" name="tab" value="{{ active_tab }}">
                 <input class="form-control form-control-sm" style="width:230px;background:rgba(15,23,42,.8);border-color:rgba(148,163,184,.3);color:#e2e8f0;"
                        type="search" name="q" value="{{ q }}" placeholder="Search email, name, device, plan…">
                 <button class="btn btn-sm btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
-                {% if q or view != 'all' %}<a class="btn btn-sm btn-outline-secondary" href="?">Reset</a>{% endif %}
+                {% if q or view != 'all' %}<a class="btn btn-sm btn-outline-secondary" href="?tab={{ active_tab }}">Reset</a>{% endif %}
             </form>
         </div>
-        <div class="d-flex gap-2 flex-wrap mt-2">
-            <a class="fbtn {% if view == 'all' %}active{% endif %}" href="?">All</a>
-            <a class="fbtn {% if view == 'online' %}active{% endif %}" href="?f=online">Online now</a>
-            <a class="fbtn {% if view == 'blocked' %}active{% endif %}" href="?f=blocked">Blocked</a>
-            <a class="fbtn {% if view == 'subscribed' %}active{% endif %}" href="?f=subscribed">Subscribed</a>
-            <a class="fbtn {% if view == 'free' %}active{% endif %}" href="?f=free">Free</a>
-            <a class="fbtn {% if view == 'never' %}active{% endif %}" href="?f=never">Never online</a>
+
+        <!-- Tabs. One list per tab: the server renders and sends only the list
+             that is open, so this page stays small even though it carries four
+             big tables, and switching between them is a fragment fetch (no
+             reload, the other lists simply disappear). -->
+        <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
+            <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill bg-dark border border-secondary ms-1">{{ counts.total }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'devices' %}active{% endif %}" data-tab="devices" href="?tab=devices" role="tab" aria-selected="{% if active_tab == 'devices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-alt me-1"></i>Devices using the app with no account<span class="pill bg-warning text-dark ms-1">{{ counts.anonymous_devices }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill bg-dark border border-secondary ms-1">{{ counts.signed_out }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill bg-dark border border-secondary ms-1">{{ counts.visits }}</span></a>
         </div>
+
+        <!-- Kept outside the swappable panel: the row actions need both. -->
+        <div class="csrf-holder" hidden>{% csrf_token %}</div>
+        <div id="blockStatus" class="small pt-1"></div>
     </div>
 
-    <!-- ============================ ACCOUNTS ============================ -->
-    <div class="table-responsive mt-3">
-        <table class="table table-dark table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>Status</th>
-                    <th>Device (live)</th>
-                    <th>App device record</th>
-                    <th>Account</th>
-                    <th>Subscription</th>
-                    <th>Library / cloud</th>
-                    <th>Access</th>
-                    <th style="min-width:330px;">Manage</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in rows %}
-                {% with u=r.obj hb=r.hb %}
-                <tr id="block-row-{{ u.id }}" data-email="{{ u.email }}">
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            {% if u.photo_url %}
-                                <img class="avatar" src="{{ u.photo_url }}" alt="">
-                            {% else %}
-                                <div class="avatar" style="background:linear-gradient(135deg,{% if u.is_subscribed %}#22c55e,#16a34a{% else %}#475569,#334155{% endif %});">{{ u.display_name|first|upper|default:'?' }}</div>
-                            {% endif %}
-                            <div>
-                                <div class="fw-semibold text-white">{{ u.display_name|default:u.email }}</div>
-                                <div class="sub"><code class="mono">{{ u.email }}</code></div>
-                                <div class="sub">#{{ u.id }} · synced {{ u.last_synced_at|timesince }} ago</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        {% if hb and hb.is_online %}
-                            <span class="pill bg-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>Online</span>
-                        {% elif hb %}
-                            <span class="pill bg-secondary">Offline</span>
-                        {% else %}
-                            <span class="pill bg-dark border border-secondary text-secondary">Never</span>
-                        {% endif %}
-                        {% if hb %}
-                            <div class="sub mt-1">{{ hb.last_seen_at|timesince }} ago</div>
-                            {% if hb.is_playing %}<div class="sub text-success">▶ {{ hb.media_title|default:'playing' }}</div>{% endif %}
-                            {% if hb.current_screen %}<div class="sub">{{ hb.current_screen }}</div>{% endif %}
-                            {% if not hb.is_logged_in %}<div class="pill bg-warning text-dark mt-1">Signed out</div>{% endif %}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if hb %}
-                            <div class="text-white">{% if hb.device_model %}<i class="fab fa-android text-success me-1"></i>{{ hb.device_model }}{% else %}{{ u.device_model|default:'-' }}{% endif %}</div>
-                            <div class="sub">v{{ hb.app_version|default:u.app_version|default:'-' }} · {{ hb.os_version|default:u.os_version }}</div>
-                            {% if hb.device_id %}<div class="mono sub">{{ hb.device_id }}</div>{% endif %}
-                            {% if hb.player_engine %}<div class="sub">{{ hb.player_engine }}</div>{% endif %}
-                        {% else %}
-                            <div class="text-white">{{ u.device_model|default:'-' }}</div>
-                            <div class="sub">v{{ u.app_version|default:'-' }}{% if u.build_number %} · build {{ u.build_number }}{% endif %}</div>
-                            {% if u.device_id %}<div class="mono sub">{{ u.device_id }}</div>{% endif %}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if r.device %}
-                            <div class="sub">visits {{ r.device.total_visits }} · last {{ r.device.last_seen_at|timesince }} ago</div>
-                            <div class="sub">first seen {{ r.device.first_seen_at|date:'Y-m-d H:i' }}</div>
-                        {% else %}
-                            <div class="sub">No device record yet</div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if r.account %}
-                            <div class="text-white">{{ r.account.username }}</div>
-                            <div class="sub">joined {{ r.account.date_joined|date:'Y-m-d' }}</div>
-                            <div class="sub">last login {{ r.account.last_login|date:'Y-m-d H:i'|default:'never' }}</div>
-                            <div>{% if r.account.is_active %}<span class="pill bg-success">Verified</span>{% else %}<span class="pill bg-warning text-dark">Not verified</span>{% endif %}</div>
-                        {% else %}
-                            <span class="pill bg-dark border border-secondary text-secondary">No login account</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if u.is_subscribed %}
-                            <span class="pill bg-success"><i class="fas fa-check me-1"></i>{{ u.plan|default:'VIP' }}</span>
-                            <div class="sub">until {{ u.valid_until|date:'Y-m-d'|default:'—' }} ({{ u.days_remaining }}d)</div>
-                        {% else %}
-                            <span class="pill bg-secondary">Free</span>
-                        {% endif %}
-                        {% if u.features %}<div class="sub">{{ u.features|join:', '|truncatechars:40 }}</div>{% endif %}
-                    </td>
-                    <td>
-                        {% if r.cloud %}
-                            <div class="sub">history {{ r.cloud.history }} · list {{ r.cloud.watchlist }} · fav {{ r.cloud.favorites }} · dl {{ r.cloud.downloads }}</div>
-                            <div class="sub">progress {{ r.cloud.progress }} · playlists {{ r.cloud.playlists }} · v{{ r.cloud.version }}</div>
-                        {% else %}
-                            <div class="sub">no cloud data</div>
-                        {% endif %}
-                        <div class="sub">plays {{ r.history }} · wl {{ r.watchlist }} · activity {{ r.activity }}</div>
-                    </td>
-                    <td class="access-cell">
-                        {% if u.block_mode %}
-                            <span class="pill bg-danger">{{ u.get_block_mode_display }}</span>
-                            {% if u.blocked_at %}<div class="sub">{{ u.blocked_at|timesince }} ago</div>{% endif %}
-                            {% if u.blocked_reason %}<div class="sub">{{ u.blocked_reason|truncatechars:40 }}</div>{% endif %}
-                        {% else %}
-                            <span class="pill bg-success">Active</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="d-flex gap-1 flex-wrap">
-                            <button type="button" class="btn btn-sm btn-outline-warning act-btn" title="Playback blocked" onclick="blockUser({{ u.id }}, 'play', this)"><i class="fas fa-volume-mute me-1"></i>Play</button>
-                            <button type="button" class="btn btn-sm btn-outline-warning act-btn" title="App blocked — no data, app shows Server is Down" onclick="blockUser({{ u.id }}, 'app', this)"><i class="fas fa-wifi me-1"></i>App</button>
-                            <button type="button" class="btn btn-sm btn-danger act-btn" title="Stop all access" onclick="blockUser({{ u.id }}, 'full', this)"><i class="fas fa-ban me-1"></i>Full</button>
-                            <button type="button" class="btn btn-sm btn-success act-btn" title="Restore normal access" onclick="blockUser({{ u.id }}, '', this)"><i class="fas fa-check me-1"></i>Restore</button>
-                            <button type="button" class="btn btn-sm btn-outline-danger border-danger act-btn" title="Delete history and cloud data (asks first)" onclick="wipeUserData({{ u.id }}, this)"><i class="fas fa-trash-alt me-1"></i>Data</button>
-                            <button type="button" class="btn btn-sm btn-outline-info act-btn" title="Send a fresh verification code" onclick="resendCode({{ u.id }}, this)"><i class="fas fa-envelope me-1"></i>Code</button>
-                            <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'synced_user_detail' u.id %}"><i class="fas fa-id-card me-1"></i>Detail</a>
-                            <a class="btn btn-sm btn-outline-secondary act-btn" href="{% url 'synced_user_edit' u.id %}"><i class="fas fa-pen me-1"></i>Edit</a>
-                        </div>
-                    </td>
-                </tr>
-                {% endwith %}
-                {% empty %}
-                <tr><td colspan="9" class="text-center text-secondary py-4"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>{% if q or view != 'all' %}No user matches this filter.{% else %}No synced users yet — they appear the first time the app syncs.{% endif %}</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div id="tabBusy" class="sub py-2" style="display:none;"><i class="fas fa-spinner fa-spin me-1"></i>Loading…</div>
+
+    <!-- Only the selected tab's list is rendered here (see _users_full_panels). -->
+    <div id="panelWrap" class="mt-1">
+        {% include 'core/_users_full_panels.html' %}
     </div>
-
-    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap py-3">
-        <div class="sub">
-            <i class="fas fa-info-circle me-1"></i><strong class="text-danger">Full</strong> = every API call refused (403) &middot;
-            <strong class="text-warning">Play</strong> = titles won't play (403) &middot;
-            <strong class="text-warning">App</strong> = no data, app shows "Server is Down" (503) &middot; applies on the next heartbeat (&le;60s).
-        </div>
-        <div id="blockStatus" class="small"></div>
-    </div>
-
-    {% if page_obj.has_other_pages %}
-    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
-        {% if page_obj.has_previous %}<a class="fbtn" href="?page={{ page_obj.previous_page_number }}&q={{ q|urlencode }}&f={{ view }}">&laquo; Prev</a>{% endif %}
-        <span class="sub">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} users</span>
-        {% if page_obj.has_next %}<a class="fbtn" href="?page={{ page_obj.next_page_number }}&q={{ q|urlencode }}&f={{ view }}">Next &raquo;</a>{% endif %}
-    </nav>
-    {% endif %}
-
-    <hr class="border-secondary my-4">
-
-    <!-- ==================== DEVICES WITH NO ACCOUNT ==================== -->
-    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
-        <div class="sect-title"><i class="fas fa-mobile-alt text-warning me-2"></i>Devices using the app with no account</div>
-        <div class="sub">Seen by <strong>{{ selected_app.name }}</strong> · device id matches no synced profile or heartbeat — nobody signed in on them.</div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-dark table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>Device ID</th>
-                    <th>Model / OS</th>
-                    <th>Visits</th>
-                    <th>First seen</th>
-                    <th>Last seen</th>
-                    <th>Last build</th>
-                    <th>Last IP</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in anon_devices %}
-                {% with v=anon_last_visit|get_item:d.id %}
-                <tr>
-                    <td><code class="mono text-warning">{{ d.user_id }}</code></td>
-                    <td>
-                        <div class="text-white"><i class="fab fa-android text-success me-1"></i>{{ d.device_model|default:'unknown' }}</div>
-                        <div class="sub">{{ d.os_version|default:'-' }}</div>
-                    </td>
-                    <td>{{ d.total_visits }}</td>
-                    <td class="sub">{{ d.first_seen_at|date:'Y-m-d H:i' }}</td>
-                    <td>
-                        <span class="text-white">{{ d.last_seen_at|timesince }} ago</span>
-                        <div class="sub">{{ d.last_seen_at|date:'Y-m-d H:i' }}</div>
-                    </td>
-                    <td class="sub">{% if v %}{{ v.build_identifier|default:'—' }}{% else %}—{% endif %}</td>
-                    <td class="mono sub">{% if v %}{{ v.ip_address|default:'—' }}{% else %}—{% endif %}</td>
-                    <td><a class="btn btn-sm btn-outline-light act-btn" href="{% url 'android_device_logs' selected_app.id d.user_id %}"><i class="fas fa-list me-1"></i>Requests</a></td>
-                </tr>
-                {% endwith %}
-                {% empty %}
-                <tr><td colspan="8" class="text-center text-secondary py-4">Every device seen by this app belongs to a signed-in account.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    {% if anon_page.has_other_pages %}
-    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
-        {% if anon_page.has_previous %}<a class="fbtn" href="?dpage={{ anon_page.previous_page_number }}&q={{ q|urlencode }}&f={{ view }}">&laquo; Prev</a>{% endif %}
-        <span class="sub">Devices {{ anon_page.number }} of {{ anon_page.paginator.num_pages }} · {{ anon_page.paginator.count }} with no account</span>
-        {% if anon_page.has_next %}<a class="fbtn" href="?dpage={{ anon_page.next_page_number }}&q={{ q|urlencode }}&f={{ view }}">Next &raquo;</a>{% endif %}
-    </nav>
-    {% endif %}
-
-    {% if signed_out %}
-    <hr class="border-secondary my-4">
-    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
-        <div class="sect-title"><i class="fas fa-user-lock text-info me-2"></i>Accounts currently signed out of the app</div>
-        <div class="sub">Still using the app as a guest — their heartbeat says <code>is_logged_in=false</code>.</div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-dark table-hover mb-0">
-            <thead>
-                <tr><th>Email</th><th>Device</th><th>Last seen</th><th>Screens</th><th></th></tr>
-            </thead>
-            <tbody>
-                {% for h in signed_out %}
-                <tr>
-                    <td><code class="mono">{{ h.email }}</code></td>
-                    <td>
-                        <div class="text-white">{{ h.device_model|default:'-' }}</div>
-                        <div class="sub">v{{ h.app_version|default:'-' }} · {{ h.os_version|default:'-' }}</div>
-                    </td>
-                    <td>{{ h.last_seen_at|timesince }} ago</td>
-                    <td class="sub">{{ h.current_screen|default:'—' }}{% if h.recent_actions %} · {{ h.recent_actions|length }} actions{% endif %}</td>
-                    <td>
-                        {% if h.user_id %}
-                            <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'admin_user_detail' h.user_id %}"><i class="fas fa-id-card me-1"></i>Detail</a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-
-    <div class="csrf-holder" hidden>{% csrf_token %}</div>
 </div>
 {% endblock %}
 
@@ -329,6 +107,17 @@ function _csrf() {
 function _status(msg, cls) {
     var el = document.getElementById('blockStatus');
     if (el) { el.innerHTML = '<span class="' + (cls || 'text-info') + '">' + msg + '</span>'; }
+}
+
+function toggleDevice(id, btn) {
+    var row = document.getElementById('dev-detail-' + id);
+    if (!row) { return; }
+    var opening = row.style.display === 'none';
+    row.style.display = opening ? '' : 'none';
+    if (btn) {
+        btn.innerHTML = opening ? '&#9662;' : '&#9656;';
+        btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    }
 }
 
 function blockUser(id, mode, btn) {
@@ -430,5 +219,62 @@ function resendCode(id, btn) {
     .catch(function() { _status('Request failed', 'text-danger'); })
     .finally(function() { if (btn) { btn.disabled = false; } });
 }
+/* ================= Tab switching (no page reload) =================
+   This screen carries four big lists (accounts, devices with no account,
+   signed-out accounts, recent visits). The server renders and sends only
+   the one that is open, so a single page load stays small; picking another
+   tab fetches just that list's fragment and swaps it in. Everything degrades
+   to a normal navigation if fetch is missing or the request fails — the links
+   themselves carry ?tab=… and the view answers those with a full page too. */
+(function () {
+    var wrap = document.getElementById('panelWrap');
+    if (!wrap || !window.fetch) return;
+    var busy = document.getElementById('tabBusy');
+    var tabs = document.querySelectorAll('.tabbtn');
+
+    function tabOf(url) {
+        var m = /[?&]tab=([a-z]+)/.exec(url || '');
+        return m ? m[1] : 'accounts';
+    }
+
+    function markActive(tab) {
+        for (var i = 0; i < tabs.length; i++) {
+            var on = tabs[i].getAttribute('data-tab') === tab;
+            tabs[i].classList.toggle('active', on);
+            tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
+        }
+    }
+
+    function go(url) {
+        if (busy) busy.style.display = '';
+        fetch(url + (url.indexOf('?') > -1 ? '&' : '?') + 'partial=1', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        })
+        .then(function (html) {
+            wrap.innerHTML = html;
+            markActive(tabOf(url));
+            try { history.replaceState(null, '', url); } catch (e) {}
+            window.scrollTo(0, 0);
+        })
+        .catch(function () { window.location.href = url; })
+        .finally(function () { if (busy) busy.style.display = 'none'; });
+    }
+
+    /* Tab bar, in-panel filter chips and pagination: anything that links to
+       another ?tab=… stays on this page. */
+    document.addEventListener('click', function (e) {
+        var a = e.target && e.target.closest ? e.target.closest('a[href^="?tab="]') : null;
+        if (!a) return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        var href = a.getAttribute('href') || '';
+        if (href.indexOf('?tab=') !== 0) return;
+        e.preventDefault();
+        go(href);
+    });
+})();
 </script>
 {% endblock %}
