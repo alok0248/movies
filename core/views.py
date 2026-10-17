@@ -19,7 +19,7 @@ from django.db.models.functions import TruncDate
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import csrf_exempt
-from django.db import models
+from django.db import models, DatabaseError
 import http.cookiejar
 import urllib.request as _urlreq
 import urllib.error as _urlerr
@@ -8655,6 +8655,7 @@ from .auth import send_configured_email
 from .auth import (
     create_user_token_pair, decode_jwt_token, reset_rate_limit,
     check_rate_limit, record_rate_limit_attempt, rate_limit_response,
+    RATE_LIMIT_IP_MAX_ATTEMPTS,
 )
 import hashlib
 
@@ -8848,6 +8849,23 @@ def _guard_android_api_errors(view_func):
                 'message': 'Connection lost while uploading data. Please retry.',
                 'retryable': True,
             }, status=400)
+        except DatabaseError as e:
+            # A broken/unreachable user database (a deploy that has not yet
+            # migrated the external DB, a dropped connection) is a server-side
+            # outage, not a client bug. Answer 503 + retryable so the app tells
+            # the user the server is busy instead of "login failed", and record
+            # it loudly for the admin error page.
+            logger.exception('Database error in Android API endpoint %s', view_func.__name__)
+            try:
+                from .api_errors import record_api_error
+                record_api_error(view_func.__name__, request, e)
+            except Exception:
+                pass
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Server is temporarily unavailable. Please try again in a moment.',
+                'retryable': True,
+            }, status=503)
         except Exception as e:
             logger.exception('Unhandled error in Android API endpoint %s', view_func.__name__)
             try:
@@ -9724,41 +9742,52 @@ def api_user_login(request):
     if not email or not password:
         return JsonResponse({'status': 'error', 'message': 'Email and password are required'}, status=400)
 
-    # Rate limit by IP
+    # Failed attempts are rate limited per IP and per email, but only *failed*
+    # attempts count and a correct password always gets in. Checking the
+    # buckets before authenticating (as this used to) meant that once a bucket
+    # was exhausted the account owner could not log in even with the right
+    # password: ten typos from one person behind a shared carrier/office IP
+    # (or ten wrong guesses aimed at an address) locked everyone out for half
+    # an hour and reported "Too many requests" as a login failure.
     ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
-    allowed, remaining, retry_after = check_rate_limit(ip, 'login')
-    if not allowed:
-        return rate_limit_response(retry_after)
 
-    # Also rate limit by email to prevent targeted brute force
-    allowed_email, _, retry_email = check_rate_limit(email, 'login_email')
-    if not allowed_email:
-        return rate_limit_response(retry_email)
+    def _limit_response():
+        """429 when either bucket is spent, otherwise None (keep going)."""
+        allowed, _, retry_after = check_rate_limit(ip, 'login', max_attempts=RATE_LIMIT_IP_MAX_ATTEMPTS)
+        if not allowed:
+            return rate_limit_response(retry_after)
+        allowed_email, _, retry_email = check_rate_limit(email, 'login_email')
+        if not allowed_email:
+            return rate_limit_response(retry_email)
+        return None
+
+    def _failed():
+        """Record this failed attempt, then honour the limiter."""
+        record_rate_limit_attempt(ip, 'login')
+        record_rate_limit_attempt(email, 'login_email')
+        return _limit_response()
 
     django_user = User.objects.filter(email__iexact=email).first()
     if not django_user:
-        record_rate_limit_attempt(ip, 'login')
-        record_rate_limit_attempt(email, 'login_email')
-        return JsonResponse({'status': 'error', 'message': 'Email is not registered. Please register first.'}, status=404)
+        return _failed() or JsonResponse(
+            {'status': 'error', 'message': 'Email is not registered. Please register first.'}, status=404)
 
     if not django_user.has_usable_password():
-        return JsonResponse({
+        return _limit_response() or JsonResponse({
             'status': 'error',
             'message': 'This account was created from Android sync. Please register with a password first.',
         }, status=400)
 
     if not django_user.is_active:
-        return JsonResponse({
+        return _limit_response() or JsonResponse({
             'status': 'error',
-            'message': 'Email not verified. Please check your inbox for the verification link.',
+            'message': 'Email not verified. Please check your inbox for the verification code.',
             'requiresVerification': True,
         }, status=403)
 
     auth_user = authenticate(request, username=django_user.username, password=password)
     if not auth_user:
-        record_rate_limit_attempt(ip, 'login')
-        record_rate_limit_attempt(email, 'login_email')
-        return JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
+        return _failed() or JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
 
     # Success — reset rate limits
     reset_rate_limit(ip, 'login')

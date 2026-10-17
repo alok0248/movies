@@ -70,7 +70,11 @@ def create_user_token_pair(user):
 # ---------------------------------------------------------------------------
 
 RATE_LIMIT_WINDOW = 900  # 15 minutes
-RATE_LIMIT_MAX_ATTEMPTS = 10  # max requests per window per IP
+RATE_LIMIT_MAX_ATTEMPTS = 10  # max failed attempts per window per identifier
+# One public IP can carry many different people (mobile carrier CGNAT, an
+# office, a household). Throttling addresses as hard as a single account
+# locks out everyone behind it, so the address bucket gets its own ceiling.
+RATE_LIMIT_IP_MAX_ATTEMPTS = 40
 RATE_LIMIT_LOCKOUT = 1800  # 30 minutes lockout
 
 
@@ -79,7 +83,7 @@ def _get_rate_limit_key(identifier, action):
     return f'api_rl:{action}:{identifier}'
 
 
-def check_rate_limit(identifier, action='default'):
+def check_rate_limit(identifier, action='default', max_attempts=RATE_LIMIT_MAX_ATTEMPTS):
     """
     Check rate limit for an identifier (IP or email).
     Returns (allowed: bool, remaining: int, retry_after: int or None).
@@ -96,12 +100,12 @@ def check_rate_limit(identifier, action='default'):
     key = _get_rate_limit_key(identifier, action)
     attempts = cache.get(key, 0)
 
-    if attempts >= RATE_LIMIT_MAX_ATTEMPTS:
+    if attempts >= max_attempts:
         # Lock out
         cache.set(lockout_key, time.time() + RATE_LIMIT_LOCKOUT, RATE_LIMIT_LOCKOUT)
         return False, 0, RATE_LIMIT_LOCKOUT
 
-    return True, RATE_LIMIT_MAX_ATTEMPTS - attempts, None
+    return True, max_attempts - attempts, None
 
 
 def record_rate_limit_attempt(identifier, action='default'):
