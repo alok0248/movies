@@ -172,6 +172,7 @@
                                 <span class="badge bg-success">Total {{ synced_total }}</span>
                                 <span class="badge bg-info">Subscribed {{ synced_subscribed }}</span>
                                 <span class="badge bg-warning text-dark">Free {{ synced_free }}</span>
+                                <a href="{% url 'android_app_users_full' selected_app.id %}" class="btn btn-sm btn-danger"><i class="fas fa-expand me-1"></i>Open Full List</a>
                                 <a href="{% url 'synced_users_list' %}" class="btn btn-sm btn-outline-success"><i class="fas fa-users me-1"></i>Full List</a>
                                 <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-scroll me-1"></i>All Logs</a>
                             </div>

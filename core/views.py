@@ -3846,6 +3846,171 @@ def android_app_dashboard(request, app_id=None):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def android_app_users_full(request, app_id):
+    """Full-screen user + device list behind the "Users & Blocking" card.
+
+    The analytics page only renders the first 10 synced users inline, so it
+    carries an "Open full list" button to this view: the complete list with
+    every detail the server holds (account, heartbeat, device, subscription,
+    cloud counts) where the admin can block, restore, wipe or resend for any
+    row. It also lists the devices that are using the app WITHOUT an account —
+    `AndroidAppDevice` rows whose device id matches no synced profile or
+    heartbeat — plus heartbeats whose session has been signed out, so nobody
+    using the app is invisible.
+
+    The template extends base.html (not admin_base) deliberately: no admin
+    side nav, just the list.
+    """
+    from django.core.paginator import Paginator
+    from .models import (PlayHistory, UserActivity, UserCloudData,  # noqa: F401
+                         UserHeartbeat, WatchList)
+
+    selected_app = get_object_or_404(AndroidApp, id=app_id)
+
+    # ---------------------------------------------------------------- filters
+    q = (request.GET.get('q') or '').strip()
+    view = (request.GET.get('f') or 'all').strip().lower()
+
+    users_qs = SyncedUser.objects.all().order_by('-last_synced_at')
+    if q:
+        users_qs = users_qs.filter(
+            Q(email__icontains=q) | Q(display_name__icontains=q)
+            | Q(device_id__icontains=q) | Q(device_model__icontains=q)
+            | Q(plan__icontains=q)
+        )
+    if view == 'blocked':
+        users_qs = users_qs.filter(block_mode__gt='')
+    elif view == 'subscribed':
+        users_qs = users_qs.filter(is_subscribed=True)
+    elif view == 'free':
+        users_qs = users_qs.filter(is_subscribed=False)
+    elif view in ('online', 'never'):
+        # Heartbeats live on the users DB, so the online filter is matched on
+        # the email set first (small table) instead of a cross-DB join.
+        online_emails = {
+            e for e in UserHeartbeat.objects.filter(
+                last_seen_at__gte=timezone.now() - timezone.timedelta(minutes=5)
+            ).values_list('email', flat=True)
+        }
+        if view == 'online':
+            users_qs = users_qs.filter(email__in=list(online_emails)) if online_emails else users_qs.none()
+        else:
+            users_qs = users_qs.exclude(email__in=list(online_emails))
+
+    # ------------------------------------------------------------ headline counts
+    all_users = SyncedUser.objects.all()
+    total_users = all_users.count()
+    counts = {
+        'total': total_users,
+        'blocked': all_users.filter(block_mode__gt='').count(),
+        'subscribed': all_users.filter(is_subscribed=True).count(),
+        'free': all_users.filter(is_subscribed=False).count(),
+    }
+
+    # ------------------------------------------------------------- user rows
+    paginator = Paginator(users_qs, 25)
+    page_obj = paginator.get_page(request.GET.get('page') or 1)
+
+    page_ids = [u.user_id for u in page_obj.object_list if u.user_id]
+    page_emails = [u.email for u in page_obj.object_list if u.email]
+    page_device_ids = [u.device_id for u in page_obj.object_list if u.device_id]
+
+    hb_map = {h.email: h for h in UserHeartbeat.objects.filter(email__in=page_emails)}
+    account_map = {u.pk: u for u in User.objects.filter(pk__in=page_ids)} if page_ids else {}
+
+    def _counts_for(model):
+        if not page_ids:
+            return {}
+        try:
+            return dict(model.objects.filter(user_id__in=page_ids)
+                        .values_list('user_id').annotate(n=Count('id')))
+        except Exception:
+            return {}
+
+    history_counts = _counts_for(PlayHistory)
+    watchlist_counts = _counts_for(WatchList)
+    activity_counts = _counts_for(UserActivity)
+
+    cloud_map = {}
+    if page_ids:
+        for c in UserCloudData.objects.filter(user_id__in=page_ids):
+            cloud_map[c.user_id] = {
+                'history': len(c.watch_history or []),
+                'watchlist': len(c.watchlist_ids or []),
+                'favorites': len(c.favorites or []),
+                'playlists': len(c.playlists or []),
+                'downloads': len(c.downloads or []),
+                'progress': len(c.playback_progress or {}),
+                'version': c.data_version,
+            }
+
+    device_map = {}
+    if page_device_ids:
+        device_map = {d.user_id: d for d in AndroidAppDevice.objects.filter(user_id__in=page_device_ids)}
+
+    rows = []
+    for u in page_obj.object_list:
+        hb = hb_map.get(u.email)
+        acct = account_map.get(u.user_id)
+        rows.append({
+            'obj': u,
+            'hb': hb,
+            'account': acct,
+            'device': device_map.get(u.device_id),
+            'history': history_counts.get(u.user_id, 0),
+            'watchlist': watchlist_counts.get(u.user_id, 0),
+            'activity': activity_counts.get(u.user_id, 0),
+            'cloud': cloud_map.get(u.user_id),
+        })
+
+    # ------------------------------------------- devices using the app, no account
+    linked_device_ids = set(SyncedUser.objects.exclude(device_id='').values_list('device_id', flat=True))
+    linked_device_ids |= set(UserHeartbeat.objects.exclude(device_id='').values_list('device_id', flat=True))
+
+    anon_qs = AndroidAppDevice.objects.filter(android_app=selected_app)
+    if linked_device_ids:
+        anon_qs = anon_qs.exclude(user_id__in=list(linked_device_ids))
+    if q:
+        anon_qs = anon_qs.filter(Q(user_id__icontains=q) | Q(device_model__icontains=q)
+                                 | Q(os_version__icontains=q))
+    anon_qs = anon_qs.order_by('-last_seen_at')
+    counts['anonymous_devices'] = AndroidAppDevice.objects.filter(android_app=selected_app).exclude(
+        user_id__in=list(linked_device_ids) if linked_device_ids else ['']
+    ).count()
+
+    anon_paginator = Paginator(anon_qs, 25)
+    anon_page = anon_paginator.get_page(request.GET.get('dpage') or 1)
+    anon_devices = list(anon_page.object_list)
+    anon_last_visit = {}
+    if anon_devices:
+        # Latest visit per device (one query) for IP + build + exact last hit.
+        for v in (AndroidAppDeviceVisit.objects
+                  .filter(device__in=anon_devices).order_by('-visited_at')
+                  .values('device_id', 'ip_address', 'build_identifier', 'visited_at')[:5000]):
+            anon_last_visit.setdefault(v['device_id'], v)
+
+    # ------------------------------------------------- sessions signed out of the app
+    signed_out = list(UserHeartbeat.objects.filter(is_logged_in=False)
+                      .order_by('-last_seen_at')[:50])
+    counts['signed_out'] = UserHeartbeat.objects.filter(is_logged_in=False).count()
+
+    return render(request, 'core/android_app_users_full.html', {
+        'selected_app': selected_app,
+        'rows': rows,
+        'page_obj': page_obj,
+        'q': q,
+        'view': view,
+        'counts': counts,
+        'anon_devices': anon_devices,
+        'anon_page': anon_page,
+        'anon_last_visit': anon_last_visit,
+        'signed_out': signed_out,
+        'device_count': AndroidAppDevice.objects.filter(android_app=selected_app).count(),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def android_app_failed_attempts(request, app_id):
     android_app = get_object_or_404(AndroidApp, id=app_id)
     failed_attempts = android_app.failed_attempts.all()
