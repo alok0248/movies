@@ -10935,7 +10935,14 @@ def _cloud_ts_label(value):
 MAX_TMDB_ID = 10000000
 
 # Keep a page render bounded even if a user's cloud payload is enormous.
+# MAX_CLOUD_ITEMS is how many entries get titles/posters/links resolved;
+# CLOUD_ITEMS_PER_SECTION is how many of those are actually written into the
+# page. A heavy account stores 1,600+ playback entries and a thousand seen
+# keys, and rendering all of them made the page 4.4 MB and cost almost three
+# seconds of worker time to build — on a 1-vCPU box that is the difference
+# between a snappy admin page and one that queues behind everything else.
 MAX_CLOUD_ITEMS = 400
+CLOUD_ITEMS_PER_SECTION = 50
 
 
 def _cloud_sync_sections(cloud, linked_user=None):
@@ -11034,8 +11041,10 @@ def _cloud_sync_sections(cloud, linked_user=None):
         ('watchlist', 'Watchlist', 'bookmark', '#ef4444', watchlist),
         ('ratings', 'Ratings', 'star', '#94a3b8', rated),
     ]
+    # `count` stays the true total for the badge; `items` is only what the page
+    # renders, and the template says "showing the first N of COUNT".
     return [{'key': key, 'label': label, 'icon': icon, 'color': color,
-             'items': items, 'count': len(items)}
+             'items': items[:CLOUD_ITEMS_PER_SECTION], 'count': len(items)}
             for key, label, icon, color, items in sections]
 
 
@@ -11059,6 +11068,17 @@ def synced_user_detail(request, user_id):
     if linked_user:
         cloud_data, _ = UserCloudData.objects.get_or_create(user=linked_user)
     heartbeat = UserHeartbeat.objects.filter(email__iexact=user_obj.email).first()
+
+    # The Playback Progress table below the boxes shows the same data again, so
+    # it gets the same bound instead of printing every stored entry.
+    progress_map = getattr(cloud_data, 'playback_progress', None)
+    progress_map = progress_map if isinstance(progress_map, dict) else {}
+    progress_rows = sorted(
+        progress_map.items(),
+        key=lambda kv: _safe_int((kv[1] or {}).get('lastUpdated')
+                                 if isinstance(kv[1], dict) else 0),
+        reverse=True)
+
     return render(request, 'core/synced_user_detail.html', {
         'user_obj': user_obj,
         'linked_user': linked_user,
@@ -11067,6 +11087,9 @@ def synced_user_detail(request, user_id):
         # Clickable item lists behind each Cloud Sync box (details + play links).
         'cloud_sections': _cloud_sync_sections(cloud_data, linked_user),
         'max_cloud_items': MAX_CLOUD_ITEMS,
+        'cloud_items_per_section': CLOUD_ITEMS_PER_SECTION,
+        'progress_preview': progress_rows[:CLOUD_ITEMS_PER_SECTION],
+        'progress_total': len(progress_rows),
     })
 
 
