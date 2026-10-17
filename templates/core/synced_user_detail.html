@@ -18,7 +18,7 @@
         <div class="d-flex gap-2">
             <a href="{% url 'synced_user_edit' user_obj.id %}" class="btn btn-warning"><i class="fas fa-edit me-1"></i>Edit</a>
             {% if linked_user and not linked_user.is_active %}
-            <form method="post" action="{% url 'synced_user_resend_verification' user_obj.id %}" onsubmit="return confirm('Send a fresh verification code + link to {{ user_obj.email }}?')">
+            <form method="post" action="{% url 'synced_user_resend_verification' user_obj.id %}" onsubmit="return confirm('Send a fresh verification code to {{ user_obj.email }}?')">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-info"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
             </form>

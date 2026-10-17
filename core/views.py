@@ -4511,18 +4511,18 @@ def ajax_login(request):
 
 
 def _issue_verification_email(django_user, request, display_name=''):
-    """Create an EmailVerification row (link token + 6-digit OTP) and email both.
+    """Create an EmailVerification row (6-digit OTP) and email just the code.
 
     Used by web + Android registration and by resend-verification. The email
-    carries the OTP so the Android app can verify without opening the browser
-    (POST /api/user/verify-email/ with {email, otp}), plus the clickable link
-    for browser users.
+    carries the OTP only — no site link — and both clients finish registration
+    by typing that code (POST /ajax/verify-email-otp/ on the web,
+    POST /api/user/verify-email/ {email, otp} in the app). A link token is still
+    stored for backward compatibility, it is simply never mailed.
     """
     from .models import EmailVerification, SiteSettings
     token = secrets.token_hex(32)
     otp = EmailVerification.generate_otp()
     EmailVerification.objects.create(user=django_user, token=token, otp=otp)
-    verify_url = f"https://{request.get_host()}/ajax/verify-email/?token={token}"
     brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
     try:
         send_configured_email(
@@ -4530,9 +4530,7 @@ def _issue_verification_email(django_user, request, display_name=''):
             message=(
                 f'Hi {display_name or django_user.first_name or django_user.username},\r\n\r\n'
                 f'Your verification code is: {otp}\r\n\r\n'
-                f'This code is valid for 10 minutes. Enter it where prompted to verify your email.\r\n\r\n'
-                f'Or verify instantly by opening the link below in your browser (also valid for 10 minutes):\r\n\r\n'
-                f'{verify_url}\r\n\r\n'
+                f'This code is valid for 10 minutes. Enter it on the verification screen to finish creating your account.\r\n\r\n'
                 f'If you did not register with {brand}, please ignore this email.'
             ),
             recipient_list=[django_user.email],
@@ -4545,16 +4543,17 @@ def _issue_verification_email(django_user, request, display_name=''):
 
 
 def _issue_password_reset_email(django_user, request):
-    """Issue a 6-digit reset OTP + browser link and email both.
+    """Issue a 6-digit reset OTP and email just the code (no site link).
 
     Shared by the website forgot-password form and the Android API
     (forgot-password) so every trigger mails the same content and the
-    OTP is always stored (PasswordResetOTP) for the app's
-    /api/user/reset-password/ {email, otp} flow.
+    OTP is always stored (PasswordResetOTP). Both clients reset with the
+    code alone (POST /ajax/reset-password-otp/ on the web,
+    /api/user/reset-password/ {email, otp, newPassword} in the app).
 
-    Returns a dict {otp, uid, token, resetUrl} so the Android API can
-    hand resetUid/resetToken straight to the app (the app completes the
-    reset with the Django uid+token path).
+    Returns a dict {otp, uid, token, resetUrl} so the Android API can still
+    hand resetUid/resetToken straight to the app; those values are simply
+    never put in the email any more.
     """
     from .models import PasswordResetOTP, SiteSettings
     otp_code = PasswordResetOTP.generate()
@@ -4575,8 +4574,6 @@ def _issue_password_reset_email(django_user, request):
                 f'Hi {django_user.first_name or django_user.username},\r\n\r\n'
                 f'Your password reset code is: {otp_code}\r\n\r\n'
                 f'This code is valid for 10 minutes. Enter it on the "Forgot password" screen in the app or website to set a new password.\r\n\r\n'
-                f'Or reset instantly by opening the link below in your browser (valid for 10 minutes):\r\n\r\n'
-                f'{reset_url}\r\n\r\n'
                 f'If you did not request this, please ignore this email.'
             ),
             recipient_list=[django_user.email],
@@ -10841,8 +10838,9 @@ def synced_user_detail(request, user_id):
 
 
 def _admin_resend_verification(django_user, request):
-    """Admin resend of the verification email — always the same OTP content
-    (code + link) used by registration/resend. Returns (ok, message)."""
+    """Admin resend of the verification email — always the same OTP-only
+    content (6-digit code, no site link) used by registration/resend.
+    Returns (ok, message)."""
     if not django_user:
         return False, 'No linked web account found for this email.'
     if not django_user.has_usable_password():
@@ -10857,7 +10855,7 @@ def _admin_resend_verification(django_user, request):
 @user_passes_test(is_staff_or_superuser)
 @require_POST
 def synced_user_resend_verification(request, user_id):
-    """Admin: resend verification code+link for a synced (Android) user."""
+    """Admin: resend the verification code for a synced (Android) user."""
     user_obj = get_object_or_404(SyncedUser, id=user_id)
     linked_user = User.objects.filter(pk=user_obj.user_id).first() if user_obj.user_id else None
     if not linked_user and user_obj.email:
@@ -13484,7 +13482,7 @@ def admin_history_calendar_data(request):
 @user_passes_test(is_staff_or_superuser)
 @require_POST
 def admin_user_resend_verification(request, user_id):
-    """Admin: resend verification code+link for a web user."""
+    """Admin: resend the verification code for a web user."""
     detail_user = get_object_or_404(User, id=user_id)
     ok, msg = _admin_resend_verification(detail_user, request)
     if ok:
