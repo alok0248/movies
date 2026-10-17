@@ -8994,8 +8994,8 @@ _USER_SYNC_MIN_INTERVAL = 45
 # Request caps for POST /api/user/sync. The interval above only decides whether
 # a sync is *full* or answered from stored data; these cap how often a client
 # may ask at all, because every answer carries the whole cloud payload.
-_USER_SYNC_MAX_PER_WINDOW = 20       # per account + device, per window below
-_USER_SYNC_IP_MAX_PER_WINDOW = 90    # per address (shared/office/carrier IPs)
+_USER_SYNC_MAX_PER_WINDOW = 15       # per account, per window below
+_USER_SYNC_IP_MAX_PER_WINDOW = 60    # per address (shared/office/carrier IPs)
 _USER_SYNC_WINDOW_SECONDS = 60
 
 
@@ -10027,10 +10027,14 @@ def _sync_rate_limited(request, email, body):
     make nginx return 504s for everybody else. Throttled calls now come back
     as a tiny 429 with Retry-After, which costs no database work and lets the
     rest of the site breathe. Real clients sync a handful of times a minute.
+
+    The budget is per account, not per device: the looping client observed in
+    production sent a new device id with almost every attempt, so a
+    device-scoped counter never filled up. One account syncing faster than
+    this from several devices at once is not a workload worth protecting.
     """
-    device_id = (body.get('deviceId') or body.get('device_id') or '').strip()
-    identity = f'usersync_rl:{email}|{device_id}' if device_id else f'usersync_rl:{email}'
-    allowed, retry_after = _sync_rate_ok(identity, _USER_SYNC_MAX_PER_WINDOW)
+    allowed, retry_after = _sync_rate_ok(f'usersync_rl:{email}',
+                                         _USER_SYNC_MAX_PER_WINDOW)
     if not allowed:
         return _sync_too_fast_response(retry_after)
     allowed, retry_after = _sync_rate_ok(f'usersync_rl:ip:{_get_client_ip(request)}',
