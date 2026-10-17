@@ -140,6 +140,8 @@ urlpatterns = [
     path('admin-dashboard/synced-users/<int:user_id>/delete/', views.synced_user_delete, name='synced_user_delete'),
     path('admin-dashboard/synced-users/<int:user_id>/resend-verification/', views.synced_user_resend_verification, name='synced_user_resend_verification'),
     path('admin-dashboard/synced-users/<int:user_id>/block/', views.synced_user_block, name='synced_user_block'),
+    # "Delete data" — wipes history/cloud data for one user, account stays.
+    path('admin-dashboard/synced-users/<int:user_id>/wipe-data/', views.synced_user_wipe_data, name='synced_user_wipe_data'),
     path('admin-dashboard/user-dashboard/', views.user_dashboard, name='user_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/json/', views.ajax_android_app_dashboard, name='ajax_android_app_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/device/<str:user_id>/logs/', views.android_device_logs, name='android_device_logs'),

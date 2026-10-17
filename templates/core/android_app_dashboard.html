@@ -237,6 +237,7 @@
                                                     <button type="button" class="btn btn-sm btn-outline-warning" title="App blocked — no data, app shows Server is Down" onclick="blockUser({{ u.id }}, 'app', this)"><i class="fas fa-wifi me-1"></i>App</button>
                                                     <button type="button" class="btn btn-sm btn-danger" title="Stop all access — every API call refused" onclick="blockUser({{ u.id }}, 'full', this)"><i class="fas fa-ban me-1"></i>Full</button>
                                                     <button type="button" class="btn btn-sm btn-success" title="Restore normal access" onclick="blockUser({{ u.id }}, '', this)"><i class="fas fa-check me-1"></i>Restore</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger border-danger" title="Delete this user's history and cloud data (asks first)" onclick="wipeUserData({{ u.id }}, this)"><i class="fas fa-trash-alt me-1"></i>Data</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -560,6 +561,54 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+function wipeUserData(id, btn) {
+    var row = document.getElementById('block-row-' + id);
+    var email = (row && row.getAttribute('data-email')) || 'this user';
+    var msg = 'DELETE the cloud data and history for ' + email + '?\n\n'
+        + 'This removes:\n'
+        + '  - watch history, playback position and resume points\n'
+        + '  - ratings, favorites and watchlist\n'
+        + '  - downloads and playlists stored in the cloud\n'
+        + '  - web play history, activity totals and visitor records\n\n'
+        + 'KEPT: the account (sign-in, email, subscription) and app settings.\n'
+        + 'Server copies are deleted immediately.\n\n'
+        + 'This cannot be undone. Delete the data?';
+    if (!confirm(msg)) { return; }
+
+    var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    var statusEl = document.getElementById('blockStatus');
+    if (statusEl) { statusEl.innerHTML = '<span class="text-danger">Deleting data...</span>'; }
+    if (btn) { btn.disabled = true; }
+
+    fetch('/admin-dashboard/synced-users/' + id + '/wipe-data/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfInput ? csrfInput.value : '',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'format=json'
+    })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+        var data = res.data || {};
+        if (res.ok && data.success) {
+            if (statusEl) {
+                statusEl.innerHTML = '<span class="text-success"><i class="fas fa-check me-1"></i>' + (data.label || 'Data deleted') + ' - account kept</span>';
+            }
+            if (row) { row.classList.add('data-wiped'); }
+        } else {
+            if (statusEl) { statusEl.innerHTML = '<span class="text-danger">Error: ' + (data.error || 'Request failed') + '</span>'; }
+        }
+    })
+    .catch(function() {
+        if (statusEl) { statusEl.innerHTML = '<span class="text-danger">Request failed</span>'; }
+    })
+    .finally(function() {
+        if (btn) { btn.disabled = false; }
+    });
+}
+
 function blockUser(id, mode, btn) {
     var labelMap = {
         'full': 'Block ALL access',

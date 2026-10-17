@@ -10864,6 +10864,10 @@ def synced_user_resend_verification(request, user_id):
             user_obj.user = linked_user
             user_obj.save(update_fields=['user'])
     ok, msg = _admin_resend_verification(linked_user, request)
+    # Inline "Resend code" on the full-screen user list posts format=json so
+    # the row can show the result in place instead of bouncing to the detail page.
+    if request.POST.get('format') == 'json':
+        return JsonResponse({'success': ok, 'message': msg})
     if ok:
         messages.success(request, msg)
     else:
@@ -10908,6 +10912,102 @@ def synced_user_block(request, user_id):
             'blocked_at': timezone.localtime(user_obj.blocked_at).isoformat() if user_obj.blocked_at else None,
         })
     messages.success(request, f'{label} for {user_obj.email}.')
+    return redirect('synced_user_detail', user_id=user_obj.id)
+
+
+def _wipe_user_data(user_obj=None, email=''):
+    """Erase one user's history/cloud data while KEEPING the accounts.
+
+    Driven by the "Delete data" button on the Android analytics page — the
+    confirmation asks first, then this clears watch history, playback
+    progress/resume positions, ratings, favorites, watchlist, cloud downloads
+    and playlists, the web play history, daily activity counters and visitor
+    records.
+
+    Deliberately untouched: the Django login, the Android synced profile,
+    subscriptions, app preferences and the deletion tombstones. The
+    ``deleted_*`` records are kept on purpose — they are what tells every
+    signed-in device to purge its own copy on the next sync, otherwise the
+    phone would simply re-upload everything it still holds.
+    """
+    from .models import (PlayHistory, UserActivity, UserCloudData,
+                         WebsiteVisitor, WebsiteVisitorVisit, WatchList)
+
+    email = (email or '').strip().lower()
+    if not email and user_obj is not None:
+        email = (getattr(user_obj, 'email', '') or '').strip().lower()
+
+    django_user = None
+    if user_obj is not None and getattr(user_obj, 'user_id', None):
+        django_user = User.objects.filter(pk=user_obj.user_id).first()
+    if django_user is None and email:
+        django_user = User.objects.filter(email__iexact=email).first()
+
+    counts = {'cloud_fields': 0, 'play_history': 0, 'watchlist': 0,
+              'activity': 0, 'visitors': 0, 'visits': 0}
+    if django_user is None:
+        # Android-only profile with no linked account: nothing beyond the
+        # synced row itself exists to clear.
+        return counts
+
+    cloud = UserCloudData.objects.filter(user=django_user).first()
+    if cloud:
+        changed = []
+        for field in cloud._meta.fields:
+            if field.primary_key or field.name in ('app_settings', 'data_version'):
+                continue
+            if field.name.startswith('deleted_'):
+                continue
+            current = getattr(cloud, field.name)
+            if isinstance(current, dict):
+                setattr(cloud, field.name, {})
+                changed.append(field.name)
+            elif isinstance(current, list):
+                setattr(cloud, field.name, [])
+                changed.append(field.name)
+        if changed:
+            cloud.data_version += 1
+            cloud.save(update_fields=changed + ['data_version'])
+        counts['cloud_fields'] = len(changed)
+
+    counts['play_history'] = PlayHistory.objects.filter(user=django_user).delete()[0]
+    counts['watchlist'] = WatchList.objects.filter(user=django_user).delete()[0]
+    counts['activity'] = UserActivity.objects.filter(user=django_user).delete()[0]
+    # Deliberately no visitor__user join — it would span two database aliases.
+    visitor_ids = list(
+        WebsiteVisitor.objects.filter(user=django_user).values_list('pk', flat=True)
+    )
+    if visitor_ids:
+        counts['visits'] = WebsiteVisitorVisit.objects.filter(
+            visitor_id__in=visitor_ids).delete()[0]
+        counts['visitors'] = WebsiteVisitor.objects.filter(
+            pk__in=visitor_ids).delete()[0]
+    return counts
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def synced_user_wipe_data(request, user_id):
+    """Admin: delete one user's data/history — the accounts stay.
+
+    The "Delete data" button in the Users & Blocking table asks for
+    confirmation first, then POSTs here with format=json so the row updates
+    without a page reload.
+    """
+    user_obj = get_object_or_404(SyncedUser, id=user_id)
+    email = (user_obj.email or '').strip()
+    counts = _wipe_user_data(user_obj, email=email)
+    total = sum(counts.values())
+    if request.POST.get('format') == 'json':
+        return JsonResponse({
+            'success': True,
+            'email': email,
+            'deleted': counts,
+            'total': total,
+            'label': f'Data deleted for {email} ({total} records/fields)',
+        })
+    messages.success(request, f'Data deleted for {email}: {counts}. Accounts kept.')
     return redirect('synced_user_detail', user_id=user_obj.id)
 
 
