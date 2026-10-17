@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load custom_filters %}
 {% block admin_content %}
 <div class="container mt-5 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -65,6 +66,7 @@
                     <thead>
                         <tr>
                             <th>User</th>
+                            <th>Status</th>
                             <th>Email</th>
                             <th>Device</th>
                             <th>App Version</th>
@@ -90,12 +92,28 @@
                                     </div>
                                 </div>
                             </td>
+                            {% with beat=hb_map %}
+                            {% with hb=beat|get_item:u.email %}
+                            <td>
+                                {% if hb and hb.is_online %}
+                                    <span class="badge bg-success"><i class="fas fa-circle me-1" style="font-size:.55rem;"></i>Online</span>
+                                {% elif hb %}
+                                    <span class="badge bg-secondary">Offline</span>
+                                {% else %}
+                                    <span class="badge bg-dark border border-secondary text-secondary">Never</span>
+                                {% endif %}
+                                {% if u.block_mode %}
+                                    <span class="badge bg-danger">{{ u.get_block_mode_display }}</span>
+                                {% endif %}
+                            </td>
                             <td><code class="text-break">{{ u.email }}</code></td>
                             <td>
-                                <div class="text-white">{{ u.device_model|default:'-' }}</div>
-                                <div class="text-secondary small">Android {{ u.os_version }}</div>
+                                <div class="text-white">{% if hb %}<i class="fab fa-android text-success me-1"></i>{% endif %}{{ hb.device_model|default:u.device_model|default:'-' }}</div>
+                                <div class="text-secondary small">{{ hb.os_version|default:u.os_version|default:'-' }}</div>
                             </td>
-                            <td><code>{{ u.app_version|default:'-' }}</code></td>
+                            <td><code>{{ hb.app_version|default:u.app_version|default:'-' }}</code></td>
+                            {% endwith %}
+                            {% endwith %}
                             <td>
                                 {% if u.is_subscribed %}
                                     <span class="badge bg-success"><i class="fas fa-check me-1"></i>Subscribed</span>
@@ -109,7 +127,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-secondary py-5">
+                            <td colspan="9" class="text-center text-secondary py-5">
                                 <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
                                 No synced users yet. Users will appear here when they connect via the sync API.
                             </td>

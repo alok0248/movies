@@ -3768,6 +3768,7 @@ def android_app_dashboard(request, app_id=None):
     failed_attempts = []
     recent_devices = []
     recent_visits = []
+    recent_logs = []
     total_unique_visitors = 0
     if selected_app:
         # Auto-clean old analytics data based on retention setting
@@ -3794,6 +3795,8 @@ def android_app_dashboard(request, app_id=None):
         # Get recent devices and visits
         recent_devices = selected_app.devices.select_related().all()[:10]
         recent_visits = selected_app.device_visits.select_related('device').all()[:20]
+        # Last 20 app logs so Users / Android / Logs live on this one page.
+        recent_logs = selected_app.app_logs.select_related('device').all()[:20]
         
         # Calculate total unique visitors
         total_unique_visitors = selected_app.devices.count()
@@ -3805,12 +3808,16 @@ def android_app_dashboard(request, app_id=None):
     ]
 
     # Synced users (single query with annotate instead of 3 separate queries)
-    from .models import SyncedUser
+    from .models import SyncedUser, UserHeartbeat
     synced_qs = SyncedUser.objects.all()
-    synced_users = synced_qs.order_by('-last_synced_at')[:5]
+    synced_users = synced_qs.order_by('-last_synced_at')[:10]
     synced_total = synced_qs.count()
     synced_subscribed = synced_qs.filter(is_subscribed=True).count()
     synced_free = synced_total - synced_subscribed
+
+    # Latest heartbeat per email — powers the Online/Offline badge and the live
+    # device / app-version columns in the inline Users & Blocking table.
+    hb_map = {h.email: h for h in UserHeartbeat.objects.all()}
 
     return render(request, 'core/android_app_dashboard.html', {
         'apps': apps,
@@ -3828,6 +3835,8 @@ def android_app_dashboard(request, app_id=None):
         'total_unique_visitors': total_unique_visitors,
         'recent_devices': recent_devices,
         'recent_visits': recent_visits,
+        'recent_logs': recent_logs,
+        'hb_map': hb_map,
         'synced_users': synced_users,
         'synced_total': synced_total,
         'synced_subscribed': synced_subscribed,
@@ -7674,6 +7683,13 @@ def videasy_sources_view(request):
     """
     import time as _time
 
+    # Play block: refuse stream sources for a logged-in user whose account is
+    # under a 'play' or 'full' block (movies/series must not play).
+    if request.user.is_authenticated:
+        prof = SyncedUser.objects.filter(email__iexact=request.user.email).first()
+        if prof and prof.block_mode in ('play', 'full'):
+            return JsonResponse({'success': False, 'error': 'Playback is currently restricted on this account.', 'servers': []}, status=403)
+
     tmdb_id = request.GET.get('tmdb_id', '')
     media_type = request.GET.get('media_type', 'movie')
     season_id = request.GET.get('season_id', '')
@@ -8634,7 +8650,7 @@ def ajax_delete_ad_file(request):
 # ---------------------------------------------------------------------------
 # Android User API (Register, Login, Sync) + Admin
 # ---------------------------------------------------------------------------
-from .models import SyncedUser, UserCloudData
+from .models import SyncedUser, UserCloudData, UserHeartbeat
 from .auth import send_configured_email
 from .auth import (
     create_user_token_pair, decode_jwt_token, reset_rate_limit,
@@ -9773,6 +9789,11 @@ def api_user_login(request):
     _record_session(auth_user, 'android', request, device_model=body.get('deviceModel', ''), os_version=body.get('osVersion', ''), app_version=body.get('appVersion', ''))
     _lift_block_after_auth(request)
 
+    # Admin access control: a full/app block refuses login outright.
+    block_err = _enforce_user_block(email, app_match)
+    if block_err:
+        return block_err
+
     return JsonResponse(_build_user_response(auth_user, user_obj, {
         'message': 'Login successful',
         'requiresVerification': False,
@@ -9796,6 +9817,11 @@ def api_user_sync(request):
     email = body.get('email', '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    # Admin access control: full/app block refuses data sync.
+    block_err = _enforce_user_block(email, app_match)
+    if block_err:
+        return block_err
 
     # Throttle full syncs per user. Between full syncs, answer from stored
     # cloud data with a single read — no writes, no TMDB calls. The payload
@@ -9837,6 +9863,159 @@ def api_user_sync(request):
     })
 
 
+# --- deletion sync (app -> server) ------------------------------------------
+# The app calls these the moment the user deletes watch history, watchlist
+# entries, custom playlists or individual playlist items — and when it clears
+# history/watchlist wholesale. Each endpoint purges the cloud JSON, mirrors the
+# deletion into the web-facing WatchList/PlayHistory rows, records tombstones
+# (so no later sync, from any device, resurrects the items) and answers with
+# the updated cloud payload so the app can reconcile immediately.
+
+def _deletion_ids(body, *keys):
+    """First non-empty list (or single scalar) under any of the given keys."""
+    for key in keys:
+        val = body.get(key)
+        if isinstance(val, list) and val:
+            return val
+        if val and not isinstance(val, dict):
+            return [val]
+    return []
+
+
+def _plain_id(item):
+    """Media/playlist id out of one app-supplied entry (scalar or dict)."""
+    if isinstance(item, dict):
+        return item.get('mediaId') or item.get('id') or item.get('tmdbId') or item.get('playlistId')
+    return item
+
+
+def _int_ids(ids):
+    """The subset of ids parseable as ints — for the web-row mirrors, whose
+    tmdb_id columns are integers."""
+    out = []
+    for i in ids:
+        try:
+            out.append(int(i))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_delete(request, kind):
+    """POST /api/user/history|watchlist|playlist(/item)/delete|clear —
+    real-time deletion notifications from the Android app.
+
+    ``kind`` is one of: history, watchlist, playlist, playlist_item,
+    history_clear, watchlist_clear. Deleting an id that is not present still
+    records its tombstone (the item may exist on another device), so the
+    call is idempotent and safe to retry.
+    """
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = (body.get('email') or '').strip().lower()
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    # Admin access control: a full/app block stops all writes to this account.
+    block_err = _enforce_user_block(email, app_match)
+    if block_err:
+        return block_err
+
+    # If the app routed by `deleteType`, honor the matching kind so a generic
+    # /delete/ call with deleteType=history lands on the history branch.
+    dt = (body.get('deleteType') or '').strip().lower()
+    _dt_kind = {'history': 'history', 'clear_history': 'history_clear',
+                'watchlist': 'watchlist', 'clear_watchlist': 'watchlist_clear',
+                'playlist': 'playlist', 'playlist_item': 'playlist_item'}.get(dt)
+    if _dt_kind:
+        kind = _dt_kind
+
+    django_user, user_obj, _created = _ensure_user_and_profile(email, body)
+    cloud, _ = UserCloudData.objects.get_or_create(user=django_user)
+    from .models import PlayHistory, WatchList
+
+    if kind == 'history':
+        ids = [_plain_id(i) for i in _deletion_ids(body, 'ids', 'items', 'mediaIds', 'tmdbIds', 'mediaId')]
+        ids = [i for i in ids if i not in (None, '')]
+        removed = cloud.apply_deletions(deleted_history=ids)
+        ints = _int_ids(ids)
+        if ints:
+            PlayHistory.objects.filter(user=django_user, tmdb_id__in=ints).delete()
+        message = 'History deleted'
+
+    elif kind == 'watchlist':
+        ids = [_plain_id(i) for i in _deletion_ids(body, 'ids', 'items', 'mediaIds', 'tmdbIds', 'mediaId')]
+        ids = [i for i in ids if i not in (None, '')]
+        removed = cloud.apply_deletions(deleted_watchlist=ids)
+        ints = _int_ids(ids)
+        if ints:
+            WatchList.objects.filter(user=django_user, tmdb_id__in=ints).delete()
+        message = 'Watchlist items deleted'
+
+    elif kind == 'playlist':
+        ids = [_plain_id(i) for i in _deletion_ids(body, 'playlistIds', 'ids', 'items', 'playlistId')]
+        ids = [i for i in ids if i not in (None, '')]
+        removed = cloud.apply_deletions(deleted_playlists=ids)
+        message = 'Playlists deleted'
+
+    elif kind == 'playlist_item':
+        keys = _deletion_ids(body, 'keys', 'itemKeys', 'items')
+        keys = [k for k in keys if k not in (None, '')]
+        # Accept the compact form {playlistId: X, itemIds: [..]} and the app's
+        # exact shape {playlistId: 42, mediaId: 27205, isTv: false}.
+        pid = body.get('playlistId') or body.get('playlist_id')
+        if pid and not keys:
+            item_ids = _deletion_ids(body, 'itemIds', 'mediaIds', 'ids', 'mediaId')
+            keys = ['%s:%s' % (pid, _plain_id(i)) for i in item_ids if _plain_id(i) not in (None, '')]
+        removed = cloud.apply_deletions(deleted_playlist_items=keys)
+        message = 'Playlist items deleted'
+
+    elif kind in ('history_clear', 'watchlist_clear'):
+        if kind == 'history_clear':
+            existing = [_plain_id(h) for h in (cloud.watch_history or [])]
+            existing += [k.split('_')[1] for k in (cloud.playback_progress or {})
+                         if len(k.split('_')) >= 2 and k.split('_')[1].isdigit()]
+            existing = [i for i in existing if i not in (None, '')]
+            removed = cloud.apply_deletions(deleted_history=existing)
+            cloud.watch_history = []
+            cloud.playback_progress = {}
+            cloud.save()
+            PlayHistory.objects.filter(user=django_user).delete()
+            message = 'History cleared'
+        else:
+            existing = [_plain_id(w) for w in (cloud.watchlist_ids or [])]
+            existing = [i for i in existing if i not in (None, '')]
+            removed = cloud.apply_deletions(deleted_watchlist=existing)
+            cloud.watchlist_ids = []
+            cloud.save()
+            WatchList.objects.filter(user=django_user).delete()
+            message = 'Watchlist cleared'
+
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Unknown deletion kind'}, status=404)
+
+    # Let the next full sync merge for real instead of serving the throttled
+    # cached response captured before this deletion.
+    cache.delete(f'usersync:{email}')
+
+    return JsonResponse({
+        'status': 'success',
+        'message': message,
+        'deleted': removed,
+        'userData': cloud.get_cloud_payload(),
+    })
+
+
 @csrf_exempt
 @require_http_methods(["GET"])
 @_guard_android_api_errors
@@ -9859,6 +10038,127 @@ def api_user_profile(request):
     return JsonResponse(_build_user_response(django_user, user_obj, {
         'message': 'Profile loaded successfully',
     }))
+
+
+# ---------------------------------------------------------------------------
+# User access control (admin-set block modes) + heartbeat telemetry
+# ---------------------------------------------------------------------------
+
+def _get_synced_profile(email):
+    """SyncedUser row for an email (None when the account predates sync)."""
+    if not email:
+        return None
+    return SyncedUser.objects.filter(email__iexact=email).first()
+
+
+def _enforce_user_block(email, app_match=None, require_play=False, require_data=True):
+    """Return an error JsonResponse when the admin has blocked this user, else None.
+
+    Modes (SyncedUser.block_mode):
+      'full' — stop access. Every API call is refused with 403 so the app
+               shows "access blocked" and cannot pull any data.
+      'app'  — app block. Data APIs answer 503 "server down" so the app's own
+               heartbeat/offline logic flips to isServerOffline and falls back
+               to downloaded-only playback (no data, connection-error UX).
+      'play' — play block. Streaming/source endpoints refuse (403) so movies
+               and series won't play; data browsing stays allowed.
+
+    ``require_play`` marks a playback-only endpoint (only 'play'/'full' block
+    it). ``require_data`` marks a data endpoint ('app'/'full' block it). An
+    endpoint can pass both (blocked in every mode).
+    """
+    prof = _get_synced_profile(email)
+    if prof is None or not prof.block_mode:
+        return None
+    mode = prof.block_mode
+    if mode == 'full' or (mode == 'app' and require_data) or (mode == 'play' and require_play):
+        if mode == 'app':
+            # Mimic an unreachable server so the app shows its offline modal.
+            return JsonResponse({'status': 'error', 'message': 'Server is unreachable. Downloaded items remain available.'}, status=503)
+        reason = prof.blocked_reason or 'Contact the administrator for details.'
+        return JsonResponse({'status': 'error', 'code': 'access_blocked', 'blockMode': mode,
+                             'message': f'Your access has been restricted. {reason}'}, status=403)
+    return None
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_heartbeat(request):
+    """POST /api/user/heartbeat — 1-minute background heartbeat from the app.
+
+    Records the current device + real-time activity so the admin panel can show
+    who is online, what they are watching, and which app version they run. The
+    response carries the email-verification state and the account's block flags
+    so the app can react immediately (offline modal for 'app' block, playback
+    refusal for 'play' block).
+    """
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = (body.get('email') or '').strip().lower()
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    block_err = _enforce_user_block(email, app_match)
+    if block_err:
+        return block_err
+
+    activity = body.get('activity') or {}
+    django_user = User.objects.filter(email__iexact=email).first()
+    # The account's verification state is server-authoritative (is_active is
+    # what /api/user/verify-email/ sets). Never trust the client's echo of it
+    # here — the app gates playback on this value, so a tampered client could
+    # otherwise bypass the "Verify Email to Play" requirement. Only fall back
+    # to the client's flag when no account exists yet (nothing to check).
+    verified = bool(django_user.is_active) if django_user else bool(body.get('isEmailVerified', True))
+
+    def _int_or_none(v):
+        try:
+            return int(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    hb, _created = UserHeartbeat.objects.update_or_create(
+        email=email,
+        defaults={
+            'user': django_user,
+            'app_user_id': str(body.get('userId') or ''),
+            'is_logged_in': bool(body.get('isLoggedIn', True)),
+            'is_email_verified': verified,
+            'device_id': str(body.get('deviceId') or ''),
+            'device_model': str(body.get('deviceModel') or ''),
+            'os_version': str(body.get('osVersion') or ''),
+            'app_version': str(body.get('appVersion') or ''),
+            'current_screen': str(activity.get('currentScreen') or ''),
+            'is_playing': bool(activity.get('isPlaying', False)),
+            'playback_position_ms': _int_or_none(activity.get('playbackPositionMs')) or 0,
+            'duration_ms': _int_or_none(activity.get('durationMs')) or 0,
+            'media_title': str(activity.get('mediaTitle') or ''),
+            'media_id': _int_or_none(activity.get('mediaId')),
+            'media_is_tv': bool(activity.get('isTv', False)),
+            'season': _int_or_none(activity.get('season')),
+            'episode': _int_or_none(activity.get('episode')),
+            'player_engine': str(activity.get('playerEngine') or ''),
+            'recent_actions': (activity.get('recentActions') or [])[:50],
+            'ip_address': _get_client_ip(request) or None,
+        },
+    )
+
+    prof = _get_synced_profile(email)
+    return JsonResponse({
+        'status': 'success',
+        'isEmailVerified': verified,
+        'blockMode': (prof.block_mode if prof else '') or '',
+        'isSubscribed': bool(prof.is_subscribed) if prof else False,
+        'timestamp': int(timezone.now().timestamp() * 1000),
+    })
 
 
 @_guard_android_api_errors
@@ -10244,11 +10544,15 @@ def synced_users_list(request):
     total = users.count()
     subscribed = users.filter(is_subscribed=True).count()
     free = total - subscribed
+    # Latest heartbeat per user, keyed by email, so the table can show online
+    # status, platform, app version and real-time activity.
+    hb_map = {h.email: h for h in UserHeartbeat.objects.all()}
     return render(request, 'core/synced_users_list.html', {
         'users': users,
         'total': total,
         'subscribed': subscribed,
         'free': free,
+        'hb_map': hb_map,
     })
 
 
@@ -10495,10 +10799,12 @@ def synced_user_detail(request, user_id):
     cloud_data = None
     if linked_user:
         cloud_data, _ = UserCloudData.objects.get_or_create(user=linked_user)
+    heartbeat = UserHeartbeat.objects.filter(email__iexact=user_obj.email).first()
     return render(request, 'core/synced_user_detail.html', {
         'user_obj': user_obj,
         'linked_user': linked_user,
         'cloud_data': cloud_data,
+        'heartbeat': heartbeat,
         # Clickable item lists behind each Cloud Sync box (details + play links).
         'cloud_sections': _cloud_sync_sections(cloud_data, linked_user),
         'max_cloud_items': MAX_CLOUD_ITEMS,
@@ -10535,6 +10841,46 @@ def synced_user_resend_verification(request, user_id):
         messages.success(request, msg)
     else:
         messages.error(request, msg)
+    return redirect('synced_user_detail', user_id=user_obj.id)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def synced_user_block(request, user_id):
+    """Admin: set / lift a user's access block.
+
+    POST block_mode = '' | 'full' | 'play' | 'app'
+      ''     — restore normal access
+      'full' — stop access (every API call 403)
+      'play' — play block (movies/series won't play)
+      'app'  — app block (no data, app shows connection error)
+    """
+    user_obj = get_object_or_404(SyncedUser, id=user_id)
+    mode = (request.POST.get('block_mode') or '').strip().lower()
+    if mode not in ('', 'full', 'play', 'app'):
+        if request.POST.get('format') == 'json':
+            return JsonResponse({'success': False, 'error': 'Invalid block mode.'}, status=400)
+        messages.error(request, 'Invalid block mode.')
+        return redirect('synced_user_detail', user_id=user_obj.id)
+    user_obj.block_mode = mode
+    user_obj.blocked_reason = (request.POST.get('reason') or '').strip()[:255] if mode else ''
+    user_obj.blocked_at = timezone.now() if mode else None
+    user_obj.save(update_fields=['block_mode', 'blocked_reason', 'blocked_at'])
+    label = {'': 'Access restored', 'full': 'Full block applied',
+             'play': 'Play block applied', 'app': 'App block applied'}[mode]
+    # Inline block buttons on the analytics page post format=json and update
+    # the row in place instead of navigating away to the detail page.
+    if request.POST.get('format') == 'json':
+        return JsonResponse({
+            'success': True,
+            'block_mode': mode,
+            'label': label,
+            'display': user_obj.get_block_mode_display() if mode else '',
+            'reason': user_obj.blocked_reason,
+            'blocked_at': timezone.localtime(user_obj.blocked_at).isoformat() if user_obj.blocked_at else None,
+        })
+    messages.success(request, f'{label} for {user_obj.email}.')
     return redirect('synced_user_detail', user_id=user_obj.id)
 
 

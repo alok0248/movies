@@ -199,7 +199,11 @@ Content-Type: application/json</pre>
   "userData": {                       // optional — app's local data to merge up
     "watchlist": [...],
     "playHistory": [...],
-    "settings": {...}
+    "settings": {...},
+    "deletedHistory": [...],          // optional — tombstones; items the app
+    "deletedWatchlist": [...],        //   deleted. The server drops them from
+    "deletedPlaylists": [...],        //   cloud data and refuses to merge
+    "deletedPlaylistItems": [...]     //   them back for 24 h (e.g. "pl_1:44").
   }
 }</pre>
             <div class="api-label">Response 200</div>
@@ -207,11 +211,270 @@ Content-Type: application/json</pre>
   "status": "success",
   "message": "User data synced successfully",
   "subscription": { "plan": "free", ... },
-  "userData": { ...merged cloud data... }
+  "userData": {
+    ...merged cloud data...,
+    "deletedHistory": [...],          // active tombstones the app must honor
+    "deletedWatchlist": [...],        //   — purge these local items so a
+    "deletedPlaylists": [...],        //   missed delete notification is
+    "deletedPlaylistItems": [...]     //   caught up on the next sync.
+  }
+}
+            <div class="api-note">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Errors: 401 missing/invalid Basic header · 403 wrong credentials · 400 bad JSON / missing email.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-label" style="font-size:.85rem; color:#81c784; margin-top:2rem;">2a · Deletion Sync API <span style="color:#94a3b8;">(app → server, real-time)</span></div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/history/delete/</span>
+            <span class="api-card-title">Delete watch-history items</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Call the moment the user removes history items or marks them as not watched. Purges
+                <code>watchHistory</code> + the matching <code>playbackProgress</code> entries, deletes the
+                mirrored web rows, and records a tombstone so no later sync — from any device —
+                resurrects the item. Answering payload is the updated <code>userData</code>, so the app can
+                reconcile immediately. Deleting an id that is absent still records its tombstone
+                (it may exist on another device); safe to retry.
+            </p>
+            <div class="api-label">Auth</div>
+            <pre class="api-code" data-copy>Authorization: Basic base64(app_user:app_pass)
+Content-Type: application/json</pre>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",   // required
+  "ids": [603, 155]              // media ids
+}</pre>
+            <div class="api-note">
+                <i class="fas fa-info-circle"></i>
+                <span>Body variants: also accepts <code>"mediaId": 603</code> (singular), <code>"mediaIds": [...]</code>, <code>"items": [{"mediaId": 603}, ...]</code> or <code>"deleteType": "history"</code>. Mixing a singular id with <code>deleteType</code> works on every deletion endpoint.</span>
+            </div>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "message": "History deleted",
+  "deleted": 2,                  // cloud entries removed
+  "userData": { ...updated cloud data incl. active tombstones... }
 }</pre>
             <div class="api-note">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>Errors: 401 missing/invalid Basic header · 403 wrong credentials · 400 bad JSON / missing email.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/watchlist/delete/</span>
+            <span class="api-card-title">Remove watchlist items</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Same contract as history/delete: purges the items from the cloud watchlist, mirrors the
+                deletion into the web watchlist rows, and tombstones each id so bidirectional merge can
+                never bring them back. Response shape identical (<code>message: "Watchlist items deleted"</code>).
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",
+  "ids": [603, 155]              // or "items": [{"mediaId": 603}, ...]
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/playlist/delete/</span>
+            <span class="api-card-title">Delete custom playlists</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Removes whole playlists from cloud data and tombstones their ids. Response
+                <code>message: "Playlists deleted"</code>, same 200/error contract as above.
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",
+  "playlistIds": ["pl_1", "pl_2"]   // or "ids" / "items"
+}</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/playlist/item/delete/</span>
+            <span class="api-card-title">Remove items inside a playlist</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Removes specific items from specific playlists without deleting the playlist. Items are
+                addressed by <code>"playlistId:mediaId"</code> keys (canonical) or the compact
+                <code>playlistId</code> + <code>itemIds</code> form. Tombstoned as
+                <code>"pid:iid"</code> keys, also returned in <code>userData.deletedPlaylistItems</code>.
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "email": "user@example.com",
+  "playlistId": "pl_1",           // compact form:
+  "itemIds": [603, 155]
+}
+// or canonical keys:
+// "keys": ["pl_1:603", "pl_1:155"]
+// or "items": [{"playlistId": "pl_1", "mediaId": 603}, ...]</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/history/clear/</span>
+            <span class="api-card-title">Clear all history</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                "Clear all" / "Delete all" on the phone. Empties <code>watchHistory</code> +
+                <code>playbackProgress</code>, deletes every web history row, and tombstones every id
+                that was present — so other devices purge it too on their next sync. Body carries only
+                the email; response <code>message: "History cleared"</code>.
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{ "email": "user@example.com" }</pre>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/watchlist/clear/</span>
+            <span class="api-card-title">Clear entire watchlist</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                Empties the cloud watchlist, deletes every web watchlist row and tombstones every id
+                that was present. Same request/response contract as history/clear.
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{ "email": "user@example.com" }</pre>
+            <div class="api-note">
+                <i class="fas fa-info-circle"></i>
+                <span>All six endpoints are idempotent and free of side effects the app must undo: each answers with the full updated <code>userData</code>, including the active tombstones (<code>deletedHistory</code>, <code>deletedWatchlist</code>, <code>deletedPlaylists</code>, <code>deletedPlaylistItems</code> — <code>"pid:iid"</code> keys). Tombstones expire after 24&nbsp;h, are capped at 500 per collection, and also flow back through <code>/api/user/sync/</code> so a device that missed the notification catches up.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-label" style="font-size:.85rem; color:#81c784; margin-top:2rem;">2b · Heartbeat &amp; Access Control <span style="color:#94a3b8;">(app → server, every 60 s)</span></div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/heartbeat/</span>
+            <span class="api-card-title">1-min heartbeat + real-time activity telemetry</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                The app fires this once a minute from a background loop so the admin panel can show who is
+                online, what they are watching, which screen they're on and which app version they run.
+                The server upserts one row per user (no event log), so the latest heartbeat is always the
+                live state. A user is considered <b>online</b> when a heartbeat arrived within the last
+                <b>3&nbsp;minutes</b>. The response echoes the account's verification and block state so the
+                app can react immediately — see Access Control below.
+            </p>
+            <div class="api-label">Auth</div>
+            <pre class="api-code" data-copy>Authorization: Basic base64(app_user:app_pass)
+Content-Type: application/json
+X-Android-App: 198
+X-Android-Build: 1</pre>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "action": "heartbeat",
+  "email": "user@example.com",     // required
+  "userId": "usr_1",
+  "isLoggedIn": true,
+  "isEmailVerified": true,
+  "deviceId": "a1b2c3",
+  "deviceModel": "Pixel 7 Pro",
+  "osVersion": "14",
+  "appVersion": "1.2.0",
+  "timestamp": 1729080000000,
+  "activity": {
+    "currentScreen": "home",
+    "isPlaying": true,
+    "playbackPositionMs": 45200,
+    "durationMs": 7200000,
+    "mediaTitle": "Inception",
+    "mediaId": 27205,
+    "isTv": false,
+    "season": null,
+    "episode": null,
+    "playerEngine": "exoplayer",
+    "recentActions": ["screen_home@1729079980000"]
+  }
+}</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "isEmailVerified": true,
+  "blockMode": "",               // "" | "full" | "play" | "app"
+  "isSubscribed": false,
+  "timestamp": 1729080000000
+}</pre>
+            <div class="api-note">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Errors: 401 missing/invalid Basic header · 403 wrong credentials · 400 bad JSON / missing email · <b>503</b> app-blocked (treat as server down).</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method" style="background: rgba(239,68,68,.18); color:#f87171; border: 1px solid rgba(239,68,68,.35);">BLOCK</span>
+            <span class="api-card-path">Access Control</span>
+            <span class="api-card-title">How an admin block reaches the app</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                An admin can restrict a user from the Synced-Users panel. The mode is stored per account and
+                enforced on every API call; the app reacts to the HTTP status. There are three modes:
+            </p>
+            <div class="api-label">Modes &amp; enforcement</div>
+            <pre class="api-code" data-copy>full  → EVERY endpoint returns 403 {"code":"access_blocked"}
+        App shows "access restricted", no data is pulled.
+
+app   → data APIs (sync, deletions, register, …) return 503
+        App treats it as "server is down": isServerOffline=true,
+        "Server is Down" modal, downloaded-only playback.
+
+play  → playback/source endpoints (e.g. /api/videasy/sources/)
+        return 403 so movies & series won't play. Browsing
+        stays allowed.</pre>
+            <div class="api-label">Blocked response</div>
+            <pre class="api-code" data-copy>HTTP/1.1 403 Forbidden
+{
+  "status": "error",
+  "code": "access_blocked",
+  "blockMode": "full",
+  "message": "Your access has been restricted. …"
+}</pre>
+            <div class="api-note">
+                <i class="fas fa-info-circle"></i>
+                <span>The <code>blockMode</code> returned by <code>/api/user/heartbeat/</code> and <code>/api/user/sync/</code> lets the app surface the restriction before any data call fails.</span>
             </div>
         </div>
     </div>

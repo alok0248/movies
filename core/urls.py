@@ -99,6 +99,23 @@ urlpatterns = [
     # Android API endpoints — with and without trailing slash for app compat
     path('api/user/sync/', views.api_user_sync, name='api_user_sync'),
     path('api/user/sync', views.api_user_sync),
+    # 1-minute background heartbeat + real-time activity telemetry.
+    path('api/user/heartbeat/', views.api_user_heartbeat, name='api_user_heartbeat'),
+    path('api/user/heartbeat', views.api_user_heartbeat),
+    # Deletion sync — app notifies the server the moment the user deletes
+    # history / watchlist / playlists / playlist items, or clears them.
+    path('api/user/history/delete/', views.api_user_delete, {'kind': 'history'}, name='api_user_history_delete'),
+    path('api/user/history/delete', views.api_user_delete, {'kind': 'history'}),
+    path('api/user/watchlist/delete/', views.api_user_delete, {'kind': 'watchlist'}, name='api_user_watchlist_delete'),
+    path('api/user/watchlist/delete', views.api_user_delete, {'kind': 'watchlist'}),
+    path('api/user/playlist/delete/', views.api_user_delete, {'kind': 'playlist'}, name='api_user_playlist_delete'),
+    path('api/user/playlist/delete', views.api_user_delete, {'kind': 'playlist'}),
+    path('api/user/playlist/item/delete/', views.api_user_delete, {'kind': 'playlist_item'}, name='api_user_playlist_item_delete'),
+    path('api/user/playlist/item/delete', views.api_user_delete, {'kind': 'playlist_item'}),
+    path('api/user/history/clear/', views.api_user_delete, {'kind': 'history_clear'}, name='api_user_history_clear'),
+    path('api/user/history/clear', views.api_user_delete, {'kind': 'history_clear'}),
+    path('api/user/watchlist/clear/', views.api_user_delete, {'kind': 'watchlist_clear'}, name='api_user_watchlist_clear'),
+    path('api/user/watchlist/clear', views.api_user_delete, {'kind': 'watchlist_clear'}),
     path('api/user/register/', views.api_user_register, name='api_user_register'),
     path('api/user/register', views.api_user_register),
     path('api/user/login/', views.api_user_login, name='api_user_login'),
@@ -122,6 +139,7 @@ urlpatterns = [
     path('admin-dashboard/synced-users/<int:user_id>/edit/', views.synced_user_edit, name='synced_user_edit'),
     path('admin-dashboard/synced-users/<int:user_id>/delete/', views.synced_user_delete, name='synced_user_delete'),
     path('admin-dashboard/synced-users/<int:user_id>/resend-verification/', views.synced_user_resend_verification, name='synced_user_resend_verification'),
+    path('admin-dashboard/synced-users/<int:user_id>/block/', views.synced_user_block, name='synced_user_block'),
     path('admin-dashboard/user-dashboard/', views.user_dashboard, name='user_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/json/', views.ajax_android_app_dashboard, name='ajax_android_app_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/device/<str:user_id>/logs/', views.android_device_logs, name='android_device_logs'),

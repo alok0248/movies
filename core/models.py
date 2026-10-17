@@ -23,6 +23,98 @@ def _epoch_ms_to_dt(value):
         return None
 
 
+# --- deletion tombstones -------------------------------------------------
+# A tombstone remembers that an item was deleted so no later sync — from this
+# device, another device, or the web models — can resurrect it. Entries are
+# {id: deletedAtEpochMs}; one unexpired tombstone beats any copy of the item
+# that arrives in a sync payload or exists in a web model.
+_TOMBSTONE_TTL_MS = 24 * 60 * 60 * 1000   # deletions stick for 24 h
+_TOMBSTONE_MAX_ENTRIES = 500              # per collection, oldest pruned first
+
+
+def _cloud_item_id(item):
+    """Media id of a cloud-data item (dict or scalar), or None."""
+    if isinstance(item, dict):
+        return item.get('mediaId') or item.get('id') or item.get('tmdbId')
+    return item
+
+
+def _tid(value):
+    """Tombstone-key form of an id: trimmed string, '' for empty."""
+    if value in (None, ''):
+        return ''
+    return str(value).strip()
+
+
+def _key_media_id(key):
+    """Media id from a playback-progress key (movie_550, tv_123_2_3)."""
+    parts = str(key).split('_')
+    if len(parts) >= 2:
+        return parts[1]
+    return ''
+
+
+def _now_ms():
+    return int(timezone.now().timestamp() * 1000)
+
+
+def _tombstone_active(field, key):
+    """True when key is an unexpired tombstone in a {id: ms} map."""
+    ts = (field or {}).get(key)
+    if ts is None:
+        return False
+    try:
+        return (_now_ms() - int(ts)) <= _TOMBSTONE_TTL_MS
+    except (TypeError, ValueError):
+        return False
+
+
+def _active_keys(field):
+    """Unexpired keys of a {id: ms} tombstone map."""
+    return [k for k in (field or {}) if _tombstone_active(field, k)]
+
+
+def _tid_back(key):
+    """App-facing form of a tombstone key: numeric strings become ints."""
+    return int(key) if str(key).isdigit() else key
+
+
+def _tombstone_add(field, keys):
+    """Record keys in a {id: ms} map, dropping expired and over-cap entries."""
+    now = _now_ms()
+    out = {}
+    for k, ts in (field or {}).items():
+        try:
+            if now - int(ts) <= _TOMBSTONE_TTL_MS:
+                out[k] = ts
+        except (TypeError, ValueError):
+            continue
+    for k in keys:
+        k = _tid(k)
+        if k and k not in out:
+            out[k] = now
+    if len(out) > _TOMBSTONE_MAX_ENTRIES:
+        out = dict(sorted(out.items(), key=lambda kv: kv[1])[-_TOMBSTONE_MAX_ENTRIES:])
+    return out
+
+
+def _playlist_item_tombstoned(playlist_id, item, tombstones):
+    """True when a playlist item's key matches an active tombstone entry.
+
+    The app has sent item keys in more than one spelling, so accept the
+    canonical 'pid:iid' plus the other separators it may use. ``tombstones``
+    may be a {id: ms} map or an already-filtered set of keys.
+    """
+    iid = _tid(_cloud_item_id(item))
+    if not iid or not tombstones:
+        return False
+    pid = _tid(playlist_id)
+    active = set(_active_keys(tombstones)) if isinstance(tombstones, dict) else {_tid(t) for t in tombstones}
+    return any(c in active for c in ('%s:%s' % (pid, iid),
+                                     '%s|%s' % (pid, iid),
+                                     '%s_%s' % (pid, iid)))
+
+
 def _backfill_from_tmdb(rows):
     """Fetch missing title+poster from TMDB for a batch of PlayHistory rows.
 
@@ -1312,6 +1404,18 @@ class SyncedUser(models.Model):
     valid_until = models.DateField(blank=True, null=True)
     features = models.JSONField(default=list, blank=True)
 
+    # Access control — admin-set, enforced by the API layer (see
+    # core/views.py _enforce_user_block). Modes are mutually exclusive:
+    #   ''     — normal access
+    #   'full' — stop access: every app API call is refused (403)
+    #   'play' — playback block: streaming/source endpoints refuse, data stays
+    #   'app'  — app block: data APIs answer 503 so the app's own heartbeat
+    #            logic flips to isServerOffline and shows "Server is Down"
+    block_mode = models.CharField(max_length=10, blank=True, default='',
+                                  choices=[('', 'None'), ('full', 'Full block'),                                           ('play', 'Play block'), ('app', 'App block')])
+    blocked_at = models.DateTimeField(null=True, blank=True)
+    blocked_reason = models.CharField(max_length=255, blank=True, default='')
+
     last_synced_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1335,6 +1439,88 @@ class SyncedUser(models.Model):
             'validUntil': self.valid_until.isoformat() if self.valid_until else None,
             'daysRemaining': self.days_remaining,
             'features': self.features or [],
+        }
+
+
+class UserHeartbeat(models.Model):
+    """Latest 1-minute heartbeat from the Android app (POST /api/user/heartbeat).
+
+    One row per user — each heartbeat overwrites the previous, so the admin
+    panel always shows the current device + real-time activity without    querying an event log. ``is_online`` is derived from ``last_seen_at``    (a heartbeat every 60 s means anything under ~3 min old is online).
+    """
+    # Cross-DB link (external users DB) — no DB-level constraint.
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='heartbeat', null=True, blank=True, db_constraint=False)
+    email = models.EmailField(unique=True, db_index=True)
+    # The app's own numeric/string user id from its login response (not the
+    # Django pk — named app_user_id to avoid clashing with the FK column).
+    app_user_id = models.CharField(max_length=64, blank=True, default='')
+    is_logged_in = models.BooleanField(default=True)
+    is_email_verified = models.BooleanField(default=True)
+    # Device metadata
+    device_id = models.CharField(max_length=100, blank=True, default='')
+    device_model = models.CharField(max_length=100, blank=True, default='')
+    os_version = models.CharField(max_length=50, blank=True, default='')
+    app_version = models.CharField(max_length=50, blank=True, default='')
+    # Real-time activity (flattened from the app's activity object)
+    current_screen = models.CharField(max_length=100, blank=True, default='')
+    is_playing = models.BooleanField(default=False)
+    playback_position_ms = models.BigIntegerField(default=0)
+    duration_ms = models.BigIntegerField(default=0)
+    media_title = models.CharField(max_length=255, blank=True, default='')
+    media_id = models.BigIntegerField(null=True, blank=True)
+    media_is_tv = models.BooleanField(default=False)
+    season = models.IntegerField(null=True, blank=True)
+    episode = models.IntegerField(null=True, blank=True)
+    player_engine = models.CharField(max_length=30, blank=True, default='')
+    recent_actions = models.JSONField(default=list, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    ONLINE_WINDOW_SECONDS = 180  # heartbeat every 60 s — 3 misses = offline
+
+    class Meta:
+        verbose_name = 'User Heartbeat'
+        verbose_name_plural = 'User Heartbeats'
+        ordering = ['-last_seen_at']
+
+    def __str__(self):
+        try:
+            return f"Heartbeat: {self.email}"
+        except Exception:
+            return f"Heartbeat: user #{self.app_user_id}"
+
+    @property
+    def is_online(self):
+        if not self.last_seen_at:
+            return False
+        age = (timezone.now() - self.last_seen_at).total_seconds()
+        return age <= self.ONLINE_WINDOW_SECONDS
+
+    @property
+    def platform(self):
+        """android when the app has heartbeated, else fall back to the most
+        recent login session source (web / android / ios)."""
+        if self.last_seen_at:
+            return 'android'
+        try:
+            return UserSession.last_source(self.user) if self.user else 'web'
+        except Exception:
+            return 'web'
+
+    def activity_payload(self):
+        return {
+            'currentScreen': self.current_screen,
+            'isPlaying': self.is_playing,
+            'playbackPositionMs': self.playback_position_ms,
+            'durationMs': self.duration_ms,
+            'mediaTitle': self.media_title,
+            'mediaId': self.media_id,
+            'isTv': self.media_is_tv,
+            'season': self.season,
+            'episode': self.episode,
+            'playerEngine': self.player_engine,
+            'recentActions': self.recent_actions or [],
         }
 
 
@@ -1554,6 +1740,13 @@ class UserCloudData(models.Model):
     app_settings = models.JSONField(default=dict, blank=True)
     downloads = models.JSONField(default=list, blank=True)
     playlists = models.JSONField(default=list, blank=True)
+    # Deletion tombstones — {id: deletedAtEpochMs} maps. The app reports what
+    # it deleted (via /api/user/sync or the dedicated delete endpoints) and
+    # these records stop the bidirectional merge from bringing the items back.
+    deleted_history = models.JSONField(default=dict, blank=True)
+    deleted_watchlist = models.JSONField(default=dict, blank=True)
+    deleted_playlists = models.JSONField(default=dict, blank=True)
+    deleted_playlist_items = models.JSONField(default=dict, blank=True)
     data_version = models.IntegerField(default=0)
     last_synced_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1581,7 +1774,119 @@ class UserCloudData(models.Model):
             'userRatings': self.user_ratings or {},
             'downloads': self.downloads or [],
             'playlists': self.playlists or [],
+            # Active deletion tombstones, so a device that missed a delete
+            # notification can still purge the item when it next syncs.
+            'deletedHistory': [_tid_back(k) for k in _active_keys(self.deleted_history)],
+            'deletedWatchlist': [_tid_back(k) for k in _active_keys(self.deleted_watchlist)],
+            'deletedPlaylists': [_tid_back(k) for k in _active_keys(self.deleted_playlists)],
+            'deletedPlaylistItems': _active_keys(self.deleted_playlist_items),
         }
+
+    def apply_deletions(self, deleted_history=(), deleted_watchlist=(),
+                        deleted_playlists=(), deleted_playlist_items=()):
+        """Remove the given items from every cloud collection and record
+        tombstones so a later sync cannot resurrect them.
+
+        Ids may be scalars or the dicts the app sends ({mediaId}/{id} /
+        {playlistId, mediaId}); playlist items may be 'pid:iid' keys or
+        {playlistId, mediaId} dicts. Returns the number of data entries
+        removed (tombstones for absent items are still recorded — the item
+        may exist on another device).
+        """
+        def _norm_ids(values):
+            out = set()
+            for v in values or ():
+                if isinstance(v, dict):
+                    v = v.get('mediaId') or v.get('id') or v.get('tmdbId')
+                k = _tid(v)
+                if k:
+                    out.add(k)
+            return out
+
+        def _norm_item_keys(values):
+            out = set()
+            for v in values or ():
+                if isinstance(v, dict):
+                    pid = _tid(v.get('playlistId') or v.get('playlist_id'))
+                    iid = _tid(v.get('mediaId') or v.get('id') or v.get('tmdbId'))
+                    if pid and iid:
+                        out.add('%s:%s' % (pid, iid))
+                    continue
+                k = _tid(v)
+                if k:
+                    out.add(k)
+            return out
+
+        h_ids = _norm_ids(deleted_history)
+        w_ids = _norm_ids(deleted_watchlist)
+        p_ids = _norm_ids(deleted_playlists)
+        pi_keys = _norm_item_keys(deleted_playlist_items)
+        if not (h_ids or w_ids or p_ids or pi_keys):
+            return 0
+
+        removed = 0
+
+        if h_ids:
+            before = len(self.watch_history or [])
+            self.watch_history = [h for h in (self.watch_history or [])
+                                  if _tid(_cloud_item_id(h)) not in h_ids]
+            removed += before - len(self.watch_history)
+            before = len(self.playback_progress or {})
+            self.playback_progress = {
+                k: v for k, v in (self.playback_progress or {}).items()
+                if _tid(_cloud_item_id(v)) not in h_ids and _tid(_key_media_id(k)) not in h_ids
+            }
+            removed += before - len(self.playback_progress)
+            self.deleted_history = _tombstone_add(self.deleted_history, h_ids)
+
+        if w_ids:
+            before = len(self.watchlist_ids or [])
+            self.watchlist_ids = [w for w in (self.watchlist_ids or [])
+                                  if _tid(_cloud_item_id(w)) not in w_ids]
+            removed += before - len(self.watchlist_ids)
+            self.deleted_watchlist = _tombstone_add(self.deleted_watchlist, w_ids)
+
+        if p_ids or pi_keys:
+            kept_playlists = []
+            for pl in (self.playlists or []):
+                if not isinstance(pl, dict):
+                    kept_playlists.append(pl)
+                    continue
+                if _tid(pl.get('id') or pl.get('playlistId')) in p_ids:
+                    removed += 1  # the playlist itself
+                    continue
+                items = pl.get('items') or []
+                if pi_keys:
+                    kept_items = [it for it in items
+                                  if not _playlist_item_tombstoned(pl.get('id') or pl.get('playlistId'),
+                                                                   it, pi_keys)]
+                    removed += len(items) - len(kept_items)
+                    pl['items'] = kept_items
+                kept_playlists.append(pl)
+            self.playlists = kept_playlists
+            if p_ids:
+                self.deleted_playlists = _tombstone_add(self.deleted_playlists, p_ids)
+            if pi_keys:
+                self.deleted_playlist_items = _tombstone_add(self.deleted_playlist_items, pi_keys)
+
+        self.data_version += 1
+        self.save()
+        return removed
+
+    def apply_incoming_tombstones(self, incoming):
+        """Fold the app's deleted* lists from a sync payload into the cloud
+        record: purge the items and remember the deletions. Returns True when
+        anything changed."""
+        if not isinstance(incoming, dict):
+            return False
+        before_version = self.data_version
+        self.apply_deletions(
+            deleted_history=incoming.get('deletedHistory') or incoming.get('deleted_history') or [],
+            deleted_watchlist=incoming.get('deletedWatchlist') or incoming.get('deleted_watchlist') or [],
+            deleted_playlists=incoming.get('deletedPlaylists') or incoming.get('deleted_playlists') or [],
+            deleted_playlist_items=incoming.get('deletedPlaylistItems') or incoming.get('deleted_playlist_items') or [],
+        )
+        return self.data_version != before_version
 
     def merge_incoming(self, incoming):
         """Merge incoming data from Android app. App data wins on conflicts.
@@ -1595,6 +1900,58 @@ class UserCloudData(models.Model):
             if isinstance(item, dict):
                 return item.get('mediaId') or item.get('id')
             return item
+
+        # --- deletion tombstones -----------------------------------------
+        # Deletions beat data: drop whatever the payload itself marks as
+        # deleted, and whatever an earlier deletion (by this or another
+        # device) left an active tombstone for. Re-adding an item therefore
+        # only sticks once its tombstone expires (see _TOMBSTONE_TTL_MS).
+        def _tomb_ids(values):
+            out = set()
+            for v in values or ():
+                if isinstance(v, dict):
+                    v = v.get('mediaId') or v.get('id') or v.get('tmdbId')
+                k = _tid(v)
+                if k:
+                    out.add(k)
+            return out
+
+        active_h = (_tomb_ids(incoming.get('deletedHistory') or incoming.get('deleted_history'))
+                    | set(_active_keys(self.deleted_history)))
+        active_w = (_tomb_ids(incoming.get('deletedWatchlist') or incoming.get('deleted_watchlist'))
+                    | set(_active_keys(self.deleted_watchlist)))
+        active_p = (_tomb_ids(incoming.get('deletedPlaylists') or incoming.get('deleted_playlists'))
+                    | set(_active_keys(self.deleted_playlists)))
+        active_pi = (_tomb_ids(incoming.get('deletedPlaylistItems') or incoming.get('deleted_playlist_items'))
+                     | set(_active_keys(self.deleted_playlist_items)))
+
+        if active_h:
+            incoming['watchHistory'] = [h for h in (incoming.get('watchHistory') or [])
+                                        if _tid(_get_id(h)) not in active_h]
+            prog = incoming.get('playbackProgress') or {}
+            if prog:
+                incoming['playbackProgress'] = {
+                    k: v for k, v in prog.items()
+                    if _tid((v.get('mediaId') or v.get('id')) if isinstance(v, dict) else '') not in active_h
+                    and _tid(_key_media_id(k)) not in active_h
+                }
+        if active_w:
+            incoming['watchlist'] = [w for w in (incoming.get('watchlist') or [])
+                                     if _tid(_get_id(w)) not in active_w]
+        if active_p or active_pi:
+            kept_playlists = []
+            for pl in (incoming.get('playlists') or []):
+                if not isinstance(pl, dict):
+                    kept_playlists.append(pl)
+                    continue
+                pid = pl.get('id') or pl.get('playlistId')
+                if _tid(pid) in active_p:
+                    continue
+                if active_pi:
+                    pl['items'] = [it for it in (pl.get('items') or [])
+                                   if not _playlist_item_tombstoned(pid, it, active_pi)]
+                kept_playlists.append(pl)
+            incoming['playlists'] = kept_playlists
 
         # Playback progress — app data wins, normalize fields
         app_progress = incoming.get('playbackProgress', {})
@@ -1661,6 +2018,10 @@ class UserCloudData(models.Model):
 
         self.data_version += 1
         self.save()
+        # Purge items the payload reports as deleted and remember the
+        # tombstones — deletions win over the merge above, whichever device
+        # sent them. No-op (no extra save) when the payload carries none.
+        self.apply_incoming_tombstones(incoming)
         # After merging, push cloud data into web models
         self.sync_to_web_models()
 
@@ -1867,10 +2228,17 @@ class UserCloudData(models.Model):
         if not self.user:
             return
 
+        # Items with an active deletion tombstone never flow back up — a web
+        # row that predates the deletion must not undo it.
+        del_h = set(_active_keys(self.deleted_history))
+        del_w = set(_active_keys(self.deleted_watchlist))
+
         # --- WatchList -> cloud watchlist_ids ---
         web_wl = WatchList.objects.filter(user=self.user)
         cloud_existing = {w.get('mediaId'): w for w in (self.watchlist_ids or []) if isinstance(w, dict)}
         for item in web_wl:
+            if del_w and _tid(item.tmdb_id) in del_w:
+                continue
             if item.tmdb_id not in cloud_existing:
                 cloud_item = {
                     'mediaId': item.tmdb_id,
@@ -1884,6 +2252,8 @@ class UserCloudData(models.Model):
         # --- PlayHistory -> cloud playback_progress ---
         web_history = PlayHistory.objects.filter(user=self.user)
         for h in web_history:
+            if del_h and _tid(h.tmdb_id) in del_h:
+                continue
             season = h.season_number if h.season_number is not None else -1
             episode = h.episode_number if h.episode_number is not None else -1
             key = f"{'tv' if h.media_type == 'tv' else 'movie'}_{h.tmdb_id}_{season}_{episode}"
