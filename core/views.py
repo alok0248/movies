@@ -10974,7 +10974,11 @@ def _cloud_sync_sections(cloud, linked_user=None):
         return []
 
     def _finish(items):
-        for item in items[:MAX_CLOUD_ITEMS]:
+        # Only ever called with at most CLOUD_ITEMS_PER_SECTION entries: the
+        # title/poster lookup, the date labels and the reverse() calls cost more
+        # than the markup, so enriching entries that are never rendered was the
+        # real reason the page took seconds to build.
+        for item in items:
             hit = known.get(item['tmdb_id']) if item['tmdb_id'] else None
             if hit:
                 if not item['title']:
@@ -11016,36 +11020,38 @@ def _cloud_sync_sections(cloud, linked_user=None):
 
     progress = getattr(cloud, 'playback_progress', None)
     progress = progress if isinstance(progress, dict) else {}
-    playback = _finish([_cloud_item(entry, key=key) for key, entry in progress.items()])
-    playback.sort(key=lambda i: _safe_int(i['last_updated']), reverse=True)
-    seen = _finish([_cloud_item(key=key) for key in _as_list(getattr(cloud, 'seen_keys', None))])
-    history = _finish([_cloud_item(raw=entry)
-                       for entry in _as_list(getattr(cloud, 'watch_history', None))])
-    history.sort(key=lambda i: _safe_int(i['last_updated']), reverse=True)
-    favorites = _finish([_cloud_item(raw=entry)
-                         for entry in _as_list(getattr(cloud, 'favorites', None))])
-    watchlist = _finish([_cloud_item(raw=entry)
-                         for entry in _as_list(getattr(cloud, 'watchlist_ids', None))])
     ratings = getattr(cloud, 'user_ratings', None)
     ratings = ratings if isinstance(ratings, dict) else {}
-    rated = _finish([_cloud_item(raw=value if isinstance(value, dict) else None,
-                                 key=key if not isinstance(value, dict) else None,
-                                 rating=value if not isinstance(value, dict) else None)
-                     for key, value in ratings.items()])
 
     sections = [
-        ('playback', 'Playback Entries', 'play-circle', '#38bdf8', playback),
-        ('seen', 'Seen Items', 'eye', '#a855f7', seen),
-        ('history', 'Watch History', 'history', '#fbbf24', history),
-        ('favorites', 'Favorites', 'heart', '#22c55e', favorites),
-        ('watchlist', 'Watchlist', 'bookmark', '#ef4444', watchlist),
-        ('ratings', 'Ratings', 'star', '#94a3b8', rated),
+        ('playback', 'Playback Entries', 'play-circle', '#38bdf8',
+         [_cloud_item(entry, key=key) for key, entry in progress.items()]),
+        ('seen', 'Seen Items', 'eye', '#a855f7',
+         [_cloud_item(key=key) for key in _as_list(getattr(cloud, 'seen_keys', None))]),
+        ('history', 'Watch History', 'history', '#fbbf24',
+         [_cloud_item(raw=entry) for entry in _as_list(getattr(cloud, 'watch_history', None))]),
+        ('favorites', 'Favorites', 'heart', '#22c55e',
+         [_cloud_item(raw=entry) for entry in _as_list(getattr(cloud, 'favorites', None))]),
+        ('watchlist', 'Watchlist', 'bookmark', '#ef4444',
+         [_cloud_item(raw=entry) for entry in _as_list(getattr(cloud, 'watchlist_ids', None))]),
+        ('ratings', 'Ratings', 'star', '#94a3b8',
+         [_cloud_item(raw=value if isinstance(value, dict) else None,
+                      key=key if not isinstance(value, dict) else None,
+                      rating=value if not isinstance(value, dict) else None)
+          for key, value in ratings.items()]),
     ]
-    # `count` stays the true total for the badge; `items` is only what the page
-    # renders, and the template says "showing the first N of COUNT".
-    return [{'key': key, 'label': label, 'icon': icon, 'color': color,
-             'items': items[:CLOUD_ITEMS_PER_SECTION], 'count': len(items)}
-            for key, label, icon, color, items in sections]
+
+    rendered = []
+    for key, label, icon, color, raw_items in sections:
+        raw_items.sort(key=lambda i: _safe_int(i['last_updated']), reverse=True)
+        # `count` stays the true total for the badge; `items` is only what the
+        # page renders, and the template says "showing the first N of COUNT".
+        rendered.append({
+            'key': key, 'label': label, 'icon': icon, 'color': color,
+            'items': _finish(raw_items[:CLOUD_ITEMS_PER_SECTION]),
+            'count': len(raw_items),
+        })
+    return rendered
 
 
 @login_required
