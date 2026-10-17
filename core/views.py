@@ -8991,6 +8991,12 @@ def _ensure_user_and_profile(email, body):
 # backfill, so syncs arriving closer than this get the stored cloud state
 # served back cheaply instead.
 _USER_SYNC_MIN_INTERVAL = 45
+# Request caps for POST /api/user/sync. The interval above only decides whether
+# a sync is *full* or answered from stored data; these cap how often a client
+# may ask at all, because every answer carries the whole cloud payload.
+_USER_SYNC_MAX_PER_WINDOW = 20       # per account + device, per window below
+_USER_SYNC_IP_MAX_PER_WINDOW = 90    # per address (shared/office/carrier IPs)
+_USER_SYNC_WINDOW_SECONDS = 60
 
 
 def _guard_android_api_errors(view_func):
@@ -9991,6 +9997,60 @@ def api_user_login(request):
     }))
 
 
+def _sync_rate_ok(key, limit):
+    """Fixed-window request counter for /api/user/sync.
+
+    Returns (allowed, retry_after_seconds). Kept in the cache on purpose: it
+    is a cheap in-memory check, so a throttled client costs one dictionary
+    lookup instead of the database reads and the half-megabyte payload a real
+    sync builds.
+    """
+    now = timezone.now().timestamp()
+    state = cache.get(key)
+    if not state or state.get('reset', 0) <= now:
+        cache.set(key, {'count': 1, 'reset': now + _USER_SYNC_WINDOW_SECONDS},
+                  _USER_SYNC_WINDOW_SECONDS)
+        return True, 0
+    if state.get('count', 0) >= limit:
+        return False, max(1, int(round(state['reset'] - now)))
+    state['count'] = state.get('count', 0) + 1
+    cache.set(key, state, max(1, int(round(state['reset'] - now))))
+    return True, 0
+
+
+def _sync_rate_limited(request, email, body):
+    """429 when this account/device — or this address — syncs too fast.
+
+    A client stuck in a retry loop asks every second or two; every answer it
+    gets carries the user's whole cloud payload (~0.5 MB here), so a single
+    looping phone was enough to pin both gunicorn workers on a 1-vCPU box and
+    make nginx return 504s for everybody else. Throttled calls now come back
+    as a tiny 429 with Retry-After, which costs no database work and lets the
+    rest of the site breathe. Real clients sync a handful of times a minute.
+    """
+    device_id = (body.get('deviceId') or body.get('device_id') or '').strip()
+    identity = f'usersync_rl:{email}|{device_id}' if device_id else f'usersync_rl:{email}'
+    allowed, retry_after = _sync_rate_ok(identity, _USER_SYNC_MAX_PER_WINDOW)
+    if not allowed:
+        return _sync_too_fast_response(retry_after)
+    allowed, retry_after = _sync_rate_ok(f'usersync_rl:ip:{_get_client_ip(request)}',
+                                         _USER_SYNC_IP_MAX_PER_WINDOW)
+    if not allowed:
+        return _sync_too_fast_response(retry_after)
+    return None
+
+
+def _sync_too_fast_response(retry_after):
+    response = JsonResponse({
+        'status': 'error',
+        'message': 'Syncing too often. Please wait a moment and try again.',
+        'retryable': True,
+        'retryAfter': retry_after,
+    }, status=429)
+    response['Retry-After'] = str(retry_after)
+    return response
+
+
 @_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -10013,6 +10073,10 @@ def api_user_sync(request):
     block_err = _enforce_user_block(email, app_match)
     if block_err:
         return block_err
+
+    rate_err = _sync_rate_limited(request, email, body)
+    if rate_err:
+        return rate_err
 
     # Throttle full syncs per user. Between full syncs, answer from stored
     # cloud data with a single read — no writes, no TMDB calls. The payload
