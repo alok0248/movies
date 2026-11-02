@@ -1,0 +1,299 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Traffic Control - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .tc-head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+    .tc-icon {
+        width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
+        background: linear-gradient(135deg, #f97316, #ef4444);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .tc-card {
+        background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18);
+        border-radius: 12px; padding: 1rem;
+    }
+    .tc-stat { display: flex; flex-direction: column; gap: .15rem; }
+    .tc-num { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .tc-lbl { font-size: .72rem; color: #94a3b8; }
+    .tc-sub { font-size: .74rem; color: #94a3b8; }
+    .tc-mono { font-family: Consolas, Menlo, monospace; font-size: .74rem; }
+    .tc-chip {
+        display: inline-flex; align-items: center; gap: .3rem;
+        font-size: .72rem; padding: .18rem .5rem; border-radius: 7px;
+        border: 1px solid rgba(148,163,184,.3); color: #cbd5e1;
+        background: rgba(15,23,42,.6);
+    }
+    .tc-chip.on { border-color: #22c55e; color: #86efac; background: rgba(34,197,94,.12); }
+    .tc-chip.off { border-color: rgba(148,163,184,.25); color: #94a3b8; }
+    .tc-btn {
+        display: inline-flex; align-items: center; gap: .35rem;
+        font-size: .74rem; font-weight: 600; padding: .3rem .6rem; border-radius: 8px;
+        border: 1px solid rgba(148,163,184,.35); background: rgba(15,23,42,.75);
+        color: #e2e8f0; cursor: pointer; text-decoration: none;
+    }
+    .tc-btn:hover { background: rgba(30,41,59,.95); color: #fff; }
+    .tc-btn.off { border-color: #f87171; color: #fca5a5; }
+    .tc-btn.on { border-color: #22c55e; color: #86efac; }
+    .tc-btn.lift { border-color: rgba(148,163,184,.3); color: #cbd5e1; }
+    .tc-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    .tc-table th {
+        font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+        color: #94a3b8; text-align: left; padding: .4rem .5rem;
+        border-bottom: 1px solid rgba(148,163,184,.2); white-space: nowrap;
+    }
+    .tc-table td { padding: .45rem .5rem; border-bottom: 1px solid rgba(148,163,184,.1); vertical-align: middle; }
+    .tc-table tr:last-child td { border-bottom: 0; }
+    .tc-scroll { overflow-x: auto; }
+    .tc-sect { font-size: .95rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .45rem; }
+    .tc-bot-group { margin-top: .75rem; }
+    .tc-bot-group h6 { font-size: .72rem; color: #94a3b8; margin: 0 0 .35rem; font-weight: 600; }
+    .tc-bots { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .tc-bot { display: inline-flex; align-items: stretch; }
+    .tc-bot form { margin: 0; }
+    .tc-bot button {
+        font-size: .72rem; padding: .18rem .45rem; border-radius: 0 7px 7px 0;
+        border: 1px solid rgba(148,163,184,.3); border-left: 0;
+        background: rgba(15,23,42,.6); color: #94a3b8; cursor: pointer;
+    }
+    .tc-bot button:hover { color: #fff; }
+    .tc-bot .tag {
+        font-size: .72rem; padding: .18rem .45rem; border-radius: 7px 0 0 7px;
+        border: 1px solid rgba(148,163,184,.3); background: rgba(15,23,42,.6);
+        color: #cbd5e1; font-family: Consolas, Menlo, monospace;
+    }
+    .tc-bot.on .tag { color: #86efac; border-color: rgba(34,197,94,.6); background: rgba(34,197,94,.10); }
+    .tc-bot.on button { border-color: rgba(34,197,94,.6); color: #86efac; }
+    .tc-empty { font-size: .78rem; color: #64748b; padding: .6rem 0; }
+    a.tc-link { color: #93c5fd; text-decoration: none; }
+    a.tc-link:hover { text-decoration: underline; }
+</style>
+
+<div class="container-fluid py-3">
+    <div class="tc-head mb-3">
+        <div class="tc-icon"><i class="fas fa-shield-halved fa-lg text-white"></i></div>
+        <div class="flex-grow-1">
+            <h4 class="mb-0 text-white">Traffic Control</h4>
+            <div class="tc-sub">Everything the site refuses, in one place — bots, addresses and probes.</div>
+        </div>
+        <a class="tc-btn" href="{% url 'blocked_headers' %}"><i class="fas fa-heading"></i> All header rules</a>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg">
+            <div class="tc-card tc-stat">
+                <div class="tc-num" style="color:#fbbf24;">{{ bot_on }}<span class="tc-sub">/{{ bot_total }}</span></div>
+                <div class="tc-lbl">Bot rules on</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="tc-card tc-stat">
+                <div class="tc-num" style="color:#f87171;">{{ ip_totals.active|default:0 }}</div>
+                <div class="tc-lbl">Addresses blocked</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="tc-card tc-stat">
+                <div class="tc-num" style="color:#60a5fa;">{{ header_totals.active|default:0 }}</div>
+                <div class="tc-lbl">Header rules on</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="tc-card tc-stat">
+                <div class="tc-num" style="color:#a78bfa;">{{ probe_totals.ips|default:0 }}</div>
+                <div class="tc-lbl">Probe addresses (24h)</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="tc-card tc-stat">
+                <div class="tc-num" style="color:{% if five_xx_pct > 2 %}#f87171{% else %}#34d399{% endif %};">{{ five_xx_pct|floatformat:1 }}%</div>
+                <div class="tc-lbl">5xx last hour ({{ five_xx_bad }}/{{ five_xx_total }})</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-xl-8">
+            <div class="tc-card">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="tc-sect"><i class="fas fa-robot text-warning"></i> Bot profile</div>
+                    <form method="post" action="{% url 'header_block_action' %}" style="margin:0;"
+                          onsubmit="return confirm('Switch on every bot rule except Google?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="bots">
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="tc-btn on" type="submit"><i class="fas fa-bolt"></i> Block all bots (Google kept)</button>
+                    </form>
+                </div>
+                <div class="tc-sub mt-1">
+                    Each row is one User-Agent rule. Toggle a single program without touching the others —
+                    Google crawlers are never in this list.
+                </div>
+                {% for group in bot_groups %}
+                <div class="tc-bot-group">
+                    <h6>{{ group.name }}</h6>
+                    <div class="tc-bots">
+                        {% for item in group.items %}
+                        <span class="tc-bot {% if item.on %}on{% endif %}">
+                            <span class="tag" title="{{ item.label }}">{{ item.token }}</span>
+                            <form method="post" action="{% url 'header_block_action' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                {% if item.on %}
+                                <input type="hidden" name="action" value="unblock">
+                                <input type="hidden" name="id" value="{{ item.rule_id }}">
+                                <button type="submit" title="Serve this program again">on</button>
+                                {% else %}
+                                <input type="hidden" name="action" value="block">
+                                <input type="hidden" name="value" value="{{ item.token }}">
+                                <input type="hidden" name="reason" value="bot profile: {{ item.label }}">
+                                <button type="submit" title="Refuse this program">off</button>
+                                {% endif %}
+                            </form>
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="tc-card">
+                <div class="tc-sect"><i class="fas fa-unlock text-info"></i> Unblock queue</div>
+                <div class="tc-sub mt-1 mb-2">Every active block, newest first. One button lifts one entry.</div>
+                {% if queue %}
+                <div class="tc-scroll">
+                    <table class="tc-table">
+                        <thead><tr><th>Blocked</th><th>Since</th><th></th></tr></thead>
+                        <tbody>
+                        {% for entry in queue %}
+                        <tr>
+                            <td>
+                                <span class="tc-mono">{{ entry.target }}</span>
+                                <div class="tc-sub">
+                                    {% if entry.kind == 'ip' %}address{% else %}header rule{% endif %}
+                                    {% if entry.reason %} · {{ entry.reason|truncatechars:48 }}{% endif %}
+                                </div>
+                            </td>
+                            <td class="tc-sub">{{ entry.since|date:'d M H:i' }}</td>
+                            <td>
+                                <form method="post" style="margin:0;"
+                                      action="{% if entry.kind == 'ip' %}{% url 'ip_block_action' %}{% else %}{% url 'header_block_action' %}{% endif %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    {% if entry.kind == 'ip' %}
+                                    <input type="hidden" name="action" value="unblock">
+                                    <input type="hidden" name="ip" value="{{ entry.target }}">
+                                    {% else %}
+                                    <input type="hidden" name="action" value="unblock">
+                                    <input type="hidden" name="id" value="{{ entry.rule_id }}">
+                                    {% endif %}
+                                    <button class="tc-btn lift" type="submit" title="Serve this again"><i class="fas fa-unlock"></i> Lift</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="tc-empty">Nothing is blocked right now.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="tc-card mt-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div class="tc-sect"><i class="fas fa-shield-alt text-danger"></i> Blocked addresses</div>
+            <a class="tc-btn" href="{% url 'blocked_ips' %}">Full block list</a>
+        </div>
+        {% if ip_rows %}
+        <div class="tc-scroll">
+            <table class="tc-table">
+                <thead>
+                    <tr><th>Address</th><th>Reason</th><th>Blocked</th><th>By</th><th>Requests while blocked</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for row in ip_rows %}
+                <tr>
+                    <td class="tc-mono {% if row.is_permanent %}text-danger{% endif %}">{{ row.ip }}</td>
+                    <td class="tc-sub">{{ row.reason|default:'—'|truncatechars:60 }}</td>
+                    <td class="tc-sub">{{ row.blocked_at|date:'d M H:i' }}</td>
+                    <td class="tc-sub">{{ row.blocked_by|default:'—' }}</td>
+                    <td><span class="tc-chip">{{ row.after }}</span></td>
+                    <td>
+                        <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="unblock">
+                            <input type="hidden" name="ip" value="{{ row.ip }}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="tc-btn lift" type="submit"><i class="fas fa-unlock"></i> Lift</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="tc-empty">No address is blocked. Probes below can be blocked in one click.</div>
+        {% endif %}
+    </div>
+
+    <div class="tc-card mt-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div class="tc-sect"><i class="fas fa-user-secret text-warning"></i> Probes &amp; suspicious traffic (24h)</div>
+            <a class="tc-btn" href="{% url 'probes' %}">Probe report</a>
+        </div>
+        {% if probe_rows %}
+        <div class="tc-scroll">
+            <table class="tc-table">
+                <thead>
+                    <tr><th>Address</th><th>Unknown pages</th><th>Requests</th><th>Last seen</th><th>Signals</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for row in probe_rows %}
+                <tr>
+                    <td class="tc-mono">{{ row.ip }}</td>
+                    <td><span class="tc-chip">{{ row.not_found }}</span></td>
+                    <td class="tc-sub">{{ row.requests }}</td>
+                    <td class="tc-sub">{{ row.last_seen|date:'d M H:i' }}</td>
+                    <td class="tc-sub">{{ row.probes|join:', '|default:'—'|truncatechars:56 }}</td>
+                    <td>
+                        <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;"
+                              onsubmit="return confirm('Block {{ row.ip }}?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="block">
+                            <input type="hidden" name="ip" value="{{ row.ip }}">
+                            <input type="hidden" name="reason" value="probe traffic">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="tc-btn off" type="submit"><i class="fas fa-ban"></i> Block</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="tc-empty">No probes in the last 24 hours.</div>
+        {% endif %}
+
+        {% if top_paths %}
+        <div class="mt-3">
+            <div class="tc-sub mb-1">Unknown paths asked for most</div>
+            <div class="d-flex flex-wrap gap-1">
+                {% for item in top_paths %}
+                <span class="tc-chip"><span class="tc-mono">{{ item.path }}</span> · {{ item.count }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="tc-sub mt-3">
+        Counts come from the retained request log ({{ total_stored }} rows kept).
+    </div>
+</div>
+{% endblock %}

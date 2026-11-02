@@ -10122,7 +10122,7 @@ def _sync_rate_ok(key, limit):
     return True, 0
 
 
-def _sync_rate_limited(request, email, body):
+def _sync_rate_limited(request, email, body, app_match=None):
     """429 when this account/device — or this address — syncs too fast.
 
     A client stuck in a retry loop asks every second or two; every answer it
@@ -10137,12 +10137,17 @@ def _sync_rate_limited(request, email, body):
     device-scoped counter never filled up. One account syncing faster than
     this from several devices at once is not a workload worth protecting.
     """
-    allowed, retry_after = _sync_rate_ok(f'usersync_rl:{email}',
-                                         _USER_SYNC_MAX_PER_WINDOW)
+    # The limits are per app, so a chatty release can be slowed from the
+    # Settings page without touching anybody else's build.
+    per_account = int(getattr(app_match, 'sync_max_per_minute', 0)
+                      or _USER_SYNC_MAX_PER_WINDOW)
+    per_address = int(getattr(app_match, 'sync_ip_max_per_minute', 0)
+                      or _USER_SYNC_IP_MAX_PER_WINDOW)
+    allowed, retry_after = _sync_rate_ok(f'usersync_rl:{email}', per_account)
     if not allowed:
         return _sync_too_fast_response(retry_after)
     allowed, retry_after = _sync_rate_ok(f'usersync_rl:ip:{_get_client_ip(request)}',
-                                         _USER_SYNC_IP_MAX_PER_WINDOW)
+                                         per_address)
     if not allowed:
         return _sync_too_fast_response(retry_after)
     return None
@@ -10182,7 +10187,7 @@ def api_user_sync(request):
     if block_err:
         return block_err
 
-    rate_err = _sync_rate_limited(request, email, body)
+    rate_err = _sync_rate_limited(request, email, body, app_match)
     if rate_err:
         return rate_err
 
@@ -10202,7 +10207,9 @@ def api_user_sync(request):
                     'subscription': recent_profile.subscription_payload() if recent_profile else FREE_SUBSCRIPTION,
                     'userData': recent_cloud.get_cloud_payload(),
                 })
-    cache.set(throttle_key, timezone.now(), _USER_SYNC_MIN_INTERVAL)
+    cache.set(throttle_key, timezone.now(),
+              int(getattr(app_match, 'sync_min_interval_seconds', 0)
+                  or _USER_SYNC_MIN_INTERVAL))
 
     # Create or get user + profile
     django_user, user_obj, created = _ensure_user_and_profile(email, body)
@@ -11365,6 +11372,9 @@ def synced_user_wipe_data(request, user_id):
     email = (user_obj.email or '').strip()
     counts = _wipe_user_data(user_obj, email=email)
     total = sum(counts.values())
+    from .audit import log_action
+    log_action(request, 'wipe_data', email,
+               'deleted %d record(s)/field(s): %s' % (total, counts))
     if request.POST.get('format') == 'json':
         return JsonResponse({
             'success': True,
@@ -12707,6 +12717,12 @@ def ip_block_action(request):
     else:
         messages.error(request, 'Unknown action.')
 
+    # One timeline entry per block/lift, for the Audit log page.
+    if ip:
+        from .audit import log_action
+        log_action(request, 'block_ip' if action in ('block', 'permanent') else 'unblock_ip',
+                   ip, 'action=%s permanent=%s reason=%s' % (action, permanent, reason))
+
     nxt = (request.POST.get('next') or '').strip()
     if not (nxt.startswith('/') and not nxt.startswith('//')):
         nxt = reverse('blocked_ips')
@@ -12865,6 +12881,19 @@ def header_block_action(request):
             messages.success(request, f'“{row.value}” is no longer listed in robots.txt.')
     else:
         messages.error(request, 'Unknown action.')
+
+    # One timeline entry per rule change, for the Audit log page.
+    from .audit import log_action
+    audit_action = {
+        'bots': 'bot_profile', 'block': 'block_header', 'unblock': 'unblock_header',
+        'delete': 'delete_header', 'robots': 'robots_header',
+        'no-robots': 'robots_header',
+    }.get(action, '')
+    if audit_action:
+        target = ('bot profile (every rule)' if action == 'bots'
+                  else '%s: %s' % (header_name, raw_value))
+        log_action(request, audit_action, target,
+                   'action=%s%s' % (action, (' reason=' + reason) if reason else ''))
 
     nxt = (request.POST.get('next') or '').strip()
     if not (nxt.startswith('/') and not nxt.startswith('//')):
@@ -14776,3 +14805,291 @@ def _format_uptime(seconds):
     elif hours > 0:
         return f'{hours}h {mins}m'
     return f'{mins}m'
+
+
+# ---------------------------------------------------------------------------
+# Traffic Control, audit log, per-app settings and health alerts.
+# ---------------------------------------------------------------------------
+
+
+def _admin_int(value, default=0, low=0, high=1000000):
+    """An int from a POST field, clamped, falling back to ``default``."""
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, number))
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def traffic_control(request):
+    """One page for everything that answers "who is hitting us and what is blocked".
+
+    The dashboard used to spread this over three pages — Blocked IPs, Blocked
+    Headers and Probes & Bots — which answered the same question separately.
+    Here the three sit together: the bot profile as a checklist you can switch
+    per program, the blocked addresses, the probes, and one queue of every
+    active block with a single Lift button each. The actions still post to the
+    existing endpoints (``ip_block_action``, ``header_block_action``), so the
+    history and validation of each are unchanged.
+    """
+    from .header_block import BOT_BLOCK_PROFILE, blocked_header_report
+    from .health import five_xx_rate
+    from .ip_block import blocked_ip_report
+    from .models import BlockedHeader
+    from .probes import probe_report
+    from .request_log import request_total
+
+    rule_ids = {r.value.lower(): r.id for r in BlockedHeader.objects.filter(is_active=True)}
+
+    groups, by_name = [], {}
+    for token, label in BOT_BLOCK_PROFILE:
+        category = (label.split(':')[0] or 'other').strip().title()
+        if category not in by_name:
+            by_name[category] = {'name': category, 'items': []}
+            groups.append(by_name[category])
+        by_name[category]['items'].append({
+            'token': token, 'label': label,
+            'on': token.lower() in rule_ids,
+            'rule_id': rule_ids.get(token.lower(), 0),
+        })
+
+    ip_rows, ip_totals = blocked_ip_report()
+    header_rows, header_totals = blocked_header_report()
+    probe_rows, probe_totals, top_paths = probe_report(hours=24, min_hits=1)
+
+    queue = []
+    for row in ip_rows:
+        queue.append({'kind': 'ip', 'target': row['ip'], 'reason': row['reason'],
+                      'since': row['blocked_at'], 'by': row['blocked_by']})
+    for row in header_rows:
+        queue.append({
+            'kind': 'header',
+            'rule_id': row['id'],
+            'target': '%s: %s' % (row['header_name'], row['value']),
+            'reason': row['reason'], 'since': row['blocked_at'],
+            'by': row['blocked_by'],
+        })
+    queue.sort(key=lambda entry: entry['since'] or timezone.now(), reverse=True)
+
+    pct5, bad5, total5 = five_xx_rate(60)
+    return render(request, 'core/admin_traffic_control.html', {
+        'bot_groups': groups,
+        'bot_on': sum(1 for g in groups for i in g['items'] if i['on']),
+        'bot_total': len(BOT_BLOCK_PROFILE),
+        'ip_rows': ip_rows,
+        'ip_totals': ip_totals,
+        'header_rows': header_rows[:80],
+        'header_totals': header_totals,
+        'probe_rows': probe_rows[:40],
+        'probe_totals': probe_totals,
+        'top_paths': top_paths[:8],
+        'queue': queue[:150],
+        'five_xx_pct': pct5,
+        'five_xx_bad': bad5,
+        'five_xx_total': total5,
+        'total_stored': request_total(),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_audit_log(request):
+    """Every admin action in one timeline: who, what, when, from where."""
+    from django.core.paginator import Paginator
+    from .audit import action_label, action_options, audit_report
+
+    action = (request.GET.get('action') or '').strip()
+    username = (request.GET.get('user') or '').strip()
+    search = (request.GET.get('q') or '').strip()
+    rows = audit_report(action=action, username=username, search=search)
+    page = Paginator(rows, 100).get_page(request.GET.get('page') or 1)
+    return render(request, 'core/admin_audit_log.html', {
+        'page_obj': page,
+        'rows': page.object_list,
+        'action': action,
+        'username': username,
+        'q': search,
+        'action_options': action_options(),
+        'action_label': action_label,
+        'total': len(rows),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def android_app_settings(request, app_id):
+    """This app's settings, in one place: retention, sync limits, version gate, ads.
+
+    The same numbers existed before but were spread over the analytics page and
+    a form that also edited the app's credentials. This page is only about the
+    behaviour: how long data is kept, how hard the app may poll the sync
+    endpoint, which builds are allowed in, and the ad switches that decide what
+    the app's players show.
+    """
+    from .audit import log_action
+
+    app_obj = get_object_or_404(AndroidApp, id=app_id)
+    site = SiteSettings.get_settings()
+
+    if request.method == 'POST':
+        section = (request.POST.get('section') or 'app').strip()
+        if section == 'ads':
+            site.adsterra_clicks_required = _admin_int(
+                request.POST.get('adsterra_clicks_required'), 5, 0, 1000)
+            site.adsterra_show_banner = request.POST.get('adsterra_show_banner') == 'on'
+            site.enable_adsterra_links = request.POST.get('enable_adsterra_links') == 'on'
+            site.enable_autoclick_ads = request.POST.get('enable_autoclick_ads') == 'on'
+            site.adsense_client_id = (request.POST.get('adsense_client_id') or '').strip()[:100]
+            site.adsense_verification_meta = (
+                request.POST.get('adsense_verification_meta') or '').strip()[:200]
+            site.save()
+            log_action(request, 'app_settings', app_obj.name,
+                       'ad switches: banner=%s links=%s autoclick=%s clicks=%s' % (
+                           site.adsterra_show_banner, site.enable_adsterra_links,
+                           site.enable_autoclick_ads, site.adsterra_clicks_required))
+            messages.success(request, 'Ad settings saved.')
+        else:
+            app_obj.data_retention_days = _admin_int(
+                request.POST.get('data_retention_days'), app_obj.data_retention_days, 1, 3650)
+            app_obj.log_retention_days = _admin_int(
+                request.POST.get('log_retention_days'), app_obj.log_retention_days, 1, 3650)
+            app_obj.sync_min_interval_seconds = _admin_int(
+                request.POST.get('sync_min_interval_seconds'),
+                app_obj.sync_min_interval_seconds, 5, 3600)
+            app_obj.sync_max_per_minute = _admin_int(
+                request.POST.get('sync_max_per_minute'), app_obj.sync_max_per_minute, 1, 600)
+            app_obj.sync_ip_max_per_minute = _admin_int(
+                request.POST.get('sync_ip_max_per_minute'),
+                app_obj.sync_ip_max_per_minute, 1, 6000)
+            app_obj.log_collection_enabled = request.POST.get('log_collection_enabled') == 'on'
+            app_obj.is_active = request.POST.get('is_active') == 'on'
+            app_obj.allowed_endpoint = (request.POST.get('allowed_endpoint') or '').strip()[:500]
+            app_obj.allowed_build_id = (request.POST.get('allowed_build_id') or '').strip()[:255]
+            app_obj.save()
+            log_action(request, 'app_settings', app_obj.name,
+                       'retention=%sd/%sd sync=%ss,%s/%smin active=%s builds=%s' % (
+                           app_obj.data_retention_days, app_obj.log_retention_days,
+                           app_obj.sync_min_interval_seconds, app_obj.sync_max_per_minute,
+                           app_obj.sync_ip_max_per_minute, app_obj.is_active,
+                           app_obj.allowed_build_id or 'any'))
+            messages.success(request, 'App settings saved.')
+        return redirect('android_app_settings', app_id=app_obj.id)
+
+    return render(request, 'core/admin_app_settings.html', {
+        'selected_app': app_obj,
+        'site': site,
+    })
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_alerts(request):
+    """Health alerts: what is checked, who is told, and a button to try it.
+
+    Recipients are ordinary email addresses the operator adds here — they do
+    not have to be admin accounts — and Telegram is optional. "Run check now"
+    reports what the checks see without sending anything; "Send a test alert"
+    delivers a message through every enabled channel, so the SMTP and bot
+    settings are proven before a real outage.
+    """
+    from . import health
+    from .audit import log_action
+    from .models import AlertRecipient, AlertSettings
+
+    conf = AlertSettings.get_settings()
+    findings = None
+    delivery = None
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+
+        if action == 'save':
+            conf.enabled = request.POST.get('enabled') == 'on'
+            conf.check_5xx = request.POST.get('check_5xx') == 'on'
+            try:
+                threshold = float((request.POST.get('five_xx_threshold') or '2').replace(',', '.'))
+            except (TypeError, ValueError):
+                threshold = 2.0
+            conf.five_xx_threshold = max(0.1, min(100.0, threshold))
+            conf.five_xx_window_minutes = _admin_int(
+                request.POST.get('five_xx_window_minutes'), 15, 1, 1440)
+            conf.check_disk = request.POST.get('check_disk') == 'on'
+            conf.disk_threshold = _admin_int(request.POST.get('disk_threshold'), 85, 1, 100)
+            conf.check_workers = request.POST.get('check_workers') == 'on'
+            conf.min_workers = _admin_int(request.POST.get('min_workers'), 2, 0, 100)
+            conf.notify_email = request.POST.get('notify_email') == 'on'
+            conf.notify_telegram = request.POST.get('notify_telegram') == 'on'
+            conf.telegram_bot_token = (request.POST.get('telegram_bot_token') or '').strip()[:200]
+            conf.telegram_chat_id = (request.POST.get('telegram_chat_id') or '').strip()[:100]
+            conf.repeat_minutes = _admin_int(request.POST.get('repeat_minutes'), 30, 1, 10080)
+            conf.save()
+            log_action(request, 'alert_settings', 'health alerts',
+                       'email=%s telegram=%s repeat=%smin' % (
+                           conf.notify_email, conf.notify_telegram, conf.repeat_minutes))
+            messages.success(request, 'Alert settings saved.')
+            return redirect('admin_alerts')
+
+        if action == 'add_recipient':
+            email = (request.POST.get('email') or '').strip().lower()
+            name = (request.POST.get('name') or '').strip()[:100]
+            if '@' not in email or len(email) < 5:
+                messages.error(request, 'Enter a valid email address.')
+            else:
+                row, created = AlertRecipient.objects.get_or_create(
+                    email=email, defaults={'name': name, 'is_active': True})
+                if not created:
+                    row.is_active = True
+                    row.name = name or row.name
+                    row.save(update_fields=['is_active', 'name'])
+                log_action(request, 'alert_recipient', email,
+                           'added' if created else 'switched back on')
+                messages.success(request, '%s will receive the alerts.' % email)
+            return redirect('admin_alerts')
+
+        if action in ('remove_recipient', 'toggle_recipient'):
+            rid = _admin_int(request.POST.get('id'), 0)
+            row = AlertRecipient.objects.filter(id=rid).first()
+            if row is None:
+                messages.warning(request, 'That recipient no longer exists.')
+            elif action == 'remove_recipient':
+                log_action(request, 'alert_recipient', row.email, 'removed')
+                row.delete()
+                messages.success(request, '%s will no longer receive the alerts.' % row.email)
+            else:
+                row.is_active = not row.is_active
+                row.save(update_fields=['is_active'])
+                log_action(request, 'alert_recipient', row.email,
+                           'on' if row.is_active else 'off')
+                messages.success(
+                    request, '%s is now %s.' % (row.email, 'on' if row.is_active else 'off'))
+            return redirect('admin_alerts')
+
+        if action == 'run':
+            findings = health.run_checks()
+            log_action(request, 'health_run', 'health checks',
+                       '; '.join('%s=%s' % (f['title'], f['detail']) for f in findings))
+
+        if action == 'test':
+            delivery = health.dispatch(force=True)
+            findings = delivery['findings']
+            log_action(request, 'alert_test', 'test alert',
+                       'email=%d telegram=%s errors=%s' % (
+                           delivery['sent_email'], delivery['sent_telegram'],
+                           '; '.join(delivery['errors']) or 'none'))
+            if delivery['errors']:
+                messages.warning(request, 'Test alert: ' + '; '.join(delivery['errors']))
+            else:
+                messages.success(
+                    request,
+                    'Test alert delivered to %d email(s)%s.' % (
+                        delivery['sent_email'],
+                        ' and Telegram' if delivery['sent_telegram'] else ''))
+
+    return render(request, 'core/admin_alerts.html', {
+        'conf': conf,
+        'recipients': list(AlertRecipient.objects.all()),
+        'findings': findings,
+        'delivery': delivery,
+        'recipients_active': AlertRecipient.objects.filter(is_active=True).count(),
+    })

@@ -559,6 +559,9 @@
 
         <div class="sb-section">
             <div class="sb-section-title">Security &amp; Traffic</div>
+            <a href="{% url 'traffic_control' %}" class="sb-item {% if 'admin-dashboard/traffic-control' in request.path %}active{% endif %}">
+                <i class="fas fa-shield-halved"></i> Traffic Control
+            </a>
             <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
                 <i class="fas fa-network-wired"></i> Requests &amp; Users
             </a>
@@ -570,6 +573,12 @@
             </a>
             <a href="{% url 'blocked_headers' %}" class="sb-item {% if 'admin-dashboard/blocked-headers' in request.path %}active{% endif %}">
                 <i class="fas fa-heading"></i> Blocked Headers
+            </a>
+            <a href="{% url 'admin_audit_log' %}" class="sb-item {% if 'admin-dashboard/audit-log' in request.path %}active{% endif %}">
+                <i class="fas fa-clipboard-list"></i> Audit Log
+            </a>
+            <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
+                <i class="fas fa-bell"></i> Health &amp; Alerts
             </a>
             <a href="{% url 'url_blocking_settings' %}" class="sb-item {% if 'url-blocking' in request.path %}active{% endif %}">
                 <i class="fas fa-ban"></i> URL Blocking

@@ -1,5 +1,6 @@
 from django.db import IntegrityError, models
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.utils.text import slugify
 from django.utils import timezone
 import json
@@ -1043,6 +1044,22 @@ class AndroidApp(models.Model):
         default=30,
         help_text="Number of days to retain analytics logs. Older data is automatically deleted."
     )
+    # How hard this app is allowed to poll POST /api/user/sync. The defaults
+    # match the code constants (_USER_SYNC_MIN_INTERVAL etc.); raising them here
+    # slows a chatty build down without a redeploy, lowering them lets a new
+    # release sync more often.
+    sync_min_interval_seconds = models.PositiveIntegerField(
+        default=45,
+        help_text="Seconds between FULL user syncs. Closer calls get the stored cloud state instead."
+    )
+    sync_max_per_minute = models.PositiveIntegerField(
+        default=15,
+        help_text="Maximum sync requests per account per minute before the app gets a 429."
+    )
+    sync_ip_max_per_minute = models.PositiveIntegerField(
+        default=60,
+        help_text="Maximum sync requests per address per minute (shared and carrier addresses included)."
+    )
     log_collection_enabled = models.BooleanField(
         default=True,
         help_text="Enable or disable log collection from this app. When disabled, the app's /log/ endpoint will reject incoming logs."
@@ -1412,7 +1429,8 @@ class SyncedUser(models.Model):
     #   'app'  — app block: data APIs answer 503 so the app's own heartbeat
     #            logic flips to isServerOffline and shows "Server is Down"
     block_mode = models.CharField(max_length=10, blank=True, default='',
-                                  choices=[('', 'None'), ('full', 'Full block'),                                           ('play', 'Play block'), ('app', 'App block')])
+                                  choices=[('', 'None'), ('full', 'Full block'),
+                                           ('play', 'Play block'), ('app', 'App block')])
     blocked_at = models.DateTimeField(null=True, blank=True)
     blocked_reason = models.CharField(max_length=255, blank=True, default='')
 
@@ -1446,7 +1464,9 @@ class UserHeartbeat(models.Model):
     """Latest 1-minute heartbeat from the Android app (POST /api/user/heartbeat).
 
     One row per user — each heartbeat overwrites the previous, so the admin
-    panel always shows the current device + real-time activity without    querying an event log. ``is_online`` is derived from ``last_seen_at``    (a heartbeat every 60 s means anything under ~3 min old is online).
+    panel always shows the current device + real-time activity without
+    querying an event log. ``is_online`` is derived from ``last_seen_at``
+    (a heartbeat every 60 s means anything under ~3 min old is online).
     """
     # Cross-DB link (external users DB) — no DB-level constraint.
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='heartbeat', null=True, blank=True, db_constraint=False)
@@ -3115,3 +3135,128 @@ class ApkDownload(models.Model):
 
     def __str__(self):
         return f'{self.file_name or self.app_slug} @ {self.ip_address or "unknown"}'
+
+
+class AdminAuditLog(models.Model):
+    """One row per admin action, so the dashboard can show a single timeline.
+
+    Blocking an address, lifting a header rule, wiping a user's cloud data,
+    switching the bot profile on and changing settings each leave a row here:
+    who did it, what they did it to, when, and from which address. The page
+    built on it (core.audit) is the answer to "who changed this?" — before it
+    existed the history was spread across the BlockedIP / BlockedHeader rows
+    and their unblock columns, which only covered two of the action kinds.
+
+    Rows live on the default (sqlite) database, like RequestLog and BlockedIP.
+    """
+
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    username = models.CharField(max_length=150, blank=True, default='', db_index=True)
+    action = models.CharField(max_length=40, blank=True, default='', db_index=True)
+    target = models.CharField(max_length=300, blank=True, default='')
+    detail = models.TextField(blank=True, default='')
+    ip_address = models.CharField(max_length=64, blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Admin action'
+        verbose_name_plural = 'Admin actions'
+        indexes = [models.Index(fields=['-created_at'], name='audit_created_idx')]
+
+    def __str__(self):
+        return f'{self.username or "?"} {self.action} {self.target}'[:120]
+
+
+class AlertRecipient(models.Model):
+    """One address that receives the health alerts.
+
+    Kept separate from the site's user accounts: an alert goes to whoever
+    watches the server, not necessarily to a signed-in admin, and the operator
+    can add as many addresses as they like.
+    """
+
+    email = models.EmailField(unique=True)
+    name = models.CharField(max_length=100, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['email']
+        verbose_name = 'Alert recipient'
+        verbose_name_plural = 'Alert recipients'
+
+    def __str__(self):
+        return self.email
+
+
+class AlertSettings(models.Model):
+    """Singleton: what the health watch looks at, and where it reports.
+
+    Three checks: the 5xx rate over a short window, free disk space, and
+    whether the gunicorn workers are still alive. Each can be switched off,
+    and each has its own threshold. Delivery is by email (to the
+    AlertRecipient rows, through the SMTP settings the site already uses) and
+    optionally by Telegram, using a bot token and chat id the admin supplies.
+    """
+
+    _SINGLETON_CACHE_KEY = 'alertsettings_row_v1'
+
+    enabled = models.BooleanField(default=True, help_text='Run the checks at all')
+
+    check_5xx = models.BooleanField(default=True)
+    five_xx_threshold = models.FloatField(
+        default=2.0, help_text='Alert when more than this percentage of recent requests failed with 5xx')
+    five_xx_window_minutes = models.PositiveIntegerField(
+        default=15, help_text='How many minutes of traffic the 5xx rate looks at')
+
+    check_disk = models.BooleanField(default=True)
+    disk_threshold = models.PositiveIntegerField(
+        default=85, help_text='Alert when the disk is this percentage full')
+
+    check_workers = models.BooleanField(default=True)
+    min_workers = models.PositiveIntegerField(
+        default=2, help_text='Alert when fewer gunicorn processes than this are running')
+
+    notify_email = models.BooleanField(default=True)
+    notify_telegram = models.BooleanField(default=False)
+    telegram_bot_token = models.CharField(max_length=200, blank=True, default='')
+    telegram_chat_id = models.CharField(max_length=100, blank=True, default='')
+
+    repeat_minutes = models.PositiveIntegerField(
+        default=30, help_text='Do not repeat the same alert more often than this')
+
+    class Meta:
+        verbose_name = 'Alert settings'
+        verbose_name_plural = 'Alert settings'
+
+    def __str__(self):
+        return 'Alert settings'
+
+    @classmethod
+    def get_settings(cls):
+        cache_key = cls._SINGLETON_CACHE_KEY
+        try:
+            cached = cache.get(cache_key)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return cached
+        row = cls.objects.first()
+        if row is None:
+            try:
+                row, _ = cls.objects.get_or_create(pk=1)
+            except Exception:
+                return cls()
+        try:
+            cache.set(cache_key, row, 60)
+        except Exception:
+            pass
+        return row
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+        try:
+            cache.delete(self._SINGLETON_CACHE_KEY)
+        except Exception:
+            pass

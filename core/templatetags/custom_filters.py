@@ -47,3 +47,10 @@ def is_future_date(value):
         return d > date.today()
     except (ValueError, TypeError):
         return False
+
+
+@register.filter
+def audit_label(row):
+    """Human wording for an AdminAuditLog row's action code."""
+    from core.audit import action_label
+    return action_label(getattr(row, 'action', ''))

@@ -33,6 +33,12 @@ urlpatterns = [
     path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
     # Every blocked IP, with the requests it made after the block.
     path('admin-dashboard/blocked-ips/', views.admin_blocked_ips, name='blocked_ips'),
+    # Blocked addresses, blocked headers and probes on one page.
+    path('admin-dashboard/traffic-control/', views.traffic_control, name='traffic_control'),
+    # Who blocked / lifted / wiped / changed what, and when.
+    path('admin-dashboard/audit-log/', views.admin_audit_log, name='admin_audit_log'),
+    # Health checks and the addresses they alert.
+    path('admin-dashboard/alerts/', views.admin_alerts, name='admin_alerts'),
     # Header rules (User-Agent and friends) that refuse a whole kind of traffic.
     path('admin-dashboard/blocked-headers/', views.admin_blocked_headers, name='blocked_headers'),
     # Block / lift / publish one header rule (POST).
@@ -87,6 +93,8 @@ urlpatterns = [
     path('admin-dashboard/android-apps/create/', views.android_app_create, name='android_app_create'),
     path('admin-dashboard/android-apps/<int:app_id>/toggle/', views.toggle_android_app, name='toggle_android_app'),
     path('admin-dashboard/android-apps/<int:app_id>/edit/', views.android_app_edit, name='android_app_edit'),
+    path('admin-dashboard/android-apps/<int:app_id>/settings/', views.android_app_settings,
+         name='android_app_settings'),
     path('admin-dashboard/android-apps/<int:app_id>/delete/', views.android_app_delete, name='android_app_delete'),
     path('admin-dashboard/android-apps/analytics/', views.android_app_dashboard, name='android_app_dashboard'),
     path('admin-dashboard/android-apps/<int:app_id>/analytics/', views.android_app_dashboard, name='android_app_dashboard_detail'),

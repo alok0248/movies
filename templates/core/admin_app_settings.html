@@ -1,0 +1,160 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}App Settings — {{ selected_app.name }}{% endblock %}
+{% block admin_content %}
+<style>
+    .as-card {
+        background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18);
+        border-radius: 12px; padding: 1.1rem;
+    }
+    .as-head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+    .as-icon {
+        width: 44px; height: 44px; border-radius: 12px;
+        background: linear-gradient(135deg, #22c55e, #0ea5e9);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .as-sect { font-size: .95rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .45rem; }
+    .as-sub { font-size: .74rem; color: #94a3b8; }
+    .as-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .9rem; }
+    .as-field label { display: block; font-size: .74rem; color: #94a3b8; margin-bottom: .25rem; }
+    .as-field input[type=text], .as-field input[type=number], .as-field input[type=email] {
+        width: 100%; padding: .38rem .55rem; border-radius: 8px;
+        border: 1px solid rgba(148,163,184,.3); background: rgba(15,23,42,.7); color: #e2e8f0;
+        font-size: .82rem;
+    }
+    .as-field input:focus { outline: 2px solid rgba(34,197,94,.45); outline-offset: 1px; }
+    .as-check { display: flex; align-items: flex-start; gap: .45rem; font-size: .78rem; color: #cbd5e1; }
+    .as-btn {
+        display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; font-weight: 600;
+        padding: .4rem .8rem; border-radius: 8px; border: 1px solid #22c55e;
+        background: rgba(34,197,94,.14); color: #86efac; cursor: pointer;
+    }
+    .as-btn:hover { background: rgba(34,197,94,.24); }
+    .as-mono { font-family: Consolas, Menlo, monospace; font-size: .74rem; }
+</style>
+
+<div class="container-fluid py-3">
+    <div class="as-head mb-3">
+        <div class="as-icon"><i class="fas fa-sliders fa-lg text-white"></i></div>
+        <div class="flex-grow-1">
+            <h4 class="mb-0 text-white">{{ selected_app.name }} — settings</h4>
+            <div class="as-sub">Retention, sync limits, version gate and ads, all on one page.</div>
+        </div>
+        <a class="as-btn" style="border-color:rgba(148,163,184,.35);color:#cbd5e1;background:rgba(15,23,42,.7);"
+           href="{% url 'android_app_dashboard_detail' selected_app.id %}"><i class="fas fa-chart-line"></i> Analytics</a>
+        <a class="as-btn" style="border-color:rgba(148,163,184,.35);color:#cbd5e1;background:rgba(15,23,42,.7);"
+           href="{% url 'android_app_edit' selected_app.id %}"><i class="fas fa-key"></i> Credentials</a>
+    </div>
+
+    <div class="as-card mb-3">
+        <div class="as-sect mb-1"><i class="fas fa-database text-info"></i> Data &amp; sync</div>
+        <div class="as-sub mb-3">How long analytics and logs are kept, and how hard the app may poll
+            <span class="as-mono">/api/user/sync</span>. The sync limits apply to this app's builds only.</div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="section" value="app">
+            <div class="as-grid">
+                <div class="as-field">
+                    <label for="data_retention_days">Analytics retention (days)</label>
+                    <input id="data_retention_days" type="number" min="1" max="3650"
+                           name="data_retention_days" value="{{ selected_app.data_retention_days }}">
+                </div>
+                <div class="as-field">
+                    <label for="log_retention_days">Log retention (days)</label>
+                    <input id="log_retention_days" type="number" min="1" max="3650"
+                           name="log_retention_days" value="{{ selected_app.log_retention_days }}">
+                </div>
+                <div class="as-field">
+                    <label for="sync_min_interval_seconds">Full sync interval (seconds)</label>
+                    <input id="sync_min_interval_seconds" type="number" min="5" max="3600"
+                           name="sync_min_interval_seconds" value="{{ selected_app.sync_min_interval_seconds }}">
+                </div>
+                <div class="as-field">
+                    <label for="sync_max_per_minute">Syncs per account per minute</label>
+                    <input id="sync_max_per_minute" type="number" min="1" max="600"
+                           name="sync_max_per_minute" value="{{ selected_app.sync_max_per_minute }}">
+                </div>
+                <div class="as-field">
+                    <label for="sync_ip_max_per_minute">Syncs per address per minute</label>
+                    <input id="sync_ip_max_per_minute" type="number" min="1" max="6000"
+                           name="sync_ip_max_per_minute" value="{{ selected_app.sync_ip_max_per_minute }}">
+                </div>
+            </div>
+
+            <div class="as-sect mt-4 mb-1"><i class="fas fa-door-open text-warning"></i> Version gate</div>
+            <div class="as-sub mb-2">Which builds and endpoints may connect. Leave a field empty to allow any.
+                Ranges work: <span class="as-mono">#225-#250</span> or <span class="as-mono">1.0.0, 1.0.1</span>.</div>
+            <div class="as-grid">
+                <div class="as-field">
+                    <label for="allowed_endpoint">Allowed endpoint / build identity</label>
+                    <input id="allowed_endpoint" type="text" name="allowed_endpoint"
+                           value="{{ selected_app.allowed_endpoint }}" placeholder="#225-#250">
+                </div>
+                <div class="as-field">
+                    <label for="allowed_build_id">Allowed build identifier</label>
+                    <input id="allowed_build_id" type="text" name="allowed_build_id"
+                           value="{{ selected_app.allowed_build_id }}" placeholder="1.0.0, 1.0.1">
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-3 mt-3">
+                <label class="as-check">
+                    <input type="checkbox" name="log_collection_enabled" {% if selected_app.log_collection_enabled %}checked{% endif %}>
+                    <span>Collect logs from the app's <span class="as-mono">/log/</span> endpoint</span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="is_active" {% if selected_app.is_active %}checked{% endif %}>
+                    <span>App is active (unchecking refuses every build)</span>
+                </label>
+            </div>
+
+            <div class="mt-3">
+                <button class="as-btn" type="submit"><i class="fas fa-check"></i> Save app settings</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="as-card">
+        <div class="as-sect mb-1"><i class="fas fa-rectangle-ad text-success"></i> Ads</div>
+        <div class="as-sub mb-3">These switches are site-wide (they are what the players and the app's
+            ad units read), shown here so the app's ad behaviour can be changed in the same place.</div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="section" value="ads">
+            <div class="as-grid">
+                <div class="as-field">
+                    <label for="adsterra_clicks_required">Clicks before a direct link opens</label>
+                    <input id="adsterra_clicks_required" type="number" min="0" max="1000"
+                           name="adsterra_clicks_required" value="{{ site.adsterra_clicks_required }}">
+                </div>
+                <div class="as-field">
+                    <label for="adsense_client_id">AdSense client id</label>
+                    <input id="adsense_client_id" type="text" name="adsense_client_id"
+                           value="{{ site.adsense_client_id|default:'' }}" placeholder="ca-pub-…">
+                </div>
+                <div class="as-field">
+                    <label for="adsense_verification_meta">AdSense verification meta</label>
+                    <input id="adsense_verification_meta" type="text" name="adsense_verification_meta"
+                           value="{{ site.adsense_verification_meta|default:'' }}">
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-3 mt-3">
+                <label class="as-check">
+                    <input type="checkbox" name="adsterra_show_banner" {% if site.adsterra_show_banner %}checked{% endif %}>
+                    <span>Show the sponsor banner on movie and series pages</span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="enable_adsterra_links" {% if site.enable_adsterra_links %}checked{% endif %}>
+                    <span>Direct-link units may open automatically</span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="enable_autoclick_ads" {% if site.enable_autoclick_ads %}checked{% endif %}>
+                    <span>Click-count ads may open</span>
+                </label>
+            </div>
+            <div class="mt-3">
+                <button class="as-btn" type="submit"><i class="fas fa-check"></i> Save ad settings</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
