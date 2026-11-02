@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from django.views.generic import TemplateView
 from . import views
 from . import local_player
@@ -15,6 +15,12 @@ urlpatterns = [
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('ajax/dashboard-stats/', views.ajax_dashboard_stats, name='ajax_dashboard_stats'),
     path('admin-dashboard/edit-settings/', views.edit_settings, name='edit_settings'),
+    # The thirteen settings pages are grouped into three, each showing one panel
+    # at a time (?tab=). The old per-page URLs above stay, so bookmarks work —
+    # hence the explicit group names here rather than a catch-all slug, which
+    # would swallow /settings/branding/ and friends.
+    re_path(r'^admin-dashboard/settings/(?P<group>site|data|delivery)/$',
+            views.settings_hub, name='settings_hub'),
     path('admin-dashboard/settings/branding/', views.branding_settings, name='branding_settings'),
     path('admin-dashboard/settings/display/', views.display_settings, name='display_settings'),
     path('admin-dashboard/settings/data-source/', views.data_source_settings, name='data_source_settings'),

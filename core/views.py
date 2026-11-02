@@ -974,6 +974,76 @@ def admin_dashboard(request):
         except Exception:
             pass
 
+    # ------------------------------------------------------------------ status
+    # The dashboard used to be a launcher: four grids of links that repeated the
+    # sidebar. It now answers "is anything wrong right now", because that is the
+    # one question the sidebar cannot. Everything below is read-only and each
+    # block is wrapped, so a missing table shows a gap rather than a 500.
+    findings, open_incidents, recent_audit = [], [], []
+    blocked_now = blocked_today = api_errors_day = 0
+    five_xx_pct, five_xx_failed, five_xx_total = 0.0, 0, 0
+    builds, gate_rejections = [], 0
+
+    try:
+        from .health import run_checks
+        # record=False: the sidebar badge already opens/closes incidents on its
+        # own schedule, so the dashboard only reports and never writes.
+        findings = run_checks(record=False)
+    except Exception:
+        logger.debug('dashboard: health checks unavailable', exc_info=True)
+
+    try:
+        from .models import AlertIncident
+        open_incidents = list(
+            AlertIncident.objects.filter(resolved_at__isnull=True)
+            .order_by('opened_at')[:5])
+    except Exception:
+        logger.debug('dashboard: could not read incidents', exc_info=True)
+
+    try:
+        from .audit import audit_report
+        recent_audit = audit_report(limit=6)
+    except Exception:
+        logger.debug('dashboard: could not read the audit log', exc_info=True)
+
+    try:
+        from .models import BlockedIP, ErrorLog, SyncedUser
+        blocked_now = BlockedIP.objects.filter(is_active=True).count()
+        blocked_today = SyncedUser.objects.filter(
+            block_mode__gt='', blocked_at__date=today).count()
+        api_errors_day = ErrorLog.objects.filter(
+            created_at__gte=timezone.now() - timezone.timedelta(hours=24)).count()
+    except Exception:
+        logger.debug('dashboard: could not read the counters', exc_info=True)
+
+    try:
+        from .health import five_xx_rate
+        five_xx_pct, five_xx_failed, five_xx_total = five_xx_rate(1440)
+    except Exception:
+        logger.debug('dashboard: could not compute the 5xx rate', exc_info=True)
+
+    try:
+        from datetime import timedelta as _td
+        from django.db.models import Count, Sum
+        from .models import AndroidAppBuildLog, AndroidAppFailedAttempt
+        week_ago = today - _td(days=7)
+        builds = list(
+            AndroidAppBuildLog.objects.filter(access_date__gte=week_ago)
+            .values('build_identifier')
+            .annotate(reqs=Sum('connection_count'))
+            .order_by('-reqs')[:5])
+        total_reqs = sum((b['reqs'] or 0) for b in builds) or 1
+        for row in builds:
+            row['share'] = round(100.0 * (row['reqs'] or 0) / total_reqs, 1)
+        gate_rejections = AndroidAppFailedAttempt.objects.filter(
+            attempted_at__date__gte=week_ago,
+            failure_reason='identity_invalid').count()
+    except Exception:
+        logger.debug('dashboard: could not read the build logs', exc_info=True)
+
+    failing = [f for f in findings if f.get('ok') is False]
+    unknown = [f for f in findings if f.get('ok') is None]
+
     return render(request, 'core/admin_dashboard.html', {
         'site_settings': site_settings,
         'visitors_today': visitors_today,
@@ -982,6 +1052,19 @@ def admin_dashboard(request):
         'db_size': db_size,
         'ext_db_size': ext_db_size,
         'active_db': user_db,
+        'findings': findings,
+        'failing_checks': failing,
+        'unknown_checks': unknown,
+        'open_incidents': open_incidents,
+        'recent_audit': recent_audit,
+        'blocked_now': blocked_now,
+        'blocked_today': blocked_today,
+        'api_errors_day': api_errors_day,
+        'five_xx_pct': five_xx_pct,
+        'five_xx_failed': five_xx_failed,
+        'five_xx_total': five_xx_total,
+        'builds': builds,
+        'gate_rejections': gate_rejections,
     })
 
 
@@ -2548,7 +2631,7 @@ def edit_settings(request):
         form = SiteSettingsForm(request.POST, instance=site_settings)
         if form.is_valid():
             form.save()
-            return redirect('admin_dashboard')
+            return _settings_redirect(request, 'admin_dashboard')
     else:
         form = SiteSettingsForm(instance=site_settings)
     
@@ -2567,7 +2650,7 @@ def _settings_section_view(request, form_class, title, description='', back_url=
         form = form_class(request.POST, instance=site_settings)
         if form.is_valid():
             form.save()
-            return redirect('admin_dashboard')
+            return _settings_redirect(request, 'admin_dashboard')
     else:
         form = form_class(instance=site_settings)
     return render(request, 'core/settings_section.html', {
@@ -14261,7 +14344,7 @@ def db_connection_settings(request):
                     is_default=is_default, is_active=True,
                 )
             messages.success(request, f'Connection "{name}" saved successfully.')
-            return redirect('db_connection_settings')
+            return _settings_redirect(request, 'db_connection_settings')
 
         elif action == 'delete':
             conn_id = request.POST.get('conn_id', '')
@@ -14269,7 +14352,7 @@ def db_connection_settings(request):
                 conn = get_object_or_404(DBConnectionConfig, pk=conn_id)
                 conn.delete()
                 messages.success(request, 'Connection deleted.')
-            return redirect('db_connection_settings')
+            return _settings_redirect(request, 'db_connection_settings')
 
         elif action == 'toggle_active':
             conn_id = request.POST.get('conn_id', '')
@@ -14279,7 +14362,7 @@ def db_connection_settings(request):
                 conn.save()
                 status = 'activated' if conn.is_active else 'deactivated'
                 messages.success(request, f'Connection "{conn.name}" {status}.')
-            return redirect('db_connection_settings')
+            return _settings_redirect(request, 'db_connection_settings')
 
     connections = DBConnectionConfig.objects.all()
     routing = _get_routing_config()
@@ -14421,7 +14504,7 @@ def db_connection_detail(request, pk):
             name = conn.name
             conn.delete()
             messages.success(request, f'Connection "{name}" deleted.')
-            return redirect('db_connection_settings')
+            return _settings_redirect(request, 'db_connection_settings')
         if action == 'toggle_active':
             conn.is_active = not conn.is_active
             conn.save()
@@ -14444,6 +14527,128 @@ def db_connection_detail(request, pk):
         'routing': routing,
         'stats': stats,
         'is_live_external': is_live_external,
+    })
+
+
+# ---------------------------------------------------------------- settings hub
+# Thirteen single-purpose settings pages became three, each showing one panel at
+# a time. The panels *are* those pages: the hub asks the existing view to render
+# with ``_settings_embed`` set, which makes its template extend the bare
+# fragment base instead of the admin shell, and then either returns that
+# fragment (a tab switch) or drops it inside the hub's own page (first paint).
+# Nothing about a settings view's behaviour changed, and every original URL
+# still renders that page on its own.
+SETTINGS_HUB = {
+    'site': {
+        'title': 'Site',
+        'subtitle': 'What the site is called, how it looks, and what sits at the '
+                    'bottom of every page.',
+        'tabs': [
+            ('general', 'General', 'Site name, contact details and API keys', 'edit_settings'),
+            ('branding', 'Branding', 'Brand name, tagline and colour', 'branding_settings'),
+            ('display', 'Display', 'Items per row, card size, list length', 'display_settings'),
+            ('footer', 'Footer', 'Footer sections, links and copyright', 'footer_settings'),
+        ],
+    },
+    'data': {
+        'title': 'Data & APIs',
+        'subtitle': 'Where content comes from, which database serves it, and what '
+                    'that is costing.',
+        'tabs': [
+            ('source', 'Data source', 'TMDB API or the local database', 'data_source_settings'),
+            ('tmdb', 'TMDB database', 'Connection for the local TMDB mirror', 'tmdb_db_settings'),
+            ('keys', 'API keys', 'Keys in use, their state and last use', 'data_source_config'),
+            ('usage', 'Usage', 'Which source answered, and how often', 'data_source_usage_stats'),
+            ('db', 'DB connections', 'External database connections', 'db_connection_settings'),
+            ('routing', 'DB routing', 'Which database holds which data', 'db_routing_settings'),
+        ],
+    },
+    'delivery': {
+        'title': 'Delivery',
+        'subtitle': 'How pages reach a visitor: the player, the mail settings and '
+                    'the URL gate.',
+        'tabs': [
+            ('player', 'Player', 'Default movie and TV player', 'player_settings'),
+            ('email', 'Email', 'SMTP addresses, purposes and templates', 'email_settings'),
+            ('blocking', 'URL blocking', 'Blocked URLs and redirects', 'url_blocking_settings'),
+        ],
+    },
+}
+
+
+def _settings_redirect(request, fallback):
+    """Send a saved settings form back to the tab it came from.
+
+    A panel in a hub knows its own URL, so a save there returns to that tab
+    instead of dumping the admin on the dashboard. Forms also carry a hidden
+    ``next`` field, which covers a panel posted straight to its own view.
+    Only ever redirects to a path on this site.
+    """
+    target = getattr(request, '_settings_hub', '') or ''
+    if not target:
+        target = (request.POST.get('next') or request.GET.get('next') or '')
+    if target.startswith('/') and not target.startswith('//'):
+        return redirect(target)
+    return redirect(fallback)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def settings_hub(request, group):
+    """One settings group, one panel at a time.
+
+    ``?tab=`` picks the panel and ``?partial=1`` asks for just that panel, which
+    is what the tab strip fetches — the same fragment swap the users page uses,
+    so switching tabs keeps the page, its scroll and its state.
+    """
+    conf = SETTINGS_HUB.get(group)
+    if conf is None:
+        raise Http404('Unknown settings group')
+
+    tabs = conf['tabs']
+    # A panel's form posts to the hub path, which carries no query string, so the
+    # panel also sends its own key; without that a save on the third tab would
+    # be handed to the first tab's form.
+    active = (request.GET.get('tab') or request.POST.get('tab')
+              or tabs[0][0]).strip().lower()
+    tab = next((t for t in tabs if t[0] == active), tabs[0])
+    key, label, hint, view_name = tab
+
+    hub_path = reverse('settings_hub', args=[group])
+    tab_url = hub_path + '?tab=' + key
+
+    target_view = globals().get(view_name)
+    if target_view is None:
+        raise Http404('That settings page is missing')
+
+    # Ask the existing page to render as a bare panel, and to come back here
+    # after a save.
+    request._settings_embed = True
+    request._settings_hub = tab_url
+    response = target_view(request)
+
+    if getattr(response, 'status_code', 200) in (301, 302, 303, 307, 308):
+        return response      # a save already decided where to go
+    if request.GET.get('partial') == '1':
+        return response
+
+    from django.utils.safestring import mark_safe
+    body = response.content.decode('utf-8', 'replace') if hasattr(response, 'content') else ''
+    return render(request, 'core/settings_hub.html', {
+        'group': group,
+        'group_title': conf['title'],
+        'group_subtitle': conf.get('subtitle', ''),
+        'hub_url': hub_path,
+        'tabs': [
+            {'key': t[0], 'label': t[1], 'hint': t[2],
+             'url': hub_path + '?tab=' + t[0]}
+            for t in tabs
+        ],
+        'active_key': key,
+        'active_label': label,
+        'active_hint': hint,
+        'tab_url': tab_url,
+        'panel': mark_safe(body),
     })
 
 
@@ -14544,7 +14749,7 @@ def db_routing_settings(request):
             routing.save()
             status = 'ENABLED' if routing.use_external_db else 'DISABLED'
             messages.success(request, f'External DB routing {status}. Restart server for changes to take full effect.')
-            return redirect('db_routing_settings')
+            return _settings_redirect(request, 'db_routing_settings')
 
         elif action == 'migrate_data':
             direction = request.POST.get('direction', '')  # 'to_external' or 'to_local'
@@ -14561,7 +14766,7 @@ def db_routing_settings(request):
                 routing.last_migration_message = str(e)
                 routing.save(update_fields=['last_migrated_at', 'last_migration_status', 'last_migration_message'])
                 messages.error(request, f'Migration failed: {e}')
-            return redirect('db_routing_settings')
+            return _settings_redirect(request, 'db_routing_settings')
 
     # Get counts from both databases
     from django.db import connections

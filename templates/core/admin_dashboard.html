@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load custom_filters %}
 
 {% block admin_content %}
 <style>
@@ -304,260 +305,173 @@
     }
 </style>
 
-<!-- Configuration Section -->
-<div class="mb-4">
-    <div class="d-flex align-items-center mb-3">
-        <i class="fas fa-cog me-2 text-secondary" style="font-size:.85rem;"></i>
-        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Configuration</h6>
+<!-- What needs a look right now -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-7">
+        <div class="admin-card h-100">
+            <div class="admin-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="mb-0 fw-bold" style="font-size:.85rem;">
+                        <i class="fas fa-triangle-exclamation me-2" style="color:{% if failing_checks or open_incidents %}#f87171{% else %}#4ade80{% endif %};"></i>Needs attention
+                    </h6>
+                    <div class="d-flex gap-2 align-items-center">
+                        {% if open_incidents %}<span class="dash-pill bad">{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</span>{% endif %}
+                        {% if failing_checks %}<span class="dash-pill bad">{{ failing_checks|length }} check{{ failing_checks|length|pluralize }} failing</span>{% elif not open_incidents %}<span class="dash-pill ok">All clear</span>{% endif %}
+                        <a href="{% url 'admin_alerts' %}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-right"></i></a>
+                    </div>
+                </div>
+
+                {% if open_incidents %}
+                <div class="dash-sub mb-2">Open incidents — acknowledged and closed from Health &amp; Alerts.</div>
+                {% for inc in open_incidents %}
+                <div class="dash-row">
+                    <span class="dash-dot bad"></span>
+                    <div class="flex-grow-1">
+                        <div class="text-white" style="font-size:.83rem;">{{ inc.title }}</div>
+                        <div class="dash-sub">{{ inc.detail|default:'—'|truncatechars:120 }}</div>
+                        <div class="dash-sub">open since {{ inc.opened_at|date:'d M H:i' }}{% if inc.occurrences > 1 %} &middot; seen {{ inc.occurrences }} times{% endif %}{% if inc.acknowledged_by %} &middot; acknowledged by {{ inc.acknowledged_by }}{% endif %}</div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                {% if findings %}
+                <div class="dash-sub mt-2 mb-1" style="text-transform:uppercase;letter-spacing:.06em;font-size:.68rem;opacity:.5;">Last check</div>
+                {% for f in findings %}
+                <div class="dash-row">
+                    <span class="dash-dot {% if f.ok %}ok{% elif f.ok is None %}unknown{% else %}bad{% endif %}"></span>
+                    <div class="flex-grow-1">
+                        <div class="text-white" style="font-size:.83rem;">{{ f.title }}</div>
+                        <div class="dash-sub">{{ f.detail }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="dash-sub py-3">No health checks ran — see Health &amp; Alerts.</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
-    <div class="row g-3">
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'branding_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-palette mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#a78bfa,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Branding</div>
-                    <div class="text-secondary small">Brand name, tagline, color</div>
+
+    <div class="col-lg-5">
+        <div class="admin-card h-100">
+            <div class="admin-card-body">
+                <h6 class="mb-3 fw-bold" style="font-size:.85rem;">
+                    <i class="fas fa-clock me-2" style="color:#fbbf24;"></i>Today at a glance
+                </h6>
+                <div class="dash-mini-grid">
+                    <a href="{% url 'traffic_control' %}" class="dash-mini {% if blocked_now %}warn{% endif %}">
+                        <div class="dash-mini-n">{{ blocked_now }}</div>
+                        <div class="dash-mini-l">Addresses blocked</div>
+                    </a>
+                    <a href="{% url 'synced_users_list' %}" class="dash-mini {% if blocked_today %}warn{% endif %}">
+                        <div class="dash-mini-n">{{ blocked_today }}</div>
+                        <div class="dash-mini-l">Accounts blocked today</div>
+                    </a>
+                    <a href="{% url 'api_error_log' %}" class="dash-mini {% if api_errors_day %}warn{% endif %}">
+                        <div class="dash-mini-n">{{ api_errors_day }}</div>
+                        <div class="dash-mini-l">API errors (24h)</div>
+                    </a>
+                    <a href="{% url 'traffic_control' %}" class="dash-mini {% if five_xx_pct > 2 %}bad{% endif %}">
+                        <div class="dash-mini-n">{{ five_xx_pct|floatformat:1 }}%</div>
+                        <div class="dash-mini-l">5xx (24h) &middot; {{ five_xx_failed }}/{{ five_xx_total }}</div>
+                    </a>
                 </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'display_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-tv mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#60a5fa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Display</div>
-                    <div class="text-secondary small">Items per row, card size, theme</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'navbar_item_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-bars mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Navbar</div>
-                    <div class="text-secondary small">Edit nav items, order, icons</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'data_source_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-database mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Data Source</div>
-                    <div class="text-secondary small">TMDB API or database</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'data_source_config' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-server mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#c084fc,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">TMDB Database</div>
-                    <div class="text-secondary small">Local TMDB connection</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'player_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-play-circle mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Player</div>
-                    <div class="text-secondary small">Default movie/TV player</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'url_blocking_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-shield-alt mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#f87171,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">URL Blocking</div>
-                    <div class="text-secondary small">Block URLs and redirects</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'footer_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-window-maximize mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Footer</div>
-                    <div class="text-secondary small">Footer layout and links</div>
-                </div>
-            </a>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Management Section -->
-<div class="mb-4">
-    <div class="d-flex align-items-center mb-3">
-        <i class="fas fa-tools me-2 text-secondary" style="font-size:.85rem;"></i>
-        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">Management</h6>
+<!-- Builds + admin actions -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="admin-card h-100">
+            <div class="admin-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="mb-0 fw-bold" style="font-size:.85rem;">
+                        <i class="fab fa-android me-2" style="color:#4ade80;"></i>Builds, last 7 days
+                    </h6>
+                    <a href="{% url 'android_app_dashboard' %}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-right"></i></a>
+                </div>
+                {% if builds %}
+                {% for b in builds %}
+                <div class="dash-row">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <span class="text-white" style="font-size:.82rem;">{{ b.build_identifier|default:'(unknown build)' }}</span>
+                            <span class="dash-sub">{{ b.reqs|intcomma }} req &middot; {{ b.share }}%</span>
+                        </div>
+                        <div class="dash-bar"><span style="width:{{ b.share }}%;"></span></div>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="dash-sub mt-2">
+                    {% if gate_rejections %}<strong style="color:#f87171">{{ gate_rejections }}</strong> request(s) turned away by the build gate in this window.{% else %}No requests rejected by the build gate.{% endif %}
+                </div>
+                {% else %}
+                <div class="dash-sub py-3">No build activity recorded in the last 7 days.</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
-    <div class="row g-3">
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'content_row_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-th-large mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#a78bfa,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Content Rows</div>
-                    <div class="text-secondary small">Home page rows</div>
+
+    <div class="col-lg-6">
+        <div class="admin-card h-100">
+            <div class="admin-card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="mb-0 fw-bold" style="font-size:.85rem;">
+                        <i class="fas fa-clipboard-list me-2" style="color:#a78bfa;"></i>Recent admin actions
+                    </h6>
+                    <a href="{% url 'admin_audit_log' %}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-right"></i></a>
                 </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'player_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-gamepad mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Players</div>
-                    <div class="text-secondary small">Video player configs</div>
+                {% if recent_audit %}
+                {% for row in recent_audit %}
+                <div class="dash-row">
+                    <div class="flex-grow-1">
+                        <div style="font-size:.82rem;">
+                            <strong class="text-white">{{ row.username|default:'—' }}</strong>
+                            <span style="color:rgba(255,255,255,.6);">{{ row|audit_label|lower }}</span>
+                        </div>
+                        <div class="dash-sub">{{ row.target|default:'—'|truncatechars:70 }} &middot; {{ row.created_at|date:'d M H:i' }}</div>
+                    </div>
                 </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'ad_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-ad mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Ads</div>
-                    <div class="text-secondary small">Ad providers and rules</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'admin_adsterra' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-bullhorn mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#fb923c,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Adsterra Ads</div>
-                    <div class="text-secondary small">Direct-link ad URL &amp; clicks</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'provider_item_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-plug mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Providers</div>
-                    <div class="text-secondary small">TMDB provider management</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'android_app_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fab fa-android mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#16a34a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Android Apps</div>
-                    <div class="text-secondary small">Endpoints and credentials</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'android_app_downloads' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-download mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#facc15,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">APK Downloads</div>
-                    <div class="text-secondary small">Installs, IPs &amp; opens</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'synced_users_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-users mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Synced Users</div>
-                    <div class="text-secondary small">Android app users</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'admin_user_list' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-user-shield mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#c084fc,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">User Management</div>
-                    <div class="text-secondary small">All registered users</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'email_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-envelope mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#38bdf8,#0ea5e9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Email SMTP</div>
-                    <div class="text-secondary small">Email configuration</div>
-                </div>
-            </a>
+                {% endfor %}
+                {% else %}
+                <div class="dash-sub py-3">No admin actions recorded yet.</div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
 
-<!-- System Section -->
-<div class="mb-4">
-    <div class="d-flex align-items-center mb-3">
-        <i class="fas fa-chart-line me-2 text-secondary" style="font-size:.85rem;"></i>
-        <h6 class="dash-grp-head fw-bold mb-0" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.5;">System & Analytics</h6>
-    </div>
-    <div class="row g-3">
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'admin_analytics' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-chart-line mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#818cf8,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">User Analytics</div>
-                    <div class="text-secondary small">Page views, time, platforms</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'web_management_dashboard' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-chart-bar mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#60a5fa,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Web Analytics</div>
-                    <div class="text-secondary small">Visitors and pageviews</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'system_resource_dashboard' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-server mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#f472b6,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">System Resources</div>
-                    <div class="text-secondary small">CPU, memory, disk</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'request_log' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-network-wired mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Requests &amp; Users</div>
-                    <div class="text-secondary small">Request log + active visitors</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'db_connection_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-plug mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#4ade80,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">DB Connections</div>
-                    <div class="text-secondary small">Add/edit database connections</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'db_routing_settings' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-route mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#22d3ee,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">Data Routing</div>
-                    <div class="text-secondary small">Local vs external DB</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4 col-lg-3">
-            <a href="{% url 'db_dashboard' %}" class="admin-card d-block text-decoration-none h-100">
-                <div class="admin-card-body text-center py-4">
-                    <i class="fas fa-heartbeat mb-2" style="font-size:1.5rem;background:linear-gradient(135deg,#f87171,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
-                    <div class="dash-tile-lbl fw-semibold" style="font-size:.85rem;">DB Dashboard</div>
-                    <div class="text-secondary small">Health, size, tables</div>
-                </div>
-            </a>
-        </div>
-    </div>
-</div>
+<style>
+    .dash-sub { font-size: .72rem; color: rgba(255,255,255,.4); }
+    .dash-row { display: flex; gap: .6rem; align-items: flex-start; padding: .5rem 0; border-bottom: 1px solid rgba(255,255,255,.045); }
+    .dash-row:last-child { border-bottom: 0; }
+    .dash-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: .35rem; flex: 0 0 auto; }
+    .dash-dot.ok { background: #34d399; }
+    .dash-dot.bad { background: #f87171; }
+    .dash-dot.unknown { background: #94a3b8; }
+    .dash-pill { font-size: .68rem; font-weight: 700; padding: .18rem .55rem; border-radius: 20px; }
+    .dash-pill.bad { background: rgba(248,113,113,.15); color: #f87171; }
+    .dash-pill.ok { background: rgba(52,211,153,.15); color: #34d399; }
+    .dash-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+    .dash-mini { display: block; padding: .85rem .9rem; border-radius: 12px; text-decoration: none; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); transition: all .2s; }
+    .dash-mini:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); transform: translateY(-1px); }
+    .dash-mini-n { font-size: 1.35rem; font-weight: 800; color: #fff; line-height: 1.1; }
+    .dash-mini-l { font-size: .68rem; color: rgba(255,255,255,.45); margin-top: .15rem; }
+    .dash-mini.warn .dash-mini-n { color: #fbbf24; }
+    .dash-mini.bad .dash-mini-n { color: #f87171; }
+    .dash-bar { height: 4px; border-radius: 3px; background: rgba(255,255,255,.07); margin-top: .35rem; overflow: hidden; }
+    .dash-bar span { display: block; height: 100%; background: linear-gradient(90deg,#4ade80,#22c55e); }
+    html[data-theme="light"] .dash-sub { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .dash-row { border-color: rgba(0,0,0,.06); }
+    html[data-theme="light"] .dash-mini { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .dash-mini-n { color: #111; }
+    html[data-theme="light"] .dash-mini-l { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .dash-pill.bad { background: rgba(185,28,28,.1); color: #b91c1c; }
+    html[data-theme="light"] .dash-pill.ok { background: rgba(21,128,61,.1); color: #15803d; }
+</style>
 
 <!-- Poster Backfill Section -->
 <div class="mb-4">

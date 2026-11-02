@@ -132,6 +132,23 @@ def site_settings(request):
     }
 
 
+def settings_wrapper(request):
+    """Let a settings page render as a bare panel instead of a whole page.
+
+    The Site / Data & APIs / Delivery hubs show one settings panel at a time.
+    A hub sets ``request._settings_embed`` before calling the existing settings
+    view, and this processor then supplies ``settings_wrapper`` so the page's
+    own template extends the bare fragment base rather than the admin shell.
+
+    Templates read ``settings_wrapper|default:'core/admin_base.html'``, so a
+    settings page opened on its own URL keeps rendering with its full chrome —
+    old bookmarks still work, they just land on the one page they name.
+    """
+    if getattr(request, '_settings_embed', False):
+        return {'settings_wrapper': 'core/settings_panel_base.html'}
+    return {}
+
+
 def admin_badges(request):
     """Live counters for the admin sidebar.
 

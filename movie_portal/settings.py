@@ -85,6 +85,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.site_settings',
                 'core.context_processors.admin_badges',
+                'core.context_processors.settings_wrapper',
             ],
         },
     },

@@ -1,0 +1,121 @@
+{% extends 'core/admin_base.html' %}
+
+{% block admin_content %}
+<style>
+    .st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
+    .st-title { font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.01em; }
+    .st-sub { font-size: .78rem; color: rgba(255,255,255,.42); margin-top: .2rem; max-width: 60ch; }
+    .st-tabs { display: flex; gap: .35rem; flex-wrap: wrap; border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 1.1rem; padding-bottom: .1rem; }
+    .st-tab {
+        display: inline-flex; align-items: center; gap: .45rem;
+        padding: .5rem .85rem; border-radius: 10px 10px 0 0;
+        font-size: .8rem; font-weight: 600; text-decoration: none;
+        color: rgba(255,255,255,.5); border: 1px solid transparent; border-bottom: 0;
+        cursor: pointer; background: transparent; transition: all .15s;
+    }
+    .st-tab:hover { color: rgba(255,255,255,.85); background: rgba(255,255,255,.04); }
+    .st-tab.active { color: #fff; background: rgba(99,102,241,.14); border-color: rgba(99,102,241,.35); }
+    .st-tab .st-count { font-size: .64rem; opacity: .6; }
+    #st-panel { position: relative; min-height: 120px; }
+    #st-panel.loading { opacity: .45; pointer-events: none; transition: opacity .15s; }
+    .st-flash { font-size: .72rem; color: rgba(255,255,255,.35); }
+    html[data-theme="light"] .st-title { color: #111; }
+    html[data-theme="light"] .st-sub, html[data-theme="light"] .st-flash { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .st-tabs { border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .st-tab { color: rgba(0,0,0,.55); }
+    html[data-theme="light"] .st-tab.active { color: #111; background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.3); }
+</style>
+
+<div class="st-head">
+    <div>
+        <h2 class="st-title">{{ group_title }}</h2>
+        <div class="st-sub">{{ group_subtitle }}</div>
+    </div>
+    <div class="st-flash" id="st-state">{{ active_label }}</div>
+</div>
+
+<nav class="st-tabs" id="st-tabs" aria-label="{{ group_title }} settings sections">
+    {% for t in tabs %}
+    <a href="{{ t.url }}" class="st-tab{% if t.key == active_key %} active{% endif %}"
+       data-tab="{{ t.key }}" data-url="{{ t.url }}" title="{{ t.hint }}">{{ t.label }}</a>
+    {% endfor %}
+</nav>
+
+<div id="st-panel" data-tab-url="{{ tab_url }}">
+    {{ panel }}
+</div>
+
+<script>
+(function () {
+    var panel = document.getElementById('st-panel');
+    var tabs = document.getElementById('st-tabs');
+    var state = document.getElementById('st-state');
+
+    /* A panel is a whole settings page rendered without the shell, so its forms
+       still post to their own view. Give each one a `next` so the save comes
+       back to this tab instead of the dashboard. Forms that post through their
+       own JS simply carry an extra ignored field. */
+    function tag(nextUrl, key, root) {
+        (root || panel).querySelectorAll('form').forEach(function (form) {
+            if (form.querySelector('input[name="next"]')) return;
+            [['next', nextUrl], ['tab', key]].forEach(function (pair) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = pair[0];
+                input.value = pair[1];
+                form.appendChild(input);
+            });
+        });
+    }
+
+    function activate(key) {
+        tabs.querySelectorAll('.st-tab').forEach(function (a) {
+            a.classList.toggle('active', a.dataset.tab === key);
+        });
+    }
+
+    function show(html, key, url) {
+        panel.innerHTML = html;
+        panel.dataset.tabUrl = url;
+        activate(key);
+        var link = tabs.querySelector('.st-tab[data-tab="' + key + '"]');
+        if (state && link) state.textContent = link.textContent.trim();
+        tag(url, key);
+        panel.classList.remove('loading');
+    }
+
+    tabs.addEventListener('click', function (event) {
+        var link = event.target.closest('.st-tab');
+        if (!link) return;
+        var key = link.dataset.tab;
+        if (link.classList.contains('active')) return;
+        event.preventDefault();
+        /* The site's page-transition script listens on document and navigates a
+           quarter-second after *any* link click. Stop it here or every tab
+           would swap and then reload anyway. */
+        event.stopPropagation();
+
+        var url = link.dataset.url;
+        panel.classList.add('loading');
+        history.replaceState(null, '', url);
+
+        /* No X-Requested-With here on purpose: the email panel treats that
+           header as "this is an AJAX action" and would answer JSON instead of
+           markup. A plain GET returns the panel. */
+        fetch(url + '&partial=1', { credentials: 'same-origin' })
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        })
+        .then(function (html) { show(html, key, url); })
+        .catch(function () {
+            /* The fragment failed: fall back to a normal navigation, which the
+               link already points at anyway. */
+            window.location.href = url;
+        });
+    });
+
+    tag(panel.dataset.tabUrl, document.querySelector('.st-tab.active').dataset.tab);
+})();
+</script>
+{% endblock %}

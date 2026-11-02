@@ -1,0 +1,13 @@
+{% comment %}
+Bare wrapper for a settings panel fetched as a fragment.
+
+The settings pages were thirteen separate full pages. The three hub pages
+(Site / Data & APIs / Delivery) show one panel at a time; when a panel is
+requested by the hub it must be just that panel, with no admin sidebar,
+header or footer around it, so the hub can swap it into place.
+
+Templates use settings_wrapper|default:'core/admin_base.html', and the
+settings_wrapper context processor supplies this file only while a hub page is
+rendering them. Asked for directly, a settings page still gets its own full
+page exactly as before.
+{% endcomment %}{% block admin_content %}{% endblock %}
