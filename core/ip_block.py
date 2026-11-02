@@ -682,3 +682,19 @@ def auto_block_script(ip_address, user_agent=''):
     logger.info('IPBlock: auto-blocking %s — %s', ip, detail)
     return block_ip(ip, 'auto:script-watch', 'used an automated client: ' + detail,
                     permanent=False)
+
+
+# Google's crawlers must never be caught by the unknown-page watch: they walk
+# old URLs on purpose, and a 403 there costs the site its indexing. They are
+# the one family the site deliberately keeps (see core.header_block's profile,
+# which excludes them for the same reason).
+GOOGLE_CRAWLER_UA = (
+    'googlebot', 'adsbot-google', 'google-inspectiontool', 'mediapartners-google',
+    'googleother', 'storebot-google', 'feedfetcher-google', 'google-',
+)
+
+
+def is_google_crawler(user_agent):
+    """True when the request announces a Google crawler."""
+    lowered = (user_agent or '').strip().lower()
+    return bool(lowered) and any(token in lowered for token in GOOGLE_CRAWLER_UA)

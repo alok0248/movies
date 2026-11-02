@@ -194,6 +194,11 @@ class IPBlockMiddleware:
         path = getattr(request, 'path', '') or ''
         if not should_watch_unknown_pages(path):
             return
+        # Google walks old URLs on purpose; a 403 there costs the site its
+        # indexing, so its crawlers never add to the count.
+        from .ip_block import is_google_crawler
+        if is_google_crawler(request.META.get('HTTP_USER_AGENT', '')):
+            return
         ip = get_client_ip(request)
         if ip and note_unknown_page(ip):
             auto_block_probe(ip, path=path)
