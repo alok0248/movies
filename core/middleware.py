@@ -166,10 +166,37 @@ class IPBlockMiddleware:
 
     def __call__(self, request):
         try:
-            return self._check(request)
+            response = self._check(request)
         except Exception:
             # Blocking must never break the site; on any doubt, serve the request.
             return self.get_response(request)
+        try:
+            self._watch_unknown_pages(request, response)
+        except Exception:
+            logger.debug('IPBlock: unknown-page watch failed', exc_info=True)
+        return response
+
+    def _watch_unknown_pages(self, request, response):
+        """Block an address that keeps asking for pages the site does not have.
+
+        Counted after the response, because only the response says whether the
+        page existed. One 404 is a typo; a stream of them is a script walking a
+        URL list. Such an address is blocked (auto:probe-watch) and sees the
+        block page, which asks it to sign in or register — and either one lifts
+        the block, so a lost visitor is not locked out.
+        """
+        if getattr(response, 'status_code', None) != 404:
+            return
+        if self._operator(request):
+            return
+        from .ip_block import (auto_block_probe, note_unknown_page,
+                               should_watch_unknown_pages)
+        path = getattr(request, 'path', '') or ''
+        if not should_watch_unknown_pages(path):
+            return
+        ip = get_client_ip(request)
+        if ip and note_unknown_page(ip):
+            auto_block_probe(ip, path=path)
 
     def _check(self, request):
         from .ip_block import (should_count_for_bot_rate, note_request,
@@ -194,6 +221,21 @@ class IPBlockMiddleware:
                         logger.warning(
                             'IPBlock: %s crossed the request rate but looks human '
                             '(%s) - not blocked', client_ip, verdict)
+        # A request that announces itself as a program — curl, python-requests,
+        # a headless browser, a scanner — is not a visitor. It is refused at
+        # once with the block page instead of being waited on. The app's API and
+        # the dashboard are never inspected here.
+        if client_ip and not operator:
+            from .ip_block import (SCRIPT_BLOCK_EXEMPT_PREFIXES, auto_block_script,
+                                   is_script_agent)
+            path = getattr(request, 'path', '') or ''
+            user_agent = request.META.get('HTTP_USER_AGENT', '') or ''
+            if (not path.startswith(SCRIPT_BLOCK_EXEMPT_PREFIXES)
+                    and is_script_agent(user_agent)):
+                auto_block_script(client_ip, user_agent)
+                return blocked_response(request, client_ip,
+                                        blocked_ip_for(client_ip))
+
         if self._hard_exempt(request):
             return self.get_response(request)
         # A header rule names a program, not a person, so it is enforced for

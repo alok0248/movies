@@ -122,8 +122,17 @@ def reset_bot_watch(ip_address=None):
     """Clear the rolling window (all addresses, or just one)."""
     if ip_address is None:
         _bot_watch.clear()
+        try:
+            _unknown_watch.clear()
+        except NameError:
+            pass
         return
-    _bot_watch.pop(normalize_ip(ip_address), None)
+    ip = normalize_ip(ip_address)
+    _bot_watch.pop(ip, None)
+    try:
+        _unknown_watch.pop(ip, None)
+    except NameError:
+        pass
 
 # The auth form lives in the site's home page modal, so the home page stays
 # reachable when it is being opened for signing in or registering.
@@ -389,7 +398,8 @@ def bot_verdict(user_agent, configured_bot_uas=(), known_bot_ip=False):
 
 def is_bot_block(row):
     """True when an auto-bot block (rather than a hand-made one) made this row."""
-    return bool(row is not None and (row.blocked_by or '').startswith('auto:bot'))
+    return bool(row is not None and (row.blocked_by or '').startswith(
+        ('auto:bot', 'auto:probe', 'auto:script')))
 
 
 def set_permanent(ip_address, permanent=True, by=''):
@@ -569,3 +579,106 @@ def blocked_ip_report(include_unblocked=False, search=''):
         'repeat': sum(1 for s in rows if (s['offense_count'] or 1) > 1),
     }
     return rows, totals
+
+# --- unknown-page (404 / probe) watch -------------------------------------
+# A person mistypes a URL once in a while; a scraper walks hundreds of URLs
+# that do not exist. This watch sends an address that keeps asking for missing
+# pages to the block page, which asks it to sign in or register — and doing
+# either lifts the block. The block is deliberately not permanent: it is a
+# prompt for a human, and a warning for a script (a second one is permanent
+# because lift_block_for_signup leaves that mark).
+UNKNOWN_WINDOW_SECONDS = 600
+UNKNOWN_MAX_REQUESTS = 40
+# Pages that must never count: assets, the app's API and the dashboard.
+UNKNOWN_SKIP_PREFIXES = ('/static/', '/media/', '/api/', '/admin', '/favicon.ico')
+UNKNOWN_WATCH_MAX_IPS = 6000
+_unknown_watch = {}
+
+
+def should_watch_unknown_pages(path):
+    """False for assets, the app's API and the dashboard."""
+    p = path or ''
+    return bool(p) and not p.startswith(UNKNOWN_SKIP_PREFIXES)
+
+
+def note_unknown_page(ip_address, now=None):
+    """Count one missing-page request; True once this address has had enough.
+
+    Same cheap in-process rolling window as the request-rate watch: once the
+    block row exists every worker enforces it, so the counter only has to be
+    good enough to notice the pattern.
+    """
+    from collections import deque
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    now = now if now is not None else time.monotonic()
+    if len(_unknown_watch) > UNKNOWN_WATCH_MAX_IPS:
+        for old in list(_unknown_watch)[:UNKNOWN_WATCH_MAX_IPS // 4]:
+            _unknown_watch.pop(old, None)
+    window = _unknown_watch.get(ip)
+    if window is None:
+        window = _unknown_watch[ip] = deque()
+    cutoff = now - UNKNOWN_WINDOW_SECONDS
+    while window and window[0] < cutoff:
+        window.popleft()
+    window.append(now)
+    if len(window) < UNKNOWN_MAX_REQUESTS:
+        return False
+    _unknown_watch.pop(ip, None)
+    return True
+
+
+def auto_block_probe(ip_address, hits=None, path=''):
+    """Block an address that keeps asking for pages the site does not have.
+
+    Not permanent: the block page asks the visitor to sign in or register, and
+    either one lifts it (see lift_block_for_signup). An address that was warned
+    this way and comes back to probe again is escalated to permanent by
+    block_ip() itself.
+    """
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return None, False
+    detail = '%s pages that do not exist inside %s minutes' % (
+        hits or UNKNOWN_MAX_REQUESTS, UNKNOWN_WINDOW_SECONDS // 60)
+    if path:
+        detail += ' (last: %s)' % path[:120]
+    logger.info('IPBlock: auto-blocking %s — %s', ip, detail)
+    return block_ip(ip, 'auto:probe-watch', 'kept asking for pages that do not exist: ' + detail,
+                    permanent=False)
+
+
+# --- script / bot client detection ----------------------------------------
+# A request that announces itself as a program — curl, python-requests, a
+# headless browser, a scanner — is not a visitor. Those are refused at once
+# with the block page rather than waiting for them to misbehave first. The
+# Android app's client (okhttp) and normal browsers are not in this list, and
+# the app's API is never inspected here.
+SCRIPT_BLOCK_EXEMPT_PREFIXES = ('/api/', '/static/', '/media/', '/admin')
+
+
+def is_script_agent(user_agent):
+    """True for the User-Agents a script or automation tool sends.
+
+    Only unambiguous tool signatures qualify: a browser that happens to look
+    unusual must never be refused for it.
+    """
+    lowered = (user_agent or '').strip().lower()
+    if not lowered:
+        return False
+    for signature in SCRAPER_UA_SIGNATURES:
+        if signature in lowered:
+            return True
+    return False
+
+
+def auto_block_script(ip_address, user_agent=''):
+    """Refuse an address that is using a scraping or automation client."""
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return None, False
+    detail = ('automated client (%s)' % (user_agent or '')[:120]) if user_agent else 'automated client'
+    logger.info('IPBlock: auto-blocking %s — %s', ip, detail)
+    return block_ip(ip, 'auto:script-watch', 'used an automated client: ' + detail,
+                    permanent=False)
