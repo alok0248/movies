@@ -189,6 +189,10 @@ class IPBlockMiddleware:
             return
         if self._operator(request):
             return
+        # A signed-in person is a person. Someone who mistypes a URL or follows a
+        # broken link must never be auto-blocked for it, however many they hit.
+        if self._signed_in(request):
+            return
         from .ip_block import (auto_block_probe, note_unknown_page,
                                should_watch_unknown_pages)
         path = getattr(request, 'path', '') or ''
@@ -258,6 +262,15 @@ class IPBlockMiddleware:
             return self.get_response(request)
         row = blocked_ip_for(client_ip)
         if row is None:
+            return self.get_response(request)
+        # The Android app is never shown the block page. Its traffic shares
+        # carrier addresses with thousands of other users, so an address block
+        # meant for one scraper would otherwise take the app down for everyone
+        # behind it. Only app-identifying requests on app paths are let through;
+        # a browser or a script on the same address still gets the block.
+        from .ip_block import is_app_client_request, APP_CLIENT_PATH_PREFIXES
+        path = getattr(request, 'path', '') or ''
+        if path.startswith(APP_CLIENT_PATH_PREFIXES) and is_app_client_request(request):
             return self.get_response(request)
         # A signed-in visitor already followed the block page's way out, so a
         # hand-made block does not stop them — but a bot block, or a permanent

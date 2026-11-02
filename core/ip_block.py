@@ -54,6 +54,14 @@ AUTH_EXEMPT_PREFIXES = (
     '/api/user/reset-password', '/api/user/verify-reset-otp',
 )
 
+# The Android app's own surface. It talks to ``/api/`` and downloads its APK
+# from ``/apps/download/<id>/`` with an OkHttp client, and mobile carriers put
+# thousands of real users behind one address — so these paths are never blocked,
+# never counted towards a bot rate and never treated as a script. Blocking one
+# of those addresses (or one of these paths) would take the app down for genuine
+# users; the API has its own auth and rate limits for the traffic that matters.
+APP_CLIENT_PATH_PREFIXES = ('/api/', '/apps/download/')
+
 # --- bot-rate watch -------------------------------------------------------
 # A visitor asking for this many non-user-API requests inside the window looks
 # like a scraper rather than a person, and is blocked as a bot. Tuned where a
@@ -65,7 +73,9 @@ BOT_WINDOW_SECONDS = 300
 BOT_MAX_REQUESTS = 150
 # Paths that never count towards the bot rate (the app's user-data polling).
 BOT_RATE_SKIP_PREFIXES = (
-    '/api/user/', '/ajax/page-activity', '/static/', '/media/',
+    # The app's whole surface: carrier-grade NAT puts many real devices behind
+    # one address, so counting its polling would block genuine users.
+    '/api/', '/apps/download/', '/ajax/page-activity', '/static/', '/media/',
     # Endpoints a normal visitor produces by clicking and watching. Counting
     # them let an enthusiastic human reach the bot limit on their own.
     '/ajax/track-click/', '/ajax/click-status/', '/ajax/adsterra/click/',
@@ -590,7 +600,8 @@ def blocked_ip_report(include_unblocked=False, search=''):
 UNKNOWN_WINDOW_SECONDS = 600
 UNKNOWN_MAX_REQUESTS = 40
 # Pages that must never count: assets, the app's API and the dashboard.
-UNKNOWN_SKIP_PREFIXES = ('/static/', '/media/', '/api/', '/admin', '/favicon.ico')
+UNKNOWN_SKIP_PREFIXES = ('/static/', '/media/', '/api/', '/apps/download/',
+                        '/admin', '/favicon.ico')
 UNKNOWN_WATCH_MAX_IPS = 6000
 _unknown_watch = {}
 
@@ -655,7 +666,29 @@ def auto_block_probe(ip_address, hits=None, path=''):
 # with the block page rather than waiting for them to misbehave first. The
 # Android app's client (okhttp) and normal browsers are not in this list, and
 # the app's API is never inspected here.
-SCRIPT_BLOCK_EXEMPT_PREFIXES = ('/api/', '/static/', '/media/', '/admin')
+SCRIPT_BLOCK_EXEMPT_PREFIXES = ('/api/', '/apps/download/', '/static/', '/media/',
+                                '/admin')
+
+
+def is_app_client_request(request):
+    """True when this request is the Android app rather than a browser.
+
+    The app's OkHttp client announces itself as ``okhttp/4.x``, and its
+    authenticated calls carry an ``Authorization`` header. Either signal is
+    enough: a browser cannot send okhttp's User-Agent, and the app never sends
+    a browser one. Kept deliberately narrow so a block still applies to a
+    browser or a script that happens to hit an app path.
+    """
+    try:
+        user_agent = (request.META.get('HTTP_USER_AGENT', '') or '').lower()
+    except Exception:
+        return False
+    if 'okhttp' in user_agent:
+        return True
+    try:
+        return bool(request.META.get('HTTP_AUTHORIZATION'))
+    except Exception:
+        return False
 
 
 def is_script_agent(user_agent):

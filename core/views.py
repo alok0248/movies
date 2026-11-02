@@ -1044,7 +1044,83 @@ def admin_dashboard(request):
     failing = [f for f in findings if f.get('ok') is False]
     unknown = [f for f in findings if f.get('ok') is None]
 
+    # ------------------------------------------------------- traffic charts
+    # One place that answers "who is actually connected, and what are we
+    # refusing": web and Android connections per day for the last two weeks,
+    # plus the blocks standing right now and the refusals served each day.
+    traffic = {'labels': [], 'web': [], 'android': [], 'blocked_hits': []}
+    traffic_totals = {
+        'web_today': 0, 'android_today': 0, 'web_14': 0, 'android_14': 0,
+        'blocked_now': blocked_now, 'blocked_headers': 0, 'blocked_today_hits': 0,
+        'permanent': 0, 'new_today': 0, 'top_bots': [],
+    }
+    try:
+        from datetime import timedelta as _td2
+        from django.db.models import Count, Sum, Q
+        from .models import (AndroidAppAccessLog, BlockedHeader, RequestLog,
+                             WebsiteVisitorVisit)
+        start = today - _td2(days=13)
+        day_list = [start + _td2(days=i) for i in range(14)]
+        traffic['labels'] = [d.strftime('%d %b') for d in day_list]
+
+        # Web: distinct visitors per day, bots excluded (the tracker keeps them
+        # apart, so a scraper never inflates "people connected").
+        web_by_day = dict(
+            WebsiteVisitorVisit.objects
+            .filter(visited_at__date__gte=start, is_bot=False)
+            .values('visited_at__date')
+            .annotate(n=Count('visitor', distinct=True))
+            .values_list('visited_at__date', 'n'))
+
+        # Android: the app's own per-day connection counter.
+        android_by_day = dict(
+            AndroidAppAccessLog.objects
+            .filter(access_date__gte=start)
+            .values('access_date')
+            .annotate(n=Sum('connection_count'))
+            .values_list('access_date', 'n'))
+
+        # Refusals served per day, from the request log (403 = block page).
+        blocked_by_day = dict(
+            RequestLog.objects
+            .filter(created_at__date__gte=start, status_code=403)
+            .values('created_at__date')
+            .annotate(n=Count('id'))
+            .values_list('created_at__date', 'n'))
+
+        for d in day_list:
+            traffic['web'].append(int(web_by_day.get(d) or 0))
+            traffic['android'].append(int(android_by_day.get(d) or 0))
+            traffic['blocked_hits'].append(int(blocked_by_day.get(d) or 0))
+
+        traffic_totals['web_today'] = traffic['web'][-1]
+        traffic_totals['android_today'] = traffic['android'][-1]
+        traffic_totals['web_14'] = sum(traffic['web'])
+        traffic_totals['android_14'] = sum(traffic['android'])
+        traffic_totals['blocked_today_hits'] = traffic['blocked_hits'][-1]
+        traffic_totals['blocked_headers'] = BlockedHeader.objects.filter(
+            is_active=True).count()
+        traffic_totals['new_today'] = BlockedIP.objects.filter(
+            is_active=True, blocked_at__date=today).count()
+        traffic_totals['permanent'] = BlockedIP.objects.filter(
+            is_active=True, is_permanent=True).count()
+        # Which programs the 403s came from, so a repeating bot is visible
+        # without opening the log.
+        top_bots = (RequestLog.objects
+                    .filter(created_at__gte=timezone.now() - timezone.timedelta(hours=24),
+                            status_code=403)
+                    .exclude(user_agent='')
+                    .values('user_agent')
+                    .annotate(n=Count('id'))
+                    .order_by('-n')[:5])
+        traffic_totals['top_bots'] = [
+            {'ua': (r['user_agent'] or '')[:60], 'n': r['n']} for r in top_bots]
+    except Exception:
+        logger.debug('dashboard: could not build the traffic charts', exc_info=True)
+
     return render(request, 'core/admin_dashboard.html', {
+        'traffic': traffic,
+        'traffic_totals': traffic_totals,
         'site_settings': site_settings,
         'visitors_today': visitors_today,
         'user_count': user_count,
