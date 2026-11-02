@@ -1,0 +1,49 @@
+<div class="adw-section">
+    <div class="adw-section-title">Account</div>
+    <dl class="adw-kv">
+        <dt>Email</dt><dd>{{ u.email }}</dd>
+        <dt>Name</dt><dd>{{ u.display_name|default:"—" }}</dd>
+        <dt>Plan</dt><dd>{{ u.plan|default:"—" }}{% if u.is_subscribed %} <span class="adw-chip ok">subscribed</span>{% endif %}</dd>
+        {% if u.valid_until %}<dt>Valid until</dt><dd>{{ u.valid_until }}</dd>{% endif %}
+        <dt>Last sync</dt><dd>{{ u.last_synced_at|timesince }} ago</dd>
+        <dt>Joined</dt><dd>{{ u.created_at|date:"Y-m-d H:i" }}</dd>
+    </dl>
+</div>
+
+<div class="adw-section">
+    <div class="adw-section-title">Access</div>
+    {% if u.block_mode %}
+        <span class="adw-chip on">{{ u.get_block_mode_display }}</span>
+        {% if u.blocked_at %}<div class="adw-empty">blocked {{ u.blocked_at|timesince }} ago</div>{% endif %}
+        {% if u.blocked_reason %}<div class="adw-empty">{{ u.blocked_reason }}</div>{% endif %}
+    {% else %}
+        <span class="adw-chip ok">Active</span>
+    {% endif %}
+</div>
+
+<div class="adw-section">
+    <div class="adw-section-title">Device</div>
+    <dl class="adw-kv">
+        <dt>Model</dt><dd>{{ u.device_model|default:"—" }}</dd>
+        {% if u.os_version %}<dt>OS</dt><dd>{{ u.os_version }}</dd>{% endif %}
+        <dt>Device id</dt><dd class="adw-mono">{{ u.device_id|default:"—" }}</dd>
+        {% if u.app_version %}<dt>App</dt><dd>{{ u.app_version }} ({{ u.build_number }})</dd>{% endif %}
+    </dl>
+</div>
+
+<div class="adw-section">
+    <div class="adw-section-title">Presence</div>
+    {% if heartbeat %}
+        <dl class="adw-kv">
+            <dt>Last heartbeat</dt><dd>{{ heartbeat.last_seen_at|timesince }} ago</dd>
+        </dl>
+    {% else %}
+        <div class="adw-empty">No heartbeat recorded for this account.</div>
+    {% endif %}
+</div>
+
+<div class="adw-actions">
+    <a class="adw-btn primary" href="{% url 'synced_user_detail' u.id %}">Open full page</a>
+    <a class="adw-btn" href="{% url 'synced_user_edit' u.id %}">Edit</a>
+    <a class="adw-btn" href="{% url 'synced_users_list' %}?q={{ u.email|urlencode }}">Back to list</a>
+</div>

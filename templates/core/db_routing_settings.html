@@ -102,7 +102,7 @@
 
                     {% if active_conn %}
                     <div class="d-flex gap-3">
-                        <form method="post" onsubmit="return confirm('Migrate ALL user data to external database?');">
+                        <form method="post" onsubmit="return confirmTyped(event, {word: 'MIGRATE', what: 'every user record to the external database', detail: 'Records are copied to the external connection. Nothing is deleted from the source.'});">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="migrate_data">
                             <input type="hidden" name="direction" value="to_external">
@@ -110,7 +110,7 @@
                                 <i class="fas fa-arrow-right me-2"></i>Migrate to External DB
                             </button>
                         </form>
-                        <form method="post" onsubmit="return confirm('Migrate ALL user data back to local database?');">
+                        <form method="post" onsubmit="return confirmTyped(event, {word: 'MIGRATE', what: 'every user record back to the local database', detail: 'Records are copied back to the local database. Nothing is deleted from the source.'});">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="migrate_data">
                             <input type="hidden" name="direction" value="to_local">

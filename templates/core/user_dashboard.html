@@ -213,7 +213,7 @@
                             <td>
                                 <div class="d-flex gap-1">
                                     <a href="{% url 'synced_user_edit' u.id %}" class="btn btn-sm btn-warning" title="Edit"><i class="fas fa-edit"></i></a>
-                                    <form method="post" action="{% url 'synced_user_delete' u.id %}" onsubmit="return confirm('Delete?')">{% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash"></i></button></form>
+                                    <form method="post" action="{% url 'synced_user_delete' u.id %}" onsubmit="return confirmTyped(event, {what: 'the account {{ u.email|escapejs }}', detail: 'The synced profile, its cloud data and its history are removed.'})">{% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash"></i></button></form>
                                 </div>
                             </td>
                         </tr>

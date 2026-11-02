@@ -250,7 +250,7 @@
             <button type="button" onclick="rlExport('csv')" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</button>
             <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
             <button type="button" onclick="rlExport('json')" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</button>
-            <form method="post" action="{% url 'request_log' %}" onsubmit="return confirm('Clear all recorded requests? This cannot be undone.');" style="margin:0;">
+            <form method="post" action="{% url 'request_log' %}" onsubmit="return confirmTyped(event, {what: 'the whole recorded request log'});" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="clear">
                 <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>
@@ -366,7 +366,7 @@
                 </thead>
             <tbody>
                 {% for rec in records %}
-                <tr>
+                <tr data-drawer="{% url 'request_peek' rec.pk %}" data-drawer-title="Request {{ rec.created_at|date:'Y-m-d H:i' }}" style="cursor:pointer">
                     <td class="rl-mono">{{ rec.created_at|date:"Y-m-d H:i:s" }}</td>
                     <td><span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span></td>
                     <td><span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %}">{{ rec.status_code }}</span></td>
@@ -438,7 +438,7 @@
     </form>
 
     {% for rec in records %}
-    <div class="rl-card p-3 mb-3">
+    <div class="rl-card p-3 mb-3" data-drawer="{% url 'request_peek' rec.pk %}" data-drawer-title="Request {{ rec.created_at|date:'Y-m-d H:i' }}" style="cursor:pointer">
         <div class="d-flex justify-content-between align-items-start mb-2" style="gap:.75rem;">
             <div style="min-width:0;">
                 <span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span>

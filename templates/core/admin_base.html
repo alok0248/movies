@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <style>
@@ -55,6 +56,18 @@
     }
     .sb-item i { width: 18px; text-align: center; font-size: .85rem; opacity: .7; }
     .sb-item.active i { opacity: 1; color: #818cf8; }
+    .sb-badge {
+        margin-left: auto; min-width: 20px; height: 19px; padding: 0 .34rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 999px; font-size: .66rem; font-weight: 700; line-height: 1;
+        background: rgba(148,163,184,.22); color: #e2e8f0; letter-spacing: 0;
+    }
+    .sb-item.active .sb-badge { background: rgba(255,255,255,.22); }
+    .sb-badge.danger { background: rgba(239,68,68,.9); color: #fff; }
+    .sb-badge.info { background: rgba(99,102,241,.85); color: #fff; }
+    html[data-theme="light"] .sb-badge { background: rgba(25,25,55,.12); color: #1f2937; }
+    html[data-theme="light"] .sb-badge.danger { background: #dc2626; color: #fff; }
+    html[data-theme="light"] .sb-badge.info { background: #4f46e5; color: #fff; }
     .sb-divider { height: 1px; background: rgba(255,255,255,.05); margin: .5rem .75rem; }
 
     /* Mobile toggle */
@@ -533,6 +546,7 @@
     html[data-theme="dark"] .admin-main [style*="color:#111"],
     html[data-theme="dark"] .admin-main [style*="color:#212529"],
     html[data-theme="dark"] .admin-main [style*="color:#333"] { color: var(--text) !important; }
+
 </style>
 
 <!-- Toast container -->
@@ -544,65 +558,56 @@
 
 <div class="admin-layout">
     <!-- Sidebar -->
-    <nav class="admin-sidebar" id="adminSidebar">
+        <nav class="admin-sidebar" id="adminSidebar">
         <div class="sb-section">
-            <div class="sb-section-title">Dashboard</div>
+            <div class="sb-section-title">Overview</div>
             <a href="{% url 'admin_dashboard' %}" class="sb-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                 <i class="fas fa-home"></i> Overview
             </a>
             <a href="{% url 'db_dashboard' %}" class="sb-item {% if 'db-dashboard' in request.path %}active{% endif %}">
                 <i class="fas fa-heartbeat"></i> DB Dashboard
             </a>
+            <a href="{% url 'admin_analytics' %}" class="sb-item {% if 'admin-dashboard/analytics' in request.path and 'engagement' not in request.path %}active{% endif %}">
+                <i class="fas fa-chart-line"></i> User Analytics
+            </a>
+            <a href="{% url 'admin_engagement_analytics' %}" class="sb-item {% if 'engagement' in request.path %}active{% endif %}">
+                <i class="fas fa-fire"></i> Engagement
+            </a>
+            <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
+                <i class="fas fa-chart-bar"></i> Web Analytics
+            </a>
+            <a href="{% url 'system_resource_dashboard' %}" class="sb-item {% if 'system-resources' in request.path %}active{% endif %}">
+                <i class="fas fa-server"></i> System
+            </a>
         </div>
 
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">Security &amp; Traffic</div>
+            <div class="sb-section-title">Security &amp; Health</div>
             <a href="{% url 'traffic_control' %}" class="sb-item {% if 'admin-dashboard/traffic-control' in request.path %}active{% endif %}">
                 <i class="fas fa-shield-halved"></i> Traffic Control
+                {% if admin_badges.blocked %}<span class="sb-badge" title="{{ admin_badges.blocked }} address{{ admin_badges.blocked|pluralize }} blocked">{{ admin_badges.blocked }}</span>{% endif %}
             </a>
             <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
                 <i class="fas fa-network-wired"></i> Requests &amp; Users
-            </a>
-            <a href="{% url 'probes' %}" class="sb-item {% if 'admin-dashboard/probes' in request.path %}active{% endif %}">
-                <i class="fas fa-user-secret"></i> Probes &amp; Bots
-            </a>
-            <a href="{% url 'blocked_ips' %}" class="sb-item {% if 'admin-dashboard/blocked-ips' in request.path %}active{% endif %}">
-                <i class="fas fa-shield-alt"></i> Blocked IPs
-            </a>
-            <a href="{% url 'blocked_headers' %}" class="sb-item {% if 'admin-dashboard/blocked-headers' in request.path %}active{% endif %}">
-                <i class="fas fa-heading"></i> Blocked Headers
             </a>
             <a href="{% url 'admin_audit_log' %}" class="sb-item {% if 'admin-dashboard/audit-log' in request.path %}active{% endif %}">
                 <i class="fas fa-clipboard-list"></i> Audit Log
             </a>
             <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
                 <i class="fas fa-bell"></i> Health &amp; Alerts
+                {% if admin_badges.alerts %}<span class="sb-badge danger" title="{{ admin_badges.alerts }} health check{{ admin_badges.alerts|pluralize }} failing">{{ admin_badges.alerts }}</span>{% endif %}
+            </a>
+            <a href="{% url 'admin_data_volume' %}" class="sb-item {% if 'data-volume' in request.path %}active{% endif %}">
+                <i class="fas fa-database"></i> Data &amp; Retention
             </a>
             <a href="{% url 'url_blocking_settings' %}" class="sb-item {% if 'url-blocking' in request.path %}active{% endif %}">
                 <i class="fas fa-ban"></i> URL Blocking
             </a>
             <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
                 <i class="fas fa-bug"></i> API Errors
-            </a>
-        </div>
-
-        <div class="sb-divider"></div>
-
-        <div class="sb-section">
-            <div class="sb-section-title">Configuration</div>
-            <a href="{% url 'branding_settings' %}" class="sb-item {% if 'branding' in request.path %}active{% endif %}">
-                <i class="fas fa-palette"></i> Branding
-            </a>
-            <a href="{% url 'display_settings' %}" class="sb-item {% if 'display' in request.path %}active{% endif %}">
-                <i class="fas fa-tv"></i> Display
-            </a>
-            <a href="{% url 'footer_settings' %}" class="sb-item {% if 'footer' in request.path %}active{% endif %}">
-                <i class="fas fa-window-maximize"></i> Footer
-            </a>
-            <a href="{% url 'player_settings' %}" class="sb-item {% if 'player' in request.path %}active{% endif %}">
-                <i class="fas fa-play-circle"></i> Player
+                {% if admin_badges.api_errors %}<span class="sb-badge info" title="{{ admin_badges.api_errors }} new error{{ admin_badges.api_errors|pluralize }} since you last looked">{{ admin_badges.api_errors }}</span>{% endif %}
             </a>
         </div>
 
@@ -611,7 +616,7 @@
         <div class="sb-section">
             <div class="sb-section-title">Content</div>
             <a href="{% url 'admin_content_list' %}" class="sb-item {% if 'admin-dashboard/content' in request.path and 'content-rows' not in request.path %}active{% endif %}">
-                <i class="fas fa-film"></i> Movies & TV
+                <i class="fas fa-film"></i> Movies &amp; TV
             </a>
             <a href="{% url 'content_row_list' %}" class="sb-item {% if 'content-rows' in request.path %}active{% endif %}">
                 <i class="fas fa-th-large"></i> Content Rows
@@ -633,12 +638,13 @@
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">User Management</div>
+            <div class="sb-section-title">Users &amp; Access</div>
             <a href="{% url 'admin_user_list' %}" class="sb-item {% if 'users' in request.path %}active{% endif %}">
                 <i class="fas fa-user-shield"></i> Users
             </a>
             <a href="{% url 'synced_users_list' %}" class="sb-item {% if 'synced-users' in request.path %}active{% endif %}">
                 <i class="fas fa-users"></i> Synced Users
+                {% if admin_badges.blocked_today %}<span class="sb-badge" title="{{ admin_badges.blocked_today }} account{{ admin_badges.blocked_today|pluralize }} blocked today">{{ admin_badges.blocked_today }}</span>{% endif %}
             </a>
             <a href="{% url 'admin_history_calendar' %}" class="sb-item {% if 'history-calendar' in request.path %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> History Calendar
@@ -651,7 +657,7 @@
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">Android & API</div>
+            <div class="sb-section-title">Android &amp; API</div>
             <a href="{% url 'android_app_list' %}" class="sb-item {% if 'android-apps' in request.path and 'analytics' not in request.path and 'downloads' not in request.path %}active{% endif %}">
                 <i class="fab fa-android"></i> Android Apps
             </a>
@@ -675,30 +681,30 @@
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">Database</div>
-            <a href="{% url 'db_connection_settings' %}" class="sb-item {% if 'db-connections' in request.path %}active{% endif %}">
-                <i class="fas fa-plug"></i> Connections
+            <div class="sb-section-title">Settings</div>
+            <a href="{% url 'branding_settings' %}" class="sb-item {% if 'branding' in request.path %}active{% endif %}">
+                <i class="fas fa-palette"></i> Branding
             </a>
-            <a href="{% url 'db_routing_settings' %}" class="sb-item {% if 'db-routing' in request.path %}active{% endif %}">
-                <i class="fas fa-route"></i> Data Routing
+            <a href="{% url 'display_settings' %}" class="sb-item {% if 'display' in request.path %}active{% endif %}">
+                <i class="fas fa-tv"></i> Display
+            </a>
+            <a href="{% url 'footer_settings' %}" class="sb-item {% if 'footer' in request.path %}active{% endif %}">
+                <i class="fas fa-window-maximize"></i> Footer
+            </a>
+            <a href="{% url 'player_settings' %}" class="sb-item {% if 'player' in request.path %}active{% endif %}">
+                <i class="fas fa-play-circle"></i> Player
             </a>
         </div>
 
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">Analytics</div>
-            <a href="{% url 'admin_analytics' %}" class="sb-item {% if 'admin-dashboard/analytics' in request.path and 'engagement' not in request.path %}active{% endif %}">
-                <i class="fas fa-chart-line"></i> User Analytics
+            <div class="sb-section-title">Database</div>
+            <a href="{% url 'db_connection_settings' %}" class="sb-item {% if 'db-connections' in request.path %}active{% endif %}">
+                <i class="fas fa-plug"></i> Connections
             </a>
-            <a href="{% url 'admin_engagement_analytics' %}" class="sb-item {% if 'engagement' in request.path %}active{% endif %}">
-                <i class="fas fa-fire"></i> Engagement
-            </a>
-            <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
-                <i class="fas fa-chart-bar"></i> Web Analytics
-            </a>
-            <a href="{% url 'system_resource_dashboard' %}" class="sb-item {% if 'system-resources' in request.path %}active{% endif %}">
-                <i class="fas fa-server"></i> System
+            <a href="{% url 'db_routing_settings' %}" class="sb-item {% if 'db-routing' in request.path %}active{% endif %}">
+                <i class="fas fa-route"></i> Data Routing
             </a>
         </div>
     </nav>
@@ -709,6 +715,8 @@
     </main>
 </div>
 
+<script src="{% static 'js/admin-drawer.js' %}"></script>
+<script src="{% static 'js/typed-confirm.js' %}"></script>
 <script>
 // Sidebar toggle
 function toggleSidebar() {

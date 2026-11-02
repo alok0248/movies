@@ -130,3 +130,81 @@ def site_settings(request):
         'enable_adsterra_links': bool(ss.enable_adsterra_links),
         'enable_autoclick_ads': bool(ss.enable_autoclick_ads),
     }
+
+
+def admin_badges(request):
+    """Live counters for the admin sidebar.
+
+    Four numbers that say something needs a look, cached so a page view does
+    not pay for them every time:
+
+    * ``blocked``       — addresses currently refused by the site,
+    * ``blocked_today`` — app accounts blocked since midnight,
+    * ``api_errors``    — errors recorded since this admin last opened the page
+                          (per-browser watermark in the session),
+    * ``alerts``        — health checks currently failing.
+
+    Everything is wrapped: a database hiccup must never break a page render,
+    and the whole processor only runs for staff inside /admin-dashboard/.
+    """
+    try:
+        user = getattr(request, 'user', None)
+        if not (user and user.is_authenticated and (user.is_staff or user.is_superuser)):
+            return {}
+        if not (getattr(request, 'path', '') or '').startswith('/admin-dashboard'):
+            return {}
+    except Exception:
+        return {}
+
+    badges = {'blocked': 0, 'blocked_today': 0, 'api_errors': 0, 'alerts': 0}
+    try:
+        from django.core.cache import cache
+        from django.utils import timezone
+        from .models import BlockedIP, ErrorLog, SyncedUser
+
+        blocked = cache.get('admin_badge_blocked')
+        if blocked is None:
+            blocked = BlockedIP.objects.filter(is_active=True).count()
+            cache.set('admin_badge_blocked', blocked, 60)
+        badges['blocked'] = int(blocked)
+
+        today = cache.get('admin_badge_blocked_today')
+        if today is None:
+            today = SyncedUser.objects.filter(
+                block_mode__gt='', blocked_at__date=timezone.localdate()).count()
+            cache.set('admin_badge_blocked_today', today, 120)
+        badges['blocked_today'] = int(today)
+
+        seen = None
+        try:
+            seen = request.session.get('admin_api_errors_seen')
+        except Exception:
+            seen = None
+        errors = ErrorLog.objects.all()
+        if seen:
+            from django.utils.dateparse import parse_datetime
+            stamp = parse_datetime(seen)
+            if stamp:
+                errors = errors.filter(created_at__gt=stamp)
+        else:
+            errors = errors.filter(created_at__gte=timezone.now() - timezone.timedelta(hours=24))
+        badges['api_errors'] = errors.count()
+
+        failing = cache.get('admin_badge_health')
+        if failing is None:
+            try:
+                from .health import run_checks
+                from .models import AlertIncident
+                findings = run_checks()          # also opens/updates incidents
+                open_rows = AlertIncident.objects.filter(resolved_at__isnull=True).count()
+                # before the first incident row exists the failing checks are
+                # the same number, so the badge is never silently empty
+                failing = open_rows or sum(1 for f in findings if f.get('ok') is False)
+            except Exception:
+                failing = 0
+            cache.set('admin_badge_health', failing, 120)
+        badges['alerts'] = int(failing)
+    except Exception:
+        pass
+
+    return {'admin_badges': badges}

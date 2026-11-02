@@ -117,7 +117,7 @@
         <div class="d-flex gap-2">
             <a href="{% url 'api_error_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
             <a href="{% url 'api_error_log' %}?format=json" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</a>
-            <form method="post" action="{% url 'api_error_log' %}" onsubmit="return confirm('Clear all recorded errors? This cannot be undone.');" style="margin:0;">
+            <form method="post" action="{% url 'api_error_log' %}" onsubmit="return confirmTyped(event, {what: 'every recorded API error'});" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="clear">
                 <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>

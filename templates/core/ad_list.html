@@ -151,7 +151,7 @@
                                 </button>
                             </form>
                             <a href="{% url 'ad_edit' ad.id %}" class="btn btn-sm btn-warning me-2">Edit</a>
-                            <a href="{% url 'ad_delete' ad.id %}" class="btn btn-sm btn-danger">Delete</a>
+                            <a href="{% url 'ad_delete' ad.id %}" class="btn btn-sm btn-danger" onclick="return confirmTyped(event, {what: 'this ad slot', detail: 'Its configuration and placement are removed.'})">Delete</a>
                         </td>
                     </tr>
                     {% empty %}

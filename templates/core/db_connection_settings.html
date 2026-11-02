@@ -229,7 +229,7 @@
                                         <button class="btn btn-sm btn-outline-info" onclick="loadConn({{ conn.id }}, '{{ conn.name|escapejs }}', '{{ conn.db_type }}', '{{ conn.host|escapejs }}', {{ conn.port }}, '{{ conn.database_name|escapejs }}', '{{ conn.username|escapejs }}', '{{ conn.notes|escapejs }}', {{ conn.is_default|yesno:'true,false' }})"><i class="fas fa-edit"></i></button>
                                         <button class="btn btn-sm btn-outline-success" onclick="testSavedConn({{ conn.id }})"><i class="fas fa-plug"></i></button>
                                         <button class="btn btn-sm btn-outline-warning" onclick="writeConfig({{ conn.id }})"><i class="fas fa-file-export"></i></button>
-                                        <form method="post" class="d-inline" onsubmit="return confirm('Delete this connection?');">
+                                        <form method="post" class="d-inline" onsubmit="return confirmTyped(event, {what: 'the saved connection {{ conn.name|escapejs }}'});">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="conn_id" value="{{ conn.id }}">

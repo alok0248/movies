@@ -61,6 +61,55 @@
         </form>
     </div>
 
+    {% if incidents_open %}
+    <div class="aa-card mb-3" style="border-color:rgba(239,68,68,.45);">
+        <div class="aa-sect mb-2" style="color:#fca5a5;"><i class="fas fa-triangle-exclamation"></i> Open incidents</div>
+        {% for inc in incidents_open %}
+        <div class="aa-finding">
+            <span class="aa-dot bad"></span>
+            <div class="flex-grow-1">
+                <strong class="text-white">{{ inc.title }}</strong>
+                <div class="aa-sub">{{ inc.detail }}</div>
+                <div class="aa-sub">
+                    open {{ inc.opened_at|timesince }} · seen {{ inc.occurrences }}×
+                    {% if inc.acknowledged_at %} · acknowledged by {{ inc.acknowledged_by }}{% endif %}
+                </div>
+            </div>
+            {% if inc.acknowledged_at %}
+            <span class="aa-sub">acknowledged</span>
+            {% else %}
+            <form method="post" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="ack_incident">
+                <input type="hidden" name="id" value="{{ inc.id }}">
+                <button class="aa-btn" type="submit"><i class="fas fa-check"></i> Acknowledge</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="aa-card mb-3">
+        <div class="aa-sub"><i class="fas fa-circle-check text-success me-1"></i> No open incidents — every enabled check is passing.</div>
+    </div>
+    {% endif %}
+
+    {% if incidents_recent %}
+    <div class="aa-card mb-3">
+        <div class="aa-sect mb-2"><i class="fas fa-clock-rotate-left text-info"></i> Recent incidents</div>
+        <table class="aa-table">
+            {% for inc in incidents_recent %}
+            <tr>
+                <td>{{ inc.title }}</td>
+                <td class="aa-sub">{{ inc.opened_at|date:"Y-m-d H:i" }}</td>
+                <td class="aa-sub">lasted {{ inc.duration }}</td>
+                <td class="aa-sub">{% if inc.acknowledged_by %}{{ inc.acknowledged_by }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+
     {% if findings %}
     <div class="aa-card mb-3">
         <div class="aa-sect mb-2"><i class="fas fa-wave-square text-info"></i> Last run</div>
@@ -97,6 +146,17 @@
                 <label for="r-name">Name (optional)</label>
                 <input id="r-name" type="text" name="name" placeholder="Ops">
             </div>
+            <div class="aa-field">
+                <label>Routed checks</label>
+                <div class="d-flex gap-2 align-items-center" style="height:31px;">
+                    {% for key in incident_keys %}
+                    <label class="aa-check" style="font-size:.74rem;margin:0;">
+                        <input type="checkbox" name="checks" value="{{ key }}"><span>{{ key }}</span>
+                    </label>
+                    {% endfor %}
+                    <span class="aa-sub" style="font-size:.7rem;">(none = all)</span>
+                </div>
+            </div>
             <button class="aa-btn primary" type="submit"><i class="fas fa-plus"></i> Add</button>
         </form>
 
@@ -106,6 +166,20 @@
             <tr>
                 <td class="aa-mono">{{ r.email }}</td>
                 <td class="aa-sub">{{ r.name|default:'—' }}</td>
+                <td>
+                    <form method="post" style="margin:0;display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="recipient_checks">
+                        <input type="hidden" name="id" value="{{ r.id }}">
+                        {% for key in incident_keys %}
+                        <label class="aa-check" style="font-size:.7rem;margin:0;">
+                            <input type="checkbox" name="checks" value="{{ key }}" {% if key in r.check_list %}checked{% endif %}>
+                            <span>{{ key }}</span>
+                        </label>
+                        {% endfor %}
+                        <button class="aa-btn" type="submit" style="padding:.14rem .5rem;font-size:.68rem;">Save</button>
+                    </form>
+                </td>
                 <td>
                     <span class="aa-sub">{% if r.is_active %}active{% else %}off{% endif %}</span>
                 </td>
@@ -179,6 +253,14 @@
                     <label for="repeat_minutes">Repeat window (minutes)</label>
                     <input id="repeat_minutes" type="number" min="1" max="10080"
                            name="repeat_minutes" value="{{ conf.repeat_minutes }}">
+                </div>
+                <div class="aa-field">
+                    <label for="quiet_start">Quiet hours from</label>
+                    <input id="quiet_start" type="time" name="quiet_start" value="{{ conf.quiet_start }}">
+                </div>
+                <div class="aa-field">
+                    <label for="quiet_end">Quiet hours to</label>
+                    <input id="quiet_end" type="time" name="quiet_end" value="{{ conf.quiet_end }}">
                 </div>
             </div>
 

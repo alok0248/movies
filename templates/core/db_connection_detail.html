@@ -55,7 +55,7 @@
                             {% if conn.is_active %}<i class="fas fa-pause me-1"></i>Deactivate{% else %}<i class="fas fa-play me-1"></i>Activate{% endif %}
                         </button>
                     </form>
-                    <form method="post" class="d-inline" onsubmit="return confirm('Delete this connection?');">
+                    <form method="post" class="d-inline" onsubmit="return confirmTyped(event, {what: 'this saved connection'});">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="delete">
                         <button class="btn btn-outline-danger btn-sm px-3"><i class="fas fa-trash me-1"></i>Delete</button>

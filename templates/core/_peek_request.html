@@ -1,0 +1,40 @@
+<div class="adw-section">
+    <div class="adw-section-title">Request</div>
+    <dl class="adw-kv">
+        <dt>Time</dt><dd>{{ rec.created_at|date:"Y-m-d H:i:s" }}</dd>
+        <dt>Method</dt><dd><span class="adw-chip">{{ rec.method }}</span></dd>
+        <dt>Status</dt><dd><span class="adw-chip {% if rec.status_code >= 500 %}on{% elif rec.status_code < 400 %}ok{% else %}info{% endif %}">{{ rec.status_code }}</span></dd>
+        <dt>Category</dt><dd>{{ rec.get_category_display }}</dd>
+        <dt>Path</dt><dd class="adw-mono">{{ rec.path }}</dd>
+        {% if rec.query %}<dt>Query</dt><dd class="adw-mono">{{ rec.query }}</dd>{% endif %}
+        <dt>Client</dt><dd>{{ rec.client_ip|default:"—" }}</dd>
+        {% if rec.username %}<dt>User</dt><dd>{{ rec.username }}</dd>{% endif %}
+        <dt>View</dt><dd class="adw-mono">{{ rec.view_name|default:"—" }}</dd>
+        <dt>Duration</dt><dd>{{ rec.duration_ms }} ms</dd>
+    </dl>
+</div>
+
+{% if rec.user_agent %}
+<div class="adw-section">
+    <div class="adw-section-title">User agent</div>
+    <div class="adw-mono">{{ rec.user_agent }}</div>
+</div>
+{% endif %}
+
+{% if rec.referer %}
+<div class="adw-section">
+    <div class="adw-section-title">Referer</div>
+    <div class="adw-mono">{{ rec.referer }}</div>
+</div>
+{% endif %}
+
+{% if rec.request_body %}
+<div class="adw-section">
+    <div class="adw-section-title">Request body (masked)</div>
+    <div class="adw-mono" style="white-space:pre-wrap;word-break:break-all">{{ rec.request_body }}</div>
+</div>
+{% endif %}
+
+<div class="adw-actions">
+    <a class="adw-btn" href="{% url 'request_log' %}?q={{ rec.path|urlencode }}">Filter by this path</a>
+</div>

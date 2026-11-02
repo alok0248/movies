@@ -1,0 +1,40 @@
+<div class="adw-section">
+    <div class="adw-section-title">Address</div>
+    <dl class="adw-kv">
+        <dt>IP</dt><dd class="adw-mono">{{ ip }}</dd>
+        <dt>Status</dt><dd>{% if row.is_active %}<span class="adw-chip on">Blocked</span>{% else %}<span class="adw-chip">Unblocked</span>{% endif %}{% if row.is_permanent %} <span class="adw-chip on">permanent</span>{% endif %}</dd>
+        <dt>Blocked at</dt><dd>{{ row.blocked_at|date:"Y-m-d H:i:s" }}</dd>
+        <dt>Blocked by</dt><dd>{{ row.blocked_by|default:"—" }}</dd>
+        <dt>Times blocked</dt><dd>{{ row.offense_count }}</dd>
+        <dt>Requests since</dt><dd>{{ after_block }}</dd>
+        {% if row.unblocked_at %}<dt>Lifted</dt><dd>{{ row.unblocked_at|date:"Y-m-d H:i" }} by {{ row.unblocked_by|default:"—" }}</dd>{% endif %}
+    </dl>
+</div>
+
+<div class="adw-section">
+    <div class="adw-section-title">Reason recorded</div>
+    <div>{{ row.reason|default:"No reason recorded." }}</div>
+</div>
+
+{% if recent %}
+<div class="adw-section">
+    <div class="adw-section-title">Latest requests</div>
+    <ul class="adw-list">
+        {% for rec in recent %}
+        <li class="adw-mono">{{ rec.created_at|date:"H:i:s" }} · {{ rec.status_code }} · {{ rec.method }} {{ rec.path|truncatechars:52 }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="adw-actions">
+    <form method="post" action="{% url 'ip_block_action' %}" onsubmit="return confirmTyped(event, {what: 'the block on {{ ip }}', detail: 'Requests from this address are served again.'});">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{% if row.is_active %}unblock{% else %}block{% endif %}">
+        <input type="hidden" name="ip" value="{{ ip }}">
+        <input type="hidden" name="next" value="{% url 'blocked_ips' %}">
+        <button type="submit" class="adw-btn {% if row.is_active %}primary{% else %}danger{% endif %}">{% if row.is_active %}Lift block{% else %}Block again{% endif %}</button>
+    </form>
+    <a class="adw-btn" href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener">Look up</a>
+    <a class="adw-btn" href="{% url 'blocked_ips' %}?q={{ ip|urlencode }}">Back to list</a>
+</div>

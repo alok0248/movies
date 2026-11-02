@@ -71,7 +71,7 @@ def gunicorn_workers():
         return -1
 
 
-def run_checks():
+def run_checks(record=True):
     """Every enabled check as ``{key, title, ok, detail}``, in display order.
 
     A check that cannot read its signal reports ``ok=None`` (unknown) rather
@@ -114,7 +114,80 @@ def run_checks():
                        else '%d running (minimum %d)' % (count, minimum)),
         })
 
+    if record:
+        try:
+            record_incidents(findings)
+        except Exception:
+            logger.debug('health: could not record incidents', exc_info=True)
+
     return findings
+
+
+def record_incidents(findings=None):
+    """Open, update or close one incident per failing check.
+
+    Called at the end of every ``run_checks`` (the cron command, the
+    "Run check now" button and the sidebar badge all go through it), so the
+    incident record reflects what the checks actually saw, whether or not an
+    email was allowed to go out. Never raises: a sick database must not stop
+    the checks from reporting.
+    """
+    from .models import AlertIncident
+    now = timezone.now()
+    failing = {f['key']: f for f in (findings if findings is not None else run_checks(record=False))
+               if f.get('ok') is False}
+
+    for inc in AlertIncident.objects.filter(resolved_at__isnull=True):
+        finding = failing.get(inc.check_key)
+        if finding is None:
+            inc.resolved_at = now
+            inc.save(update_fields=['resolved_at'])
+            continue
+        inc.last_seen_at = now
+        inc.occurrences = (inc.occurrences or 1) + 1
+        if finding.get('detail'):
+            inc.detail = finding['detail']
+        inc.save(update_fields=['last_seen_at', 'occurrences', 'detail'])
+
+    for key, finding in failing.items():
+        if AlertIncident.objects.filter(check_key=key, resolved_at__isnull=True).exists():
+            continue
+        AlertIncident.objects.create(
+            check_key=key,
+            title=(finding.get('title') or key)[:120],
+            detail=finding.get('detail') or '',
+            opened_at=now,
+            last_seen_at=now,
+        )
+
+
+def in_quiet_hours(conf=None):
+    """True when now is inside the configured quiet window (24h HH:MM)."""
+    from .models import AlertSettings
+    conf = conf or AlertSettings.get_settings()
+    start = (getattr(conf, 'quiet_start', '') or '').strip()
+    end = (getattr(conf, 'quiet_end', '') or '').strip()
+    if not start or not end:
+        return False
+
+    def minutes(value):
+        try:
+            hour, minute = value.split(':')
+            hour, minute = int(hour), int(minute)
+        except (ValueError, AttributeError):
+            return None
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return None
+        return hour * 60 + minute
+
+    begin, finish = minutes(start), minutes(end)
+    if begin is None or finish is None:
+        return False
+    local = timezone.localtime()
+    current = local.hour * 60 + local.minute
+    if begin <= finish:
+        return begin <= current < finish
+    return current >= begin or current < finish   # window crosses midnight
 
 
 def problems(findings=None):
@@ -150,11 +223,19 @@ def recipients():
         return []
 
 
-def send_email(subject, body):
-    """Email every active recipient. Returns (sent_count, error)."""
-    addrs = [r.email for r in recipients()]
+def send_email(subject, body, keys=None):
+    """Email the active recipients routed to ``keys``. Returns (sent_count, error).
+
+    ``keys`` is the set of failing check keys; a recipient with no routing
+    configured hears about everything, and one with routing gets only the
+    checks it asked for.
+    """
+    rows = recipients()
+    if keys:
+        rows = [r for r in rows if r.wants(keys)]
+    addrs = [r.email for r in rows]
     if not addrs:
-        return 0, 'no alert recipients configured'
+        return 0, 'no alert recipients configured for these checks'
     _apply_mail_settings()
     try:
         from django.core.mail import send_mail
@@ -211,7 +292,7 @@ def dispatch(force=False):
     conf = AlertSettings.get_settings()
     findings = run_checks()
     result = {'findings': findings, 'sent_email': 0, 'sent_telegram': False,
-              'errors': [], 'throttled': False}
+              'errors': [], 'throttled': False, 'quiet': False}
 
     if not getattr(conf, 'enabled', True):
         result['errors'].append('health alerts are switched off')
@@ -219,6 +300,13 @@ def dispatch(force=False):
 
     bad = [f for f in findings if f.get('ok') is False]
     if not bad and not force:
+        return result
+
+    # Quiet hours hold delivery back, not detection: the incident is already
+    # recorded by run_checks, so the problem is visible in the morning even
+    # though no message went out overnight.
+    if not force and in_quiet_hours(conf):
+        result['quiet'] = True
         return result
 
     if not force:
@@ -238,7 +326,7 @@ def dispatch(force=False):
     subject = '[newmovies] %s' % subject
 
     if getattr(conf, 'notify_email', True):
-        count, error = send_email(subject, body)
+        count, error = send_email(subject, body, keys=[f['key'] for f in bad] or None)
         result['sent_email'] = count
         if error:
             result['errors'].append('email: ' + error)

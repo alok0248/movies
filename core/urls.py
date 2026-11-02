@@ -33,12 +33,16 @@ urlpatterns = [
     path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
     # Every blocked IP, with the requests it made after the block.
     path('admin-dashboard/blocked-ips/', views.admin_blocked_ips, name='blocked_ips'),
+    path('admin-dashboard/requests/<int:pk>/peek/', views.request_peek, name='request_peek'),
+    path('admin-dashboard/synced-users/<int:user_id>/peek/', views.synced_user_peek, name='synced_user_peek'),
+    path('admin-dashboard/blocked-ips/<str:ip>/peek/', views.blocked_ip_peek, name='blocked_ip_peek'),
     # Blocked addresses, blocked headers and probes on one page.
     path('admin-dashboard/traffic-control/', views.traffic_control, name='traffic_control'),
     # Who blocked / lifted / wiped / changed what, and when.
     path('admin-dashboard/audit-log/', views.admin_audit_log, name='admin_audit_log'),
     # Health checks and the addresses they alert.
     path('admin-dashboard/alerts/', views.admin_alerts, name='admin_alerts'),
+    path('admin-dashboard/data-volume/', views.admin_data_volume, name='admin_data_volume'),
     # Header rules (User-Agent and friends) that refuse a whole kind of traffic.
     path('admin-dashboard/blocked-headers/', views.admin_blocked_headers, name='blocked_headers'),
     # Block / lift / publish one header rule (POST).

@@ -78,7 +78,7 @@
                     </thead>
                     <tbody>
                         {% for u in users %}
-                        <tr class="user-row" style="cursor:pointer;" onclick="window.location='{% url 'synced_user_detail' u.id %}'">
+                        <tr class="user-row" style="cursor:pointer;" data-drawer="{% url 'synced_user_peek' u.id %}" data-drawer-title="{{ u.email }}">
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     {% if u.photo_url %}

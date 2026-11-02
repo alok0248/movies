@@ -301,7 +301,7 @@
                                 <button type="submit" class="bh-btn bh-btn-off"><i class="fas fa-ban"></i>Block again</button>
                             </form>
                             {% endif %}
-                            <form method="post" action="{% url 'header_block_action' %}" style="margin:0;" onsubmit="return confirm('Delete this rule? The history of it goes too.');">
+                            <form method="post" action="{% url 'header_block_action' %}" style="margin:0;" onsubmit="return confirmTyped(event, {what: 'the rule {{ r.header_name|escapejs }}: {{ r.value|escapejs }}', detail: 'Its block history is deleted with it. Blocked requests are served again.'});">
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="id" value="{{ r.id }}">

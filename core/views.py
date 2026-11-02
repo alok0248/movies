@@ -1,7 +1,7 @@
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
-from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, StreamingHttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, StreamingHttpResponse, Http404
 from django.http.request import UnreadablePostError
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
@@ -3816,6 +3816,57 @@ def android_app_dashboard(request, app_id=None):
     # device / app-version columns in the inline Users & Blocking table.
     hb_map = {h.email: h for h in UserHeartbeat.objects.all()}
 
+    # ---- Build health -----------------------------------------------------
+    # AndroidAppBuildLog keeps one row per build per day, so a week of them
+    # shows a release that never propagated as plainly as one that did. The
+    # gate's refusals are counted from the failed attempts, which is the number
+    # that says "raise allowed_build_id" or "this build is being turned away".
+    from datetime import timedelta as _timedelta
+
+    build_health = []
+    oldest_build = None
+    oldest_share = 0
+    if selected_app is not None:
+        try:
+            from .models import AndroidAppBuildLog, AndroidAppFailedAttempt
+            week_ago = timezone.localdate() - _timedelta(days=7)
+            logs = list(
+                AndroidAppBuildLog.objects
+                .filter(android_app=selected_app, access_date__gte=week_ago)
+                .values('build_identifier')
+                .annotate(reqs=Sum('connection_count'))
+                .order_by('-reqs')[:12])
+            rejected = {
+                row['build_identifier']: row['n']
+                for row in AndroidAppFailedAttempt.objects
+                .filter(android_app=selected_app, attempted_at__date__gte=week_ago,
+                        failure_reason='identity_invalid')
+                .values('build_identifier')
+                .annotate(n=Count('id'))
+            }
+            total_reqs = sum((row['reqs'] or 0) for row in logs) or 1
+            for row in logs:
+                build_health.append({
+                    'build': row['build_identifier'] or '(unknown)',
+                    'requests': row['reqs'] or 0,
+                    'share': round(100.0 * (row['reqs'] or 0) / total_reqs, 1),
+                    'rejected': rejected.get(row['build_identifier'], 0),
+                })
+        except Exception:
+            logger.debug('build health: could not read the build logs', exc_info=True)
+
+        try:
+            from .models import SyncedUser
+            builds = list(SyncedUser.objects.filter(build_number__gt=0)
+                          .values('build_number').annotate(n=Count('id'))
+                          .order_by('build_number'))
+            if builds:
+                oldest_build = builds[0]['build_number']
+                total_accounts = sum(b['n'] for b in builds) or 1
+                oldest_share = round(100.0 * builds[0]['n'] / total_accounts, 1)
+        except Exception:
+            logger.debug('build health: could not read the build split', exc_info=True)
+
     return render(request, 'core/android_app_dashboard.html', {
         'apps': apps,
         'selected_app': selected_app,
@@ -3836,6 +3887,9 @@ def android_app_dashboard(request, app_id=None):
         'synced_total': synced_total,
         'synced_subscribed': synced_subscribed,
         'synced_free': synced_free,
+        'build_health': build_health,
+        'oldest_build': oldest_build,
+        'oldest_share': oldest_share,
     })
 
 
@@ -9180,6 +9234,12 @@ def api_error_log(request):
             'errors': [error_to_dict(r) for r in records],
         })
 
+    # Opening this page clears its sidebar badge for this browser.
+    try:
+        request.session['admin_api_errors_seen'] = timezone.now().isoformat()
+    except Exception:
+        pass
+
     return render(request, 'core/admin_api_errors.html', {
         'records': records,
         'count': len(records),
@@ -11837,31 +11897,60 @@ def ajax_track_page_view(request):
 def admin_analytics(request):
     """Admin page showing user analytics: page views, time spent, platforms."""
     from .models import UserPageView, UserSession, WebsiteVisitor
+    from datetime import datetime, time as dtime
+    from django.utils.dateparse import parse_date
     from django.db.models import Sum, Count, Avg, F, Q
     from django.utils import timezone
 
-    days = int(request.GET.get('days', 7))
-    since = timezone.now() - timezone.timedelta(days=days)
+    # A preset (?days=7) or an explicit window (?start=YYYY-MM-DD&end=...).
+    # The window is capped at a year so a typo cannot scan years of rows, and
+    # the previous period of the same length is measured for the deltas.
+    raw_start = (request.GET.get('start') or '').strip()
+    raw_end = (request.GET.get('end') or '').strip()
+    start_date, end_date = parse_date(raw_start), parse_date(raw_end)
+    custom_range = bool(start_date and end_date)
+    if custom_range:
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+        if (end_date - start_date).days > 364:
+            start_date = end_date - timezone.timedelta(days=364)
+        tz = timezone.get_current_timezone()
+        since = timezone.make_aware(datetime.combine(start_date, dtime.min), tz)
+        until = timezone.make_aware(
+            datetime.combine(end_date + timezone.timedelta(days=1), dtime.min), tz)
+        if until > timezone.now():
+            until = timezone.now()
+        days = max(1, (end_date - start_date).days + 1)
+    else:
+        try:
+            days = max(1, min(365, int(request.GET.get('days', 7))))
+        except (TypeError, ValueError):
+            days = 7
+        since = timezone.now() - timezone.timedelta(days=days)
+        until = timezone.now()
+
+    range_label = '%s → %s' % (timezone.localtime(since).date().isoformat(),
+                               timezone.localtime(until).date().isoformat())
 
     # Overview stats
-    total_views = UserPageView.objects.filter(viewed_at__gte=since).count()
-    total_time = UserPageView.objects.filter(viewed_at__gte=since).aggregate(
+    total_views = UserPageView.objects.filter(viewed_at__gte=since, viewed_at__lt=until).count()
+    total_time = UserPageView.objects.filter(viewed_at__gte=since, viewed_at__lt=until).aggregate(
         total=Sum('time_spent_seconds'))['total'] or 0
-    avg_time = UserPageView.objects.filter(viewed_at__gte=since).aggregate(
+    avg_time = UserPageView.objects.filter(viewed_at__gte=since, viewed_at__lt=until).aggregate(
         avg=Avg('time_spent_seconds'))['avg'] or 0
-    unique_visitors = UserPageView.objects.filter(viewed_at__gte=since).values(
+    unique_visitors = UserPageView.objects.filter(viewed_at__gte=since, viewed_at__lt=until).values(
         'visitor_id').distinct().count()
     unique_users = UserPageView.objects.filter(
-        viewed_at__gte=since, user__isnull=False).values('user').distinct().count()
+        viewed_at__gte=since, viewed_at__lt=until, user__isnull=False).values('user').distinct().count()
 
     # Platform breakdown
-    platform_data = list(UserPageView.objects.filter(viewed_at__gte=since)
+    platform_data = list(UserPageView.objects.filter(viewed_at__gte=since, viewed_at__lt=until)
         .values('platform')
         .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'))
         .order_by('-views'))
 
     # Top pages
-    top_pages = list(UserPageView.objects.filter(viewed_at__gte=since)
+    top_pages = list(UserPageView.objects.filter(viewed_at__gte=since, viewed_at__lt=until)
         .values('path', 'page_title')
         .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'),
                   avg_time=Avg('time_spent_seconds'))
@@ -11869,7 +11958,7 @@ def admin_analytics(request):
 
     # Most active users
     active_users = list(UserPageView.objects.filter(
-        viewed_at__gte=since, user__isnull=False)
+        viewed_at__gte=since, viewed_at__lt=until, user__isnull=False)
         .values('user__username', 'user__email')
         .annotate(views=Count('id'), total_time=Sum('time_spent_seconds'))
         .order_by('-views')[:15])
@@ -11897,8 +11986,33 @@ def admin_analytics(request):
         .annotate(views=Count('id'))
         .order_by('hour'))
 
+    # ---- previous period ---------------------------------------------------
+    span = until - since
+    prev_since, prev_until = since - span, since
+    previous = UserPageView.objects.filter(viewed_at__gte=prev_since, viewed_at__lt=prev_until)
+    prev_views = previous.count()
+    prev_visitors = previous.values('visitor_id').distinct().count()
+    prev_avg_time = previous.aggregate(avg=Avg('time_spent_seconds'))['avg'] or 0
+
+    def _delta(now_value, before_value):
+        if not before_value:
+            return None
+        return round(100.0 * (now_value - before_value) / before_value, 1)
+
     return render(request, 'core/admin_analytics.html', {
         'days': days,
+        'custom_range': custom_range,
+        'range_start': timezone.localtime(since).date().isoformat(),
+        'range_end': timezone.localtime(until - timezone.timedelta(seconds=1)).date().isoformat(),
+        'range_label': range_label,
+        'prev_views': prev_views,
+        'prev_visitors': prev_visitors,
+        'prev_avg_time': prev_avg_time,
+        'delta_views': _delta(total_views, prev_views),
+        'delta_visitors': _delta(unique_visitors, prev_visitors),
+        'delta_avg_time': _delta(avg_time, prev_avg_time),
+        'prev_label': '%s → %s' % (timezone.localtime(prev_since).date().isoformat(),
+                                   timezone.localtime(prev_until).date().isoformat()),
         'total_views': total_views,
         'total_time': total_time,
         'avg_time': avg_time,
@@ -14995,7 +15109,7 @@ def admin_alerts(request):
     """
     from . import health
     from .audit import log_action
-    from .models import AlertRecipient, AlertSettings
+    from .models import AlertIncident, AlertRecipient, AlertSettings
 
     conf = AlertSettings.get_settings()
     findings = None
@@ -15023,6 +15137,8 @@ def admin_alerts(request):
             conf.telegram_bot_token = (request.POST.get('telegram_bot_token') or '').strip()[:200]
             conf.telegram_chat_id = (request.POST.get('telegram_chat_id') or '').strip()[:100]
             conf.repeat_minutes = _admin_int(request.POST.get('repeat_minutes'), 30, 1, 10080)
+            conf.quiet_start = _admin_hhmm(request.POST.get('quiet_start'))
+            conf.quiet_end = _admin_hhmm(request.POST.get('quiet_end'))
             conf.save()
             log_action(request, 'alert_settings', 'health alerts',
                        'email=%s telegram=%s repeat=%smin' % (
@@ -15033,15 +15149,18 @@ def admin_alerts(request):
         if action == 'add_recipient':
             email = (request.POST.get('email') or '').strip().lower()
             name = (request.POST.get('name') or '').strip()[:100]
+            routing = _admin_check_routing(request.POST.getlist('checks'))
             if '@' not in email or len(email) < 5:
                 messages.error(request, 'Enter a valid email address.')
             else:
                 row, created = AlertRecipient.objects.get_or_create(
-                    email=email, defaults={'name': name, 'is_active': True})
+                    email=email, defaults={'name': name, 'is_active': True, 'checks': routing})
                 if not created:
                     row.is_active = True
                     row.name = name or row.name
-                    row.save(update_fields=['is_active', 'name'])
+                    if routing:
+                        row.checks = routing
+                    row.save(update_fields=['is_active', 'name', 'checks'])
                 log_action(request, 'alert_recipient', email,
                            'added' if created else 'switched back on')
                 messages.success(request, '%s will receive the alerts.' % email)
@@ -15065,6 +15184,32 @@ def admin_alerts(request):
                     request, '%s is now %s.' % (row.email, 'on' if row.is_active else 'off'))
             return redirect('admin_alerts')
 
+        if action == 'ack_incident':
+            inc = AlertIncident.objects.filter(
+                id=_admin_int(request.POST.get('id'), 0)).first()
+            if inc is None:
+                messages.warning(request, 'That incident no longer exists.')
+            else:
+                inc.acknowledged_at = timezone.now()
+                inc.acknowledged_by = (request.user.get_username() or '')[:150]
+                inc.save(update_fields=['acknowledged_at', 'acknowledged_by'])
+                log_action(request, 'alert_ack', inc.title, 'incident acknowledged')
+                messages.success(request, 'Incident acknowledged as %s.' % inc.acknowledged_by)
+            return redirect('admin_alerts')
+
+        if action == 'recipient_checks':
+            row = AlertRecipient.objects.filter(
+                id=_admin_int(request.POST.get('id'), 0)).first()
+            if row is None:
+                messages.warning(request, 'That recipient no longer exists.')
+            else:
+                row.checks = _admin_check_routing(request.POST.getlist('checks'))
+                row.save(update_fields=['checks'])
+                log_action(request, 'alert_recipient', row.email,
+                           'routing=%s' % (row.checks or 'all checks'))
+                messages.success(request, 'Routing saved for %s.' % row.email)
+            return redirect('admin_alerts')
+
         if action == 'run':
             findings = health.run_checks()
             log_action(request, 'health_run', 'health checks',
@@ -15086,10 +15231,197 @@ def admin_alerts(request):
                         delivery['sent_email'],
                         ' and Telegram' if delivery['sent_telegram'] else ''))
 
+    incidents_open = list(AlertIncident.objects.filter(
+        resolved_at__isnull=True).order_by('opened_at'))
     return render(request, 'core/admin_alerts.html', {
         'conf': conf,
         'recipients': list(AlertRecipient.objects.all()),
         'findings': findings,
         'delivery': delivery,
         'recipients_active': AlertRecipient.objects.filter(is_active=True).count(),
+        'incidents_open': incidents_open,
+        'incidents_recent': list(AlertIncident.objects.filter(
+            resolved_at__isnull=False).order_by('-resolved_at')[:10]),
+        'incident_keys': ['5xx', 'disk', 'workers'],
+    })
+
+
+
+def _admin_hhmm(value):
+    """A 24h HH:MM string, or '' when the input is not a valid time."""
+    value = (value or '').strip()
+    if len(value) == 5 and value[2] == ':' and value[:2].isdigit() and value[3:].isdigit():
+        hour, minute = int(value[:2]), int(value[3:])
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return value
+    return ''
+
+
+def _admin_check_routing(values):
+    """Comma-separated check keys from a list of submitted checkboxes."""
+    order = ['5xx', 'disk', 'workers']
+    picked = [k for k in order if k in set(values or [])]
+    return ','.join(picked)[:60]
+
+
+# ------------------------------------------------------------------ storage
+# The tables that grow without being asked. Kept as data so the page, the
+# purge and its preview all read the same list.
+DATA_VOLUME_TABLES = (
+    ('request_log', 'Request log', 'RequestLog', 'created_at', 'Every page and API request'),
+    ('api_errors', 'API errors', 'ErrorLog', 'created_at', 'Failed 4xx/5xx responses'),
+    ('app_logs', 'App logs', 'AndroidAppLog', 'timestamp', 'Logs posted by the Android app'),
+    ('app_access', 'App access', 'AndroidAppAccessLog', 'access_date', 'Daily access counts per app'),
+    ('app_builds', 'App builds', 'AndroidAppBuildLog', 'access_date', 'Daily build counts per app'),
+    ('app_visitors', 'Daily visitors', 'AndroidAppDailyUniqueVisitor', 'access_date', 'Unique visitors per day'),
+    ('app_failed', 'Failed attempts', 'AndroidAppFailedAttempt', 'attempted_at', 'Rejected API attempts'),
+    ('app_devices', 'Device visits', 'AndroidAppDeviceVisit', 'visited_at', 'Device-level visits'),
+    ('audit', 'Admin audit', 'AdminAuditLog', 'created_at', 'Admin actions recorded here'),
+)
+
+
+def _data_volume_rows(days):
+    """Per-table row count, oldest row and how many rows a purge would delete."""
+    from django.apps import apps
+    from django.utils import timezone
+    from datetime import timedelta
+
+    cutoff = timezone.now() - timedelta(days=max(1, int(days or 30)))
+    rows = []
+    for key, label, model_name, field, note in DATA_VOLUME_TABLES:
+        try:
+            model = apps.get_model('core', model_name)
+        except LookupError:
+            continue
+        entry = {'key': key, 'label': label, 'note': note, 'count': 0,
+                 'oldest': None, 'preview': 0, 'error': ''}
+        try:
+            qs = model.objects.all()
+            entry['count'] = qs.count()
+            oldest = qs.order_by(field).values_list(field, flat=True).first()
+            entry['oldest'] = oldest
+            entry['preview'] = qs.filter(**{'%s__lt' % field: cutoff}).count()
+        except Exception as exc:  # a table that cannot be read is reported, not fatal
+            entry['error'] = str(exc)[:120]
+        rows.append(entry)
+    return rows
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_data_volume(request):
+    """What the growing tables cost, and a previewed purge for each of them."""
+    from django.apps import apps
+    from django.utils import timezone
+    from datetime import timedelta
+    from .audit import log_action
+
+    try:
+        days = int(request.GET.get('days') or request.POST.get('days') or 30)
+    except (TypeError, ValueError):
+        days = 30
+    days = max(1, min(3650, days))
+
+    if request.method == 'POST' and (request.POST.get('action') or '') == 'purge':
+        key = (request.POST.get('table') or '').strip()
+        target = next((t for t in DATA_VOLUME_TABLES if t[0] == key), None)
+        if target is None:
+            messages.error(request, 'Unknown table.')
+            return redirect('admin_data_volume')
+        _, label, model_name, field, _note = target
+        try:
+            model = apps.get_model('core', model_name)
+            cutoff = timezone.now() - timedelta(days=days)
+            deleted = model.objects.filter(**{'%s__lt' % field: cutoff}).delete()[0]
+            log_action(request, 'data_purge', label,
+                       'removed %d row(s) older than %d day(s)' % (deleted, days))
+            messages.success(request, 'Purged %d row(s) from %s (older than %d days).'
+                             % (deleted, label, days))
+        except Exception as exc:
+            logger.warning('data volume: purge failed', exc_info=True)
+            messages.error(request, 'Could not purge %s: %s' % (label, exc))
+        return redirect('%s?days=%d' % (reverse('admin_data_volume'), days))
+
+    rows = _data_volume_rows(days)
+    db_size = None
+    try:
+        from django.conf import settings as dj_settings
+        engine = dj_settings.DATABASES['default'].get('ENGINE', '')
+        name = dj_settings.DATABASES['default'].get('NAME') or ''
+        if 'sqlite' in engine and isinstance(name, str) and os.path.exists(name):
+            db_size = os.path.getsize(name)
+    except Exception:
+        db_size = None
+
+    return render(request, 'core/admin_data_volume.html', {
+        'rows': rows,
+        'days': days,
+        'db_size': db_size,
+        'total_rows': sum(r['count'] for r in rows),
+        'total_preview': sum(r['preview'] for r in rows),
+    })
+
+
+# ------------------------------------------------------------------ peeks
+# Fragments for the admin drawer. Same guard as the pages they belong to:
+# staff only, and they only read.
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def request_peek(request, pk):
+    """Drawer fragment: one recorded request in full."""
+    from .models import RequestLog
+    rec = get_object_or_404(RequestLog, pk=pk)
+    return render(request, 'core/_peek_request.html', {'rec': rec})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def synced_user_peek(request, user_id):
+    """Drawer fragment: one synced app account, with its reachable actions."""
+    from .models import SyncedUser, UserHeartbeat, UserCloudData
+    u = get_object_or_404(SyncedUser, pk=user_id)
+
+    heartbeat = None
+    try:
+        heartbeat = UserHeartbeat.objects.filter(email=u.email).first()
+    except Exception:
+        logger.debug('peek: heartbeat lookup failed', exc_info=True)
+
+    cloud = None
+    try:
+        cloud = UserCloudData.objects.filter(email=u.email).first()
+    except Exception:
+        logger.debug('peek: cloud lookup failed', exc_info=True)
+
+    return render(request, 'core/_peek_synced_user.html', {
+        'u': u,
+        'heartbeat': heartbeat,
+        'cloud': cloud,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def blocked_ip_peek(request, ip):
+    """Drawer fragment: one blocked address and what it did."""
+    from .models import BlockedIP, RequestLog
+    row = BlockedIP.objects.filter(ip_address=ip).first()
+    if row is None:
+        raise Http404('No block for that address')
+
+    try:
+        after = RequestLog.objects.filter(client_ip=ip, created_at__gte=row.blocked_at).count()
+    except Exception:
+        after = 0
+    try:
+        recent = list(RequestLog.objects.filter(client_ip=ip).order_by('-created_at')[:10])
+    except Exception:
+        recent = []
+
+    return render(request, 'core/_peek_blocked_ip.html', {
+        'row': row,
+        'ip': ip,
+        'after_block': after,
+        'recent': recent,
     })

@@ -37,7 +37,7 @@
                             </div>
                             <div class="small opacity-75">{{ app.slug }}</div>
                         </div>
-                        <a href="{% url 'android_app_delete' app.id %}" class="btn btn-sm btn-outline-danger flex-shrink-0 mt-1" title="Delete endpoint" onclick="event.stopPropagation();" style="font-size:.7rem;padding:2px 6px;"><i class="fas fa-trash"></i></a>
+                        <a href="{% url 'android_app_delete' app.id %}" class="btn btn-sm btn-outline-danger flex-shrink-0 mt-1" title="Delete endpoint" onclick="event.stopPropagation(); return confirmTyped(event, {what: 'the endpoint {{ app.name|escapejs }}', detail: 'Its credentials, build gate, analytics and logs are deleted with it.'})" style="font-size:.7rem;padding:2px 6px;"><i class="fas fa-trash"></i></a>
                     </a>
                     {% empty %}
                     <div class="list-group-item bg-dark text-secondary border-secondary">No apps saved.</div>
@@ -230,7 +230,7 @@
                         </div>
                         <a href="{% url 'android_app_settings' selected_app.id %}" class="btn btn-sm btn-outline-info"><i class="fas fa-sliders me-1"></i>Settings</a>
                         <a href="{% url 'android_app_edit' selected_app.id %}" class="btn btn-sm btn-outline-warning">Edit App</a>
-                        <a href="{% url 'android_app_delete' selected_app.id %}" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash me-1"></i>Delete Endpoint</a>
+                        <a href="{% url 'android_app_delete' selected_app.id %}" class="btn btn-sm btn-outline-danger" onclick="return confirmTyped(event, {what: 'the endpoint {{ selected_app.name|escapejs }}', detail: 'Its credentials, build gate, analytics and logs are deleted with it.'})"><i class="fas fa-trash me-1"></i>Delete Endpoint</a>
                     </div>
                     <div style="height: 300px;"><canvas id="dailyConnectionsChart"></canvas></div>
                 </div>
@@ -254,12 +254,61 @@
 
             <div class="card bg-dark border-secondary shadow-sm mt-4">
                 <div class="card-body">
+                    <h5 class="text-white mb-1">Build health (last 7 days)</h5>
+                    <div class="text-secondary small mb-3">Which builds are actually in use, how much of the traffic each carries, and how often the version gate refused them.</div>
+
+                    {% if oldest_build %}
+                    <div class="d-flex flex-wrap gap-4 mb-3 small">
+                        <div><span class="text-secondary">Oldest build in use</span> <strong class="text-white">#{{ oldest_build }}</strong></div>
+                        <div><span class="text-secondary">Accounts still on it</span> <strong class="{% if oldest_share >= 25 %}text-warning{% else %}text-white{% endif %}">{{ oldest_share }}%</strong></div>
+                        <div><span class="text-secondary">Gate allows</span> <code class="text-info">{{ selected_app.allowed_build_id|default:'every build' }}</code></div>
+                    </div>
+                    {% endif %}
+
+                    {% if build_health %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-dark align-middle mb-0" style="font-size:.82rem;">
+                            <thead>
+                                <tr>
+                                    <th style="width:34%;">Build</th>
+                                    <th class="text-end">Requests</th>
+                                    <th style="width:32%;">Share</th>
+                                    <th class="text-end" title="Requests refused as an invalid endpoint identity — the version gate">Rejected</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for b in build_health %}
+                                <tr>
+                                    <td class="text-white">{% if b.build == '(unknown)' %}<span class="text-secondary">unknown build</span>{% else %}#{{ b.build }}{% endif %}</td>
+                                    <td class="text-end">{{ b.requests }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div style="flex:1;height:6px;border-radius:99px;background:rgba(148,163,184,.18);overflow:hidden;">
+                                                <div style="width:{{ b.share }}%;height:100%;background:linear-gradient(90deg,#6366f1,#22d3ee);"></div>
+                                            </div>
+                                            <span class="text-secondary" style="min-width:42px;">{{ b.share }}%</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-end {% if b.rejected %}text-danger fw-semibold{% else %}text-secondary{% endif %}">{{ b.rejected }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-secondary small">No build traffic recorded in the last 7 days.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm mt-4">
+                <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
                         <h5 class="text-white mb-0">Endpoint Configuration</h5>
                         <div class="d-flex gap-2">
                             <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-scroll me-1"></i>Logs</a>
                             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code me-1"></i>Connection Helper</button>
-                            <a href="{% url 'android_app_clear_data' selected_app.id 'all_analytics' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('DELETE ALL analytics data for this app?\n\nThis includes: logs, failed attempts, devices, visits, access logs, build logs, daily visitors.\n\nThis cannot be undone!');"><i class="fas fa-skull-crossbones me-1"></i>Nuke All</a>
+                            <a href="{% url 'android_app_clear_data' selected_app.id 'all_analytics' %}" class="btn btn-sm btn-outline-danger" onclick="return confirmTyped(event, {what: 'all analytics data for this app', detail: 'Logs, failed attempts, devices, visits, access logs, build logs and daily visitors are deleted. The endpoint and its credentials are kept.'});"><i class="fas fa-skull-crossbones me-1"></i>Nuke All</a>
                         </div>
                     </div>
                     <div class="row g-3 small">
@@ -280,7 +329,7 @@
                             <div class="text-secondary small">Recent failed attempts to connect to this endpoint (last 5).</div>
                         </div>
                         <div class="d-flex gap-2">
-                            <a href="{% url 'android_app_clear_data' selected_app.id 'failed_attempts' %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete ALL failed attempt records?');"><i class="fas fa-trash me-1"></i>Clear</a>
+                            <a href="{% url 'android_app_clear_data' selected_app.id 'failed_attempts' %}" class="btn btn-sm btn-outline-danger" onclick="return confirmTyped(event, {what: 'all failed attempt records for this app'});"><i class="fas fa-trash me-1"></i>Clear</a>
                             <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="btn btn-sm btn-outline-danger">View All</a>
                         </div>
                     </div>
@@ -326,7 +375,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-warning"><i class="fas fa-filter me-1"></i>All Logs &amp; Filters</a>
-                            <a href="{% url 'android_app_logs_clear' selected_app.id %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete ALL app logs for this app? This cannot be undone.');"><i class="fas fa-trash me-1"></i>Clear</a>
+                            <a href="{% url 'android_app_logs_clear' selected_app.id %}" class="btn btn-sm btn-outline-danger" onclick="return confirmTyped(event, {what: 'every app log for this app'});"><i class="fas fa-trash me-1"></i>Clear</a>
                         </div>
                     </div>
                     {% if recent_logs %}
@@ -399,16 +448,17 @@
 function wipeUserData(id, btn) {
     var row = document.getElementById('block-row-' + id);
     var email = (row && row.getAttribute('data-email')) || 'this user';
-    var msg = 'DELETE the cloud data and history for ' + email + '?\n\n'
-        + 'This removes:\n'
-        + '  - watch history, playback position and resume points\n'
-        + '  - ratings, favorites and watchlist\n'
-        + '  - downloads and playlists stored in the cloud\n'
-        + '  - web play history, activity totals and visitor records\n\n'
-        + 'KEPT: the account (sign-in, email, subscription) and app settings.\n'
-        + 'Server copies are deleted immediately.\n\n'
-        + 'This cannot be undone. Delete the data?';
-    if (!confirm(msg)) { return; }
+    confirmTyped(null, {
+        title: 'Delete cloud data and history',
+        word: 'DELETE',
+        what: 'the cloud data and history for ' + email,
+        detail: 'Watch history, resume points, ratings, favorites, watchlist, downloads, playlists and web play history are removed. The account, sign-in and subscription are kept.',
+        onConfirm: function () { wipeUserDataNow(id, btn); }
+    });
+}
+
+function wipeUserDataNow(id, btn) {
+    var row = document.getElementById('block-row-' + id);
 
     var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
     var statusEl = document.getElementById('blockStatus');
@@ -790,7 +840,8 @@ print(response.json())</pre>
                         </table>
                     </div>
                 </div>
-n                <!-- Possible Responses -->
+
+n                <!-- Possible Responses -->
                 <div class="mt-4">
                     <h6 class="text-white mb-2"><i class="fas fa-exchange-alt me-1 text-warning"></i>Possible Responses</h6>
                     <div class="table-responsive">

@@ -23,7 +23,7 @@
                 <button type="submit" class="btn btn-outline-info"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
             </form>
             {% endif %}
-            <form method="post" action="{% url 'synced_user_delete' user_obj.id %}" onsubmit="return confirm('Delete this user permanently?')">
+            <form method="post" action="{% url 'synced_user_delete' user_obj.id %}" onsubmit="return confirmTyped(event, {what: 'the account {{ user_obj.email|escapejs }}', detail: 'The synced profile, its cloud data and its history are removed. This does not touch the web account.'})">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-danger"><i class="fas fa-trash me-1"></i>Delete</button>
             </form>

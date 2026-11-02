@@ -116,13 +116,30 @@
         <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">
             <i class="fas fa-chart-line me-2" style="background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>User Analytics
         </h1>
-        <small class="text-secondary">Last {{ days }} days · Updated: {% now "M d, Y H:i" %}</small>
+        <small class="text-secondary">
+            {% if custom_range %}{{ range_label }}{% else %}Last {{ days }} days{% endif %}
+            · {{ days }} day{{ days|pluralize }} · Updated: {% now "M d, Y H:i" %}
+        </small>
     </div>
-    <div class="d-flex gap-2">
-        <a href="?days=1" class="btn btn-sm {% if days == 1 %}btn-primary{% else %}btn-outline-secondary{% endif %}">Today</a>
-        <a href="?days=7" class="btn btn-sm {% if days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7 Days</a>
-        <a href="?days=30" class="btn btn-sm {% if days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}">30 Days</a>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        <a href="?days=1" class="btn btn-sm {% if not custom_range and days == 1 %}btn-primary{% else %}btn-outline-secondary{% endif %}">Today</a>
+        <a href="?days=7" class="btn btn-sm {% if not custom_range and days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7 Days</a>
+        <a href="?days=30" class="btn btn-sm {% if not custom_range and days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}">30 Days</a>
+        <form method="get" class="d-flex gap-1 align-items-center" style="margin:0;">
+            <input type="date" name="start" value="{{ range_start }}" max="{{ range_end }}"
+                   class="form-control form-control-sm" style="width:145px;background:#0f172a;color:#e2e8f0;border:1px solid rgba(148,163,184,.3);">
+            <span class="text-secondary small">→</span>
+            <input type="date" name="end" value="{{ range_end }}"
+                   class="form-control form-control-sm" style="width:145px;background:#0f172a;color:#e2e8f0;border:1px solid rgba(148,163,184,.3);">
+            <button class="btn btn-sm btn-primary" type="submit">Apply</button>
+        </form>
     </div>
+</div>
+
+<div class="text-secondary small mb-3" style="margin-top:-.4rem;">
+    <i class="fas fa-code-compare me-1"></i>
+    Compared with the previous {{ days }} day{{ days|pluralize }}: {{ prev_label }}
+    — {{ prev_views }} view{{ prev_views|pluralize }} and {{ prev_visitors }} visitor{{ prev_visitors|pluralize }}.
 </div>
 
 <!-- Overview Stats -->
@@ -131,18 +148,24 @@
         <div class="stat-card">
             <div class="text-secondary small mb-1"><i class="fas fa-eye me-1"></i>Total Page Views</div>
             <div class="stat-num" style="color:#38bdf8;">{{ total_views|floatformat:0 }}</div>
+            {% if delta_views is not None %}<div class="small {% if delta_views >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {% if delta_views >= 0 %}+{% endif %}{{ delta_views }}% vs previous</div>{% endif %}
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="stat-card">
             <div class="text-secondary small mb-1"><i class="fas fa-clock me-1"></i>Total Time Spent</div>
             <div class="stat-num" style="color:#a855f7;">{% if total_time > 3600 %}{{ total_time|floatformat:0|truncatechars:4 }}h{% elif total_time > 60 %}{{ total_time|floatformat:0|truncatechars:4 }}m{% else %}{{ total_time|floatformat:0 }}s{% endif %}</div>
+            {% if delta_avg_time is not None %}<div class="small {% if delta_avg_time >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {% if delta_avg_time >= 0 %}+{% endif %}{{ delta_avg_time }}% avg/page</div>{% endif %}
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="stat-card">
             <div class="text-secondary small mb-1"><i class="fas fa-users me-1"></i>Unique Visitors</div>
             <div class="stat-num" style="color:#22c55e;">{{ unique_visitors }}</div>
+            {% if delta_visitors is not None %}<div class="small {% if delta_visitors >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {% if delta_visitors >= 0 %}+{% endif %}{{ delta_visitors }}% vs previous</div>{% endif %}
         </div>
     </div>
     <div class="col-6 col-md-3">

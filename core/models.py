@@ -3177,8 +3177,26 @@ class AlertRecipient(models.Model):
 
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=100, blank=True, default='')
+    # Which checks this address should hear about: a comma-separated list of
+    # the check keys (5xx, disk, workers). Empty means every check — the
+    # default, so an address added without thinking keeps working.
+    checks = models.CharField(
+        max_length=60, blank=True, default='',
+        help_text="Comma-separated check keys (5xx, disk, workers). Empty = all checks.")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def check_list(self):
+        """The check keys this recipient is routed to (empty = all)."""
+        return [k.strip() for k in (self.checks or '').split(',') if k.strip()]
+
+    def wants(self, keys):
+        """True when this address should receive an alert for ``keys``."""
+        mine = self.check_list
+        if not mine:
+            return True
+        return bool(set(mine) & set(keys))
 
     class Meta:
         ordering = ['email']
@@ -3225,6 +3243,15 @@ class AlertSettings(models.Model):
     repeat_minutes = models.PositiveIntegerField(
         default=30, help_text='Do not repeat the same alert more often than this')
 
+    # Quiet hours: no delivery inside this window (incidents are still
+    # recorded, so nothing is lost — the mail simply waits until morning).
+    quiet_start = models.CharField(
+        max_length=5, blank=True, default='',
+        help_text="Start of quiet hours, 24h HH:MM (e.g. 23:00). Empty = none.")
+    quiet_end = models.CharField(
+        max_length=5, blank=True, default='',
+        help_text="End of quiet hours, 24h HH:MM (e.g. 07:00). Empty = none.")
+
     class Meta:
         verbose_name = 'Alert settings'
         verbose_name_plural = 'Alert settings'
@@ -3260,3 +3287,46 @@ class AlertSettings(models.Model):
             cache.delete(self._SINGLETON_CACHE_KEY)
         except Exception:
             pass
+
+
+class AlertIncident(models.Model):
+    """One health problem, from the moment it appeared until it cleared.
+
+    Alerts are emails that can be missed or throttled; the incident is the
+    record that stays. Each check key (5xx, disk, workers) has at most one
+    open row: while the check keeps failing the row is updated and its
+    occurrence count grows, and the first passing run closes it. An admin can
+    acknowledge it so the next person looking knows someone is on it.
+    """
+
+    CHECK_CHOICES = [('5xx', 'Server errors'), ('disk', 'Disk space'),
+                     ('workers', 'Gunicorn workers')]
+
+    check_key = models.CharField(max_length=20, choices=CHECK_CHOICES)
+    title = models.CharField(max_length=120)
+    detail = models.TextField(blank=True, default='')
+    opened_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.CharField(max_length=150, blank=True, default='')
+    occurrences = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['-opened_at']
+        verbose_name = 'Alert incident'
+        verbose_name_plural = 'Alert incidents'
+        indexes = [models.Index(fields=['check_key', 'resolved_at'])]
+
+    @property
+    def is_open(self):
+        return self.resolved_at is None
+
+    @property
+    def duration(self):
+        """How long it has been running (open or closed)."""
+        end = self.resolved_at or timezone.now()
+        return end - self.opened_at
+
+    def __str__(self):
+        return '%s since %s' % (self.check_key, self.opened_at.strftime('%Y-%m-%d %H:%M'))

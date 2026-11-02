@@ -1,7 +1,9 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load custom_filters %}
 
-{% block title %}All Users — {{ selected_app.name }}{% endblock %}
+{% block title %}All Users — {{ selected_app.name }}
+{% endblock %}
 
 {% block content %}
 <!-- Full-screen user list: no admin side nav (extends base.html, not admin_base).
@@ -161,16 +163,17 @@ function blockUser(id, mode, btn) {
 function wipeUserData(id, btn) {
     var row = document.getElementById('block-row-' + id);
     var email = (row && row.getAttribute('data-email')) || 'this user';
-    var msg = 'DELETE the cloud data and history for ' + email + '?\n\n'
-        + 'This removes:\n'
-        + '  - watch history, playback position and resume points\n'
-        + '  - ratings, favorites and watchlist\n'
-        + '  - downloads and playlists stored in the cloud\n'
-        + '  - web play history, activity totals and visitor records\n\n'
-        + 'KEPT: the account (sign-in, email, subscription) and app settings.\n'
-        + 'Server copies are deleted immediately.\n\n'
-        + 'This cannot be undone. Delete the data?';
-    if (!confirm(msg)) { return; }
+    confirmTyped(null, {
+        title: 'Delete cloud data and history',
+        word: 'DELETE',
+        what: 'the cloud data and history for ' + email,
+        detail: 'Watch history, resume points, ratings, favorites, watchlist, downloads, playlists and web play history are removed. The account, sign-in and subscription are kept.',
+        onConfirm: function () { wipeUserDataNow(id, btn); }
+    });
+}
+
+function wipeUserDataNow(id, btn) {
+    var row = document.getElementById('block-row-' + id);
     if (btn) { btn.disabled = true; }
     _status('<span class="text-danger">Deleting data…</span>');
     fetch('/admin-dashboard/synced-users/' + id + '/wipe-data/', {
@@ -277,4 +280,5 @@ function resendCode(id, btn) {
     });
 })();
 </script>
+<script src="{% static 'js/typed-confirm.js' %}"></script>
 {% endblock %}

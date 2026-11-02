@@ -407,7 +407,18 @@ async function bulkAction(action) {
 
     // Delete — confirm then delete
     if (action === 'delete') {
-        if (!confirm('Delete ' + ids.length + ' users? This cannot be undone!')) return;
+        confirmTyped(null, {
+            title: 'Delete ' + ids.length + ' accounts',
+            word: 'DELETE',
+            what: ids.length + ' web accounts and everything they saved',
+            detail: 'The accounts, their play history and their saved lists are removed. This cannot be undone.',
+            onConfirm: function () { doBulkDelete(ids, resultEl); }
+        });
+        return;
+    }
+}
+
+async function doBulkDelete(ids, resultEl) {
         try {
             var resp = await fetch('/admin-dashboard/users/bulk/delete/', {
                 method: 'POST',
@@ -419,7 +430,6 @@ async function bulkAction(action) {
             if (data.success) setTimeout(function() { location.reload(); }, 1500);
         } catch(e) { showResult(resultEl, 'danger', 'Network error'); }
         return;
-    }
 }
 
 function showResult(el, type, msg) {
@@ -441,8 +451,17 @@ async function toggleBlock(userId, btn) {
     } catch (e) { alert('Failed to toggle user status'); }
 }
 
-async function deleteUser(userId, username) {
-    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+function deleteUser(userId, username) {
+    confirmTyped(null, {
+        title: 'Delete ' + username,
+        word: 'DELETE',
+        what: 'the web account ' + username,
+        detail: 'The account and its history are removed. This cannot be undone.',
+        onConfirm: function () { deleteUserNow(userId); }
+    });
+}
+
+async function deleteUserNow(userId) {
     try {
         const resp = await fetch(`/admin-dashboard/users/${userId}/delete/`, {
             method: 'POST',
