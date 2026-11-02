@@ -171,7 +171,10 @@ BOT_BLOCK_PROFILE = (
     ('axios/', 'scraper client: axios'),
     ('Go-http-client', 'scraper client: Go'),
     ('Java/', 'scraper client: Java'),
-    ('okhttp', 'scraper client: okhttp'),
+    # 'okhttp' is deliberately absent: it is the Android app's own HTTP client
+    # (okhttp/4.x), so a rule for it would refuse every request the app makes
+    # outside /api/ — its APK download included. A scraper that uses okhttp is
+    # still caught by the address watch and the request rate.
     ('PostmanRuntime', 'API tool: Postman'),
     ('insomnia', 'API tool: Insomnia'),
     ('HeadlessChrome', 'automation: headless Chrome'),
@@ -348,23 +351,29 @@ def rule_for_request(request):
     return matched[0] if matched else None
 
 
+# Paths the Android app itself requests with its OkHttp client. A header rule
+# names a program, and the app's program is okhttp, so these must stay reachable
+# whatever rules the operator has switched on — a rule here would take the app
+# down for every user at once.
+APP_CLIENT_PATH_PREFIXES = ('/api/', '/apps/download/')
+
+
 def normalize_path(request):
     """True when header rules may apply to this path at all.
 
-    The whole ``/api/`` surface is left alone, not just the account endpoints:
-    the mobile app talks to it with an OkHttp User-Agent (``okhttp/4.x``), which
-    is one of the scraper signatures the bot profile blocks, and the app also
-    calls ``/api/android-apps/…/log/``, ``/api/player/`` and ``/api/links``.
-    Enforcing a User-Agent rule there would take the app down for every user
-    behind that client, so rules guard the website pages and the API stays
-    reachable for the app. Scrapers on the API are still caught by the address
-    watch and the request rate.
+    The app's own endpoints are left alone: it talks to ``/api/`` and downloads
+    its APK from ``/apps/download/<id>/`` with an OkHttp User-Agent
+    (``okhttp/4.x``), and it also calls ``/api/android-apps/…/log/``,
+    ``/api/player/`` and ``/api/links``. Enforcing a User-Agent rule there would
+    take the app down for every user behind that client, so rules guard the
+    website pages and the app's own surface stays reachable. Scrapers on the
+    API are still caught by the address watch and the request rate.
     """
     try:
         path = getattr(request, 'path', '') or ''
     except Exception:
         return True
-    return not path.startswith('/api/')
+    return not path.startswith(APP_CLIENT_PATH_PREFIXES)
 
 
 def rule_for_value(raw, header_name=DEFAULT_HEADER):
