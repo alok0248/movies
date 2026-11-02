@@ -77,6 +77,171 @@ SUGGESTED_RULES = (
     ('Bingbot', 'Bing (also indexes for search)'),
 )
 
+# --- "block every bot except Google" -------------------------------------
+# The site's search visibility depends on Google, so no rule the one-click bot
+# profile creates may ever match a Google crawler. Instead of trusting a bare
+# ``if 'google' in ua`` (which any scraper could spoof to walk straight through
+# every rule), the profile's tokens are chosen so that none of them occurs in
+# Google's real crawler User-Agents — and test_bot_block asserts exactly that
+# for every token below. Tokens are specific programs; a broad token like
+# 'bot' would swallow Googlebot and is deliberately absent.
+GOOGLE_CRAWLER_UAS = (
+    'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; '
+    'Googlebot/2.1; +http://www.google.com/bot.html) Chrome/W.X.Y.Z Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 '
+    '(compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    'Googlebot-Image/1.0',
+    'Googlebot-Video/1.0',
+    'Googlebot-News',
+    'Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)',
+    'AdsBot-Google (+http://www.google.com/adsbot.html)',
+    'AdsBot-Google-Mobile (+http://www.google.com/mobile/adsbot.html)',
+    'Mediapartners-Google',
+    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 '
+    '(compatible; Storebot-Google/1.0)',
+    'GoogleOther',
+    'FeedFetcher-Google; (+http://www.google.com/feedfetcher.html)',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/W.X.Y.Z Safari/537.36 Google-Read-Aloud',
+    'Google-Site-Verification/1.0',
+)
+
+# Every program the one-click profile refuses, with a short label for the
+# reason column. Grouped so the admin can see what kind of traffic each one is:
+# AI crawlers, SEO/marketing crawlers, search engines other than Google, and
+# the scraper clients a script announces itself with.
+BOT_BLOCK_PROFILE = (
+    # AI crawlers and on-demand fetchers.
+    ('GPTBot', 'AI crawler: OpenAI training'),
+    ('ChatGPT-User', 'AI fetcher: OpenAI on demand'),
+    ('OAI-SearchBot', 'AI crawler: OpenAI search'),
+    ('ClaudeBot', 'AI crawler: Anthropic'),
+    ('Claude-User', 'AI fetcher: Anthropic on demand'),
+    ('anthropic-ai', 'AI crawler: Anthropic'),
+    ('CCBot', 'AI crawler: Common Crawl'),
+    ('Bytespider', 'AI crawler: ByteDance'),
+    ('Amazonbot', 'AI crawler: Amazon'),
+    ('meta-externalagent', 'AI crawler: Meta'),
+    ('FacebookBot', 'AI crawler: Meta'),
+    ('Applebot-Extended', 'AI training: Apple'),
+    ('PerplexityBot', 'AI crawler: Perplexity'),
+    ('Perplexity-User', 'AI fetcher: Perplexity on demand'),
+    ('cohere-ai', 'AI crawler: Cohere'),
+    ('Diffbot', 'AI crawler: Diffbot'),
+    ('ImagesiftBot', 'AI crawler: ImageSift'),
+    ('Timpibot', 'AI crawler: Timpi'),
+    ('Omgilibot', 'AI crawler: Omgili'),
+    ('YouBot', 'AI crawler: You.com'),
+    ('iaskspider', 'AI crawler: iAsk'),
+    ('AI2Bot', 'AI crawler: Allen Institute'),
+    # SEO / marketing crawlers.
+    ('AhrefsBot', 'SEO crawler: Ahrefs'),
+    ('SemrushBot', 'SEO crawler: Semrush'),
+    ('MJ12bot', 'SEO crawler: Majestic'),
+    ('DotBot', 'SEO crawler: Moz'),
+    ('BLEXBot', 'SEO crawler: WebMeUp'),
+    ('DataForSeoBot', 'SEO crawler: DataForSEO'),
+    ('Screaming Frog', 'SEO spider: Screaming Frog'),
+    ('Sitebulb', 'SEO audit: Sitebulb'),
+    ('serpstatbot', 'SEO crawler: Serpstat'),
+    ('MauiBot', 'SEO crawler: Maui'),
+    # Search engines other than Google.
+    ('Bingbot', 'search engine: Bing (needs manual lift if wanted)'),
+    ('DuckDuckBot', 'search engine: DuckDuckGo'),
+    ('YandexBot', 'search engine: Yandex'),
+    ('Baiduspider', 'search engine: Baidu'),
+    ('Sogou', 'search engine: Sogou'),
+    ('Exabot', 'search engine: Exalead'),
+    ('Yeti/', 'search engine: Naver'),
+    ('PetalBot', 'search engine: Huawei Petal'),
+    ('SeznamBot', 'search engine: Seznam'),
+    # Scraper clients: a script that announces itself, never a browser.
+    ('curl/', 'scraper client: curl'),
+    ('Wget/', 'scraper client: wget'),
+    ('python-requests', 'scraper client: python-requests'),
+    ('python-urllib', 'scraper client: python-urllib'),
+    ('httpx/', 'scraper client: httpx'),
+    ('aiohttp/', 'scraper client: aiohttp'),
+    ('Scrapy', 'scraper framework: Scrapy'),
+    ('libwww-perl', 'scraper client: libwww-perl'),
+    ('node-fetch', 'scraper client: node-fetch'),
+    ('axios/', 'scraper client: axios'),
+    ('Go-http-client', 'scraper client: Go'),
+    ('Java/', 'scraper client: Java'),
+    ('okhttp', 'scraper client: okhttp'),
+    ('PostmanRuntime', 'API tool: Postman'),
+    ('insomnia', 'API tool: Insomnia'),
+    ('HeadlessChrome', 'automation: headless Chrome'),
+    ('PhantomJS', 'automation: PhantomJS'),
+    ('Puppeteer', 'automation: Puppeteer'),
+    ('Playwright', 'automation: Playwright'),
+    ('Selenium', 'automation: Selenium'),
+    ('masscan', 'scanner: masscan'),
+    ('nmap', 'scanner: nmap'),
+    ('zgrab', 'scanner: zgrab'),
+    ('Nikto', 'scanner: Nikto'),
+    ('sqlmap', 'scanner: sqlmap'),
+    ('HTTrack', 'scraper: HTTrack'),
+    ('WPScan', 'scanner: WPScan'),
+    ('gobuster', 'scanner: gobuster'),
+)
+
+
+def google_collisions(tokens=None):
+    """Profile tokens that would also match a Google crawler (expected: none).
+
+    Kept as a function rather than a comment so a test can prove it, and so a
+    future token added carelessly fails loudly instead of quietly costing the
+    site its Google indexing.
+    """
+    values = tokens if tokens is not None else [t for t, _ in BOT_BLOCK_PROFILE]
+    hits = []
+    for token in values:
+        needle = token.lower()
+        for ua in GOOGLE_CRAWLER_UAS:
+            if needle in ua.lower():
+                hits.append((token, ua))
+                break
+    return hits
+
+
+def block_known_bots(blocked_by='', reason=''):
+    """Switch on every rule of the bot profile. Returns (created, already, skipped).
+
+    Rules already on are left exactly as they are — kind of block, history and
+    robots.txt state all survive — so pressing the button twice is harmless.
+    A token that somehow matches a Google crawler would be skipped rather than
+    created, and reported back, whatever the profile says.
+    """
+    from .models import BlockedHeader
+    active_values = {v.lower() for v in BlockedHeader.objects.filter(is_active=True)
+                     .values_list('value', flat=True)}
+    created = already = 0
+    skipped = []
+    dangerous = {token for token, _ in google_collisions()}
+    for token, label in BOT_BLOCK_PROFILE:
+        if token in dangerous:
+            skipped.append(token)
+            continue
+        if token.lower() in active_values:
+            already += 1
+            continue
+        row, _is_new = block_header(
+            token, DEFAULT_HEADER, blocked_by,
+            reason=('bot profile: ' + label)[:300], robots_disallow=False)
+        if row is None:
+            skipped.append(token)
+        else:
+            created += 1
+            active_values.add(token.lower())
+    logger.info('HeaderBlock: bot profile switched on by %s (%d new, %d already on)',
+                blocked_by or '?', created, already)
+    return created, already, skipped
+
+
 # The rule list is cached per worker for a moment so a busy site does not read
 # it from the database on every request. Only a non-empty list is cached: while
 # there are no rules (the usual case) every request looks, so the very first

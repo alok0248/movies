@@ -120,6 +120,38 @@
     </div>
 
     <div class="bh-card p-3 mb-3">
+        <div class="d-flex flex-wrap gap-3 align-items-start">
+            <div style="flex:1;min-width:260px;">
+                <div style="font-size:1rem;font-weight:700;color:#fbbf24;">
+                    <i class="fas fa-robot me-1"></i>Block every bot — Google kept
+                </div>
+                <div class="bh-sub mt-1">
+                    One click adds a User-Agent rule for {{ bot_profile_count }} known programs: AI crawlers
+                    (GPTBot, ClaudeBot, CCBot…), SEO crawlers, search engines other than Google, and scraper
+                    clients (curl, wget, python-requests, headless browsers). Googlebot and the rest of
+                    Google's crawlers are never included. Every one becomes its own rule in the table below,
+                    so a single bot — Bing, say — can be lifted on its own without touching the others.
+                </div>
+                <details class="mt-2">
+                    <summary class="bh-sub" style="cursor:pointer;">What this blocks ({{ bot_profile_count }})</summary>
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                        {% for token, label in bot_profile %}
+                        <span class="bh-chip" title="{{ label }}">{{ token }}</span>
+                        {% endfor %}
+                    </div>
+                </details>
+            </div>
+            <form method="post" action="{% url 'header_block_action' %}" style="margin:0;"
+                  onsubmit="return confirm('Block every known bot except Google?\n\nGoogle crawlers stay allowed. Each rule can be lifted on its own from the table below.');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="bots">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="bh-btn bh-btn-off"><i class="fas fa-robot"></i>Block bots (Google kept)</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="bh-card p-3 mb-3">
         <form method="post" action="{% url 'header_block_action' %}" class="bh-form" style="margin:0;">
             {% csrf_token %}
             <input type="hidden" name="action" value="block">

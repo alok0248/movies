@@ -12810,7 +12810,22 @@ def header_block_action(request):
     except (TypeError, ValueError):
         rule_id = 0
 
-    if action == 'block':
+    if action == 'bots':
+        # One click for "block every bot except Google": the whole profile of
+        # known crawlers and scraper clients becomes a set of User-Agent rules.
+        # Each one is an ordinary rule in the table below, so the admin can lift
+        # a single bot (Bing, for instance) without touching the rest.
+        from .header_block import block_known_bots
+        created, already, skipped = block_known_bots(
+            who, reason or 'bot profile: every known bot except Google')
+        parts = [f'{created} new bot rule{"s" if created != 1 else ""} added']
+        if already:
+            parts.append(f'{already} already in place')
+        message = 'Bot block is on — ' + ', '.join(parts) + '. Google crawlers stay allowed.'
+        if skipped:
+            message += ' Skipped (would also match Google): ' + ', '.join(skipped) + '.'
+        messages.success(request, message)
+    elif action == 'block':
         if not raw_value:
             messages.error(request, 'Enter the header text to block — for example ClaudeBot.')
         else:
@@ -12869,8 +12884,8 @@ def admin_blocked_headers(request):
     """
     import csv
     from django.http import HttpResponse
-    from .header_block import (COMMON_HEADERS, MIN_VALUE_LENGTH, SUGGESTED_RULES,
-                               blocked_header_report)
+    from .header_block import (BOT_BLOCK_PROFILE, COMMON_HEADERS, MIN_VALUE_LENGTH,
+                               SUGGESTED_RULES, blocked_header_report)
 
     show_all = (request.GET.get('show') or 'active') == 'all'
     search = (request.GET.get('q') or '').strip()[:100]
@@ -12915,6 +12930,8 @@ def admin_blocked_headers(request):
         'common_headers': COMMON_HEADERS,
         'suggested': SUGGESTED_RULES,
         'min_value_length': MIN_VALUE_LENGTH,
+        'bot_profile': BOT_BLOCK_PROFILE,
+        'bot_profile_count': len(BOT_BLOCK_PROFILE),
         # The rule counts come from the retained request log, so say how big
         # that window currently is.
         'total_stored': request_total(),
