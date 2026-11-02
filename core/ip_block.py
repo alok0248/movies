@@ -27,6 +27,7 @@ never lock the operator out of the dashboard.
 blocking rule is local to the portal and never touches the external user DB.
 """
 
+import base64
 import ipaddress
 import logging
 import time
@@ -670,25 +671,83 @@ SCRIPT_BLOCK_EXEMPT_PREFIXES = ('/api/', '/apps/download/', '/static/', '/media/
                                 '/admin')
 
 
-def is_app_client_request(request):
-    """True when this request is the Android app rather than a browser.
+# How long this worker remembers the apps' Basic credentials. Short on
+# purpose: rotating them in the admin has to take effect promptly.
+APP_CRED_CACHE_SECONDS = 60
+_app_creds_cache = (0.0, frozenset())
 
-    The app's OkHttp client announces itself as ``okhttp/4.x``, and its
-    authenticated calls carry an ``Authorization`` header. Either signal is
-    enough: a browser cannot send okhttp's User-Agent, and the app never sends
-    a browser one. Kept deliberately narrow so a block still applies to a
-    browser or a script that happens to hit an app path.
+
+def _active_app_credentials():
+    """The (username, password) pairs of the active Android apps, cached briefly.
+
+    The app authenticates with Basic auth using its own ``access_username`` /
+    ``access_password`` (see ``AndroidApp``). Keeping the set in this worker for
+    a minute stops the bypass from querying the database on every request the
+    app makes from a blocked carrier address. An app with a blank pair is left
+    out: blank credentials must never match a request.
+    """
+    global _app_creds_cache
+    now = time.monotonic()
+    stamp, creds = _app_creds_cache
+    if creds and (now - stamp) < APP_CRED_CACHE_SECONDS:
+        return creds
+    try:
+        from .models import AndroidApp
+        creds = frozenset(
+            (username, password)
+            for username, password in AndroidApp.objects.filter(is_active=True)
+            .values_list('access_username', 'access_password')
+            if username and password
+        )
+    except Exception:
+        logger.debug('IPBlock: could not load the app credentials', exc_info=True)
+        return frozenset()
+    _app_creds_cache = (now, creds)
+    return creds
+
+
+def _app_basic_credentials_valid(request):
+    """True when the Authorization header carries an active app's credentials.
+
+    A bare ``Authorization`` header proves nothing — any script can send one —
+    so only the app's real Basic credentials count. A crawler that fakes the
+    header is refused the block page like any other client.
+    """
+    try:
+        header = request.META.get('HTTP_AUTHORIZATION', '') or ''
+    except Exception:
+        return False
+    if not header.startswith('Basic '):
+        return False
+    try:
+        decoded = base64.b64decode(header.split(' ', 1)[1].strip()).decode('utf-8')
+        username, password = decoded.split(':', 1)
+    except Exception:
+        return False
+    if not username or not password:
+        return False
+    return (username, password) in _active_app_credentials()
+
+
+def is_app_client_request(request):
+    """True when this request is the Android app rather than a browser or script.
+
+    The app's OkHttp client announces itself as ``okhttp/4.x``; that User-Agent
+    is the signal it always sends, including on the endpoints it calls without
+    credentials (the streams, the APK download). A browser cannot send it.
+
+    An ``Authorization`` header is only accepted when it carries an active
+    app's own Basic credentials, because the header alone proves nothing: a
+    plain ``curl -H 'Authorization: x' /api/...`` must still get the block page.
+    Untrusted headers are checked last so the common app request stays cheap.
     """
     try:
         user_agent = (request.META.get('HTTP_USER_AGENT', '') or '').lower()
     except Exception:
-        return False
+        user_agent = ''
     if 'okhttp' in user_agent:
         return True
-    try:
-        return bool(request.META.get('HTTP_AUTHORIZATION'))
-    except Exception:
-        return False
+    return _app_basic_credentials_valid(request)
 
 
 def is_script_agent(user_agent):
