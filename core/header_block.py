@@ -351,15 +351,20 @@ def rule_for_request(request):
 def normalize_path(request):
     """True when header rules may apply to this path at all.
 
-    The app's own account endpoints are left alone: one rule that happens to
-    match a phone client's User-Agent must never be able to take the mobile app
-    down for every user behind it.
+    The whole ``/api/`` surface is left alone, not just the account endpoints:
+    the mobile app talks to it with an OkHttp User-Agent (``okhttp/4.x``), which
+    is one of the scraper signatures the bot profile blocks, and the app also
+    calls ``/api/android-apps/…/log/``, ``/api/player/`` and ``/api/links``.
+    Enforcing a User-Agent rule there would take the app down for every user
+    behind that client, so rules guard the website pages and the API stays
+    reachable for the app. Scrapers on the API are still caught by the address
+    watch and the request rate.
     """
     try:
         path = getattr(request, 'path', '') or ''
     except Exception:
         return True
-    return not path.startswith('/api/user/')
+    return not path.startswith('/api/')
 
 
 def rule_for_value(raw, header_name=DEFAULT_HEADER):
