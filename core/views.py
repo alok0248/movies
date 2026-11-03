@@ -11125,6 +11125,419 @@ def _permanently_delete_user(user_obj=None, email=''):
     return email or 'unknown'
 
 
+# ---------------------------------------------------------------------------
+# Google Sign-In (POST /api/user/google-login)
+# ---------------------------------------------------------------------------
+# The Android app obtains a Google ID token (a signed JWT) after the user picks
+# an account and posts it here. The token is the proof of identity; the email
+# in the body is only a hint and is never trusted on its own. The token is
+# verified against Google's public keys (via the tokeninfo endpoint, which
+# checks the signature, audience, issuer and expiry for us) and the identity is
+# taken from the token's claims.
+
+# Web OAuth client ID the ID token's `aud` must equal. Overridable via the
+# GOOGLE_OAUTH_CLIENT_ID setting / env var so a new client can be rotated
+# without a code change.
+GOOGLE_OAUTH_CLIENT_ID = getattr(
+    settings, 'GOOGLE_OAUTH_CLIENT_ID',
+    '621729506326-1nqvn8vsk5abvbm0hvd9mm4ijce3dva1.apps.googleusercontent.com',
+)
+GOOGLE_TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo'
+GOOGLE_ISSUERS = ('accounts.google.com', 'https://accounts.google.com')
+
+
+def _verify_google_id_token(id_token):
+    """Verify a Google ID token and return its claims, or None when invalid.
+
+    Uses Google's tokeninfo endpoint, which validates the JWT signature against
+    Google's rotating public keys and returns the claims. We then re-check the
+    audience, issuer, expiry and email_verified flag ourselves so a token minted
+    for a different app (or an unverified address) can never sign anyone in.
+    """
+    if not id_token or not isinstance(id_token, str):
+        return None
+    try:
+        resp = requests.get(GOOGLE_TOKENINFO_URL, params={'id_token': id_token}, timeout=8)
+    except requests.RequestException as e:
+        logger.warning('Google tokeninfo request failed: %s', e)
+        return None
+    if resp.status_code != 200:
+        logger.info('Google tokeninfo rejected the token (HTTP %s)', resp.status_code)
+        return None
+    try:
+        claims = resp.json()
+    except ValueError:
+        return None
+    if not isinstance(claims, dict):
+        return None
+
+    # Audience must be our Web client ID.
+    if claims.get('aud') != GOOGLE_OAUTH_CLIENT_ID:
+        logger.info('Google token audience mismatch: %s', claims.get('aud'))
+        return None
+    # Issuer must be Google.
+    if claims.get('iss') not in GOOGLE_ISSUERS:
+        logger.info('Google token issuer mismatch: %s', claims.get('iss'))
+        return None
+    # Expiry must be in the future.
+    try:
+        if int(claims.get('exp', 0)) <= int(timezone.now().timestamp()):
+            return None
+    except (TypeError, ValueError):
+        return None
+    # The address must be verified by Google.
+    if str(claims.get('email_verified', '')).lower() not in ('true', '1'):
+        return None
+    if not claims.get('sub') or not claims.get('email'):
+        return None
+    return claims
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_google_login(request):
+    """POST /api/user/google-login — sign in (or sign up) with a Google ID token.
+
+    Verifies the token, then finds the account by Google ``sub`` (falling back
+    to the email for accounts that registered with a password first, linking the
+    ``sub`` to that record). Creates the account when it does not exist. Returns
+    the same payload shape as /api/user/login so the app can restore history,
+    favorites, watchlist and playlists from ``userData`` right after login.
+    """
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    id_token = body.get('idToken') or body.get('id_token') or ''
+    claims = _verify_google_id_token(id_token)
+    if not claims:
+        return JsonResponse({'status': 'error', 'message': 'Google token verification failed'}, status=401)
+
+    # Identity comes from the token's claims, never from the body.
+    sub = str(claims.get('sub'))
+    email = (claims.get('email') or '').strip().lower()
+    display_name = (claims.get('name') or '').strip()
+    photo_url = (claims.get('picture') or '').strip()
+
+    if not email:
+        return JsonResponse({'status': 'error', 'message': 'Google token verification failed'}, status=401)
+
+    # Admin access control: a full/app block refuses login outright.
+    block_err = _enforce_user_block(email, app_match)
+    if block_err:
+        return block_err
+
+    from .models import SyncedUser, UserCloudData
+
+    # 1) Find by Google sub (the stable identifier).
+    user_obj = SyncedUser.objects.filter(google_id=sub).first()
+    django_user = None
+    if user_obj and user_obj.user_id:
+        django_user = User.objects.filter(pk=user_obj.user_id).first()
+
+    # 2) Fall back to the email (an account that registered with a password
+    #    first) and link the sub to that record.
+    if django_user is None:
+        django_user = User.objects.filter(email__iexact=email).first()
+    if user_obj is None and django_user is not None:
+        user_obj = SyncedUser.objects.filter(email__iexact=email).first()
+
+    created = False
+    if django_user is None:
+        # Brand new account — Google already verified the address.
+        base_username = email.split('@')[0] or 'user'
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        django_user = User.objects.create_user(username=username, email=email, password=None)
+        django_user.first_name = display_name
+        django_user.is_active = True
+        django_user.save()
+        created = True
+
+    # Google verified the address, so the account is active regardless of how
+    # it was created.
+    if not django_user.is_active:
+        django_user.is_active = True
+        django_user.save(update_fields=['is_active'])
+
+    if user_obj is None:
+        user_obj = SyncedUser.objects.create(
+            user=django_user, email=email, display_name=display_name,
+            photo_url=photo_url, google_id=sub,
+            device_id=body.get('deviceId', ''),
+            device_model=body.get('deviceModel', ''),
+            os_version=body.get('osVersion', ''),
+            app_version=body.get('appVersion', ''),
+            build_number=body.get('buildNumber', 0),
+        )
+    else:
+        # Repoint a stale FK and refresh the profile from the token claims.
+        if not user_obj.user_id or user_obj.user_id != django_user.pk:
+            user_obj.user = django_user
+        user_obj.email = email
+        user_obj.google_id = sub
+        user_obj.display_name = display_name or user_obj.display_name
+        user_obj.photo_url = photo_url or user_obj.photo_url
+        if body.get('deviceId'):
+            user_obj.device_id = body.get('deviceId', '')
+            user_obj.device_model = body.get('deviceModel', '')
+            user_obj.os_version = body.get('osVersion', '')
+            user_obj.app_version = body.get('appVersion', '')
+            user_obj.build_number = body.get('buildNumber', 0)
+        user_obj.save()
+
+    UserCloudData.objects.get_or_create(user=django_user)
+
+    _record_session(django_user, 'android', request,
+                    device_model=body.get('deviceModel', ''),
+                    os_version=body.get('osVersion', ''),
+                    app_version=body.get('appVersion', ''))
+    _lift_block_after_auth(request)
+
+    return JsonResponse(_build_user_response(django_user, user_obj, {
+        'message': 'Signed in with Google',
+        'requiresVerification': False,
+    }))
+
+
+# ---------------------------------------------------------------------------
+# Account deletion with OTP (POST /api/user/delete/request-otp + /api/user/delete)
+# ---------------------------------------------------------------------------
+# Two-step flow the app relies on: request a code, then delete with that code.
+# The delete endpoint is the single source of truth — if it returns an error the
+# app keeps everything intact, so a failed call can never leave the device wiped
+# while the account still exists. The OTP is validated server-side only.
+
+# Rate limits for the delete-code request: 1 per 60 s per account, 5 per hour.
+_DELETE_OTP_MIN_INTERVAL = 60
+_DELETE_OTP_MAX_PER_HOUR = 5
+_DELETE_OTP_HOUR_WINDOW = 3600
+
+
+def _find_account_for_delete(user_id, email):
+    """Locate (django_user, synced_user) by userId then email, or (None, None)."""
+    from .models import SyncedUser
+    django_user = None
+    user_obj = None
+
+    # userId is the app's 'usr_<pk>' string.
+    if user_id:
+        pk = None
+        try:
+            pk = int(str(user_id).replace('usr_', '').strip())
+        except (TypeError, ValueError):
+            pk = None
+        if pk:
+            django_user = User.objects.filter(pk=pk).first()
+            if django_user:
+                user_obj = SyncedUser.objects.filter(user=django_user).first()
+
+    if django_user is None and email:
+        django_user = User.objects.filter(email__iexact=email).first()
+        if django_user:
+            user_obj = SyncedUser.objects.filter(email__iexact=email).first()
+    if user_obj is None and email:
+        user_obj = SyncedUser.objects.filter(email__iexact=email).first()
+        if user_obj and user_obj.user_id and django_user is None:
+            django_user = User.objects.filter(pk=user_obj.user_id).first()
+
+    return django_user, user_obj
+
+
+def _delete_otp_rate_error(email):
+    """Return a 429 response when the delete-code request budget is spent.
+
+    Two windows per account: at most one request per 60 s, and at most five per
+    hour. Kept in the cache so a throttled client costs one lookup.
+    """
+    now = timezone.now().timestamp()
+    short_key = f'deleteotp:short:{email}'
+    hour_key = f'deleteotp:hour:{email}'
+
+    last = cache.get(short_key)
+    if last and (now - last) < _DELETE_OTP_MIN_INTERVAL:
+        wait = int(round(_DELETE_OTP_MIN_INTERVAL - (now - last)))
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Too many requests. Try again in {max(wait, 1)} seconds.',
+        }, status=429)
+
+    hour = cache.get(hour_key) or {'count': 0, 'reset': now + _DELETE_OTP_HOUR_WINDOW}
+    if hour.get('reset', 0) <= now:
+        hour = {'count': 0, 'reset': now + _DELETE_OTP_HOUR_WINDOW}
+    if hour.get('count', 0) >= _DELETE_OTP_MAX_PER_HOUR:
+        wait = max(1, int(round(hour['reset'] - now)))
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Too many requests. Try again in {wait} seconds.',
+        }, status=429)
+
+    # Record this request against both windows.
+    cache.set(short_key, now, _DELETE_OTP_MIN_INTERVAL)
+    hour['count'] = hour.get('count', 0) + 1
+    cache.set(hour_key, hour, max(1, int(round(hour['reset'] - now))))
+    return None
+
+
+def _invalidate_user_sessions(django_user):
+    """Mark every active session for a user as logged out.
+
+    Deleting the account removes the rows anyway, but this is also used to
+    revoke tokens explicitly so an old token cannot keep working.
+    """
+    from .models import UserSession
+    try:
+        UserSession.objects.filter(user=django_user, is_active=True).update(
+            is_active=False, logged_out_at=timezone.now())
+    except Exception:
+        logger.warning('Could not invalidate sessions for user %s', django_user.pk, exc_info=True)
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_delete_request_otp(request):
+    """POST /api/user/delete/request-otp — email a 6-digit deletion code.
+
+    Nothing is deleted here. The code is stored with a 10-minute expiry and a
+    maximum of 5 verification attempts; any previously issued deletion code for
+    the account is invalidated first.
+    """
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = (body.get('email') or '').strip().lower()
+    user_id = (body.get('userId') or '').strip()
+
+    django_user, user_obj = _find_account_for_delete(user_id, email)
+    if django_user is None:
+        return JsonResponse({'status': 'error', 'message': 'No account found with this email address.'}, status=404)
+
+    account_email = (django_user.email or email).strip().lower()
+
+    # Admin access control: a full/app block stops the delete flow too.
+    block_err = _enforce_user_block(account_email, app_match)
+    if block_err:
+        return block_err
+
+    rate_err = _delete_otp_rate_error(account_email)
+    if rate_err:
+        return rate_err
+
+    from .models import AccountDeletionOTP, SiteSettings
+
+    # Invalidate any previously issued deletion code for this account.
+    AccountDeletionOTP.objects.filter(user=django_user, used=False).update(used=True)
+
+    otp = AccountDeletionOTP.generate()
+    AccountDeletionOTP.objects.create(user=django_user, otp=otp)
+
+    brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
+    try:
+        send_configured_email(
+            subject=f'Account deletion code - {brand}',
+            message=(
+                f'Hi {django_user.first_name or django_user.username},\r\n\r\n'
+                f'Your account deletion code is: {otp}\r\n\r\n'
+                f'This code is valid for 10 minutes. Enter it in the app to permanently delete your account.\r\n\r\n'
+                f'If you did not request this, please ignore this email — your account is safe.'
+            ),
+            recipient_list=[account_email],
+            purpose='verification',
+            fail_silently=True,
+        )
+    except Exception as e:
+        logger.warning(f'Failed to send account deletion email: {e}', exc_info=True)
+
+    return JsonResponse({
+        'status': 'success',
+        'message': f'A 6-digit verification code has been sent to {account_email}.',
+    })
+
+
+@_guard_android_api_errors
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_user_delete_account(request):
+    """POST /api/user/delete — permanently delete the account after OTP check.
+
+    Validates the emailed code, then deletes the user record and every synced
+    row tied to it in one transaction, and revokes all sessions. Any 2xx is
+    treated as success by the app; a non-2xx keeps the user signed in and leaves
+    local data untouched.
+    """
+    app_match, err = _validate_android_auth(request)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
+    email = (body.get('email') or '').strip().lower()
+    user_id = (body.get('userId') or '').strip()
+    otp_code = (body.get('otp') or '').strip()
+
+    if not otp_code:
+        return JsonResponse({'status': 'error', 'message': 'Verification code is required'}, status=400)
+
+    django_user, user_obj = _find_account_for_delete(user_id, email)
+    if django_user is None:
+        return JsonResponse({'status': 'error', 'message': 'No account found with this email address.'}, status=404)
+
+    account_email = (django_user.email or email).strip().lower()
+
+    block_err = _enforce_user_block(account_email, app_match)
+    if block_err:
+        return block_err
+
+    from .models import AccountDeletionOTP
+
+    otp_obj = AccountDeletionOTP.objects.filter(
+        user=django_user, used=False,
+    ).order_by('-created_at').first()
+
+    if otp_obj is None or otp_obj.is_expired or otp_obj.too_many_attempts:
+        return JsonResponse({'status': 'error', 'message': 'Incorrect verification code'}, status=400)
+
+    if otp_obj.otp != otp_code:
+        # Count the failed attempt so the code cannot be brute-forced.
+        otp_obj.attempts = otp_obj.attempts + 1
+        otp_obj.save(update_fields=['attempts'])
+        return JsonResponse({'status': 'error', 'message': 'Incorrect verification code'}, status=400)
+
+    # Correct code — consume it and delete everything in one transaction.
+    otp_obj.used = True
+    otp_obj.save(update_fields=['used'])
+
+    # Revoke every active session token before the rows go away.
+    _invalidate_user_sessions(django_user)
+
+    # _permanently_delete_user removes the Django user (cascading cloud data,
+    # sessions, watchlist, play history, verification/reset OTPs), the Android
+    # synced profile (subscription/entitlement rows), and the newsletter
+    # subscription — all keyed by the same email.
+    _permanently_delete_user(django_user, email=account_email)
+
+    return JsonResponse({'status': 'success', 'message': 'Account deleted'})
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def synced_users_list(request):

@@ -140,6 +140,17 @@ urlpatterns = [
     path('api/user/register', views.api_user_register),
     path('api/user/login/', views.api_user_login, name='api_user_login'),
     path('api/user/login', views.api_user_login),
+    # Google Sign-In — the app posts a Google ID token and gets the same
+    # payload shape as /api/user/login. HTTPS only on the client side.
+    path('api/user/google-login/', views.api_user_google_login, name='api_user_google_login'),
+    path('api/user/google-login', views.api_user_google_login),
+    # Account deletion (two steps): request an emailed 6-digit code, then
+    # delete the account with that code. The delete call is the single source
+    # of truth — the app only wipes local data after it returns 2xx.
+    path('api/user/delete/request-otp/', views.api_user_delete_request_otp, name='api_user_delete_request_otp'),
+    path('api/user/delete/request-otp', views.api_user_delete_request_otp),
+    path('api/user/delete/', views.api_user_delete_account, name='api_user_delete_account'),
+    path('api/user/delete', views.api_user_delete_account),
     path('api/user/refresh/', views.api_user_refresh_token, name='api_user_refresh_token'),
     path('api/user/refresh', views.api_user_refresh_token),
     path('api/user/forgot-password/', views.api_user_forgot_password, name='api_user_forgot_password'),

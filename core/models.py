@@ -1612,6 +1612,57 @@ class PasswordResetOTP(models.Model):
         return f"{secrets.randbelow(1000000):06d}"
 
 
+class AccountDeletionOTP(models.Model):
+    """6-digit code that authorises permanent account deletion.
+
+    Step 1 of the app's delete flow (POST /api/user/delete/request-otp) mails a
+    code and stores it here; step 2 (POST /api/user/delete) validates it and
+    only then does the account actually go away. The code expires after 10
+    minutes and, like every other OTP on the site, is only ever validated
+    server-side — a modified client cannot delete an account without the
+    emailed code. ``attempts`` counts failed validations so a code cannot be
+    brute-forced once it is known to exist.
+    """
+    MAX_ATTEMPTS = 5
+    TTL_MINUTES = 10
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='account_deletion_otps', db_constraint=False)
+    otp = models.CharField(max_length=6)
+    attempts = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'used', 'created_at']),
+        ]
+
+    def __str__(self):
+        try:
+            email = self.user.email
+        except Exception:
+            email = f'User #{self.user_id}'
+        return f"{email} - {'used' if self.used else 'pending'}"
+
+    @property
+    def is_expired(self):
+        from datetime import timedelta
+        return timezone.now() > self.created_at + timedelta(minutes=self.TTL_MINUTES)
+
+    @property
+    def too_many_attempts(self):
+        return self.attempts >= self.MAX_ATTEMPTS
+
+    @property
+    def is_valid(self):
+        return not self.used and not self.is_expired and not self.too_many_attempts
+
+    @staticmethod
+    def generate():
+        return f"{secrets.randbelow(1000000):06d}"
+
+
 class PlayHistory(models.Model):
     """Track play sessions for logged-in users."""
     MEDIA_TYPE_CHOICES = [

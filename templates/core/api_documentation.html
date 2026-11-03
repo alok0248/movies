@@ -555,8 +555,60 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
 
     <div class="api-card">
         <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
-            <span class="api-method GET">GET</span>
-            <span class="api-card-path">/api/user/profile/</span>
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/google-login/</span>
+            <span class="api-card-title">Sign in (or sign up) with a Google ID token</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                The app posts the Google <code>id_token</code> (a signed JWT). The server verifies it against
+                Google's keys, checks the audience, issuer, expiry and <code>email_verified</code>, then takes the
+                identity from the token's claims — the email in the body is only a hint and is never trusted on its own.
+                Returns the same payload shape as <code>/api/user/login/</code>.
+            </p>
+            <div class="api-label">Request body</div>
+            <pre class="api-code" data-copy>{
+  "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+  "email": "user@gmail.com",
+  "displayName": "Alok Kumar",
+  "photoUrl": "https://lh3.googleusercontent.com/a/..."
+}</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "message": "Signed in with Google",
+  "user": { "userId": "usr_1", "isEmailVerified": true, "token": "..." },
+  "subscription": { "isSubscribed": false, "plan": "Free" },
+  "userData": { ...cloud data... }
+}</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>Failure returns <code>401 {"status":"error","message":"Google token verification failed"}</code>.</span></div>
+        </div>
+    </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method POST">POST</span>
+            <span class="api-card-path">/api/user/delete/request-otp/ · /api/user/delete/</span>
+            <span class="api-card-title">Delete the account (two steps, emailed OTP)</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                <b>Step 1 — <code>/api/user/delete/request-otp/</code>:</b> emails a 6-digit code (10-minute expiry,
+                5 attempts max, 1 request per 60 s / 5 per hour). Nothing is deleted here.<br>
+                <b>Step 2 — <code>/api/user/delete/</code>:</b> validates the code and permanently deletes the account,
+                its synced data and sessions, and revokes every token. The code is validated server-side only.
+            </p>
+            <div class="api-label">Request body (step 1)</div>
+            <pre class="api-code" data-copy>{ "email": "user@gmail.com", "userId": "usr_123" }</pre>
+            <div class="api-label">Request body (step 2)</div>
+            <pre class="api-code" data-copy>{ "email": "user@gmail.com", "userId": "usr_123", "otp": "483920", "confirmDelete": true }</pre>
+            <div class="api-label">Response 200</div>
+            <pre class="api-code" data-copy>{ "status": "success", "message": "Account deleted" }</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>A non-2xx keeps the user signed in and leaves local data untouched — the app only wipes local data after this returns 2xx.</span></div>
+        </div>
+    </div>
             <span class="api-card-title">Fetch profile + subscription via JWT</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>

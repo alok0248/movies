@@ -11,6 +11,7 @@ USER_MODELS = {
     'playhistory',
     'userclouddata',
     'emailverification',
+    'accountdeletionotp',
     'emailsendlog',
     'useractivity',
     'watchlist',

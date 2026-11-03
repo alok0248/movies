@@ -158,6 +158,14 @@ DEFAULT_FROM_EMAIL = 'noreply@newmovies.com'
 # API Configuration
 TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
+
+# Google Sign-In — the Web OAuth client ID an ID token's `aud` claim must
+# equal for POST /api/user/google-login to accept it. Override via env var to
+# rotate the client without a code change.
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get(
+    'GOOGLE_OAUTH_CLIENT_ID',
+    '621729506326-1nqvn8vsk5abvbm0hvd9mm4ijce3dva1.apps.googleusercontent.com',
+)
 CODESPECTERS_BASE_URL = 'https://api.codespecters.com/embed'
 
 # Cache Configuration
