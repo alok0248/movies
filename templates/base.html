@@ -766,6 +766,22 @@
         .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
         .auth-form-link { color: var(--brand); font-weight: 600; cursor: pointer; }
 
+        /* Continue with Google (Identity Services) */
+        .auth-google-wrap { margin-top: .9rem; }
+        .auth-google-divider { display: flex; align-items: center; gap: .6rem; color: var(--text-3); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .7rem; }
+        .auth-google-divider::before, .auth-google-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+        .auth-google-button { display: flex; justify-content: center; min-height: 40px; }
+        .auth-google-button > div, .auth-google-button iframe { max-width: 100%; }
+        .auth-google-fallback {
+            width: 100%; display: flex; align-items: center; justify-content: center; gap: .55rem;
+            padding: .7rem 1rem; border-radius: var(--radius-sm);
+            background: #fff; color: #1f1f1f; border: 1px solid var(--border);
+            font-size: .88rem; font-weight: 600; cursor: pointer;
+        }
+        .auth-google-fallback:hover { filter: brightness(.97); }
+        .auth-google-fallback img { width: 18px; height: 18px; }
+        .auth-google-done { text-align: center; color: var(--text-3); font-size: .78rem; }
+
         /* Footer */
         .site-footer { margin-top: 3rem; padding: 2.5rem 2rem; background: var(--bg-2); border-top: 1px solid var(--border); color: var(--text-3); }
         .site-footer-title { color: var(--text); font-weight: 700; margin-bottom: .6rem; font-size: .88rem; }
@@ -1243,6 +1259,11 @@
         body.admin-page .theme-float-drop { bottom: 1rem !important; }
         body.admin-page .content-wrapper { padding-bottom: .5rem !important; }
     </style>
+
+    <!-- Google Identity Services — only loaded when the site offers Google sign-in -->
+    {% if google_login_enabled and google_login_client_id %}
+    <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
+    {% endif %}
 
     <!-- Google Analytics 4 (gtag.js) -->
     {% if site_settings.google_analytics_id %}
@@ -1930,6 +1951,13 @@
                         <div id="loginMessage" class="auth-form-message" style="display: none;"></div>
                         <button type="submit" class="auth-form-btn">Sign In</button>
                     </form>
+                    {% if google_login_enabled %}
+                    <div class="auth-google-wrap">
+                        <div class="auth-google-divider"><span>or</span></div>
+                        <div id="googleLoginButton" class="auth-google-button"></div>
+                        <div id="googleLoginMessage" class="auth-form-message" style="display: none;"></div>
+                    </div>
+                    {% endif %}
                     <div class="auth-divider">
                         <span>New to {{ site_settings.brand_name }}?</span>
                     </div>
@@ -1968,6 +1996,13 @@
                         <div id="registerMessage" class="auth-form-message" style="display: none;"></div>
                         <button type="submit" class="auth-form-btn">Create Account</button>
                     </form>
+                    {% if google_login_enabled %}
+                    <div class="auth-google-wrap">
+                        <div class="auth-google-divider"><span>or</span></div>
+                        <div id="googleRegisterButton" class="auth-google-button"></div>
+                        <div id="googleRegisterMessage" class="auth-form-message" style="display: none;"></div>
+                    </div>
+                    {% endif %}
                     <div class="auth-divider">
                         <span>Already have an account?</span>
                     </div>
@@ -3451,6 +3486,9 @@
             setTimeout(() => modal.classList.add('active'), 10);
             switchAuthForm(formType);
             document.body.style.overflow = 'hidden';
+            // Render the Google button only once its container is visible —
+            // Google sizes the button from the element it is given.
+            if (typeof initGoogleSignIn === 'function') setTimeout(initGoogleSignIn, 30);
         }
 
         function closeAuthModal(event) {
@@ -3486,6 +3524,9 @@
             if (formType === 'forgot') {
                 showForgotStep(1);
             }
+            // The Google button is per-form; re-render so the now-visible target
+            // gets one (Google skips hidden containers).
+            if (typeof initGoogleSignIn === 'function') setTimeout(initGoogleSignIn, 30);
         }
 
         function showForgotStep(step) {
@@ -3544,6 +3585,108 @@
             } catch (error) {
                 showMessage('loginMessage', 'An error occurred', 'error');
             }
+        }
+
+        /* ------------------------------------------------------------------
+           Continue with Google (Google Identity Services)
+           ------------------------------------------------------------------
+           The ID token coming back from Google is posted to the site, which
+           verifies it and starts a normal Django session — no password is ever
+           involved and no account is created until the token checks out. The
+           button is rendered by Google itself, so the client ID has to reach
+           this script.
+        ------------------------------------------------------------------ */
+        const GOOGLE_LOGIN_CLIENT_ID = "{{ google_login_client_id|escapejs }}";
+        const GOOGLE_LOGIN_ENABLED = {{ google_login_enabled|yesno:"true,false" }};
+
+        function initGoogleSignIn() {
+            if (!GOOGLE_LOGIN_ENABLED || !GOOGLE_LOGIN_CLIENT_ID) return;
+            const targets = ['googleLoginButton', 'googleRegisterButton']
+                .map(id => document.getElementById(id))
+                .filter(Boolean);
+            if (!targets.length || typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+                targets.forEach(renderGoogleFallback);
+                return;
+            }
+            let initialized = false;
+            targets.forEach(function (el) {
+                // Skip a container that is hidden (Google refuses to render in
+                // one) and any container that already holds a button.
+                if (el.offsetParent === null || el.dataset.gsiReady === '1') return;
+                if (!initialized) {
+                    google.accounts.id.initialize({
+                        client_id: GOOGLE_LOGIN_CLIENT_ID,
+                        callback: handleGoogleCredential,
+                        auto_select: false,
+                        cancel_on_tap_outside: true
+                    });
+                    initialized = true;
+                }
+                el.innerHTML = '';
+                google.accounts.id.renderButton(el, {
+                    type: 'standard',
+                    theme: 'outline',
+                    size: 'large',
+                    shape: 'pill',
+                    text: 'continue_with',
+                    logo_alignment: 'center',
+                    width: 300
+                });
+                el.dataset.gsiReady = '1';
+            });
+        }
+
+        /* If the Google script is blocked (ad-blocker, offline, CSP) offer a
+           plain button that opens the same popup via the OAuth flow instead of
+           leaving an empty gap in the modal. */
+        function renderGoogleFallback(el) {
+            if (!el || el.querySelector('.auth-google-fallback')) return;
+            el.innerHTML = '<button type="button" class="auth-google-fallback">' +
+                '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="">' +
+                '<span>Continue with Google</span></button>';
+            const btn = el.querySelector('.auth-google-fallback');
+            btn.addEventListener('click', function () {
+                showMessage(el.id === 'googleRegisterButton' ? 'googleRegisterMessage' : 'googleLoginMessage',
+                    'Google sign-in is unavailable right now. Please use your email and password.', 'error');
+            });
+        }
+
+        async function handleGoogleCredential(response) {
+            if (!response || !response.credential) return;
+            const msgId = (document.getElementById('registerForm') || {}).style &&
+                document.getElementById('registerForm').style.display !== 'none'
+                ? 'googleRegisterMessage' : 'googleLoginMessage';
+            showMessage(msgId, 'Signing you in with Google…', 'info');
+
+            const formData = new FormData();
+            formData.append('credential', response.credential);
+            try {
+                const res = await fetch('{% url "ajax_google_login" %}', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showMessage(msgId, '✓ ' + data.message, 'success');
+                    setTimeout(() => {
+                        closeAuthModal();
+                        window.location.reload();
+                    }, 900);
+                } else {
+                    showMessage(msgId, data.message || 'Google sign-in failed', 'error');
+                }
+            } catch (error) {
+                showMessage(msgId, 'Could not reach the server. Please try again.', 'error');
+            }
+        }
+
+        function getCsrfToken() {
+            const input = document.querySelector('#loginFormElement input[name="csrfmiddlewaretoken"]');
+            if (input) return input.value;
+            const match = document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/);
+            return match ? decodeURIComponent(match[2]) : '';
         }
 
         async function handleRegister(event) {

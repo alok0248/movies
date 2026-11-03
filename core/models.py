@@ -348,12 +348,37 @@ class SiteSettings(models.Model):
     
     # Bot Tracking
     bot_ips = models.TextField(blank=True, null=True, help_text="Comma-separated list of IP addresses for our bot (e.g., 192.168.1.1,10.0.0.1)")
+
+    # Trusted addresses — never blocked by the bot / probe / script / rate guards
+    allowed_ips = models.TextField(
+        blank=True, null=True,
+        help_text=("Comma, space or newline separated list of IP addresses that must never be "
+                   "blocked by the automatic bot / probe / script / rate watchers. Add your own "
+                   "address here so running a script or a test can never lock you out. "
+                   "Example: 152.59.143.58, 203.0.113.7"))
     
     # Google AdSense
     adsense_verification_meta = models.CharField(max_length=200, blank=True, null=True, help_text="Google AdSense verification meta tag content (e.g., abcdef123456)")
     adsense_client_id = models.CharField(max_length=100, blank=True, null=True, help_text="Google AdSense client ID (e.g., ca-pub-1234567890123456)")
     google_analytics_id = models.CharField(max_length=50, blank=True, null=True, help_text="Google Analytics 4 measurement ID (e.g., G-XXXXXXXXXX). Leave blank to disable analytics.")
     bot_user_agents = models.TextField(blank=True, null=True, help_text="Comma-separated list of user-agent strings for our bot")
+
+    # Google Sign-In (OAuth) for the website
+    google_login_enabled = models.BooleanField(
+        default=True,
+        help_text=("Show the \"Continue with Google\" button in the site's sign-in and "
+                   "sign-up popup, and accept Google sign-in requests. Turn this off to "
+                   "accept password logins only."))
+    google_login_client_id = models.CharField(
+        max_length=200, blank=True, null=True,
+        help_text=("Google OAuth Web client ID used by the browser (e.g., "
+                   "1234567890-abc123.apps.googleusercontent.com). Leave blank to use the "
+                   "server default from settings.py / the GOOGLE_OAUTH_CLIENT_ID env var."))
+    google_login_allowed_domains = models.TextField(
+        blank=True, null=True,
+        help_text=("Optional. Space or comma separated email domains allowed to sign in with "
+                   "Google (e.g., yourschool.edu, mycompany.com). Leave blank to allow every "
+                   "Google account."))
 
     # Auto-click ad cadence (count-based)
     auto_click_every_clicks = models.IntegerField(
@@ -468,6 +493,14 @@ class SiteSettings(models.Model):
         super().save(*args, **kwargs)
         from django.core.cache import cache
         cache.delete(self._SETTINGS_CACHE_KEY)
+        # The allow-list is cached separately on the request path (it is read on
+        # every request by the IP guard), so drop that copy too — an address the
+        # operator just trusted must take effect at once.
+        try:
+            from .ip_block import reset_allowed_ips_cache
+            reset_allowed_ips_cache()
+        except Exception:
+            pass
 
     def delete(self, *args, **kwargs):
         from django.core.cache import cache

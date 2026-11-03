@@ -227,6 +227,83 @@ def is_ip_blocked(ip_address):
     return blocked_ip_for(ip_address) is not None
 
 
+# --- trusted / allow-listed addresses -------------------------------------
+# The automatic guards (bot rate, unknown-page probes, script User-Agents) fire
+# on evidence, and a wrong call locks a real person out of the site. The
+# operator's own address is the one that must never be guessed wrong: running a
+# script, a smoke test or a `curl` from it is normal work, not scraping. So
+# addresses listed in ``SiteSettings.allowed_ips`` are exempt from every watch
+# and from the block decision itself — even when a BlockedIP row already exists
+# for them (that row is simply not enforced while the address is trusted).
+#
+# The parsed list is cached per worker for a few seconds so the check costs
+# nothing on the request path; saving SiteSettings clears it immediately.
+ALLOWED_IP_CACHE_SECONDS = 30
+_allowed_ips_cache = (0.0, frozenset())
+
+# An allow-list entry is written by an operator; these are the shapes accepted.
+_ALLOWED_IP_SPLIT = (',', ';', ' ', '\t', '\r', '\n')
+
+
+def parse_allowed_ips(raw_value):
+    """Split an operator's allow-list text into canonical IP strings.
+
+    Accepts commas, spaces, semicolons and newlines (people paste IPs in every
+    shape). Hostnames and CIDR ranges are ignored on purpose — matching is by
+    exact address, so a pasted ``example.com`` must not silently trust whatever
+    it resolves to today.
+    """
+    if not raw_value:
+        return []
+    text = str(raw_value)
+    for separator in _ALLOWED_IP_SPLIT[1:]:
+        text = text.replace(separator, _ALLOWED_IP_SPLIT[0])
+    found, seen = [], set()
+    for chunk in text.split(_ALLOWED_IP_SPLIT[0]):
+        ip = normalize_ip(chunk)
+        if ip and ip not in seen:
+            seen.add(ip)
+            found.append(ip)
+    return found
+
+
+def _allowed_ips():
+    """The trusted addresses, read from SiteSettings and cached briefly."""
+    global _allowed_ips_cache
+    now = time.monotonic()
+    stamp, cached = _allowed_ips_cache
+    if cached and (now - stamp) < ALLOWED_IP_CACHE_SECONDS:
+        return cached
+    try:
+        from .models import SiteSettings
+        raw = SiteSettings.get_settings().allowed_ips
+    except Exception:
+        logger.debug('IPBlock: could not read the allowed IP list', exc_info=True)
+        return frozenset(cached or ())
+    parsed = frozenset(parse_allowed_ips(raw))
+    _allowed_ips_cache = (now, parsed)
+    return parsed
+
+
+def reset_allowed_ips_cache():
+    """Forget the cached allow-list so the next check re-reads it."""
+    global _allowed_ips_cache
+    _allowed_ips_cache = (0.0, frozenset())
+
+
+def is_ip_allowed(ip_address):
+    """True when this address is operator-trusted and must never be blocked."""
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    return ip in _allowed_ips()
+
+
+def allowed_ip_list():
+    """The trusted addresses, sorted, for the dashboard UI."""
+    return sorted(_allowed_ips())
+
+
 def block_ip(ip_address, blocked_by='', reason='', permanent=False):
     """Block an address (or re-block one that was previously unblocked).
 
@@ -351,6 +428,13 @@ def auto_block_bot(ip_address, signed_in=False, requests=None, reason=''):
     """
     ip = normalize_ip(ip_address)
     if not ip:
+        return None, False
+    # A trusted address is never auto-blocked — that is the whole point of the
+    # allow-list, and it is enforced here so every automatic caller inherits it.
+    if is_ip_allowed(ip):
+        reset_bot_watch(ip)
+        logger.info('IPBlock: not blocking trusted address %s (bot rate: %s)',
+                    ip, reason or 'crossed the request rate')
         return None, False
     detail = ('%s requests inside %s minutes' % (requests or BOT_MAX_REQUESTS,
                                                 BOT_WINDOW_SECONDS // 60))
@@ -652,6 +736,9 @@ def auto_block_probe(ip_address, hits=None, path=''):
     ip = normalize_ip(ip_address)
     if not ip:
         return None, False
+    if is_ip_allowed(ip):
+        logger.info('IPBlock: not probing-blocking trusted address %s', ip)
+        return None, False
     detail = '%s pages that do not exist inside %s minutes' % (
         hits or UNKNOWN_MAX_REQUESTS, UNKNOWN_WINDOW_SECONDS // 60)
     if path:
@@ -769,6 +856,11 @@ def auto_block_script(ip_address, user_agent=''):
     """Refuse an address that is using a scraping or automation client."""
     ip = normalize_ip(ip_address)
     if not ip:
+        return None, False
+    # Trusted (operator) addresses are exempt from the script client guard, so a
+    # `curl` health check or a deploy smoke test can never block the operator.
+    if is_ip_allowed(ip):
+        logger.info('IPBlock: trusted address %s used %s - not blocked', ip, (user_agent or '')[:80])
         return None, False
     detail = ('automated client (%s)' % (user_agent or '')[:120]) if user_agent else 'automated client'
     logger.info('IPBlock: auto-blocking %s — %s', ip, detail)

@@ -57,6 +57,28 @@
     }
     html[data-theme="light"] .form-floating-dark label { color: rgba(0,0,0,.45); }
     .photo-input { display: none; }
+
+    /* Danger zone — delete account */
+    .profile-danger { border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.05); }
+    .profile-danger h6 i { color: #ef4444; }
+    .profile-danger-text { color: var(--text-muted); font-size: .85rem; margin-bottom: 1rem; }
+    .btn-delete-account {
+        background: #dc2626; color: #fff; border: none; border-radius: 10px;
+        padding: .65rem 1.4rem; font-weight: 600; font-size: .88rem;
+    }
+    .btn-delete-account:hover { background: #ef4444; color: #fff; }
+    .btn-delete-account:disabled { opacity: .6; }
+    .btn-delete-cancel {
+        background: none; border: none; color: var(--text-muted);
+        font-size: .78rem; cursor: pointer; padding: 0;
+    }
+    .btn-delete-cancel:hover { color: var(--text); }
+    .profile-danger-note { color: var(--text-muted); font-size: .8rem; margin-bottom: .8rem; }
+    .profile-danger-msg { margin-top: .8rem; font-size: .82rem; border-radius: 8px; padding: .5rem .8rem; }
+    .profile-danger-msg.error { background: rgba(239,68,68,.12); color: #f87171; }
+    .profile-danger-msg.success { background: rgba(70,211,105,.12); color: #46d369; }
+    html[data-theme="light"] .profile-danger-msg.error { color: #b91c1c; }
+    html[data-theme="light"] .profile-danger-msg.success { color: #15803d; }
 </style>
 
 <div class="profile-wrap">
@@ -208,6 +230,51 @@
             <button type="submit" class="btn btn-save"><i class="fas fa-check me-1"></i>Save Profile</button>
         </div>
     </form>
+
+    <!-- Danger zone: delete this account, confirmed by an emailed code -->
+    <div class="profile-card profile-danger mb-5">
+        <h6><i class="fas fa-triangle-exclamation" style="color:#ef4444;"></i> Delete Account</h6>
+        <p class="profile-danger-text">
+            Deleting your account permanently removes your profile, watchlist, play history and
+            everything else saved to <strong>{{ user.email|default:user.username }}</strong>.
+            This cannot be undone.
+        </p>
+
+        <div id="deleteStep1">
+            <button type="button" class="btn-delete-account" id="deleteRequestBtn">
+                <i class="fas fa-trash me-1"></i>Send me a deletion code
+            </button>
+        </div>
+
+        <div id="deleteStep2" style="display:none;">
+            <div class="profile-danger-note" id="deleteCodeNote"></div>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-sm-5">
+                    <div class="form-floating form-floating-dark">
+                        <input type="text" class="form-control" id="deleteOtp" placeholder="Code"
+                               maxlength="6" inputmode="numeric" autocomplete="one-time-code"
+                               style="letter-spacing:.35em;text-align:center;font-weight:600;">
+                        <label for="deleteOtp">6-digit code</label>
+                    </div>
+                </div>
+                <div class="col-12 col-sm-4">
+                    <div class="form-floating form-floating-dark">
+                        <input type="text" class="form-control" id="deleteConfirm" placeholder="DELETE" autocomplete="off">
+                        <label for="deleteConfirm">Type DELETE</label>
+                    </div>
+                </div>
+                <div class="col-12 col-sm-3">
+                    <button type="button" class="btn-delete-account w-100" id="deleteConfirmBtn">
+                        Delete
+                    </button>
+                </div>
+            </div>
+            <div id="deleteMessage" class="profile-danger-msg" style="display:none;"></div>
+            <button type="button" class="btn-delete-cancel mt-2" id="deleteCancelBtn">
+                Cancel and resend a new code later
+            </button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -256,5 +323,123 @@ function removePhoto() {
     // Clear file input
     document.getElementById('photoInput').value = '';
 }
+
+/* ---------------------------------------------------------------------
+   Delete account — request a code, then confirm with the code + DELETE.
+   Both calls are POSTs carrying the CSRF token, so the deletion cannot be
+   triggered by a link on another site.
+   --------------------------------------------------------------------- */
+(function () {
+    var requestBtn = document.getElementById('deleteRequestBtn');
+    var confirmBtn = document.getElementById('deleteConfirmBtn');
+    var cancelBtn = document.getElementById('deleteCancelBtn');
+    var step1 = document.getElementById('deleteStep1');
+    var step2 = document.getElementById('deleteStep2');
+    var otpInput = document.getElementById('deleteOtp');
+    var confirmInput = document.getElementById('deleteConfirm');
+    var msg = document.getElementById('deleteMessage');
+    var note = document.getElementById('deleteCodeNote');
+    if (!requestBtn || !confirmBtn) return;
+
+    function csrf() {
+        var input = document.querySelector('#profileForm input[name="csrfmiddlewaretoken"]');
+        if (input) return input.value;
+        var match = document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/);
+        return match ? decodeURIComponent(match[2]) : '';
+    }
+
+    function say(text, type) {
+        msg.textContent = text;
+        msg.className = 'profile-danger-msg ' + (type || 'error');
+        msg.style.display = 'block';
+    }
+
+    function clearSay() {
+        msg.style.display = 'none';
+        msg.textContent = '';
+    }
+
+    requestBtn.addEventListener('click', function () {
+        if (!window.confirm('Send a 6-digit deletion code to your email address?')) return;
+        clearSay();
+        requestBtn.disabled = true;
+        var original = requestBtn.innerHTML;
+        requestBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending…';
+        fetch('{% url "ajax_delete_account_request_otp" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf() },
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+          .then(function (res) {
+              requestBtn.disabled = false;
+              requestBtn.innerHTML = original;
+              if (res.ok && res.data.success) {
+                  step1.style.display = 'none';
+                  step2.style.display = 'block';
+                  note.textContent = res.data.message;
+                  setTimeout(function () { otpInput.focus(); }, 60);
+              } else {
+                  say(res.data.message || 'Could not send the code. Please try again.');
+              }
+          })
+          .catch(function () {
+              requestBtn.disabled = false;
+              requestBtn.innerHTML = original;
+              say('Could not reach the server. Please try again.');
+          });
+    });
+
+    confirmBtn.addEventListener('click', function () {
+        var code = (otpInput.value || '').trim();
+        var word = (confirmInput.value || '').trim().toUpperCase();
+        if (word !== 'DELETE') { say('Type DELETE in the confirmation box to continue.'); return; }
+        if (!/^\d{6}$/.test(code)) { say('Enter the 6-digit code from your email.'); return; }
+        if (!window.confirm('This permanently deletes your account and everything saved to it. Continue?')) return;
+
+        clearSay();
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        var body = new FormData();
+        body.append('otp', code);
+        body.append('confirm', word);
+        fetch('{% url "ajax_delete_account" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf() },
+            body: body,
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+          .then(function (res) {
+              if (res.ok && res.data.success) {
+                  say('Your account has been deleted. Redirecting…', 'success');
+                  setTimeout(function () { window.location.href = '{% url "index" %}'; }, 1400);
+              } else {
+                  confirmBtn.disabled = false;
+                  confirmBtn.innerHTML = 'Delete';
+                  say(res.data.message || 'Could not delete the account.');
+              }
+          })
+          .catch(function () {
+              confirmBtn.disabled = false;
+              confirmBtn.innerHTML = 'Delete';
+              say('Could not reach the server. Please try again.');
+          });
+    });
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+            step2.style.display = 'none';
+            step1.style.display = 'block';
+            otpInput.value = '';
+            confirmInput.value = '';
+            clearSay();
+        });
+    }
+
+    if (otpInput) {
+        otpInput.addEventListener('input', function () {
+            otpInput.value = otpInput.value.replace(/\D/g, '').slice(0, 6);
+        });
+    }
+})();
 </script>
 {% endblock %}

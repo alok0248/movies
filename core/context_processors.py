@@ -1,6 +1,7 @@
 import json
 import re
 from .models import SiteSettings, NavbarItem, Ad, AdsterraLink, AmazonAffiliateProduct, ProviderItem, WatchRegion
+from .google_auth import google_login_enabled, resolve_client_id
 
 
 def _ad_consent_value(request):
@@ -129,6 +130,12 @@ def site_settings(request):
         'adsterra_show_banner': bool(ss.adsterra_show_banner),
         'enable_adsterra_links': bool(ss.enable_adsterra_links),
         'enable_autoclick_ads': bool(ss.enable_autoclick_ads),
+        # Google Sign-In: whether the popup should offer the Google button, and
+        # which OAuth client ID the browser should initialise with. Both come
+        # from the admin toggle so the button can be switched off without a
+        # deploy. The button is hidden (not merely rejected) when off.
+        'google_login_enabled': google_login_enabled(),
+        'google_login_client_id': resolve_client_id(),
     }
 
 

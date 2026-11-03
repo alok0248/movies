@@ -205,6 +205,61 @@
 
     <div class="tc-card mt-3">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div class="tc-sect"><i class="fas fa-key text-success"></i> Trusted addresses — never blocked</div>
+            {% if request_ip %}
+            <form method="post" action="{% url 'trusted_ip_action' %}" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="{% if request_ip_trusted %}remove{% else %}add{% endif %}">
+                <input type="hidden" name="ip" value="{{ request_ip }}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                {% if request_ip_trusted %}
+                <button class="tc-btn lift" type="submit"><i class="fas fa-minus-circle"></i> Stop trusting {{ request_ip }}</button>
+                {% else %}
+                <button class="tc-btn on" type="submit"><i class="fas fa-plus-circle"></i> Trust my address ({{ request_ip }})</button>
+                {% endif %}
+            </form>
+            {% endif %}
+        </div>
+        <div class="tc-sub mb-2">
+            The bot-rate, unknown-page and script checks fire on evidence, and one wrong call locks a
+            real person out. An address listed here is skipped by every watcher and by the block check
+            itself — even if a block row already exists for it. Add the address you run scripts and
+            smoke tests from.
+        </div>
+        {% if trusted_ips %}
+        <div class="d-flex flex-wrap gap-1 mb-2">
+            {% for ip in trusted_ips %}
+            <span class="tc-chip on">
+                <span class="tc-mono">{{ ip }}</span>
+                <form method="post" action="{% url 'trusted_ip_action' %}" style="margin:0;display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="remove">
+                    <input type="hidden" name="ip" value="{{ ip }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" title="Stop trusting {{ ip }}"
+                            style="border:0;background:none;color:#fca5a5;padding:0 0 0 .3rem;cursor:pointer;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </form>
+            </span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="tc-empty mb-2">No trusted address yet — the automatic guards apply to everyone.</div>
+        {% endif %}
+        <form method="post" action="{% url 'trusted_ip_action' %}" class="d-flex flex-wrap gap-2 align-items-center">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="text" name="ip" class="form-control form-control-sm" style="max-width:240px;"
+                   placeholder="203.0.113.7" autocomplete="off" required>
+            <button class="tc-btn" type="submit"><i class="fas fa-plus"></i> Add address</button>
+            <span class="tc-sub">One IPv4 or IPv6 address. Hostnames and ranges are ignored.</span>
+        </form>
+    </div>
+
+    <div class="tc-card mt-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
             <div class="tc-sect"><i class="fas fa-shield-alt text-danger"></i> Blocked addresses</div>
             <a class="tc-btn" href="{% url 'blocked_ips' %}">Full block list</a>
         </div>

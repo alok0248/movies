@@ -37,6 +37,8 @@ urlpatterns = [
     path('admin-dashboard/requests/', views.admin_requests, name='request_log'),
     # Block/unblock one IP (POST) — used by the Requests & Users and Blocked IPs pages.
     path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
+    # Trust / untrust one IP (POST) — the never-block allow-list on Traffic Control.
+    path('admin-dashboard/traffic-control/trusted-ip/', views.trusted_ip_action, name='trusted_ip_action'),
     # Every blocked IP, with the requests it made after the block.
     path('admin-dashboard/blocked-ips/', views.admin_blocked_ips, name='blocked_ips'),
     path('admin-dashboard/requests/<int:pk>/peek/', views.request_peek, name='request_peek'),
@@ -201,6 +203,7 @@ urlpatterns = [
     path('ajax/home-row/', views.home_row_ajax, name='home_row_ajax'),
     path('ajax/home-top/', views.home_top_ajax, name='home_top_ajax'),
     path('ajax/login/', views.ajax_login, name='ajax_login'),
+    path('ajax/google-login/', views.ajax_google_login, name='ajax_google_login'),
     path('ajax/register/', views.ajax_register, name='ajax_register'),
     path('ajax/verify-email/', views.verify_email, name='verify_email'),
     path('ajax/verify-email-otp/', views.ajax_verify_email_otp, name='ajax_verify_email_otp'),
@@ -208,6 +211,8 @@ urlpatterns = [
     path('ajax/logout/', views.ajax_logout, name='ajax_logout'),
     path('ajax/forgot-password/', views.ajax_forgot_password, name='ajax_forgot_password'),
     path('ajax/reset-password-otp/', views.ajax_reset_password_otp, name='ajax_reset_password_otp'),
+    path('ajax/delete-account/request-otp/', views.ajax_delete_account_request_otp, name='ajax_delete_account_request_otp'),
+    path('ajax/delete-account/', views.ajax_delete_account, name='ajax_delete_account'),
     path('reset-password/<uidb64>/<token>/', views.reset_password, name='reset_password'),
     path('ajax/toggle-watchlist/', views.ajax_toggle_watchlist, name='ajax_toggle_watchlist'),
     path('ajax/check-watchlist/', views.ajax_check_watchlist, name='ajax_check_watchlist'),

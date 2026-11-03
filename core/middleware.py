@@ -189,6 +189,10 @@ class IPBlockMiddleware:
             return
         if self._operator(request):
             return
+        # A trusted (operator) address is never counted for the probe watch.
+        from .ip_block import is_ip_allowed
+        if is_ip_allowed(get_client_ip(request)):
+            return
         # A signed-in person is a person. Someone who mistypes a URL or follows a
         # broken link must never be auto-blocked for it, however many they hit.
         if self._signed_in(request):
@@ -210,10 +214,16 @@ class IPBlockMiddleware:
     def _check(self, request):
         from .ip_block import (should_count_for_bot_rate, note_request,
                                auto_block_bot, blocked_ip_for, blocked_response,
-                               is_bot_block)
+                               is_bot_block, is_ip_allowed)
         client_ip = get_client_ip(request)
         signed_in = self._signed_in(request)
         operator = self._operator(request)
+        # A trusted address (SiteSettings.allowed_ips) is the operator's own
+        # machine: it is never rate-watched, never judged a script, never
+        # probe-watched, and an existing block row is not enforced for it. This
+        # is what stops a `curl` smoke test from locking the operator out.
+        if client_ip and is_ip_allowed(client_ip):
+            return self.get_response(request)
         # Watch the request rate *before* the exemptions, so a signed-in
         # scraper is caught too. should_count_for_bot_rate() keeps the app's own
         # user-data polling, assets and the dashboard out of the count, and staff

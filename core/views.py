@@ -375,9 +375,14 @@ def calendar_db(request):
     Fast calendar endpoint served from local DB (CalendarMonthCache).
     Returns movies and series for a specific month.
     GET /ajax/calendar-db/?year=2026&month=9
-    POST /ajax/calendar-db/ — save data for a month
+    POST /ajax/calendar-db/ — save data for a month (staff only)
     """
     if request.method == 'POST':
+        # Writing the shared month cache is an admin action: without this gate
+        # any anonymous visitor could overwrite the site-wide calendar data.
+        if not (request.user.is_authenticated
+                and (request.user.is_staff or request.user.is_superuser)):
+            return JsonResponse({'success': False, 'error': 'Staff only'}, status=403)
         # Save fetched data to DB
         try:
             import json as _json
@@ -4359,6 +4364,8 @@ def api_documentation_view(request):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def android_user_sync_reference(request):
     """Display registered Android apps for the user sync endpoint."""
     apps = AndroidApp.objects.all().order_by('name')
@@ -6657,6 +6664,14 @@ def download_proxy(request):
     if not target_url:
         return HttpResponse('No URL provided', status=400)
 
+    # SSRF guard: never let a browser talk us into fetching loopback, LAN,
+    # link-local / cloud-metadata or otherwise non-public addresses.
+    from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
+    try:
+        target_url = ensure_public_url(target_url)
+    except UnsafeURLError as exc:
+        return HttpResponse(str(exc), status=400)
+
     # Block obviously non-media URLs for safety. Images are allowed so the
     # media gallery can offer full-size poster/wallpaper downloads (TMDB
     # blocks direct cross-origin fetches, the browser would refuse to save).
@@ -6681,8 +6696,7 @@ def download_proxy(request):
             'Referer': target_url,
             'Origin': '/'.join(target_url.split('/')[:3]),
         }
-        remote = requests.get(target_url, headers=headers, stream=True, timeout=30,
-                              allow_redirects=True)
+        remote = guarded_get(target_url, headers=headers, stream=True, timeout=30)
         if remote.status_code >= 400:
             return HttpResponse(f'Upstream returned {remote.status_code}', status=502)
 
@@ -7189,6 +7203,13 @@ def proxy_embed(request):
     if not target:
         return HttpResponse('No URL provided', status=400)
 
+    # SSRF guard (see core/url_guard.py).
+    from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
+    try:
+        target = ensure_public_url(target)
+    except UnsafeURLError as exc:
+        return HttpResponse(str(exc), status=400)
+
     try:
         headers = {
             'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -7198,7 +7219,7 @@ def proxy_embed(request):
             'Accept-Language': 'en-US,en;q=0.5',
             'Referer': target,
         }
-        resp = requests.get(target, headers=headers, timeout=15, allow_redirects=True)
+        resp = guarded_get(target, headers=headers, timeout=15)
         if resp.status_code >= 400:
             return HttpResponse(f'Upstream returned {resp.status_code}', status=502)
 
@@ -7909,6 +7930,12 @@ def proxy_view(request, target):
     else:
         target_url = "https://" + target
 
+    from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
+    try:
+        target_url = ensure_public_url(target_url)
+    except UnsafeURLError as exc:
+        return HttpResponse(f"Proxy error: {exc}", status=400)
+
     headers = {
         'User-Agent': _VIDEASY_USER_AGENT,
         'Origin': _VIDEASY_ORIGIN,
@@ -7917,13 +7944,21 @@ def proxy_view(request, target):
 
     try:
         _session = _get_proxy_session()
-        resp = _session.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
+        try:
+            resp = guarded_get(target_url, session=_session, headers=headers,
+                               timeout=(5, 120), stream=True)
+        except UnsafeURLError as exc:
+            return HttpResponse(f"Proxy error: {exc}", status=400)
         if resp.status_code == 403:
             headers.pop('Origin', None)
             headers.pop('Referer', None)
             resp.close()
             _session = _get_proxy_session()
-        resp = _session.get(target_url, headers=headers, timeout=(5, 120), stream=True, verify=True, allow_redirects=True)
+            try:
+                resp = guarded_get(target_url, session=_session, headers=headers,
+                                   timeout=(5, 120), stream=True)
+            except UnsafeURLError as exc:
+                return HttpResponse(f"Proxy error: {exc}", status=400)
         if resp.status_code >= 400:
             resp.close()
             return HttpResponse(f"Proxy error: {resp.status_code}", status=resp.status_code)
@@ -8060,13 +8095,16 @@ def _proxy_fetch_url(target_url, origin=None, referer=None):
             headers['Referer'] = referer
         # Use requests with streaming for proper SSL + chunked transfer
         # Do NOT replace hostname with IP — that breaks SSL cert verification
-        resp = _req.get(
+        from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
+        try:
+            target_url = ensure_public_url(target_url)
+        except UnsafeURLError as exc:
+            return HttpResponse(f"Proxy error: {exc}", status=400)
+        resp = guarded_get(
             target_url,
             headers=headers,
             timeout=(8, 30),  # connect timeout, read timeout
             stream=True,
-            verify=True,
-            allow_redirects=True,
         )
         if resp.status_code == 403 and origin:
             resp.close()
@@ -9081,6 +9119,8 @@ def serve_google_verification(request):
     from django.http import HttpResponse
     return HttpResponse(content, content_type='text/html')
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_ad_files(request):
     if not request.user.is_staff:
         return redirect('/admin/')
@@ -11153,6 +11193,10 @@ def _verify_google_id_token(id_token):
     Google's rotating public keys and returns the claims. We then re-check the
     audience, issuer, expiry and email_verified flag ourselves so a token minted
     for a different app (or an unverified address) can never sign anyone in.
+
+    The accepted audience is whatever the operator configured for the site, and
+    both the saved client ID and the deploy-time default are accepted so
+    rotating the ID in the admin never locks out tokens from the other one.
     """
     if not id_token or not isinstance(id_token, str):
         return None
@@ -11171,8 +11215,11 @@ def _verify_google_id_token(id_token):
     if not isinstance(claims, dict):
         return None
 
-    # Audience must be our Web client ID.
-    if claims.get('aud') != GOOGLE_OAUTH_CLIENT_ID:
+    # Audience must be a client ID we own.
+    from .google_auth import resolve_client_id
+    accepted_audiences = {GOOGLE_OAUTH_CLIENT_ID, resolve_client_id()}
+    accepted_audiences.discard('')
+    if claims.get('aud') not in accepted_audiences:
         logger.info('Google token audience mismatch: %s', claims.get('aud'))
         return None
     # Issuer must be Google.
@@ -11209,6 +11256,11 @@ def api_user_google_login(request):
     if err:
         return err
 
+    # The operator's switch governs every client, the app included.
+    from .google_auth import google_login_enabled, email_domain_allowed
+    if not google_login_enabled():
+        return JsonResponse({'status': 'error', 'message': 'Google sign-in is disabled'}, status=403)
+
     try:
         body = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -11228,72 +11280,15 @@ def api_user_google_login(request):
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Google token verification failed'}, status=401)
 
+    if not email_domain_allowed(email):
+        return JsonResponse({'status': 'error', 'message': 'This Google account is not allowed to sign in here.'}, status=403)
+
     # Admin access control: a full/app block refuses login outright.
     block_err = _enforce_user_block(email, app_match)
     if block_err:
         return block_err
 
-    from .models import SyncedUser, UserCloudData
-
-    # 1) Find by Google sub (the stable identifier).
-    user_obj = SyncedUser.objects.filter(google_id=sub).first()
-    django_user = None
-    if user_obj and user_obj.user_id:
-        django_user = User.objects.filter(pk=user_obj.user_id).first()
-
-    # 2) Fall back to the email (an account that registered with a password
-    #    first) and link the sub to that record.
-    if django_user is None:
-        django_user = User.objects.filter(email__iexact=email).first()
-    if user_obj is None and django_user is not None:
-        user_obj = SyncedUser.objects.filter(email__iexact=email).first()
-
-    created = False
-    if django_user is None:
-        # Brand new account — Google already verified the address.
-        base_username = email.split('@')[0] or 'user'
-        username = base_username
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}{counter}"
-            counter += 1
-        django_user = User.objects.create_user(username=username, email=email, password=None)
-        django_user.first_name = display_name
-        django_user.is_active = True
-        django_user.save()
-        created = True
-
-    # Google verified the address, so the account is active regardless of how
-    # it was created.
-    if not django_user.is_active:
-        django_user.is_active = True
-        django_user.save(update_fields=['is_active'])
-
-    if user_obj is None:
-        user_obj = SyncedUser.objects.create(
-            user=django_user, email=email, display_name=display_name,
-            photo_url=photo_url, google_id=sub,
-            device_id=body.get('deviceId', ''),
-            device_model=body.get('deviceModel', ''),
-            os_version=body.get('osVersion', ''),
-            app_version=body.get('appVersion', ''),
-            build_number=body.get('buildNumber', 0),
-        )
-    else:
-        # Repoint a stale FK and refresh the profile from the token claims.
-        if not user_obj.user_id or user_obj.user_id != django_user.pk:
-            user_obj.user = django_user
-        user_obj.email = email
-        user_obj.google_id = sub
-        user_obj.display_name = display_name or user_obj.display_name
-        user_obj.photo_url = photo_url or user_obj.photo_url
-        if body.get('deviceId'):
-            user_obj.device_id = body.get('deviceId', '')
-            user_obj.device_model = body.get('deviceModel', '')
-            user_obj.os_version = body.get('osVersion', '')
-            user_obj.app_version = body.get('appVersion', '')
-            user_obj.build_number = body.get('buildNumber', 0)
-        user_obj.save()
+    django_user, user_obj, _created = _google_login_account(claims, device=body)
 
     UserCloudData.objects.get_or_create(user=django_user)
 
@@ -11307,6 +11302,131 @@ def api_user_google_login(request):
         'message': 'Signed in with Google',
         'requiresVerification': False,
     }))
+
+
+def _google_login_account(claims, *, device=None):
+    """Resolve a verified Google token to a Django user, creating it if needed.
+
+    Shared by the Android API and the website popup so both agree on identity:
+    the Google ``sub`` is the stable key, the email is the fallback that lets an
+    account which started with a password be linked to its Google identity on
+    first Google sign-in. Returns ``(django_user, synced_user, created)``.
+
+    ``device`` is an optional dict of Android device fields; the web path passes
+    none and the SyncedUser row is still created so the account is visible to
+    the rest of the app.
+    """
+    from .models import SyncedUser
+
+    device = device or {}
+    sub = str(claims.get('sub'))
+    email = (claims.get('email') or '').strip().lower()
+    display_name = (claims.get('name') or '').strip()
+    photo_url = (claims.get('picture') or '').strip()
+
+    # 1) The stable identifier.
+    user_obj = SyncedUser.objects.filter(google_id=sub).first()
+    django_user = None
+    if user_obj and user_obj.user_id:
+        django_user = User.objects.filter(pk=user_obj.user_id).first()
+
+    # 2) Fall back to the email (account created with a password first).
+    if django_user is None:
+        django_user = User.objects.filter(email__iexact=email).first()
+    if user_obj is None and django_user is not None:
+        user_obj = SyncedUser.objects.filter(email__iexact=email).first()
+
+    created = False
+    if django_user is None:
+        # Google already verified the address, so no OTP step is needed.
+        base_username = email.split('@')[0] or 'user'
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        django_user = User.objects.create_user(username=username, email=email, password=None)
+        django_user.first_name = display_name
+        django_user.is_active = True
+        django_user.save()
+        created = True
+
+    if not django_user.is_active:
+        django_user.is_active = True
+        django_user.save(update_fields=['is_active'])
+
+    if user_obj is None:
+        user_obj = SyncedUser.objects.create(
+            user=django_user, email=email, display_name=display_name,
+            photo_url=photo_url, google_id=sub,
+            device_id=device.get('deviceId', ''),
+            device_model=device.get('deviceModel', ''),
+            os_version=device.get('osVersion', ''),
+            app_version=device.get('appVersion', ''),
+            build_number=device.get('buildNumber', 0),
+        )
+    else:
+        if not user_obj.user_id or user_obj.user_id != django_user.pk:
+            user_obj.user = django_user
+        user_obj.email = email
+        user_obj.google_id = sub
+        user_obj.display_name = display_name or user_obj.display_name
+        user_obj.photo_url = photo_url or user_obj.photo_url
+        if device.get('deviceId'):
+            user_obj.device_id = device.get('deviceId', '')
+            user_obj.device_model = device.get('deviceModel', '')
+            user_obj.os_version = device.get('osVersion', '')
+            user_obj.app_version = device.get('appVersion', '')
+            user_obj.build_number = device.get('buildNumber', 0)
+        user_obj.save()
+
+    return django_user, user_obj, created
+
+
+@require_http_methods(["POST"])
+def ajax_google_login(request):
+    """POST /ajax/google-login — the website's "Continue with Google" path.
+
+    The browser hands over the ID token from Google Identity Services. This is
+    the web sibling of ``/api/user/google-login``: no Android credentials are
+    involved, the token is the whole proof of identity, and the resulting
+    session is an ordinary Django session. Refuses outright when the operator
+    has switched Google sign-in off, so hiding the button is not the only guard.
+    """
+    from .google_auth import google_login_enabled, email_domain_allowed
+
+    if not google_login_enabled():
+        return JsonResponse({'success': False, 'message': 'Google sign-in is disabled'}, status=403)
+
+    id_token = (request.POST.get('credential') or request.POST.get('id_token')
+                or request.POST.get('idToken') or '').strip()
+    claims = _verify_google_id_token(id_token)
+    if not claims:
+        return JsonResponse({'success': False, 'message': 'Google sign-in could not be verified. Please try again.'}, status=401)
+
+    email = (claims.get('email') or '').strip().lower()
+    if not email_domain_allowed(email):
+        return JsonResponse({'success': False, 'message': 'This Google account is not allowed to sign in here.'}, status=403)
+
+    # Same block rules as a password login: a blocked address cannot get in.
+    block_err = _enforce_user_block(email)
+    if block_err:
+        return block_err
+
+    django_user, _user_obj, created = _google_login_account(claims)
+
+    login(request, django_user, backend='django.contrib.auth.backends.ModelBackend')
+    _record_session(django_user, 'web', request)
+    _lift_block_after_auth(request)
+
+    logger.info('Google web sign-in for %s (%s)', django_user.username, 'new account' if created else 'existing account')
+    return JsonResponse({
+        'success': True,
+        'message': 'Account created - welcome!' if created else 'Signed in with Google',
+        'created': created,
+        'username': django_user.username,
+        'email': django_user.email,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -11536,6 +11656,111 @@ def api_user_delete_account(request):
     _permanently_delete_user(django_user, email=account_email)
 
     return JsonResponse({'status': 'success', 'message': 'Account deleted'})
+
+
+# ---------------------------------------------------------------------------
+# Account deletion with OTP — the website side of the same flow.
+# ---------------------------------------------------------------------------
+# The account is taken from the session, never from the request body, so a
+# signed-in visitor can only ever delete their own account. Same model, same
+# rate limit and same delete routine as the app, so both paths behave alike.
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_delete_account_request_otp(request):
+    """POST /ajax/delete-account/request-otp/ — email a 6-digit deletion code.
+
+    Nothing is deleted here; the code is the confirmation that the person at the
+    keyboard owns the mailbox on the account.
+    """
+    django_user = request.user
+    account_email = (django_user.email or '').strip().lower()
+    if not account_email:
+        return JsonResponse({'success': False, 'message': 'Your account has no email address on file, so a deletion code cannot be sent.'}, status=400)
+
+    rate_err = _delete_otp_rate_error(account_email)
+    if rate_err:
+        return rate_err
+
+    from .models import AccountDeletionOTP
+
+    # Any earlier code for this account stops working.
+    AccountDeletionOTP.objects.filter(user=django_user, used=False).update(used=True)
+
+    otp = AccountDeletionOTP.generate()
+    AccountDeletionOTP.objects.create(user=django_user, otp=otp)
+
+    brand = SiteSettings.get_settings().brand_name
+    try:
+        send_configured_email(
+            subject=f'Account deletion code - {brand}',
+            message=(
+                f'Hi {django_user.first_name or django_user.username},\r\n\r\n'
+                f'Your account deletion code is: {otp}\r\n\r\n'
+                f'This code is valid for 10 minutes. Enter it on your profile page to permanently delete your account. '
+                f'Everything you have saved on this site will be removed and cannot be recovered.\r\n\r\n'
+                f'If you did not request this, please ignore this email — your account is safe.'
+            ),
+            recipient_list=[account_email],
+            purpose='verification',
+            fail_silently=True,
+        )
+    except Exception as e:
+        logger.warning(f'Failed to send account deletion email: {e}', exc_info=True)
+
+    logger.info('Account deletion code requested from the web for %s', account_email)
+    return JsonResponse({
+        'success': True,
+        'message': f'A 6-digit code has been sent to {account_email}. It expires in 10 minutes.',
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_delete_account(request):
+    """POST /ajax/delete-account/ — permanently delete the signed-in account.
+
+    Requires the emailed code plus the literal word DELETE, so a stray click can
+    never wipe an account. Every failure keeps the account and the session
+    intact; only a correct code deletes anything.
+    """
+    django_user = request.user
+    account_email = (django_user.email or '').strip().lower()
+
+    otp_code = (request.POST.get('otp') or '').strip()
+    confirm_text = (request.POST.get('confirm') or '').strip().upper()
+
+    if confirm_text != 'DELETE':
+        return JsonResponse({'success': False, 'message': 'Type DELETE in the confirmation box to continue.'}, status=400)
+    if not otp_code:
+        return JsonResponse({'success': False, 'message': 'Enter the 6-digit code sent to your email.'}, status=400)
+
+    from .models import AccountDeletionOTP
+
+    otp_obj = AccountDeletionOTP.objects.filter(
+        user=django_user, used=False,
+    ).order_by('-created_at').first()
+
+    if otp_obj is None or otp_obj.is_expired or otp_obj.too_many_attempts:
+        return JsonResponse({'success': False, 'message': 'Incorrect or expired code. Request a new one.'}, status=400)
+
+    if otp_obj.otp != otp_code:
+        otp_obj.attempts = otp_obj.attempts + 1
+        otp_obj.save(update_fields=['attempts'])
+        return JsonResponse({'success': False, 'message': 'Incorrect verification code.'}, status=400)
+
+    otp_obj.used = True
+    otp_obj.save(update_fields=['used'])
+
+    _invalidate_user_sessions(django_user)
+
+    from django.contrib.auth import logout as _logout
+    _logout(request)
+
+    _permanently_delete_user(django_user, email=account_email)
+
+    logger.info('Account deleted from the web: %s', account_email)
+    return JsonResponse({'success': True, 'message': 'Your account has been permanently deleted.'})
 
 
 @login_required
@@ -13417,6 +13642,77 @@ def ip_block_action(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+@require_POST
+def trusted_ip_action(request):
+    """Add or remove an address on the trusted (never-block) allow-list.
+
+    The automatic guards — bot rate, unknown-page probes, script User-Agents —
+    are all evidence-based, and a wrong call locks out a real person. The
+    operator's own address is the one that must never be guessed wrong: running
+    a script, a smoke test or a ``curl`` from it is normal work. Addresses listed
+    here are skipped by every watch and by the block decision itself.
+
+    ``action`` is ``add`` (default) or ``remove``; ``ip`` is one address. The
+    list is stored on ``SiteSettings.allowed_ips`` as comma-separated text so it
+    stays editable straight from the settings form as well.
+    """
+    from .ip_block import normalize_ip, parse_allowed_ips, reset_allowed_ips_cache, unblock_ip
+    from .models import SiteSettings
+
+    action = (request.POST.get('action') or 'add').strip().lower()
+    raw_ip = (request.POST.get('ip') or '').strip()
+    ip = normalize_ip(raw_ip)
+    who = (request.user.username or '')[:150]
+
+    if not raw_ip:
+        messages.error(request, 'No IP address given.')
+    elif not ip:
+        messages.error(request, f'“{raw_ip[:64]}” is not a valid IP address — '
+                                'use a single IPv4 or IPv6 address.')
+    else:
+        conf = SiteSettings.get_settings()
+        current = parse_allowed_ips(conf.allowed_ips)
+        if action == 'remove':
+            if ip in current:
+                current = [entry for entry in current if entry != ip]
+                conf.allowed_ips = ', '.join(current)
+                conf.save(update_fields=['allowed_ips'])
+                reset_allowed_ips_cache()
+                messages.success(request,
+                                 f'Removed {ip} from the trusted list — the automatic '
+                                 'guards apply to it again.')
+            else:
+                messages.warning(request, f'{ip} was not on the trusted list.')
+        elif action == 'add':
+            if ip in current:
+                messages.info(request, f'{ip} is already trusted.')
+            else:
+                current.append(ip)
+                conf.allowed_ips = ', '.join(current)
+                conf.save(update_fields=['allowed_ips'])
+                reset_allowed_ips_cache()
+                messages.success(request,
+                                 f'{ip} is trusted now — the bot, probe and script '
+                                 'watchers will never block it.')
+            # A trusted address that is currently blocked would otherwise keep
+            # getting the block page, because the row still exists. Lift it.
+            if unblock_ip(ip, who) is not None:
+                messages.success(request, f'The existing block on {ip} was lifted as well.')
+        else:
+            messages.error(request, 'Unknown action.')
+
+        from .audit import log_action
+        log_action(request, 'trust_ip' if action == 'add' else 'untrust_ip', ip,
+                   'action=%s' % action)
+
+    nxt = (request.POST.get('next') or '').strip()
+    if not (nxt.startswith('/') and not nxt.startswith('//')):
+        nxt = reverse('traffic_control')
+    return redirect(nxt)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_blocked_ips(request):
     """Blocked IPs — every address the site refuses, and what it tried anyway.
 
@@ -14051,7 +14347,6 @@ def admin_user_delete(request, user_id):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 @require_POST
-@csrf_exempt
 def bulk_send_email(request):
     """Send email to multiple users at once."""
     try:
@@ -14087,7 +14382,6 @@ def bulk_send_email(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 @require_POST
-@csrf_exempt
 def bulk_change_plan(request):
     """Change subscription plan for multiple users."""
     try:
@@ -14125,7 +14419,6 @@ def bulk_change_plan(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 @require_POST
-@csrf_exempt
 def bulk_delete_users(request):
     """Delete multiple users and all linked data."""
     try:
@@ -15644,7 +15937,7 @@ def traffic_control(request):
     """
     from .header_block import BOT_BLOCK_PROFILE, blocked_header_report
     from .health import five_xx_rate
-    from .ip_block import blocked_ip_report
+    from .ip_block import allowed_ip_list, blocked_ip_report, client_ip_of
     from .models import BlockedHeader
     from .probes import probe_report
     from .request_log import request_total
@@ -15682,6 +15975,7 @@ def traffic_control(request):
     queue.sort(key=lambda entry: entry['since'] or timezone.now(), reverse=True)
 
     pct5, bad5, total5 = five_xx_rate(60)
+    trusted = allowed_ip_list()
     return render(request, 'core/admin_traffic_control.html', {
         'bot_groups': groups,
         'bot_on': sum(1 for g in groups for i in g['items'] if i['on']),
@@ -15698,6 +15992,9 @@ def traffic_control(request):
         'five_xx_bad': bad5,
         'five_xx_total': total5,
         'total_stored': request_total(),
+        'trusted_ips': trusted,
+        'request_ip': client_ip_of(request),
+        'request_ip_trusted': bool(client_ip_of(request)) and client_ip_of(request) in trusted,
     })
 
 

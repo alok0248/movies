@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 ACTION_LABELS = {
     'block_ip': 'Blocked an address',
     'unblock_ip': 'Lifted an address block',
+    'trust_ip': 'Trusted an address',
+    'untrust_ip': 'Stopped trusting an address',
     'block_header': 'Blocked a header rule',
     'unblock_header': 'Lifted a header rule',
     'delete_header': 'Deleted a header rule',
