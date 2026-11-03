@@ -10641,6 +10641,20 @@ def _item_deletion_response(body, kind, app_match=None, derive_from_body=False):
                         'clear_watchlist, playlist, playlist_item.'),
         }, status=400)
 
+    # The generic /api/user/delete/ mode must not conjure an account into
+    # existence — anything to delete has to belong to a real account in the
+    # first place, and minting an active user from an unauthenticated body would
+    # hand out free accounts. The dedicated per-kind routes keep their historical
+    # auto-create behaviour so nothing the app already ships changes underneath it.
+    if derive_from_body:
+        account_exists = (User.objects.filter(email__iexact=email).exists()
+                          or SyncedUser.objects.filter(email__iexact=email).exists())
+        if not account_exists:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No account found with this email address.',
+            }, status=404)
+
     django_user, user_obj, _created = _ensure_user_and_profile(email, body)
     cloud, _ = UserCloudData.objects.get_or_create(user=django_user)
     from .models import PlayHistory, WatchList

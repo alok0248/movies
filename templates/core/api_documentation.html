@@ -749,6 +749,12 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
   "deleted": [550],
   "userData": { ...updated cloud payload... }
 }</pre>
+            <div class="api-label">The account must already exist</div>
+            <p class="api-desc">
+                This mode deletes data from an existing account — it never creates one. An unknown
+                <code>email</code> returns <code>404</code> and no user is created.
+            </p>
+            <pre class="api-code" data-copy>404  { "status": "error", "message": "No account found with this email address." }</pre>
             <div class="api-label">Ambiguous request is refused</div>
             <p class="api-desc">
                 If you send neither an <code>otp</code> nor a <code>deleteType</code>, the server will <b>not</b> guess.
