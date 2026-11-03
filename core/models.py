@@ -1441,7 +1441,19 @@ class SyncedUser(models.Model):
     email = models.EmailField(unique=True)
     display_name = models.CharField(max_length=255, blank=True, default='')
     photo_url = models.URLField(blank=True, default='')
+    # Google identity. ``google_sub`` is the stable "sub" claim from the ID
+    # token and the key Google sign-in looks the account up by; it is unique
+    # so one Google account can never point at two profiles. ``google_id`` is
+    # the older, non-unique column kept in step for compatibility with app
+    # builds that still read it.
+    google_sub = models.CharField(max_length=255, blank=True, default='', db_index=True)
     google_id = models.CharField(max_length=100, blank=True, default='')
+    # How the account authenticates: '' / 'password' for a classic password
+    # account, 'google' for one created or linked through Google sign-in.
+    auth_provider = models.CharField(max_length=20, blank=True, default='')
+    # Whether the address has been proven (Google token, emailed OTP, or the
+    # web registration flow) rather than merely typed into a form.
+    is_email_verified = models.BooleanField(default=False)
     app_version = models.CharField(max_length=50, blank=True, default='')
     build_number = models.IntegerField(default=0)
     device_id = models.CharField(max_length=100, blank=True, default='')
@@ -1472,6 +1484,15 @@ class SyncedUser(models.Model):
 
     class Meta:
         ordering = ['-last_synced_at']
+        constraints = [
+            # One Google account, one profile. Partial so the many rows that
+            # never signed in with Google (empty string) stay unconstrained.
+            models.UniqueConstraint(
+                fields=['google_sub'],
+                condition=~models.Q(google_sub=''),
+                name='uniq_synceduser_google_sub',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.display_name or self.email}"
@@ -1660,7 +1681,10 @@ class AccountDeletionOTP(models.Model):
     TTL_MINUTES = 10
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='account_deletion_otps', db_constraint=False)
-    otp = models.CharField(max_length=6)
+    # The 6-digit code is stored hashed (see hash_code/verify_code), so the
+    # column has to fit a PBKDF2 hash rather than the six digits themselves.
+    # Rows written before hashing landed hold the plain code and still verify.
+    otp = models.CharField(max_length=128)
     attempts = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     used = models.BooleanField(default=False)
@@ -1694,6 +1718,40 @@ class AccountDeletionOTP(models.Model):
     @staticmethod
     def generate():
         return f"{secrets.randbelow(1000000):06d}"
+
+    @staticmethod
+    def hash_code(code):
+        """Salted one-way hash of a code, for storage.
+
+        The emailed code is short, so it is never stored as typed: a database
+        read must not hand out a working deletion code. PBKDF2 (Django's own
+        password hasher) is used because it is deliberately slow, which is what
+        makes five attempts a real limit rather than a formality.
+        """
+        from django.contrib.auth.hashers import make_password
+        return make_password(str(code))
+
+    def verify_code(self, code):
+        """True when ``code`` matches the stored value.
+
+        Accepts both the hashed form written by new code and the plain value
+        written by builds that predate hashing, so a code issued moments before
+        a deploy still works.
+        """
+        stored = (self.otp or '').strip()
+        code = (code or '').strip()
+        if not stored or not code:
+            return False
+        from django.contrib.auth.hashers import check_password, identify_hasher
+        try:
+            identify_hasher(stored)
+        except Exception:
+            # Not a hash — a legacy plaintext code.
+            return secrets.compare_digest(stored, code)
+        try:
+            return check_password(code, stored)
+        except Exception:
+            return False
 
 
 class PlayHistory(models.Model):

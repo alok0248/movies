@@ -176,6 +176,71 @@ User-Agent: okhttp/4.12.0</pre>
     <!-- ============ USER & SYNC ============ -->
     <div class="api-label" id="sec-user" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">2 · User &amp; Sync API</div>
 
+    <div class="api-card open">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GUIDE</span>
+            <span class="api-card-path">Shared plumbing · app-facing endpoints</span>
+            <span class="api-card-title">Rules that apply to google-login and both delete endpoints</span>
+            <i class="fas fa-chevron-down api-chevron"></i>
+        </div>
+        <div class="api-card-body">
+            <p class="api-desc">
+                These rules apply to <code>POST /api/user/google-login/</code>,
+                <code>POST /api/user/delete/request-otp/</code> and <code>POST /api/user/delete/</code>.
+            </p>
+
+            <div class="api-label">Always JSON, always non-empty</div>
+            <p class="api-desc">
+                Send <code>Content-Type: application/json</code> and <code>Accept: application/json</code>.
+                <b>Every</b> response is JSON — including 4xx/5xx — and always carries a human-readable
+                <code>message</code>, so the app never has to parse an HTML error page.
+            </p>
+            <pre class="api-code" data-copy>{
+  "status": "error",
+  "message": "Verification code is required"
+}</pre>
+
+            <div class="api-label">Method &amp; transport guards</div>
+            <p class="api-desc">
+                All three endpoints are <b>POST-only</b> — any other verb (including <code>HEAD</code>) returns
+                <code>405</code> with a JSON body, not an HTML page. In production they are also <b>HTTPS-only</b>:
+                a plain-HTTP call returns <code>403</code> with a JSON message instead of being processed.
+            </p>
+            <pre class="api-code" data-copy>// wrong verb
+405  {"status":"error","message":"Method not allowed. Use POST."}
+
+// plain HTTP in production
+403  {"status":"error","message":"This endpoint requires a secure (HTTPS) connection."}</pre>
+
+            <div class="api-label">Identity &amp; headers</div>
+            <p class="api-desc">
+                All three require the Android app's Basic Auth. The app-identity headers are optional but
+                recommended. The <code>Host</code> header is honoured as sent, so the app may call the
+                server by IP or by domain name.
+            </p>
+            <pre class="api-code" data-copy>Authorization: Basic base64(access_username:access_password)
+Content-Type: application/json
+Accept: application/json
+X-Android-App: #198
+X-Android-Build: 1
+X-Android-User-Email: user@gmail.com</pre>
+
+            <div class="api-label">Status codes</div>
+            <p class="api-desc">
+                <code>400</code> bad/missing input · <code>401</code> bad app credentials or unverifiable Google token ·
+                <code>403</code> insecure transport or blocked account · <code>404</code> no such account ·
+                <code>405</code> wrong HTTP verb · <code>429</code> rate-limited (retry later) ·
+                <code>500</code> unexpected server error · <code>503</code> temporary database problem.<br>
+                <code>429</code> and <code>503</code> are transient — the app may retry with backoff. Everything
+                else is a permanent answer for that request.
+            </p>
+            <div class="api-note">
+                <i class="fas fa-info-circle"></i>
+                <span>Rate limit is applied per app on <code>/api/</code> (burst 20). Treat <code>429</code> as "back off", never as "try again immediately".</span>
+            </div>
+        </div>
+    </div>
+
     <div class="api-card">
         <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
@@ -218,7 +283,7 @@ Content-Type: application/json</pre>
     "deletedPlaylists": [...],        //   missed delete notification is
     "deletedPlaylistItems": [...]     //   caught up on the next sync.
   }
-}
+}</pre>
             <div class="api-note">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>Errors: 401 missing/invalid Basic header · 403 wrong credentials · 400 bad JSON / missing email.</span>
@@ -567,11 +632,27 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
                 identity from the token's claims — the email in the body is only a hint and is never trusted on its own.
                 Returns the same payload shape as <code>/api/user/login/</code>.
             </p>
+            <p class="api-desc">
+                The Google <code>sub</code> claim is the account key. It is stored in <code>SyncedUser.google_sub</code>
+                under a <b>unique constraint</b>, so one Google identity can never be attached to two accounts.
+                On first sign-in the server resolves the account in this order:
+            </p>
+            <ol class="api-desc" style="padding-left:1.25rem;">
+                <li>match an existing <code>google_sub</code> → sign in;</li>
+                <li>otherwise match <code>google_id</code> (legacy column) → sign in and backfill <code>google_sub</code>;</li>
+                <li>otherwise match the verified email → <b>link</b> the Google identity to that existing account
+                    (a password account becomes usable with either method);</li>
+                <li>otherwise create a new account.</li>
+            </ol>
+            <p class="api-desc">
+                Linking or creating sets <code>auth_provider = "google"</code> and <code>is_email_verified = true</code>.
+                The account email must be a real, verified Google address — unverified Google emails are rejected.
+            </p>
             <div class="api-label">Request body</div>
             <pre class="api-code" data-copy>{
   "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
-  "email": "user@gmail.com",
-  "displayName": "Alok Kumar",
+  "email": "user@gmail.com",        // hint only — never trusted for identity
+  "displayName": "Alok Kumar",       // ignored for identity, used as a fallback name
   "photoUrl": "https://lh3.googleusercontent.com/a/..."
 }</pre>
             <div class="api-label">Response 200</div>
@@ -582,7 +663,12 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
   "subscription": { "isSubscribed": false, "plan": "Free" },
   "userData": { ...cloud data... }
 }</pre>
-            <div class="api-note"><i class="fas fa-info-circle"></i><span>Failure returns <code>401 {"status":"error","message":"Google token verification failed"}</code>.</span></div>
+            <div class="api-label">Errors</div>
+            <pre class="api-code" data-copy>400  {"status":"error","message":"Invalid JSON body"}
+401  {"status":"error","message":"Google token verification failed"}
+403  {"status":"error","message":"...account blocked..."}
+405  {"status":"error","message":"Method not allowed. Use POST."}</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>Spoofing the body <code>email</code> or <code>displayName</code> cannot create or take over an account — identity comes only from the verified token. A bad token creates no row at all.</span></div>
         </div>
     </div>
 
@@ -590,25 +676,96 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
         <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/delete/request-otp/ · /api/user/delete/</span>
-            <span class="api-card-title">Delete the account (two steps, emailed OTP)</span>
+            <span class="api-card-title">Delete the account (2 steps, emailed OTP) OR delete items (1 step)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
         <div class="api-card-body">
             <p class="api-desc">
-                <b>Step 1 — <code>/api/user/delete/request-otp/</code>:</b> emails a 6-digit code (10-minute expiry,
-                5 attempts max, 1 request per 60 s / 5 per hour). Nothing is deleted here.<br>
-                <b>Step 2 — <code>/api/user/delete/</code>:</b> validates the code and permanently deletes the account,
-                its synced data and sessions, and revokes every token. The code is validated server-side only.
+                <code>/api/user/delete/</code> is <b>one path with two modes</b>. The server picks the mode from the
+                body you send, never by guessing:
             </p>
-            <div class="api-label">Request body (step 1)</div>
-            <pre class="api-code" data-copy>{ "email": "user@gmail.com", "userId": "usr_123" }</pre>
-            <div class="api-label">Request body (step 2)</div>
-            <pre class="api-code" data-copy>{ "email": "user@gmail.com", "userId": "usr_123", "otp": "483920", "confirmDelete": true }</pre>
+            <ul class="api-desc" style="padding-left:1.25rem;">
+                <li><b>Account deletion</b> — requires <b>both</b> a non-empty <code>otp</code> <b>and</b>
+                    <code>confirmDelete: true</code>. Without both, nothing is deleted.</li>
+                <li><b>Item deletion</b> — requires <b>no</b> <code>otp</code> and <b>no</b> <code>confirmDelete</code>,
+                    and must name a target with <code>deleteType</code> (or <code>action: "delete"</code> plus <code>deleteType</code>).</li>
+            </ul>
+
+            <div class="api-label">Mode A · Account deletion — step 1: request the code</div>
+            <p class="api-desc">
+                Emails a 6-digit code. Nothing is deleted at this step. The code is stored <b>hashed</b> (never in
+                plaintext), expires in <b>10&nbsp;minutes</b>, allows <b>5 attempts</b>, and is rate-limited to
+                <b>1 request per 60&nbsp;s</b> and <b>5 per hour</b> per account.
+            </p>
+            <pre class="api-code" data-copy>POST /api/user/delete/request-otp/
+{ "email": "user@gmail.com", "userId": "usr_123" }
+
+200  { "status": "success", "message": "..." }
+404  { "status": "error", "message": "No account found with this email address." }
+429  { "status": "error", "message": "...please wait..." }</pre>
+
+            <div class="api-label">Mode A · Account deletion — step 2: confirm</div>
+            <p class="api-desc">
+                Validates the code, then permanently deletes the account, its synced data, watch history, watchlist
+                and sessions, revokes every token, and burns the code. All-or-nothing: if a step fails the account
+                is left intact and the app gets a <code>500</code>.
+            </p>
+            <pre class="api-code" data-copy>POST /api/user/delete/
+{ "email": "user@gmail.com", "userId": "usr_123", "otp": "483920", "confirmDelete": true }
+
+200  { "status": "success", "message": "Account deleted" }
+400  { "status": "error", "message": "Verification code is required" }
+400  { "status": "error", "message": "Confirmation is required. Send "confirmDelete": true with the verification code." }
+400  { "status": "error", "message": "Incorrect verification code" }
+400  { "status": "error", "message": "This verification code has expired" }
+429  { "status": "error", "message": "Too many attempts" }
+500  { "status": "error", "message": "Could not delete the account. Please try again." }</pre>
+            <div class="api-note"><i class="fas fa-exclamation-triangle"></i><span>A non-2xx keeps the user signed in and leaves local data untouched — the app only wipes local data after this returns 2xx. <code>500</code> is safe to retry; <code>400</code> is not.</span></div>
+
+            <div class="api-label">Mode B · Item deletion — one step, no OTP</div>
+            <p class="api-desc">
+                Removes individual records from the user's cloud data and records a <b>tombstone</b> so the items are
+                not re-uploaded by the next sync. The account itself is never touched. Send the same
+                <code>email</code> plus a <code>deleteType</code> and — for the id-based types — an <code>ids</code> array.
+            </p>
+            <pre class="api-code" data-copy>POST /api/user/delete/
+{
+  "email": "user@gmail.com",
+  "action": "delete",          // optional when deleteType is present
+  "deleteType": "history",     // required in this mode
+  "ids": [550, 157336]         // required for history / watchlist / playlist_item
+}</pre>
+            <div class="api-label">Accepted <code>deleteType</code> values</div>
+            <pre class="api-code" data-copy>history          remove the given watch-history entries   (needs ids)
+clear_history    wipe all watch history                    (no ids)
+watchlist        remove the given watchlist entries        (needs ids)
+clear_watchlist  wipe the whole watchlist                  (no ids)
+playlist         delete whole playlists by id              (needs ids)
+playlist_item    delete single items from a playlist      (needs ids)</pre>
             <div class="api-label">Response 200</div>
-            <pre class="api-code" data-copy>{ "status": "success", "message": "Account deleted" }</pre>
-            <div class="api-note"><i class="fas fa-info-circle"></i><span>A non-2xx keeps the user signed in and leaves local data untouched — the app only wipes local data after this returns 2xx.</span></div>
+            <pre class="api-code" data-copy>{
+  "status": "success",
+  "message": "History deleted",
+  "deleted": [550],
+  "userData": { ...updated cloud payload... }
+}</pre>
+            <div class="api-label">Ambiguous request is refused</div>
+            <p class="api-desc">
+                If you send neither an <code>otp</code> nor a <code>deleteType</code>, the server will <b>not</b> guess.
+                It returns <code>400</code> and says what it needs:
+            </p>
+            <pre class="api-code" data-copy>400  {
+  "status": "error",
+  "message": "deleteType is required to delete items. Use one of: history, clear_history, watchlist, clear_watchlist, playlist, playlist_item."
+}</pre>
+            <div class="api-note"><i class="fas fa-info-circle"></i><span>Prefer the dedicated routes when you can — <code>/api/user/history/delete/</code>, <code>/api/user/watchlist/delete/</code>, <code>/api/user/playlist/delete/</code>, <code>/api/user/playlist/item/delete/</code>, <code>/api/user/history/clear/</code>, <code>/api/user/watchlist/clear/</code>. They hit the same logic without the mode ambiguity.</span></div>
         </div>
     </div>
+
+    <div class="api-card">
+        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+            <span class="api-method GET">GET</span>
+            <span class="api-card-path">/api/user/profile/</span>
             <span class="api-card-title">Fetch profile + subscription via JWT</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>

@@ -9227,6 +9227,44 @@ def _lift_block_after_auth(request):
         logger.warning('IPBlock: could not lift the block after auth', exc_info=True)
 
 
+def _require_post(view_func):
+    """POST-only guard that answers in JSON.
+
+    Django's own ``require_http_methods`` returns an HTML body, and the app
+    shows an error's ``message`` verbatim — an HTML page would surface as a
+    blank or unparseable failure. Every refused method therefore gets the same
+    JSON shape as any other error.
+    """
+    @wraps(view_func)
+    def _wrapper(request, *args, **kwargs):
+        if request.method != 'POST':
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Method not allowed. Use POST.',
+            }, status=405)
+        return view_func(request, *args, **kwargs)
+    return _wrapper
+
+
+def _https_only(view_func):
+    """Refuse plain-HTTP calls in production, in JSON.
+
+    The app hardcodes ``https://`` for these endpoints, so an inbound plain-HTTP
+    request is either a misconfiguration or an attacker downgrading the
+    connection in the hope of reading the token or the deletion code. Locally
+    (ENV != 'prod') the guard stays out of the way so the test client works.
+    """
+    @wraps(view_func)
+    def _wrapper(request, *args, **kwargs):
+        if getattr(settings, 'ENV', 'dev') == 'prod' and not request.is_secure():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'This endpoint requires a secure (HTTPS) connection.',
+            }, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapper
+
+
 def _validate_android_auth(request):
     """Validate Basic Auth + Android headers. Returns (app_match, error_response)."""
     from .models import AndroidApp
@@ -10551,6 +10589,35 @@ def api_user_delete(request, kind):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
 
+    return _item_deletion_response(body, kind, app_match)
+
+
+# Maps the app's ``deleteType`` onto the internal kind, so a call that routed
+# itself through the generic /api/user/delete/ path still lands on the right
+# branch.
+_DELETE_TYPE_KINDS = {
+    'history': 'history',
+    'clear_history': 'history_clear',
+    'watchlist': 'watchlist',
+    'clear_watchlist': 'watchlist_clear',
+    'playlist': 'playlist',
+    'playlist_item': 'playlist_item',
+}
+
+
+def _item_deletion_response(body, kind, app_match=None, derive_from_body=False):
+    """Apply one real-time item deletion and answer with the updated payload.
+
+    Shared by the dedicated /api/user/<kind>/delete|clear/ routes and by the
+    item mode of /api/user/delete/ — the app posts both shapes to that path.
+    The caller has already validated the app credentials; ``body`` is the parsed
+    request JSON.
+
+    ``derive_from_body`` makes the kind optional: it is taken from the body's
+    ``deleteType`` instead, which is how the generic delete path works. Without
+    a usable ``deleteType`` that mode refuses rather than guessing, because
+    guessing wrong here could clear far more than the app asked for.
+    """
     email = (body.get('email') or '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
@@ -10563,11 +10630,16 @@ def api_user_delete(request, kind):
     # If the app routed by `deleteType`, honor the matching kind so a generic
     # /delete/ call with deleteType=history lands on the history branch.
     dt = (body.get('deleteType') or '').strip().lower()
-    _dt_kind = {'history': 'history', 'clear_history': 'history_clear',
-                'watchlist': 'watchlist', 'clear_watchlist': 'watchlist_clear',
-                'playlist': 'playlist', 'playlist_item': 'playlist_item'}.get(dt)
+    _dt_kind = _DELETE_TYPE_KINDS.get(dt)
     if _dt_kind:
         kind = _dt_kind
+    elif derive_from_body:
+        return JsonResponse({
+            'status': 'error',
+            'message': ('deleteType is required to delete items. '
+                        'Use one of: history, clear_history, watchlist, '
+                        'clear_watchlist, playlist, playlist_item.'),
+        }, status=400)
 
     django_user, user_obj, _created = _ensure_user_and_profile(email, body)
     cloud, _ = UserCloudData.objects.get_or_create(user=django_user)
@@ -11242,6 +11314,8 @@ def _verify_google_id_token(id_token):
 
 @_guard_android_api_errors
 @csrf_exempt
+@_https_only
+@_require_post
 @require_http_methods(["POST"])
 def api_user_google_login(request):
     """POST /api/user/google-login — sign in (or sign up) with a Google ID token.
@@ -11325,7 +11399,8 @@ def _google_login_account(claims, *, device=None):
     photo_url = (claims.get('picture') or '').strip()
 
     # 1) The stable identifier.
-    user_obj = SyncedUser.objects.filter(google_id=sub).first()
+    user_obj = (SyncedUser.objects.filter(google_sub=sub).first()
+                or SyncedUser.objects.filter(google_id=sub).first())
     django_user = None
     if user_obj and user_obj.user_id:
         django_user = User.objects.filter(pk=user_obj.user_id).first()
@@ -11358,7 +11433,8 @@ def _google_login_account(claims, *, device=None):
     if user_obj is None:
         user_obj = SyncedUser.objects.create(
             user=django_user, email=email, display_name=display_name,
-            photo_url=photo_url, google_id=sub,
+            photo_url=photo_url, google_sub=sub, google_id=sub,
+            auth_provider='google', is_email_verified=True,
             device_id=device.get('deviceId', ''),
             device_model=device.get('deviceModel', ''),
             os_version=device.get('osVersion', ''),
@@ -11369,7 +11445,12 @@ def _google_login_account(claims, *, device=None):
         if not user_obj.user_id or user_obj.user_id != django_user.pk:
             user_obj.user = django_user
         user_obj.email = email
+        user_obj.google_sub = sub
         user_obj.google_id = sub
+        user_obj.auth_provider = 'google'
+        # Google has already proven the address, so it is verified even when
+        # the row was created by a password registration that never confirmed.
+        user_obj.is_email_verified = True
         user_obj.display_name = display_name or user_obj.display_name
         user_obj.photo_url = photo_url or user_obj.photo_url
         if device.get('deviceId'):
@@ -11524,6 +11605,8 @@ def _invalidate_user_sessions(django_user):
 
 @_guard_android_api_errors
 @csrf_exempt
+@_https_only
+@_require_post
 @require_http_methods(["POST"])
 def api_user_delete_request_otp(request):
     """POST /api/user/delete/request-otp — email a 6-digit deletion code.
@@ -11565,7 +11648,7 @@ def api_user_delete_request_otp(request):
     AccountDeletionOTP.objects.filter(user=django_user, used=False).update(used=True)
 
     otp = AccountDeletionOTP.generate()
-    AccountDeletionOTP.objects.create(user=django_user, otp=otp)
+    AccountDeletionOTP.objects.create(user=django_user, otp=AccountDeletionOTP.hash_code(otp))
 
     brand = SiteSettings.get_settings().brand_name if hasattr(SiteSettings, 'get_settings') else 'NewMovies'
     try:
@@ -11592,14 +11675,25 @@ def api_user_delete_request_otp(request):
 
 @_guard_android_api_errors
 @csrf_exempt
+@_https_only
+@_require_post
 @require_http_methods(["POST"])
 def api_user_delete_account(request):
-    """POST /api/user/delete — permanently delete the account after OTP check.
+    """POST /api/user/delete — account deletion *or* an item deletion.
 
-    Validates the emailed code, then deletes the user record and every synced
-    row tied to it in one transaction, and revokes all sessions. Any 2xx is
-    treated as success by the app; a non-2xx keeps the user signed in and leaves
-    local data untouched.
+    The app posts two unrelated shapes to this one path, so the body decides
+    which flow runs:
+
+    * ``confirmDelete`` true **and** an ``otp`` present → permanently delete the
+      account after validating the emailed code (the flow documented below).
+    * ``action == "delete"`` (no ``otp``) → a real-time item deletion, routed by
+      ``deleteType`` onto the same code the dedicated
+      /api/user/<kind>/delete|clear/ endpoints use.
+
+    The order matters: the account branch is checked first and requires *both*
+    a code and the explicit confirmation flag, so a per-item deletion can never
+    destroy an account, and an account deletion can never be mistaken for one.
+    Anything that fits neither shape is refused rather than guessed at.
     """
     app_match, err = _validate_android_auth(request)
     if err:
@@ -11610,12 +11704,33 @@ def api_user_delete_account(request):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
 
-    email = (body.get('email') or '').strip().lower()
-    user_id = (body.get('userId') or '').strip()
+    if not isinstance(body, dict):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
+
     otp_code = (body.get('otp') or '').strip()
+    confirms = body.get('confirmDelete') in (True, 'true', 'True', 1, '1')
+    action = (body.get('action') or '').strip().lower()
+    delete_type = (body.get('deleteType') or '').strip().lower()
+
+    # Item-deletion mode. `action` is the app's marker for it; a body that
+    # carries only a deleteType and no code/confirmation is treated the same
+    # way so a client that omits `action` still cannot lose an account.
+    if not otp_code and not confirms and (action == 'delete' or delete_type):
+        return _item_deletion_response(body, None, app_match, derive_from_body=True)
 
     if not otp_code:
         return JsonResponse({'status': 'error', 'message': 'Verification code is required'}, status=400)
+
+    if not confirms:
+        # An account deletion must say so explicitly; a code alone is not
+        # enough to tell the two flows apart.
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Confirmation is required. Send "confirmDelete": true with the verification code.',
+        }, status=400)
+
+    email = (body.get('email') or '').strip().lower()
+    user_id = (body.get('userId') or '').strip()
 
     django_user, user_obj = _find_account_for_delete(user_id, email)
     if django_user is None:
@@ -11636,25 +11751,42 @@ def api_user_delete_account(request):
     if otp_obj is None or otp_obj.is_expired or otp_obj.too_many_attempts:
         return JsonResponse({'status': 'error', 'message': 'Incorrect verification code'}, status=400)
 
-    if otp_obj.otp != otp_code:
+    if not otp_obj.verify_code(otp_code):
         # Count the failed attempt so the code cannot be brute-forced.
         otp_obj.attempts = otp_obj.attempts + 1
         otp_obj.save(update_fields=['attempts'])
         return JsonResponse({'status': 'error', 'message': 'Incorrect verification code'}, status=400)
 
     # Correct code — consume it and delete everything in one transaction.
-    otp_obj.used = True
-    otp_obj.save(update_fields=['used'])
+    # The user row, the Android profile, cloud data, sessions, watchlist, play
+    # history, verification/reset OTPs and the newsletter subscription all go in
+    # a single commit: a half-finished deletion would leave a signed-in ghost
+    # that can never be removed again.
+    from django.db import transaction
 
-    # Revoke every active session token before the rows go away.
-    _invalidate_user_sessions(django_user)
+    try:
+        with transaction.atomic():
+            otp_obj.used = True
+            otp_obj.save(update_fields=['used'])
 
-    # _permanently_delete_user removes the Django user (cascading cloud data,
-    # sessions, watchlist, play history, verification/reset OTPs), the Android
-    # synced profile (subscription/entitlement rows), and the newsletter
-    # subscription — all keyed by the same email.
-    _permanently_delete_user(django_user, email=account_email)
+            # Revoke every active session token before the rows go away.
+            _invalidate_user_sessions(django_user)
 
+            # _permanently_delete_user removes the Django user (cascading cloud
+            # data, sessions, watchlist, play history, verification/reset OTPs),
+            # the Android synced profile (subscription/entitlement rows) and the
+            # newsletter subscription — all keyed by the same email.
+            _permanently_delete_user(django_user, email=account_email)
+    except DatabaseError:
+        raise
+    except Exception:
+        logger.exception('Account deletion failed for %s', account_email)
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Could not delete the account. Please try again.',
+        }, status=500)
+
+    logger.info('Account deleted from the app: %s', account_email)
     return JsonResponse({'status': 'success', 'message': 'Account deleted'})
 
 
@@ -11688,7 +11820,7 @@ def ajax_delete_account_request_otp(request):
     AccountDeletionOTP.objects.filter(user=django_user, used=False).update(used=True)
 
     otp = AccountDeletionOTP.generate()
-    AccountDeletionOTP.objects.create(user=django_user, otp=otp)
+    AccountDeletionOTP.objects.create(user=django_user, otp=AccountDeletionOTP.hash_code(otp))
 
     brand = SiteSettings.get_settings().brand_name
     try:
@@ -11744,7 +11876,7 @@ def ajax_delete_account(request):
     if otp_obj is None or otp_obj.is_expired or otp_obj.too_many_attempts:
         return JsonResponse({'success': False, 'message': 'Incorrect or expired code. Request a new one.'}, status=400)
 
-    if otp_obj.otp != otp_code:
+    if not otp_obj.verify_code(otp_code):
         otp_obj.attempts = otp_obj.attempts + 1
         otp_obj.save(update_fields=['attempts'])
         return JsonResponse({'success': False, 'message': 'Incorrect verification code.'}, status=400)
