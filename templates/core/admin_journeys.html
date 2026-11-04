@@ -1,0 +1,111 @@
+{# Visitor journeys — each visitor's own page history, start to last. #}
+<style>
+    .jn-card { background: var(--card-bg, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; }
+    .jn-stat { padding: .9rem 1rem; }
+    .jn-stat .n { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
+    .jn-stat .l { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3, #64748b); }
+    .jn-visitor { border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 10px; margin-bottom: .5rem; background: var(--card-bg, #1a1a2e); }
+    .jn-visitor > summary { cursor: pointer; padding: .55rem .75rem; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; list-style: none; }
+    .jn-visitor > summary::-webkit-details-marker { display: none; }
+    .jn-visitor[open] > summary { border-bottom: 1px solid var(--border, rgba(255,255,255,.08)); }
+    .jn-mono { font-family: Consolas, Menlo, monospace; font-size: .72rem; }
+    .jn-pill { display: inline-block; font-size: .64rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+    .jn-live { background: rgba(34,197,94,.15); color: #22c55e; }
+    .jn-off { background: rgba(107,114,128,.2); color: #9ca3af; }
+    .jn-ip { background: rgba(96,165,250,.14); color: #93c5fd; }
+    .jn-dev { background: rgba(168,85,247,.14); color: #c084fc; }
+    .jn-sub { color: var(--text-3, #64748b); font-size: .68rem; }
+    .jn-session { margin: .5rem .75rem; border-left: 2px solid rgba(96,165,250,.4); padding-left: .6rem; }
+    .jn-session h6 { font-size: .72rem; margin: 0 0 .25rem; color: #93c5fd; }
+    .jn-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+    .jn-table th, .jn-table td { padding: .28rem .45rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06)); text-align: left; vertical-align: top; }
+    .jn-table th { color: var(--text-2, #cbd5e1); font-weight: 600; }
+    .jn-table a { color: #7dd3fc; text-decoration: none; }
+    .jn-table a:hover { color: #bae6fd; }
+    .jn-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem .7rem; }
+    .jn-filters label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
+    .jn-filters input, .jn-filters select { width: 100%; background: rgba(148,163,184,.1); border: 1px solid var(--border, rgba(148,163,184,.25)); border-radius: 6px; color: inherit; font-size: .72rem; padding: .3rem .45rem; }
+    html[data-theme="light"] .jn-card, html[data-theme="light"] .jn-visitor { background: #fff; border-color: rgba(0,0,0,.1); }
+    html[data-theme="light"] .jn-table th, html[data-theme="light"] .jn-table td { border-color: rgba(0,0,0,.08); }
+</style>
+
+<div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div style="color:#64748b;font-size:.78rem;">
+        One history per visitor for the last {{ hours }}h — the page they started on, every page after it, and the time spent on each.
+        {% if group == 'ip' %}Grouped by <strong>IP address</strong>.{% else %}Grouped by <strong>device</strong> (visitor cookie), so an IP change does not split a visitor.{% endif %}
+    </div>
+    <a href="?tab=journeys&amp;group={{ group }}&amp;hours={{ hours }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3 col-xl-2"><div class="jn-card jn-stat"><div class="n">{{ visitor_total }}</div><div class="l">Visitors</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="jn-card jn-stat"><div class="n" style="color:#38bdf8;">{{ total_views }}</div><div class="l">Page views</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="jn-card jn-stat"><div class="n" style="color:#a855f7;">{{ total_sessions }}</div><div class="l">Visits</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="jn-card jn-stat"><div class="n" style="color:#f59e0b;">{{ total_seconds }}s</div><div class="l">Time on pages</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="jn-card jn-stat"><div class="n" style="color:#22c55e;">{{ avg_page_seconds }}s</div><div class="l">Avg per page</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="jn-card jn-stat"><div class="n" style="color:#94a3b8;">{{ shown }}{% if visitor_total > shown %}<span style="font-size:.85rem;color:#64748b;">/{{ visitor_total }}</span>{% endif %}</div><div class="l">Listed</div></div></div>
+</div>
+
+<div class="jn-card p-3 mb-3">
+    <form method="get" class="jn-filters">
+        <input type="hidden" name="tab" value="journeys">
+        <label>Seen within (hours)<input type="number" name="hours" min="1" max="720" value="{{ hours }}"></label>
+        <label>Group by
+            <select name="group">
+                <option value="visitor" {% if group != 'ip' %}selected{% endif %}>Device (visitor cookie)</option>
+                <option value="ip" {% if group == 'ip' %}selected{% endif %}>IP address</option>
+            </select>
+        </label>
+        <label>Search (visitor / IP / page / device)<input type="text" name="q" value="{{ search }}" placeholder="v_ab12..., 1.2.3.4, /person/"></label>
+        <label>&nbsp;<button type="submit" class="btn btn-sm" style="color:#93c5fd;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button></label>
+        <label>&nbsp;<a href="{% url 'request_log' %}?tab=journeys" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-eraser me-1"></i>Reset</a></label>
+    </form>
+</div>
+
+{% for j in journeys %}
+<details class="jn-visitor">
+    <summary>
+        <span class="jn-pill {% if j.active %}jn-live{% else %}jn-off{% endif %}">{% if j.active %}On site{% else %}Left{% endif %}</span>
+        <span class="jn-mono" title="{% if group == 'ip' %}IP address{% else %}Visitor id{% endif %}">{{ j.key|truncatechars:26 }}</span>
+        {% for d in j.devices %}<span class="jn-pill jn-dev">{{ d }}</span>{% endfor %}
+        {% for ip in j.ips %}<span class="jn-pill jn-ip">{{ ip }}</span>{% endfor %}
+        <span class="jn-sub">{{ j.views }} page{{ j.views|pluralize }} · {{ j.time }}s · started {{ j.first_seen|date:"M d H:i:s" }} · last {{ j.last_seen|timesince }} ago</span>
+        <span class="jn-sub ms-auto">entry: <span class="jn-mono">{{ j.path|truncatechars:40 }}</span></span>
+    </summary>
+
+    {% for s in j.sessions %}
+    <div class="jn-session">
+        <h6>
+            Visit {{ s.no }} — started {{ s.started|date:"M d H:i:s" }}, {{ s.pages }} page{{ s.pages|pluralize }}, {{ s.seconds }}s
+            <span class="jn-sub">· last page at {{ s.ended|date:"H:i:s" }}</span>
+            {% if s.referrer %}<span class="jn-sub">· arrived from <span class="jn-mono">{{ s.referrer|truncatechars:60 }}</span></span>{% else %}<span class="jn-sub">· opened directly (no referrer)</span>{% endif %}
+        </h6>
+        <table class="jn-table">
+            <thead><tr><th>#</th><th>Opened</th><th>Page</th><th>Time on page</th><th>Scroll</th><th>Gap before</th></tr></thead>
+            <tbody>
+            {% for p in j.history %}{% if p.session == s.no %}
+                <tr>
+                    <td class="jn-sub">{% if p.starts_session %}<i class="fas fa-flag text-success" title="First page of this visit"></i>{% else %}{{ forloop.counter }}{% endif %}</td>
+                    <td class="jn-sub">{{ p.viewed_at|date:"H:i:s" }}</td>
+                    <td>
+                        <a href="{{ p.path }}" target="_blank" rel="noopener noreferrer" class="jn-mono">{{ p.path|truncatechars:52 }} <i class="fas fa-external-link-alt" style="font-size:.55rem;"></i></a>
+                        {% if p.page_title %}<div class="jn-sub">{{ p.page_title|truncatechars:70 }}</div>{% endif %}
+                    </td>
+                    <td>{% if p.dwell %}{{ p.dwell }}s{% if p.estimated %}<span class="jn-sub" title="No heartbeat arrived; measured from the next page"> ~</span>{% endif %}{% else %}<span class="jn-sub">—</span>{% endif %}</td>
+                    <td class="jn-sub">{% if p.scroll_depth %}{{ p.scroll_depth|floatformat:0 }}%{% else %}—{% endif %}</td>
+                    <td class="jn-sub">{% if p.gap is None %}—{% else %}{{ p.gap }}s{% endif %}</td>
+                </tr>
+            {% endif %}{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% empty %}
+    <div class="p-3 jn-sub">No page views in this window.</div>
+    {% endfor %}
+    {% if j.trimmed %}<div class="jn-sub px-3 pb-2">History cut at {{ j.views }} pages; narrow the window to see the rest.</div>{% endif %}
+</details>
+{% empty %}
+<div class="jn-card p-4 text-center" style="color:#64748b;">
+    No page views recorded in the last {{ hours }}h. Journeys come from the site's own page-view tracker, which only runs in a real browser — scanners do not appear here.
+</div>
+{% endfor %}

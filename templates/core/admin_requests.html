@@ -56,13 +56,17 @@
                 <i class="fas fa-users-viewfinder"></i> Active Users
                 {% if panel == 'users' and total_rows %}<span class="rq-count">{{ total_rows }}</span>{% endif %}
             </a>
+            <a class="rq-tab {% if panel == 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=journeys" title="Each visitor's own history — entry page, every page after it, and the time spent on each">
+                <i class="fas fa-route"></i> Journeys
+                {% if panel == 'journeys' and visitor_total %}<span class="rq-count">{{ visitor_total }}</span>{% endif %}
+            </a>
             <a class="rq-tab {% if panel == 'details' %}on{% endif %}" href="{% url 'request_log' %}?tab=details" title="Per-account profile — devices, watch counts, logins and subscription">
                 <i class="fas fa-id-card"></i> User Details
                 {% if panel == 'details' and summary.total_users %}<span class="rq-count">{{ summary.total_users }}</span>{% endif %}
             </a>
-            <a class="rq-tab {% if panel != 'users' and panel != 'details' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
+            <a class="rq-tab {% if panel != 'users' and panel != 'details' and panel != 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
                 <i class="fas fa-network-wired"></i> Request Log
-                {% if panel != 'users' and panel != 'details' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
+                {% if panel != 'users' and panel != 'details' and panel != 'journeys' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
             </a>
             <a class="rq-tab" href="{% url 'blocked_ips' %}" title="Every blocked IP, with the requests it kept making after the block">
                 <i class="fas fa-shield-alt"></i> Blocked IPs
@@ -86,6 +90,8 @@
 
     {% if panel == 'users' %}
         {% include 'core/admin_active_users.html' %}
+    {% elif panel == 'journeys' %}
+        {% include 'core/admin_journeys.html' %}
     {% elif panel == 'details' %}
         {% include 'core/admin_user_details.html' %}
     {% else %}

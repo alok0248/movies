@@ -9494,14 +9494,16 @@ def admin_requests(request):
     """Requests & Users — one admin page holding the traffic and user views.
 
     ``?tab=log`` (the default) is the raw request log, ``?tab=users`` is the
-    aggregated active / inactive visitor list, and ``?tab=details`` is the
-    per-account profile (devices, watch counts, logins, subscription). Only the
-    tab being shown is computed, so the page stays as fast as either list was
-    alone.
+    aggregated active / inactive visitor list, ``?tab=journeys`` is each
+    visitor's own page-by-page history, and ``?tab=details`` is the per-account
+    profile (devices, watch counts, logins, subscription). Only the tab being
+    shown is computed, so the page stays as fast as either list was alone.
     """
     tab = (request.GET.get('tab') or '').strip().lower()
     if tab == 'users':
         return admin_active_users(request)
+    if tab == 'journeys':
+        return admin_visitor_journeys(request)
     if tab == 'details':
         return admin_user_details(request)
     return _request_log_tab(request)
@@ -14151,6 +14153,197 @@ def admin_probes(request):
         'hide_blocked': hide_blocked,
         'q': search,
         'total_stored': request_total(),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Visitor journeys — one history per visitor, page by page
+# ---------------------------------------------------------------------------
+
+# A break longer than this starts a new visit (the usual session timeout).
+JOURNEY_SESSION_GAP_SECONDS = 30 * 60
+JOURNEY_MAX_HISTORY = 150
+JOURNEY_MAX_LISTED = 300
+
+
+def _describe_device(user_agent):
+    """A short "browser on OS" label for one User-Agent string."""
+    ua = (user_agent or '').strip()
+    if not ua:
+        return 'Unknown device'
+    low = ua.lower()
+    if any(m in low for m in ('bot', 'spider', 'crawl', 'curl/', 'wget',
+                              'python-requests', 'go-http', 'headless')):
+        return 'Bot / script'
+    if 'okhttp' in low or 'x-android-app' in low:
+        return 'Android app'
+    if 'android' in low:
+        os_name = 'Android'
+    elif 'iphone' in low or 'ipad' in low:
+        os_name = 'iOS'
+    elif 'windows' in low:
+        os_name = 'Windows'
+    elif 'mac os x' in low or 'macintosh' in low:
+        os_name = 'macOS'
+    elif 'linux' in low:
+        os_name = 'Linux'
+    else:
+        os_name = 'unknown OS'
+    if 'edg/' in low:
+        browser = 'Edge'
+    elif 'opr/' in low or 'opera' in low:
+        browser = 'Opera'
+    elif 'samsungbrowser' in low:
+        browser = 'Samsung Internet'
+    elif 'firefox' in low or 'fxios' in low:
+        browser = 'Firefox'
+    elif 'chrome' in low or 'crios' in low:
+        browser = 'Chrome'
+    elif 'safari' in low:
+        browser = 'Safari'
+    else:
+        browser = 'browser'
+    return '%s on %s' % (browser, os_name)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_visitor_journeys(request):
+    """Every visitor's own history, from the page they started on to the last.
+
+    Grouped by the device cookie (``visitor_id``) by default — one browser keeps
+    one identity even when its IP changes — or by IP (``?group=ip``) when the
+    question is who shares an address. Each visitor expands into their visits,
+    and each visit into its pages in order, with the time spent on each page, so
+    a journey reads start to finish.
+
+    Only page views are used: they carry the time on page, the device and the
+    referrer. A scanner that never loads a page produces none and so appears
+    nowhere here — it is visible on Probes & Bots instead.
+    """
+    from .models import UserPageView
+
+    hours = _au_int_param(request, 'hours', 24, 1, 720)
+    group = 'ip' if (request.GET.get('group') or '').lower() == 'ip' else 'visitor'
+    search = (request.GET.get('q') or '').strip()
+    now = timezone.now()
+    since = now - timezone.timedelta(hours=hours)
+
+    views = UserPageView.objects.filter(viewed_at__gte=since).order_by('viewed_at')
+    if search:
+        from django.db.models import Q
+        views = views.filter(Q(path__icontains=search) | Q(page_title__icontains=search)
+                             | Q(visitor_id__icontains=search)
+                             | Q(ip_address__icontains=search)
+                             | Q(user_agent__icontains=search))
+    rows = list(views.values(
+        'visitor_id', 'user_id', 'path', 'page_title', 'platform', 'ip_address',
+        'user_agent', 'referrer', 'time_spent_seconds', 'scroll_depth',
+        'is_active', 'viewed_at', 'ended_at')[:20000])
+
+    groups = {}
+    for row in rows:
+        ip = row['ip_address'] or ''
+        if group == 'ip':
+            key = ip or 'unknown'
+        else:
+            key = row['visitor_id'] or ('ip:' + (ip or 'unknown'))
+        entry = groups.get(key)
+        if entry is None:
+            entry = groups[key] = {
+                'key': key, 'rows': [], 'ips': [], 'devices': [],
+                'user_ids': [], 'path': row['path'], 'title': row['page_title'],
+                'referrer': row['referrer'], 'platform': row['platform'],
+            }
+        entry['rows'].append(row)
+        if ip and ip not in entry['ips']:
+            entry['ips'].append(ip)
+        device = _describe_device(row['user_agent'])
+        if device not in entry['devices']:
+            entry['devices'].append(device)
+        if row['user_id'] and row['user_id'] not in entry['user_ids']:
+            entry['user_ids'].append(row['user_id'])
+
+    journeys = []
+    total_views = 0
+    total_sessions = 0
+    total_seconds = 0
+    for entry in groups.values():
+        history = entry['rows']
+        trimmed = len(history) > JOURNEY_MAX_HISTORY
+        if trimmed:
+            history = history[:JOURNEY_MAX_HISTORY]
+        previous = None
+        session_no = 0
+        session_start = None
+        sessions = []
+        for index, row in enumerate(history):
+            gap = None
+            if previous is not None:
+                gap = (row['viewed_at'] - previous['viewed_at']).total_seconds()
+            starts = previous is None or (gap or 0) > JOURNEY_SESSION_GAP_SECONDS
+            if starts:
+                session_no += 1
+                session_start = row['viewed_at']
+                sessions.append({
+                    'no': session_no, 'started': row['viewed_at'],
+                    'entry_path': row['path'], 'entry_title': row['page_title'],
+                    'referrer': row['referrer'], 'pages': 0, 'seconds': 0,
+                    'ended': row['viewed_at'],
+                })
+            reported = int(row['time_spent_seconds'] or 0)
+            estimated = False
+            if reported <= 0 and index + 1 < len(history):
+                # No heartbeat landed: fall back to the gap to the next page,
+                # capped so an idle tab cannot invent an hour of reading.
+                dwell = int(min(max((history[index + 1]['viewed_at']
+                                     - row['viewed_at']).total_seconds(), 0), 600))
+                estimated = True
+            else:
+                dwell = reported
+            row['dwell'] = dwell
+            row['estimated'] = estimated
+            row['gap'] = int(gap) if gap is not None else None
+            row['device'] = _describe_device(row['user_agent'])
+            row['session'] = session_no
+            row['starts_session'] = starts
+            current = sessions[-1]
+            current['pages'] += 1
+            current['seconds'] += dwell
+            current['ended'] = row['viewed_at']
+            total_seconds += dwell
+            previous = row
+
+        entry['history'] = history
+        entry['sessions'] = sessions
+        entry['trimmed'] = trimmed
+        entry['views'] = len(entry['rows'])
+        entry['first_seen'] = entry['rows'][0]['viewed_at']
+        entry['last_seen'] = entry['rows'][-1]['viewed_at']
+        entry['time'] = sum(row['dwell'] for row in history)
+        entry['active'] = any(row['is_active'] for row in entry['rows'])
+        del entry['rows']
+        journeys.append(entry)
+        total_views += entry['views']
+        total_sessions += len(sessions)
+
+    journeys.sort(key=lambda j: j['last_seen'], reverse=True)
+    visitor_total = len(journeys)
+    shown = journeys[:JOURNEY_MAX_LISTED]
+
+    return render(request, 'core/admin_requests.html', {
+        'panel': 'journeys',
+        'journeys': shown,
+        'visitor_total': visitor_total,
+        'shown': len(shown),
+        'row_total': visitor_total,
+        'hours': hours,
+        'group': group,
+        'search': search,
+        'total_views': total_views,
+        'total_sessions': total_sessions,
+        'total_seconds': total_seconds,
+        'avg_page_seconds': int(total_seconds / total_views) if total_views else 0,
     })
 
 

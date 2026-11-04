@@ -174,7 +174,42 @@ class IPBlockMiddleware:
             self._watch_unknown_pages(request, response)
         except Exception:
             logger.debug('IPBlock: unknown-page watch failed', exc_info=True)
+        try:
+            self._watch_page_load(request, response)
+        except Exception:
+            logger.debug('IPBlock: page-load watch failed', exc_info=True)
         return response
+
+    @staticmethod
+    def _app_request(request):
+        """True for the Android app's own traffic (never page-gated)."""
+        from .ip_block import is_app_client_request
+        try:
+            return bool(is_app_client_request(request))
+        except Exception:
+            return False
+
+    def _watch_page_load(self, request, response):
+        """Remember a real page fetch, which clears an address's surface count.
+
+        Only a successful HTML answer to a page path counts: an asset, the app's
+        API, the dashboard or the block page itself is not evidence of a browser,
+        and the ajax surface never counts (that is the thing being watched).
+        """
+        if getattr(response, 'status_code', None) != 200:
+            return
+        try:
+            content_type = response.get('Content-Type', '') or ''
+        except Exception:
+            return
+        if 'text/html' not in content_type.lower():
+            return
+        from .ip_block import should_note_page_load, note_page_load
+        if not should_note_page_load(getattr(request, 'path', '') or ''):
+            return
+        ip = get_client_ip(request)
+        if ip:
+            note_page_load(ip)
 
     def _watch_unknown_pages(self, request, response):
         """Block an address that keeps asking for pages the site does not have.
@@ -254,6 +289,30 @@ class IPBlockMiddleware:
                 auto_block_script(client_ip, user_agent)
                 return blocked_response(request, client_ip,
                                         blocked_ip_for(client_ip))
+        # The page gate: a client that only ever asks for the ajax/player surface,
+        # without once fetching a page, is a script. No browser does that, which
+        # is what makes this safe for real visitors however they browse. Staff,
+        # signed-in people, the Android app and the allow-list are never counted
+        # here (the first three are people or an app; the last is the operator).
+        if client_ip and not operator and not signed_in and not self._app_request(request):
+            from .ip_block import (auto_block_page_gate, blocked_ip_for,
+                                   has_page_load, is_friendly_crawler,
+                                   note_page_load, note_surface_request,
+                                   page_load_in_log, should_count_for_surface_gate)
+            # A search engine is never page-gated, whatever it asks for.
+            if (should_count_for_surface_gate(getattr(request, 'path', '') or '')
+                    and not is_friendly_crawler(
+                        request.META.get('HTTP_USER_AGENT', ''))):
+                if has_page_load(client_ip):
+                    pass
+                elif page_load_in_log(client_ip):
+                    # This worker never saw the page fetch; the log did. Spare the
+                    # address and remember it so the next check is free.
+                    note_page_load(client_ip)
+                elif note_surface_request(client_ip):
+                    auto_block_page_gate(client_ip)
+                    return blocked_response(request, client_ip,
+                                            blocked_ip_for(client_ip))
 
         if self._hard_exempt(request):
             return self.get_response(request)

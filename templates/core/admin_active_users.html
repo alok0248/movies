@@ -242,6 +242,7 @@
                         {% endif %}
                         {% if r.email %}<div class="au-sub au-trunc" title="{{ r.email }}">{{ r.email }}</div>{% endif %}
                         {% if r.account_active is not None %}<div class="au-sub">{% if r.account_active %}account active{% else %}account disabled{% endif %}{% if r.is_staff %} · staff{% endif %}</div>{% endif %}
+                        {% if r.visitor_id %}<div class="au-sub"><a class="au-infolink" href="?tab=journeys&amp;q={{ r.visitor_id|urlencode }}" title="This visitor's page-by-page history"><i class="fas fa-route"></i> journey</a></div>{% elif r.ip %}<div class="au-sub"><a class="au-infolink" href="?tab=journeys&amp;group=ip&amp;q={{ r.ip|urlencode }}" title="This IP's page-by-page history"><i class="fas fa-route"></i> journey</a></div>{% endif %}
                     </td>
                     <td>
                         <span class="au-badge {% if r.platform == 'web' %}au-b-web{% elif r.platform == 'android' %}au-b-android{% elif r.platform == 'ios' %}au-b-ios{% else %}au-b-other{% endif %}">

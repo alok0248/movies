@@ -134,12 +134,21 @@ def reset_bot_watch(ip_address=None):
     if ip_address is None:
         _bot_watch.clear()
         try:
+            _surface_watch.clear()
+            _page_load_seen.clear()
+        except NameError:
+            pass
+        try:
             _unknown_watch.clear()
         except NameError:
             pass
         return
     ip = normalize_ip(ip_address)
     _bot_watch.pop(ip, None)
+    try:
+        _surface_watch.pop(ip, None)
+    except NameError:
+        pass
     try:
         _unknown_watch.pop(ip, None)
     except NameError:
@@ -494,7 +503,7 @@ def bot_verdict(user_agent, configured_bot_uas=(), known_bot_ip=False):
 def is_bot_block(row):
     """True when an auto-bot block (rather than a hand-made one) made this row."""
     return bool(row is not None and (row.blocked_by or '').startswith(
-        ('auto:bot', 'auto:probe', 'auto:script')))
+        ('auto:bot', 'auto:probe', 'auto:script', 'auto:page')))
 
 
 def set_permanent(ip_address, permanent=True, by=''):
@@ -748,6 +757,164 @@ def auto_block_probe(ip_address, hits=None, path=''):
                     permanent=False)
 
 
+# --- page-gate watch ------------------------------------------------------
+# The scanners that actually cost something never load a page at all: they call
+# the ajax and player endpoints directly, with a browser User-Agent, thousands
+# of times from a pool of addresses. A real visitor's browser always fetches an
+# HTML page before its first ajax call, so "this address has never fetched a
+# page" is a signal no browser produces — which is what makes the rule safe to
+# enforce, and why it needs no User-Agent guesswork the scanners can spoof.
+#
+# It is deliberately generous and asymmetric. An address is refused only after
+# SURFACE_GATE_MAX requests to the ajax/player surface while this worker has
+# seen no page fetch and no visitor cookie from it. A real visitor produces one
+# page fetch per session that this worker records, and one page fetch clears the
+# count for good; a shared address is covered too, because the page fetch need
+# not come from the same visitor. The block is never permanent: a mistaken one
+# expires on its own, and the block page still offers the way in.
+SURFACE_GATE_WINDOW_SECONDS = 300
+# Low on purpose. The JS that calls these endpoints lives on a page, so a
+# browser has always fetched one first — the count a real visitor reaches before
+# a page fetch is a fraction of this. The fleet in the request log calls them
+# from addresses that never load a page at all, so this is where it trips.
+SURFACE_GATE_MAX_REQUESTS = 25
+# The surface the scanners replay: the site's own ajax and the player's API.
+# The player *page* (/cineplayer/, a real HTML view) is deliberately not in it —
+# loading it is evidence of a browser, so it counts as a page load instead.
+SURFACE_GATE_PREFIXES = ('/ajax/', '/cineplayer/api/')
+# How long one page fetch is remembered (per worker).
+PAGE_LOAD_TTL_SECONDS = 86400
+# Paths that never count as a page load: assets, the app's API and the dashboard.
+PAGE_LOAD_SKIP_PREFIXES = ('/static/', '/media/', '/api/', '/apps/download/',
+                           '/admin', '/favicon.ico', '/manifest.json')
+SURFACE_WATCH_MAX_IPS = 8000
+_surface_watch = {}
+_page_load_seen = {}
+
+
+def should_count_for_surface_gate(path):
+    """True for the ajax/player surface the scanners replay."""
+    p = path or ''
+    return bool(p) and p.startswith(SURFACE_GATE_PREFIXES)
+
+
+def should_note_page_load(path):
+    """True for paths that can only be produced by loading a real page."""
+    p = path or ''
+    return bool(p) and not p.startswith(PAGE_LOAD_SKIP_PREFIXES)
+
+
+def note_page_load(ip_address, now=None):
+    """Remember that this address fetched a page; its surface count is cleared.
+
+    Called for a successful, HTML answer to a page path — and for the visitor
+    cookie the tracking middleware sets, which a real browser only receives
+    after such a page. Both prove a browser, so both forget the surface count.
+    """
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return
+    now = now if now is not None else time.monotonic()
+    if len(_page_load_seen) > SURFACE_WATCH_MAX_IPS:
+        cutoff = now - PAGE_LOAD_TTL_SECONDS
+        for old, stamp in list(_page_load_seen.items()):
+            if stamp < cutoff:
+                _page_load_seen.pop(old, None)
+    _page_load_seen[ip] = now
+    _surface_watch.pop(ip, None)
+
+
+def has_page_load(ip_address, now=None):
+    """True while a recent page fetch from this address is remembered."""
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    now = now if now is not None else time.monotonic()
+    stamp = _page_load_seen.get(ip)
+    if stamp is None:
+        return False
+    if (now - stamp) > PAGE_LOAD_TTL_SECONDS:
+        _page_load_seen.pop(ip, None)
+        return False
+    return True
+
+
+def note_surface_request(ip_address, now=None):
+    """Count one ajax/player request; True once this address has had enough.
+
+    Only an address that has produced this many surface calls with no page
+    fetch ever seen from it crosses the gate. The same in-process rolling window
+    as the request-rate watch: the block row is what every worker enforces, so
+    the counter only has to be good enough to notice the pattern.
+    """
+    from collections import deque
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    now = now if now is not None else time.monotonic()
+    if has_page_load(ip, now):
+        _surface_watch.pop(ip, None)
+        return False
+    if len(_surface_watch) > SURFACE_WATCH_MAX_IPS:
+        for old in list(_surface_watch)[:SURFACE_WATCH_MAX_IPS // 4]:
+            _surface_watch.pop(old, None)
+    window = _surface_watch.get(ip)
+    if window is None:
+        window = _surface_watch[ip] = deque()
+    cutoff = now - SURFACE_GATE_WINDOW_SECONDS
+    while window and window[0] < cutoff:
+        window.popleft()
+    window.append(now)
+    if len(window) < SURFACE_GATE_MAX_REQUESTS:
+        return False
+    _surface_watch.pop(ip, None)
+    return True
+
+
+def auto_block_page_gate(ip_address, requests=None):
+    """Refuse an address that only ever calls the site's ajax/player surface.
+
+    Never permanent. A real person who somehow tripped it is unblocked by the
+    ordinary ways — the block page's sign-in, or the expiry of the temporary
+    block — because taking a human out of the site for good is exactly what this
+    guard must not do.
+    """
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return None, False
+    if is_ip_allowed(ip):
+        logger.info('IPBlock: not page-gating trusted address %s', ip)
+        return None, False
+    detail = ('%s ajax/player requests inside %s minutes with no page ever loaded'
+              % (requests or SURFACE_GATE_MAX_REQUESTS,
+                 SURFACE_GATE_WINDOW_SECONDS // 60))
+    logger.info('IPBlock: auto-blocking %s — %s', ip, detail)
+    return block_ip(ip, 'auto:page-gate', 'called only ajax/player endpoints: ' + detail,
+                    permanent=False)
+
+
+def page_load_in_log(ip_address, within_hours=24):
+    """True when the request log remembers a page fetch from this address.
+
+    A safety valve, never a reason to block: it is asked only about an address
+    that is about to be refused, so the query is paid once per candidate. A
+    page row is proof a browser was here, and spares the address — which also
+    covers the worker that did not handle the page fetch itself.
+    """
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    try:
+        from datetime import timedelta
+        from .models import RequestLog
+        since = timezone.now() - timedelta(hours=within_hours)
+        return RequestLog.objects.filter(client_ip=ip, category='page',
+                                         created_at__gte=since).exists()
+    except Exception:
+        logger.debug('IPBlock: page-load lookup failed for %s', ip, exc_info=True)
+        return False
+
+
 # --- script / bot client detection ----------------------------------------
 # A request that announces itself as a program — curl, python-requests, a
 # headless browser, a scanner — is not a visitor. Those are refused at once
@@ -876,6 +1043,18 @@ GOOGLE_CRAWLER_UA = (
     'googlebot', 'adsbot-google', 'google-inspectiontool', 'mediapartners-google',
     'googleother', 'storebot-google', 'feedfetcher-google', 'google-',
 )
+
+
+def is_friendly_crawler(user_agent):
+    """True for the crawlers the site deliberately keeps (search engines).
+
+    They are never page-gated: a search engine that walks the site costs it
+    nothing here and blocking one costs it its indexing.
+    """
+    lowered = (user_agent or '').strip().lower()
+    if not lowered:
+        return False
+    return any(token in lowered for token in FRIENDLY_CRAWLER_UA)
 
 
 def is_google_crawler(user_agent):
