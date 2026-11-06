@@ -2,61 +2,132 @@
 
 {% block admin_content %}
 <style>
-    .st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
-    .st-title { font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.01em; }
-    .st-sub { font-size: .78rem; color: rgba(255,255,255,.42); margin-top: .2rem; max-width: 60ch; }
-    .st-tabs { display: flex; gap: .35rem; flex-wrap: wrap; border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 1.1rem; padding-bottom: .1rem; }
+    .st-wrap { max-width: 1180px; }
+    .st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .st-title { font-size: 1.3rem; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.015em; }
+    .st-sub { font-size: .75rem; color: rgba(255,255,255,.42); margin-top: .25rem; max-width: 72ch; line-height: 1.5; }
+    .st-chip {
+        display: inline-flex; align-items: center; gap: .4rem; padding: .32rem .65rem; border-radius: 999px;
+        font-size: .68rem; color: rgba(255,255,255,.55); background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.08); white-space: nowrap;
+    }
+    .st-chip i { font-size: .55rem; color: #6ee7b7; }
+    .st-tabs {
+        display: flex; gap: .3rem; flex-wrap: wrap; align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 1.05rem; padding-bottom: .1rem;
+    }
+    .st-tabs.st-single { display: none; }
     .st-tab {
         display: inline-flex; align-items: center; gap: .45rem;
         padding: .5rem .85rem; border-radius: 10px 10px 0 0;
-        font-size: .8rem; font-weight: 600; text-decoration: none;
+        font-size: .79rem; font-weight: 600; text-decoration: none;
         color: rgba(255,255,255,.5); border: 1px solid transparent; border-bottom: 0;
-        cursor: pointer; background: transparent; transition: all .15s;
+        cursor: pointer; background: transparent;
+        transition: color .16s ease, background .16s ease, border-color .16s ease;
     }
-    .st-tab:hover { color: rgba(255,255,255,.85); background: rgba(255,255,255,.04); }
-    .st-tab.active { color: #fff; background: rgba(99,102,241,.14); border-color: rgba(99,102,241,.35); }
-    .st-tab .st-count { font-size: .64rem; opacity: .6; }
-    #st-panel { position: relative; min-height: 120px; }
-    #st-panel.loading { opacity: .45; pointer-events: none; transition: opacity .15s; }
-    .st-flash { font-size: .72rem; color: rgba(255,255,255,.35); }
+    .st-tab:hover { color: rgba(255,255,255,.88); background: rgba(255,255,255,.045); }
+    .st-tab.active { color: #fff; background: rgba(99,102,241,.15); border-color: rgba(99,102,241,.34); }
+    .st-tabs .st-spacer { flex: 1; }
+    .st-links a { font-size: .7rem; color: rgba(255,255,255,.42); text-decoration: none; margin-left: .8rem; }
+    .st-links a:hover { color: #a5b4fc; }
+    #st-panel { position: relative; min-height: 140px; transition: opacity .18s ease; }
+    #st-panel.loading { opacity: .4; pointer-events: none; }
+    #st-panel.swap { animation: st-fade .22s ease; }
+    @keyframes st-fade { from { opacity: .3; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+    #st-toasts { position: fixed; right: 1.1rem; bottom: 1.1rem; z-index: 90; display: flex; flex-direction: column; gap: .45rem; pointer-events: none; }
+    .st-toast {
+        padding: .55rem .85rem; border-radius: 10px; font-size: .75rem; color: #e5e7eb;
+        background: rgba(24,28,40,.96); border: 1px solid rgba(255,255,255,.12);
+        box-shadow: 0 12px 30px rgba(0,0,0,.45); opacity: 0; transform: translateY(6px);
+        transition: opacity .2s ease, transform .2s ease; max-width: 320px;
+    }
+    .st-toast.in { opacity: 1; transform: none; }
+    .st-toast.ok { border-left: 3px solid #34d399; }
+    .st-toast.warn { border-left: 3px solid #fbbf24; }
+    .st-toast.bad { border-left: 3px solid #f87171; }
     html[data-theme="light"] .st-title { color: #111; }
-    html[data-theme="light"] .st-sub, html[data-theme="light"] .st-flash { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .st-sub, html[data-theme="light"] .st-chip { color: rgba(0,0,0,.5); }
+    html[data-theme="light"] .st-chip { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
     html[data-theme="light"] .st-tabs { border-color: rgba(0,0,0,.08); }
     html[data-theme="light"] .st-tab { color: rgba(0,0,0,.55); }
     html[data-theme="light"] .st-tab.active { color: #111; background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.3); }
+    html[data-theme="light"] .st-toast { background: #fff; color: #111; border-color: rgba(0,0,0,.1); }
 </style>
 
-<div class="st-head">
-    <div>
-        <h2 class="st-title">{{ group_title }}</h2>
-        <div class="st-sub">{{ group_subtitle }}</div>
+<div class="st-wrap">
+    <div class="st-head">
+        <div>
+            <h2 class="st-title">{{ group_title }}</h2>
+            <div class="st-sub">{{ group_subtitle }}</div>
+        </div>
+        <div class="st-chip"><i class="fas fa-circle"></i> <span id="st-state">{{ active_label }}</span></div>
     </div>
-    <div class="st-flash" id="st-state">{{ active_label }}</div>
+
+    <nav class="st-tabs{% if tabs|length < 2 %} st-single{% endif %}" id="st-tabs" aria-label="{{ group_title }} settings sections">
+        {% for t in tabs %}
+        <a href="{{ t.url }}" class="st-tab{% if t.key == active_key %} active{% endif %}"
+           data-tab="{{ t.key }}" data-url="{{ t.url }}" title="{{ t.hint }}">{{ t.label }}</a>
+        {% endfor %}
+        <span class="st-spacer"></span>
+        <span class="st-links">
+            <a href="{% url 'settings_root' %}" data-settings-link><i class="fas fa-gauge-high"></i> Overview</a>
+            <a href="{% url 'admin_dashboard' %}"><i class="fas fa-house"></i> Dashboard</a>
+        </span>
+    </nav>
+
+    <div id="st-panel" data-tab-url="{{ tab_url }}" data-key="{{ active_key }}">
+        {{ panel }}
+    </div>
 </div>
 
-<nav class="st-tabs" id="st-tabs" aria-label="{{ group_title }} settings sections">
-    {% for t in tabs %}
-    <a href="{{ t.url }}" class="st-tab{% if t.key == active_key %} active{% endif %}"
-       data-tab="{{ t.key }}" data-url="{{ t.url }}" title="{{ t.hint }}">{{ t.label }}</a>
-    {% endfor %}
-</nav>
-
-<div id="st-panel" data-tab-url="{{ tab_url }}">
-    {{ panel }}
-</div>
+<div id="st-toasts" aria-live="polite"></div>
 
 <script>
 (function () {
-    var panel = document.getElementById('st-panel');
-    var tabs = document.getElementById('st-tabs');
-    var state = document.getElementById('st-state');
+    /* The frame (.st-wrap) is never replaced, so every listener below survives
+       each swap: clicking a tab, saving a form or following a link only ever
+       changes the content inside this frame. Nothing navigates. */
+    var wrap = document.querySelector('.st-wrap');
+    if (!wrap) return;
+    var toasts = document.getElementById('st-toasts');
+
+    function panelEl() { return document.getElementById('st-panel'); }
+    function tabsEl() { return document.getElementById('st-tabs'); }
+    function chipEl() { return document.getElementById('st-state'); }
+
+    function toast(message, kind) {
+        var el = document.createElement('div');
+        el.className = 'st-toast ' + (kind || 'ok');
+        el.textContent = message;
+        toasts.appendChild(el);
+        requestAnimationFrame(function () { el.classList.add('in'); });
+        setTimeout(function () {
+            el.classList.remove('in');
+            setTimeout(function () { el.remove(); }, 240);
+        }, 2600);
+    }
+
+    function flash(panel) {
+        panel.classList.remove('swap');
+        void panel.offsetWidth;
+        panel.classList.add('swap');
+    }
+
+    function markTabs(key) {
+        var tabs = tabsEl();
+        if (!tabs) return;
+        tabs.querySelectorAll('.st-tab').forEach(function (a) {
+            a.classList.toggle('active', a.dataset.tab === key);
+        });
+        var active = tabs.querySelector('.st-tab[data-tab="' + key + '"]');
+        if (chipEl() && active) chipEl().textContent = active.textContent.trim();
+    }
 
     /* A panel is a whole settings page rendered without the shell, so its forms
-       still post to their own view. Give each one a `next` so the save comes
-       back to this tab instead of the dashboard. Forms that post through their
-       own JS simply carry an extra ignored field. */
-    function tag(nextUrl, key, root) {
-        (root || panel).querySelectorAll('form').forEach(function (form) {
+       post to their own view. Add `next` so a save returns to this tab. */
+    function tag(root, nextUrl, key) {
+        if (!root) return;
+        root.querySelectorAll('form').forEach(function (form) {
             if (form.querySelector('input[name="next"]')) return;
             [['next', nextUrl], ['tab', key]].forEach(function (pair) {
                 var input = document.createElement('input');
@@ -68,54 +139,152 @@
         });
     }
 
-    function activate(key) {
-        tabs.querySelectorAll('.st-tab').forEach(function (a) {
-            a.classList.toggle('active', a.dataset.tab === key);
-        });
-    }
-
-    function show(html, key, url) {
-        panel.innerHTML = html;
-        panel.dataset.tabUrl = url;
-        activate(key);
-        var link = tabs.querySelector('.st-tab[data-tab="' + key + '"]');
-        if (state && link) state.textContent = link.textContent.trim();
-        tag(url, key);
-        panel.classList.remove('loading');
-    }
-
-    tabs.addEventListener('click', function (event) {
-        var link = event.target.closest('.st-tab');
-        if (!link) return;
-        var key = link.dataset.tab;
-        if (link.classList.contains('active')) return;
-        event.preventDefault();
-        /* The site's page-transition script listens on document and navigates a
-           quarter-second after *any* link click. Stop it here or every tab
-           would swap and then reload anyway. */
-        event.stopPropagation();
-
-        var url = link.dataset.url;
+    /* Same group, different panel: fetch just that panel. */
+    function loadPanel(url, key) {
+        var panel = panelEl();
         panel.classList.add('loading');
-        history.replaceState(null, '', url);
+        var joiner = url.indexOf('?') === -1 ? '?' : '&';
+        /* No X-Requested-With on purpose: the email panel treats that header as
+           "an AJAX action" and would answer JSON instead of markup. */
+        return fetch(url + joiner + 'partial=1', { credentials: 'same-origin' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.text();
+            })
+            .then(function (html) {
+                panel.innerHTML = html;
+                panel.dataset.tabUrl = url;
+                panel.dataset.key = key;
+                markTabs(key);
+                tag(panel, url, key);
+                panel.classList.remove('loading');
+                flash(panel);
+            });
+    }
 
-        /* No X-Requested-With here on purpose: the email panel treats that
-           header as "this is an AJAX action" and would answer JSON instead of
-           markup. A plain GET returns the panel. */
-        fetch(url + '&partial=1', { credentials: 'same-origin' })
-        .then(function (r) {
+    /* Another group (or a page inside this one): fetch it, then update this
+       frame's title, tabs and panel in place. */
+    function softGo(url) {
+        var panel = panelEl();
+        var settled = url;
+        panel.classList.add('loading');
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                settled = r.url || url;   // a redirect (e.g. /settings/) resolves here
+                return r.text();
+            })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var fresh = doc.querySelector('.st-wrap');
+                var freshPanel = fresh && fresh.querySelector('#st-panel');
+                if (!freshPanel) throw new Error('no shell');
+
+                [['.st-title', 'textContent'], ['.st-sub', 'textContent']].forEach(function (pair) {
+                    var here = wrap.querySelector(pair[0]);
+                    var there = fresh.querySelector(pair[0]);
+                    if (here && there) here[pair[1]] = there[pair[1]];
+                });
+
+                var nav = tabsEl();
+                var freshNav = fresh.querySelector('#st-tabs');
+                if (nav && freshNav) {
+                    nav.innerHTML = freshNav.innerHTML;
+                    nav.className = freshNav.className;
+                }
+
+                panel.innerHTML = freshPanel.innerHTML;
+                panel.dataset.tabUrl = freshPanel.dataset.tabUrl;
+                panel.dataset.key = freshPanel.dataset.key;
+                var freshChip = fresh.querySelector('#st-state');
+                if (chipEl() && freshChip) chipEl().textContent = freshChip.textContent;
+                tag(panel, panel.dataset.tabUrl, panel.dataset.key);
+                panel.classList.remove('loading');
+                flash(panel);
+                history.pushState(null, '', settled);
+            })
+            .catch(function () { window.location.href = url; });
+    }
+
+    wrap.addEventListener('click', function (event) {
+        var tab = event.target.closest('.st-tab');
+        if (tab) {
+            /* The site's page-transition script listens on document and
+               navigates after *any* link click; stop it before it sees this. */
+            event.preventDefault();
+            event.stopPropagation();
+            if (tab.classList.contains('active')) return;
+            var url = tab.dataset.url;
+            history.replaceState(null, '', url);
+            loadPanel(url, tab.dataset.tab);
+            return;
+        }
+        var link = event.target.closest('a[data-settings-link]');
+        if (link) {
+            event.preventDefault();
+            event.stopPropagation();
+            softGo(link.href);
+        }
+    });
+
+    /* Saving never reloads the page: post in place, then swap only this panel. */
+    wrap.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!form || form.tagName !== 'FORM') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (form.dataset.busy === '1') return;
+        form.dataset.busy = '1';
+
+        var panel = panelEl();
+        var button = form.querySelector('button[type="submit"], input[type="submit"]');
+        var note = panel.querySelector('[data-save-note]');
+        if (button) button.classList.add('is-busy');
+        if (note) note.textContent = 'Saving…';
+
+        var key = panel.dataset.key;
+        var url = form.getAttribute('action') || panel.dataset.tabUrl;
+        fetch(url, {
+            method: 'POST',
+            body: new FormData(form),
+            credentials: 'same-origin'
+        }).then(function (r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.text();
-        })
-        .then(function (html) { show(html, key, url); })
-        .catch(function () {
-            /* The fragment failed: fall back to a normal navigation, which the
-               link already points at anyway. */
-            window.location.href = url;
+            /* A save redirects back to its tab; a validation failure answers
+               the bare panel with the field errors still attached. */
+            if (r.redirected) return { saved: true };
+            return r.text().then(function (html) { return { saved: false, html: html }; });
+        }).then(function (result) {
+            if (result.saved) {
+                return loadPanel(panel.dataset.tabUrl, key).then(function () { toast('Saved'); });
+            }
+            if (/<html[\s>]/i.test(result.html)) {
+                /* A panel whose form posts to its own view answered with a
+                   whole page; keep the frame and reload just this panel. */
+                return loadPanel(panel.dataset.tabUrl, key).then(function () {
+                    toast('Not saved — check the fields', 'warn');
+                });
+            }
+            panel.innerHTML = result.html;
+            tag(panel, panel.dataset.tabUrl, key);
+            toast('Not saved — check the fields', 'warn');
+            var firstError = panel.querySelector('.set-err, .errorlist');
+            if (firstError && firstError.scrollIntoView) {
+                firstError.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        }).catch(function () {
+            toast('Could not save — try again', 'bad');
+        }).then(function () {
+            form.dataset.busy = '';
+            if (button) button.classList.remove('is-busy');
+            var freshNote = panelEl().querySelector('[data-save-note]');
+            if (freshNote) freshNote.textContent = 'Changes apply as soon as you save.';
         });
     });
 
-    tag(panel.dataset.tabUrl, document.querySelector('.st-tab.active').dataset.tab);
+    window.addEventListener('popstate', function () { softGo(window.location.href); });
+
+    tag(panelEl(), panelEl().dataset.tabUrl, panelEl().dataset.key);
 })();
 </script>
 {% endblock %}

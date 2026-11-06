@@ -1,0 +1,147 @@
+{% extends settings_wrapper|default:'core/admin_base.html' %}
+
+{% block admin_content %}
+<style>
+    .ov { max-width: 1180px; }
+    .ov-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: .6rem; margin-bottom: .9rem; }
+    .ov-tile {
+        display: flex; align-items: center; gap: .65rem; padding: .7rem .8rem;
+        background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07);
+        border-radius: 12px; transition: transform .16s ease, border-color .16s ease;
+    }
+    .ov-tile:hover { transform: translateY(-1px); border-color: rgba(99,102,241,.35); }
+    .ov-tile i {
+        width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 8px; background: rgba(99,102,241,.15); color: #a5b4fc; font-size: .74rem; flex: none;
+    }
+    .ov-val { font-size: 1.05rem; font-weight: 800; color: #fff; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .ov-lab { font-size: .65rem; color: rgba(255,255,255,.4); margin-top: .1rem; }
+    .ov-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: .7rem; }
+    @media (max-width: 860px) { .ov-grid { grid-template-columns: 1fr; } }
+    .ov-card {
+        background: rgba(255,255,255,.022); border: 1px solid rgba(255,255,255,.07);
+        border-radius: 14px; padding: .85rem .95rem 1rem; min-width: 0;
+    }
+    .ov-card > header { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .75rem; }
+    .ov-card h3 { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #a5b4fc; margin: 0; }
+    .ov-card header span { font-size: .66rem; color: rgba(255,255,255,.35); }
+    .ov-bars { display: flex; align-items: flex-end; gap: .35rem; height: 108px; }
+    .ov-day { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; }
+    .ov-day b {
+        display: block; width: 100%; max-width: 22px; border-radius: 5px 5px 2px 2px; min-height: 3px;
+        background: linear-gradient(180deg, #6366f1, rgba(99,102,241,.35));
+        transition: filter .15s ease;
+    }
+    .ov-day b.err { background: linear-gradient(180deg, #f87171, rgba(248,113,113,.3)); }
+    .ov-day:hover b { filter: brightness(1.25); }
+    .ov-axis { display: flex; gap: .35rem; margin-top: .35rem; }
+    .ov-axis span { flex: 1; text-align: center; font-size: .58rem; color: rgba(255,255,255,.3); text-transform: uppercase; letter-spacing: .04em; }
+    .ov-legend { display: flex; gap: .8rem; margin-top: .55rem; font-size: .63rem; color: rgba(255,255,255,.42); }
+    .ov-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: .25rem; }
+    .ov-mix { display: flex; flex-direction: column; gap: .55rem; }
+    .ov-mix-row { display: flex; align-items: center; gap: .6rem; font-size: .72rem; color: rgba(255,255,255,.72); }
+    .ov-mix-bar { flex: 1; height: 7px; border-radius: 4px; background: rgba(255,255,255,.07); overflow: hidden; }
+    .ov-mix-bar span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6366f1, #22d3ee); }
+    .ov-mix-row em { font-style: normal; color: rgba(255,255,255,.4); font-size: .65rem; min-width: 62px; text-align: right; }
+    .ov-health { display: flex; flex-direction: column; gap: .1rem; }
+    .ov-health a {
+        display: grid; grid-template-columns: 9px 88px 1fr; align-items: center; gap: .55rem;
+        padding: .42rem .3rem; border-radius: 8px; text-decoration: none;
+        color: rgba(255,255,255,.78); font-size: .72rem; transition: background .14s ease;
+    }
+    .ov-health a:hover { background: rgba(255,255,255,.05); }
+    .ov-dot { width: 7px; height: 7px; border-radius: 50%; background: #34d399; }
+    .ov-dot.warn { background: #fbbf24; }
+    .ov-health .grp { color: rgba(255,255,255,.35); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; }
+    .ov-health .det { color: rgba(255,255,255,.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ov-empty { font-size: .72rem; color: rgba(255,255,255,.35); padding: .6rem .2rem; }
+    html[data-theme="light"] .ov-tile, html[data-theme="light"] .ov-card { background: #fff; border-color: rgba(0,0,0,.08); }
+    html[data-theme="light"] .ov-val { color: #111; }
+    html[data-theme="light"] .ov-lab, html[data-theme="light"] .ov-card header span,
+    html[data-theme="light"] .ov-axis span, html[data-theme="light"] .ov-health .grp,
+    html[data-theme="light"] .ov-health .det, html[data-theme="light"] .ov-empty { color: rgba(0,0,0,.45); }
+    html[data-theme="light"] .ov-card h3 { color: #4338ca; }
+    html[data-theme="light"] .ov-health a { color: rgba(0,0,0,.78); }
+    html[data-theme="light"] .ov-health a:hover { background: rgba(0,0,0,.04); }
+    html[data-theme="light"] .ov-mix-row { color: rgba(0,0,0,.7); }
+</style>
+
+<div class="ov">
+    <div class="ov-tiles">
+        {% for tile in tiles %}
+        <div class="ov-tile">
+            <i class="fas {{ tile.icon }}"></i>
+            <div>
+                <div class="ov-val">{{ tile.value }}</div>
+                <div class="ov-lab">{{ tile.label }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="ov-grid">
+        <section class="ov-card">
+            <header><h3>Requests and errors</h3><span>last {{ days }} days</span></header>
+            <div class="ov-bars">
+                {% for day in traffic_series %}
+                <div class="ov-day" title="{{ day.day|date:'D d M' }} — {{ day.requests }} requests, {{ day.errors }} errors">
+                    <b style="height: {{ day.req_pct }}%"></b>
+                    <b class="err" style="height: {{ day.err_pct }}%"></b>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="ov-axis">
+                {% for day in traffic_series %}<span>{{ day.day|date:'D' }}</span>{% endfor %}
+            </div>
+            <div class="ov-legend">
+                <span><i style="background:#6366f1"></i>{{ week_requests }} requests</span>
+                <span><i style="background:#f87171"></i>{{ week_errors }} errors</span>
+            </div>
+        </section>
+
+        <section class="ov-card">
+            <header><h3>Page views</h3><span>{{ week_views }} this week</span></header>
+            <div class="ov-bars">
+                {% for day in page_series %}
+                <div class="ov-day" title="{{ day.day|date:'D d M' }} — {{ day.count }} views">
+                    <b style="height: {{ day.pct }}%"></b>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="ov-axis">
+                {% for day in page_series %}<span>{{ day.day|date:'D' }}</span>{% endfor %}
+            </div>
+        </section>
+
+        <section class="ov-card">
+            <header><h3>Where content came from</h3><span>all recorded answers</span></header>
+            {% if mix %}
+            <div class="ov-mix">
+                {% for row in mix %}
+                <div class="ov-mix-row">
+                    <span style="min-width:96px">{{ row.label }}</span>
+                    <span class="ov-mix-bar"><span style="width: {{ row.pct }}%"></span></span>
+                    <em>{{ row.count }} · {{ row.pct }}%</em>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="ov-empty">No data-source answers recorded yet.</div>
+            {% endif %}
+        </section>
+
+        <section class="ov-card">
+            <header><h3>Configuration</h3><span>every link opens its own panel</span></header>
+            <div class="ov-health">
+                {% for row in health %}
+                <a href="{{ row.url }}" data-settings-link>
+                    <span class="ov-dot{% if row.state == 'warn' %} warn{% endif %}"></span>
+                    <span class="grp">{{ row.group }} · {{ row.label }}</span>
+                    <span class="det">{{ row.detail }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

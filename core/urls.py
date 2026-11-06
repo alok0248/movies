@@ -19,8 +19,13 @@ urlpatterns = [
     # at a time (?tab=). The old per-page URLs above stay, so bookmarks work —
     # hence the explicit group names here rather than a catch-all slug, which
     # would swallow /settings/branding/ and friends.
-    re_path(r'^admin-dashboard/settings/(?P<group>site|data|delivery)/$',
+    # /settings/ opens the overview; each group then shows one panel at a time.
+    path('admin-dashboard/settings/', views.settings_root, name='settings_root'),
+    re_path(r'^admin-dashboard/settings/(?P<group>overview|site|data|delivery|security)/$',
             views.settings_hub, name='settings_hub'),
+    path('admin-dashboard/settings/general/', views.general_settings, name='general_settings'),
+    path('admin-dashboard/settings/security-protection/', views.security_protection_settings,
+         name='security_protection_settings'),
     path('admin-dashboard/settings/branding/', views.branding_settings, name='branding_settings'),
     path('admin-dashboard/settings/display/', views.display_settings, name='display_settings'),
     path('admin-dashboard/settings/data-source/', views.data_source_settings, name='data_source_settings'),

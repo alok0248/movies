@@ -1052,8 +1052,16 @@ class TMDBApiKey(models.Model):
     class Meta:
         ordering = ['-is_active', '-created_at']
 
+    @property
+    def masked(self):
+        """The key with its middle removed, safe to render on an admin page."""
+        key = self.key or ''
+        if len(key) <= 10:
+            return '•' * 8
+        return f'{key[:4]}…{key[-4:]}'
+
     def __str__(self):
-        return f"TMDB API Key: {self.key[:10]}..."
+        return f"TMDB API Key: {self.masked}"
 
 
 class AndroidApp(models.Model):

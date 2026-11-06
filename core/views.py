@@ -42,10 +42,11 @@ from .utils import normalize_movie_item, normalize_series_item, normalize_movie_
 
 logger = logging.getLogger(__name__)
 from .forms import (
-    SiteSettingsForm, ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
+    ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
     PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm,
-    AdSwitchesForm
+    AdSwitchesForm, GeneralSettingsForm, SecurityProtectionForm,
+    GENERAL_FIELD_SECTIONS, SECURITY_FIELD_SECTIONS
 )
 
 
@@ -2705,41 +2706,76 @@ def series_detail(request, series_slug):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def edit_settings(request):
-    site_settings = SiteSettings.get_settings()
-    api_keys = TMDBApiKey.objects.all().order_by('-is_active', '-created_at')
-    
-    if request.method == 'POST':
-        form = SiteSettingsForm(request.POST, instance=site_settings)
-        if form.is_valid():
-            form.save()
-            return _settings_redirect(request, 'admin_dashboard')
-    else:
-        form = SiteSettingsForm(instance=site_settings)
-    
-    return render(request, 'core/edit_settings.html', {
-        'form': form,
-        'api_keys': api_keys
-    })
+    """Old /edit-settings/ URL: the General panel, opened on its own.
+
+    The all-fields form that used to live here is gone — it could save values
+    that eight other settings pages also own, so the last screen to be opened
+    silently won. General keeps only the fields nothing else looks after.
+    """
+    return general_settings(request)
+
+
+def _settings_field_sections(form, sections):
+    """Group a bound form's fields under the titles a section map gives.
+
+    A field the map does not mention still renders, under "Other", so adding a
+    field to a form can never make it vanish from the page.
+    """
+    if not sections:
+        return [{'title': '', 'hint': '', 'fields': list(form)}]
+    grouped, used = [], set()
+    for title, hint, names in sections:
+        fields = [form[name] for name in names if name in form.fields]
+        if fields:
+            grouped.append({'title': title, 'hint': hint, 'fields': fields})
+        used.update(names)
+    rest = [form[name] for name in form.fields if name not in used]
+    if rest:
+        grouped.append({'title': 'Other', 'hint': '', 'fields': rest})
+    return grouped
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
-def _settings_section_view(request, form_class, title, description='', back_url='admin_dashboard'):
+@cache_control(private=True, no_store=True)
+def _settings_section_view(request, form_class, title, description='', back_url='admin_dashboard',
+                           sections=None):
     """Shared handler for the single-section admin settings pages (deduplicated)."""
     site_settings = SiteSettings.get_settings()
     if request.method == 'POST':
         form = form_class(request.POST, instance=site_settings)
         if form.is_valid():
             form.save()
-            return _settings_redirect(request, 'admin_dashboard')
+            return _settings_redirect(request, back_url)
     else:
         form = form_class(instance=site_settings)
     return render(request, 'core/settings_section.html', {
         'form': form,
+        'sections': _settings_field_sections(form, sections),
         'title': title,
         'description': description,
         'back_url': back_url,
     })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def general_settings(request):
+    return _settings_section_view(
+        request, GeneralSettingsForm, 'General',
+        description='Site identity, measurement IDs, Google sign-in and how ads behave.',
+        sections=GENERAL_FIELD_SECTIONS,
+    )
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def security_protection_settings(request):
+    return _settings_section_view(
+        request, SecurityProtectionForm, 'Protection',
+        description='Addresses that are never blocked, bot signatures, and browser protection.',
+        sections=SECURITY_FIELD_SECTIONS,
+    )
 
 
 @login_required
@@ -15659,13 +15695,148 @@ def db_connection_detail(request, pk):
 # fragment (a tab switch) or drops it inside the hub's own page (first paint).
 # Nothing about a settings view's behaviour changed, and every original URL
 # still renders that page on its own.
+# ---------------------------------------------------------------- settings overview
+
+SETTINGS_OVERVIEW_DAYS = 7
+
+
+def _day_series(model, date_field, days=SETTINGS_OVERVIEW_DAYS, **filters):
+    """Rows per local day for the last `days` days, zero-filled and chart-ready."""
+    today = timezone.localdate()
+    start = today - datetime.timedelta(days=days - 1)
+    rows = (model.objects.filter(**{date_field + '__date__gte': start}, **filters)
+            .annotate(day=TruncDate(date_field, tzinfo=timezone.get_current_timezone()))
+            .values('day').annotate(total=Count('id')))
+    counts = {row['day']: row['total'] for row in rows}
+    series = []
+    for i in range(days):
+        day = start + datetime.timedelta(days=i)
+        series.append({'day': day, 'count': counts.get(day, 0)})
+    peak = max([point['count'] for point in series] + [1])
+    for point in series:
+        point['pct'] = round(point['count'] * 100.0 / peak, 1)
+    return series
+
+
+def _settings_health():
+    """One row per settings area: a value it holds, or the value it is missing.
+
+    Read-only: it never prints a secret, only whether one is set, so the
+    overview can be shared on a screen without leaking a key or a password.
+    """
+    ss = SiteSettings.get_settings()
+
+    def hub(group, tab):
+        return reverse('settings_hub', args=[group]) + '?tab=' + tab
+
+    def state(value):
+        return 'ok' if value else 'warn'
+
+    active_keys = TMDBApiKey.objects.filter(is_active=True).count()
+    allowed = [ip for ip in (ss.allowed_ips or '').replace(',', ' ').split() if ip]
+    rows = [
+        {'group': 'Site', 'label': 'General', 'url': hub('site', 'general'),
+         'detail': ('Analytics ' + ss.google_analytics_id) if ss.google_analytics_id else 'No analytics ID',
+         'state': state(ss.google_analytics_id)},
+        {'group': 'Site', 'label': 'Branding', 'url': hub('site', 'branding'),
+         'detail': ss.brand_name or 'No brand name', 'state': state(ss.brand_name)},
+        {'group': 'Data & APIs', 'label': 'Data source', 'url': hub('data', 'source'),
+         'detail': ss.get_data_source_display(), 'state': 'ok'},
+        {'group': 'Data & APIs', 'label': 'API keys', 'url': hub('data', 'keys'),
+         'detail': f'{active_keys} active key{"" if active_keys == 1 else "s"}',
+         'state': state(active_keys)},
+        {'group': 'Data & APIs', 'label': 'TMDB database', 'url': hub('data', 'tmdb'),
+         'detail': ss.tmdb_db_host or 'No host set', 'state': state(ss.tmdb_db_host)},
+        {'group': 'Delivery', 'label': 'Email', 'url': hub('delivery', 'email'),
+         'detail': ss.email_host_user or 'No sender address', 'state': state(ss.email_host_user)},
+        {'group': 'Delivery', 'label': 'Player', 'url': hub('delivery', 'player'),
+         'detail': ss.active_movie_player or 'No player chosen', 'state': state(ss.active_movie_player)},
+        {'group': 'Security', 'label': 'Protection', 'url': hub('security', 'protection'),
+         'detail': (f'{len(allowed)} trusted address{"" if len(allowed) == 1 else "es"}'
+                    if allowed else 'No trusted addresses'),
+         'state': state(allowed)},
+        {'group': 'Security', 'label': 'URL blocking', 'url': hub('security', 'blocking'),
+         'detail': 'Blocking on' if ss.enable_url_blocking else 'Blocking off',
+         'state': 'ok'},
+    ]
+    return rows
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@cache_control(private=True, no_store=True)
+def settings_overview(request):
+    """The settings dashboard: configuration health, traffic and source mix.
+
+    Every number here is read from the tables that already record it, so this
+    page duplicates no setting and no count that another page owns; it links to
+    the page that owns each one instead.
+    """
+    from .models import (TMDBMovie, TMDBTV, Subscriber, BlockedIP, TMDBApiKey,
+                         DataSourceUsageLog, UserPageView, RequestLog)
+
+    page_series = _day_series(UserPageView, 'viewed_at')
+    request_series = _day_series(RequestLog, 'created_at')
+    blocked_series = _day_series(RequestLog, 'created_at', status_code__gte=400)
+
+    mix_rows = (DataSourceUsageLog.objects.values('source')
+                .annotate(total=Sum('usage_count')).order_by('-total'))
+    mix_total = sum(row['total'] or 0 for row in mix_rows) or 1
+    mix = [{'label': dict(DataSourceUsageLog.SOURCE_CHOICES).get(row['source'], row['source']),
+            'count': row['total'] or 0,
+            'pct': round((row['total'] or 0) * 100.0 / mix_total, 1)} for row in mix_rows]
+
+    week_views = sum(point['count'] for point in page_series)
+    week_requests = sum(point['count'] for point in request_series)
+    week_errors = sum(point['count'] for point in blocked_series)
+
+    # One row per day so the template can show requests and errors together.
+    traffic_series = [
+        {'day': request_point['day'],
+         'requests': request_point['count'], 'req_pct': request_point['pct'],
+         'errors': error_point['count'], 'err_pct': error_point['pct']}
+        for request_point, error_point in zip(request_series, blocked_series)
+    ]
+
+    return render(request, 'core/settings_overview.html', {
+        'health': _settings_health(),
+        'page_series': page_series,
+        'request_series': request_series,
+        'error_series': blocked_series,
+        'traffic_series': traffic_series,
+        'mix': mix,
+        'days': SETTINGS_OVERVIEW_DAYS,
+        'week_views': week_views,
+        'week_requests': week_requests,
+        'week_errors': week_errors,
+        'tiles': [
+            {'label': 'Movies', 'value': TMDBMovie.objects.count(), 'icon': 'fa-film'},
+            {'label': 'Series', 'value': TMDBTV.objects.count(), 'icon': 'fa-tv'},
+            {'label': 'Page views / 7d', 'value': week_views, 'icon': 'fa-eye'},
+            {'label': 'Requests / 7d', 'value': week_requests, 'icon': 'fa-bolt'},
+            {'label': 'Errors / 7d', 'value': week_errors, 'icon': 'fa-triangle-exclamation'},
+            {'label': 'Active blocks', 'value': BlockedIP.objects.filter(is_active=True).count(), 'icon': 'fa-ban'},
+            {'label': 'Active API keys', 'value': TMDBApiKey.objects.filter(is_active=True).count(), 'icon': 'fa-key'},
+            {'label': 'Subscribers', 'value': Subscriber.objects.count(), 'icon': 'fa-envelope'},
+        ],
+    })
+
+
 SETTINGS_HUB = {
+    'overview': {
+        'title': 'Settings',
+        'subtitle': 'The whole server in one place: what is configured, what it is '
+                    'doing this week, and what needs a look.',
+        'tabs': [
+            ('health', 'Overview', 'Health, traffic and data-source use', 'settings_overview'),
+        ],
+    },
     'site': {
         'title': 'Site',
-        'subtitle': 'What the site is called, how it looks, and what sits at the '
-                    'bottom of every page.',
+        'subtitle': 'Identity, measurements, branding and the footer. Every value '
+                    'here is owned by exactly one panel.',
         'tabs': [
-            ('general', 'General', 'Site name, contact details and API keys', 'edit_settings'),
+            ('general', 'General', 'Identity, analytics, Google sign-in and ads', 'general_settings'),
             ('branding', 'Branding', 'Brand name, tagline and colour', 'branding_settings'),
             ('display', 'Display', 'Items per row, card size, list length', 'display_settings'),
             ('footer', 'Footer', 'Footer sections, links and copyright', 'footer_settings'),
@@ -15686,11 +15857,18 @@ SETTINGS_HUB = {
     },
     'delivery': {
         'title': 'Delivery',
-        'subtitle': 'How pages reach a visitor: the player, the mail settings and '
-                    'the URL gate.',
+        'subtitle': 'How pages reach a visitor: the player and the mail settings.',
         'tabs': [
             ('player', 'Player', 'Default movie and TV player', 'player_settings'),
             ('email', 'Email', 'SMTP addresses, purposes and templates', 'email_settings'),
+        ],
+    },
+    'security': {
+        'title': 'Security',
+        'subtitle': 'Who is never blocked, who is treated as a bot, and what the '
+                    'site refuses to serve.',
+        'tabs': [
+            ('protection', 'Protection', 'Trusted addresses, bot signatures, DevTools rule', 'security_protection_settings'),
             ('blocking', 'URL blocking', 'Blocked URLs and redirects', 'url_blocking_settings'),
         ],
     },
@@ -15708,13 +15886,24 @@ def _settings_redirect(request, fallback):
     target = getattr(request, '_settings_hub', '') or ''
     if not target:
         target = (request.POST.get('next') or request.GET.get('next') or '')
-    if target.startswith('/') and not target.startswith('//'):
+    # Same site only: browsers turn "\\" into "/", so /\evil.example is an
+    # off-site target even though it starts with a single slash.
+    if (target.startswith('/') and not target.startswith('//')
+            and '\\' not in target and not any(ch in target for ch in '\r\n\t')):
         return redirect(target)
     return redirect(fallback)
 
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def settings_root(request):
+    """Bare /settings/ opens the overview, which links to every group."""
+    return redirect(reverse('settings_hub', args=['overview']))
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@cache_control(private=True, no_store=True)
 def settings_hub(request, group):
     """One settings group, one panel at a time.
 

@@ -637,3 +637,99 @@ class AdsterraLinkForm(forms.ModelForm):
         if not url and not code:
             raise forms.ValidationError('Add either an Adsterra URL or the Adsterra JS code.')
         return cleaned
+
+
+class GeneralSettingsForm(forms.ModelForm):
+    """Site identity, measurements and ad behaviour.
+
+    Every field here is owned by this page and by no other: the branding,
+    display, footer, player, email, URL-blocking, data-source and TMDB database
+    pages each keep their own fields, so a value can never be saved from two
+    different screens and quietly overwrite the other.
+    """
+
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'url_format',
+            'google_analytics_id',
+            'adsense_client_id',
+            'adsense_verification_meta',
+            'google_login_enabled',
+            'google_login_client_id',
+            'google_login_allowed_domains',
+            'enable_autoclick_ads',
+            'auto_click_every_clicks',
+            'enable_adsterra_links',
+            'default_clicks_required',
+            'require_ad_consent',
+            'ad_consent_message',
+            'max_ad_load_retries',
+            'idm_visibility',
+            'tile_ad_every_n',
+            'enable_tile_click_gating',
+            'tile_ad_source',
+            'tile_gating_source',
+        ]
+        widgets = {
+            'url_format': forms.Select(attrs={'class': 'form-select'}),
+            'google_analytics_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'G-XXXXXXXXXX'}),
+            'adsense_client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ca-pub-0000000000000000'}),
+            'adsense_verification_meta': forms.TextInput(attrs={'class': 'form-control'}),
+            'google_login_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'google_login_client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '…apps.googleusercontent.com'}),
+            'google_login_allowed_domains': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'enable_autoclick_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'auto_click_every_clicks': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+            'enable_adsterra_links': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'default_clicks_required': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'}),
+            'require_ad_consent': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'ad_consent_message': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'max_ad_load_retries': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'}),
+            'idm_visibility': forms.Select(attrs={'class': 'form-select'}),
+            'tile_ad_every_n': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'}),
+            'enable_tile_click_gating': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'tile_ad_source': forms.Select(attrs={'class': 'form-select'}),
+            'tile_gating_source': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
+class SecurityProtectionForm(forms.ModelForm):
+    """Who is never blocked, who is treated as a bot, and browser protection."""
+
+    class Meta:
+        model = SiteSettings
+        fields = ['allowed_ips', 'bot_ips', 'bot_user_agents', 'dev_mode_protection']
+        widgets = {
+            'allowed_ips': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 4,
+                'placeholder': '152.59.143.58, 203.0.113.7'}),
+            'bot_ips': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 3, 'placeholder': '192.168.1.10, 10.0.0.5'}),
+            'bot_user_agents': forms.Textarea(attrs={
+                'class': 'form-control', 'rows': 3, 'placeholder': 'Googlebot, MyCustomCrawler'}),
+            'dev_mode_protection': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+# Which section title each field is shown under on the grouped settings pages.
+# A field missing from here still renders, under "Other", so nothing is lost.
+GENERAL_FIELD_SECTIONS = [
+    ('Site identity', 'How detail-page links look and which measurements the site reports.',
+     ['url_format', 'google_analytics_id', 'adsense_client_id', 'adsense_verification_meta']),
+    ('Google sign-in', 'The "Continue with Google" button and who may use it.',
+     ['google_login_enabled', 'google_login_client_id', 'google_login_allowed_domains']),
+    ('Ads', 'When ads may open, how often, and who sees the IDM button.',
+     ['enable_autoclick_ads', 'auto_click_every_clicks', 'enable_adsterra_links',
+      'default_clicks_required', 'require_ad_consent', 'ad_consent_message',
+      'max_ad_load_retries', 'idm_visibility', 'tile_ad_every_n',
+      'enable_tile_click_gating', 'tile_ad_source', 'tile_gating_source']),
+]
+
+SECURITY_FIELD_SECTIONS = [
+    ('Trusted & bot addresses',
+     'Addresses that are never blocked, and the traffic this site treats as its own bot.',
+     ['allowed_ips', 'bot_ips', 'bot_user_agents']),
+    ('Browser protection', 'Extra checks applied to visitors, not to staff.',
+     ['dev_mode_protection']),
+]

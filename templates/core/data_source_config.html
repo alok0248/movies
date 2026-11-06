@@ -77,7 +77,7 @@
                                     <tbody id="api-keys-list">
                                         {% for key in api_keys %}
                                         <tr data-key-id="{{ key.id }}">
-                                            <td><code class="api-key-value">{{ key.key }}</code></td>
+                                            <td><code class="api-key-value">{{ key.masked }}</code></td>
                                             <td>
                                                 <div class="form-check form-switch">
                                                     <input class="form-check-input" type="checkbox" 
