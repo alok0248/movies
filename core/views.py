@@ -11240,6 +11240,66 @@ def api_user_refresh_token(request):
     })
 
 
+def _purge_user_rows(django_user_id, *, also_emails=()):
+    """Delete every row that hangs off a Django user, by id.
+
+    ``on_delete`` is a promise the database cannot keep here. These models
+    live on the external users DB while ``auth.User`` lives on ``default``,
+    every link is declared with ``db_constraint=False``, and SQLite cannot
+    cascade across two attached databases. So deleting the auth row leaves
+    the profile, cloud data, history, watchlist, sessions and OTPs behind —
+    and because Django reuses the lowest free primary key, the *next*
+    account to be created inherits them.
+
+    Every model that points at ``User`` is listed explicitly below and
+    removed while its owner's id is still known. Some are additionally keyed
+    by the email the deleted account held, because that is the only link
+    those rows have.
+    """
+    from .models import (
+        SyncedUser, UserProfile, UserCloudData, UserSession, PlayHistory,
+        WatchList, EmailVerification, PasswordResetOTP, AccountDeletionOTP,
+        UserActivity, UserHeartbeat, UserPageView, Subscriber,
+        WebsiteVisitor,
+    )
+
+    if django_user_id:
+        UserProfile.objects.filter(user_id=django_user_id).delete()
+        UserCloudData.objects.filter(user_id=django_user_id).delete()
+        UserSession.objects.filter(user_id=django_user_id).delete()
+        PlayHistory.objects.filter(user_id=django_user_id).delete()
+        WatchList.objects.filter(user_id=django_user_id).delete()
+        EmailVerification.objects.filter(user_id=django_user_id).delete()
+        PasswordResetOTP.objects.filter(user_id=django_user_id).delete()
+        AccountDeletionOTP.objects.filter(user_id=django_user_id).delete()
+        UserActivity.objects.filter(user_id=django_user_id).delete()
+        UserHeartbeat.objects.filter(user_id=django_user_id).delete()
+        UserPageView.objects.filter(user_id=django_user_id).delete()
+        # The visitor log outlives the account that produced it: it is traffic
+        # history, not personal data, so the row is unlinked rather than
+        # deleted — which is what its declared SET_NULL asks for but cannot do
+        # across two databases.
+        WebsiteVisitor.objects.filter(user_id=django_user_id).update(user=None)
+
+    # Dedupe: the same address can arrive from the auth row and the synced
+    # profile, and each address triggers its own sweep.
+    seen = set()
+    for address in also_emails:
+        address = (address or '').strip().lower()
+        if not address or address in seen:
+            continue
+        seen.add(address)
+        SyncedUser.objects.filter(email__iexact=address).delete()
+        UserHeartbeat.objects.filter(email__iexact=address).delete()
+        Subscriber.objects.filter(email__iexact=address).delete()
+        for django_user in User.objects.filter(email__iexact=address):
+            if django_user.pk == django_user_id:
+                continue
+            # A second auth row sharing the address (Google sign-in creates
+            # the account by email): purge its dependants and the row itself.
+            _purge_user_rows(django_user.pk, also_emails=())
+
+
 def _permanently_delete_user(user_obj=None, email=''):
     """Permanently remove a user and ALL linked data keyed by email.
 
@@ -11248,11 +11308,12 @@ def _permanently_delete_user(user_obj=None, email=''):
     OTPs, and newsletter subscription — to the same email and deletes them
     all together. Call with either the SyncedUser or the Django User; the
     other half is located by email so nothing is orphaned.
+
+    The dependant rows are removed explicitly (see ``_purge_user_rows``)
+    rather than relying on CASCADE, which does not fire across the two
+    databases this project splits user data over.
     """
-    from .models import SyncedUser, Subscriber
-    # Note: EmailVerification, PasswordResetOTP, UserCloudData, UserSession,
-    # PlayHistory, WatchList all CASCADE from Django's auth.User, so deleting
-    # the user wipes them automatically.
+    from .models import SyncedUser
     email = (email or '').strip().lower()
     if not email and user_obj:
         email = getattr(user_obj, 'email', '') or ''
@@ -11269,22 +11330,31 @@ def _permanently_delete_user(user_obj=None, email=''):
     if django_user is None and email:
         django_user = User.objects.filter(email=email).first()
 
-    # Android synced profile — delete BEFORE the Django user because
-    # SyncedUser.user is SET_NULL; deleting the user first would null the
-    # link and orphan the profile.
+    # Android synced profile and everything else keyed to this account.
+    # Collected before the auth row goes away, because the id is what links
+    # the two databases and it is gone the moment the row is.
+    synced_user = None
     if email:
-        SyncedUser.objects.filter(email=email).delete()
-    if django_user is not None and django_user.pk:
-        SyncedUser.objects.filter(user_id=django_user.pk).delete()
+        synced_user = SyncedUser.objects.filter(email__iexact=email).first()
+    if synced_user is None and django_user is not None and django_user.pk:
+        synced_user = SyncedUser.objects.filter(user_id=django_user.pk).first()
 
-    # The linked Django auth user (cascades: EmailVerification, PasswordResetOTP,
-    # UserCloudData, UserSession, PlayHistory, WatchList via CASCADE FKs).
+    emails = [email]
+    if django_user is not None:
+        for linked_user in User.objects.filter(pk=django_user.pk):
+            if linked_user.email:
+                emails.append(linked_user.email)
+    if synced_user is not None and synced_user.email:
+        emails.append(synced_user.email)
+
+    _purge_user_rows(
+        django_user.pk if django_user is not None else None,
+        also_emails=emails,
+    )
+
+    # The linked Django auth user itself.
     if django_user:
         django_user.delete()
-
-    # Newsletter subscription keyed by the same email.
-    if email:
-        Subscriber.objects.filter(email=email).delete()
 
     return email or 'unknown'
 
@@ -11824,10 +11894,11 @@ def api_user_delete_account(request):
             # Revoke every active session token before the rows go away.
             _invalidate_user_sessions(django_user)
 
-            # _permanently_delete_user removes the Django user (cascading cloud
-            # data, sessions, watchlist, play history, verification/reset OTPs),
-            # the Android synced profile (subscription/entitlement rows) and the
-            # newsletter subscription — all keyed by the same email.
+            # _permanently_delete_user removes the auth row, the Android
+            # synced profile, cloud data, sessions, watchlist, play history,
+            # verification/reset/deletion OTPs and the newsletter
+            # subscription. It deletes each one explicitly — CASCADE does not
+            # reach across the two databases this project splits them over.
             _permanently_delete_user(django_user, email=account_email)
     except DatabaseError:
         raise
@@ -11837,6 +11908,13 @@ def api_user_delete_account(request):
             'status': 'error',
             'message': 'Could not delete the account. Please try again.',
         }, status=500)
+
+    # Drop any cached copy of the account so a later request cannot be served
+    # from it.
+    try:
+        cache.delete(f'usersync:{account_email}')
+    except Exception:
+        logger.warning('Could not clear the sync cache for %s', account_email, exc_info=True)
 
     logger.info('Account deleted from the app: %s', account_email)
     return JsonResponse({'status': 'success', 'message': 'Account deleted'})
@@ -11942,6 +12020,11 @@ def ajax_delete_account(request):
     _logout(request)
 
     _permanently_delete_user(django_user, email=account_email)
+
+    try:
+        cache.delete(f'usersync:{account_email}')
+    except Exception:
+        logger.warning('Could not clear the sync cache for %s', account_email, exc_info=True)
 
     logger.info('Account deleted from the web: %s', account_email)
     return JsonResponse({'success': True, 'message': 'Your account has been permanently deleted.'})
@@ -15701,10 +15784,16 @@ SETTINGS_OVERVIEW_DAYS = 7
 
 
 def _day_series(model, date_field, days=SETTINGS_OVERVIEW_DAYS, **filters):
-    """Rows per local day for the last `days` days, zero-filled and chart-ready."""
+    """Rows per local day for the last `days` days, zero-filled and chart-ready.
+
+    The range is a datetime comparison, not ``__date``: a function on the column
+    cannot use its index, which cost over a second per series on the live log
+    tables. Only the day grouping runs over the seven days that remain.
+    """
     today = timezone.localdate()
     start = today - datetime.timedelta(days=days - 1)
-    rows = (model.objects.filter(**{date_field + '__date__gte': start}, **filters)
+    start_at = timezone.make_aware(datetime.datetime.combine(start, datetime.time.min))
+    rows = (model.objects.filter(**{date_field + '__gte': start_at}, **filters)
             .annotate(day=TruncDate(date_field, tzinfo=timezone.get_current_timezone()))
             .values('day').annotate(total=Count('id')))
     counts = {row['day']: row['total'] for row in rows}
