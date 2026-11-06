@@ -15782,7 +15782,7 @@ def db_connection_detail(request, pk):
 
 SETTINGS_OVERVIEW_DAYS = 7
 SETTINGS_OVERVIEW_CACHE_KEY = 'settings_overview_v1'
-SETTINGS_OVERVIEW_CACHE_SECONDS = 120
+SETTINGS_OVERVIEW_CACHE_SECONDS = 300
 
 
 def _day_series(model, date_field, days=SETTINGS_OVERVIEW_DAYS, **filters):
