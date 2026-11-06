@@ -49,6 +49,9 @@ class Command(BaseCommand):
         self.stdout.write(f'Valid User IDs in auth_user: {len(valid_ids)}\n')
 
         # Each entry: (Model, fk_field_name, extra_label)
+        # The user-data models that live on the external DB and are declared
+        # db_constraint=False — those are the ones CASCADE cannot reach, so
+        # they are the ones that actually accumulate orphans.
         models_to_check = [
             ('playhistory', 'user', 'PlayHistory'),
             ('watchlist', 'user', 'WatchList'),
@@ -56,10 +59,19 @@ class Command(BaseCommand):
             ('useractivity', 'user', 'UserActivity'),
             ('emailverification', 'user', 'EmailVerification'),
             ('passwordresetotp', 'user', 'PasswordResetOTP'),
+            ('accountdeletionotp', 'user', 'AccountDeletionOTP'),
             ('userclouddata', 'user', 'UserCloudData'),
             ('userprofile', 'user', 'UserProfile'),
+            ('userheartbeat', 'user', 'UserHeartbeat'),
             ('emailsendlog', 'sent_by', 'EmailSendLog (sent_by)'),
             ('emailmessage', 'sent_by', 'EmailMessage (sent_by)'),
+        ]
+
+        # SyncedUser.user is SET_NULL, so an orphan is a row whose user link
+        # was already nulled rather than one pointing at a missing ID. Those
+        # are found by email instead, below.
+        unlink_models = [
+            ('websitevisitor', 'user', 'WebsiteVisitor (unlink, keep traffic row)'),
         ]
 
         from django.apps import apps
@@ -102,6 +114,37 @@ class Command(BaseCommand):
                 total_deleted += deleted
                 self.stdout.write(self.style.SUCCESS(
                     f'  DELETED {deleted} {label} rows'
+                ))
+
+        # Traffic rows that merely pointed at a deleted account are unlinked
+        # rather than deleted — the visit still happened.
+        for model_name, fk_field, label in unlink_models:
+            try:
+                Model = apps.get_model('core', model_name)
+            except LookupError:
+                self.stdout.write(f'  SKIP  {label} — model not found')
+                continue
+
+            ref_ids = set(
+                Model.objects.exclude(**{f'{fk_field}_id__isnull': True})
+                             .values_list(f'{fk_field}_id', flat=True)
+                             .distinct()
+            )
+            orphan_ids = ref_ids - valid_ids
+            if not orphan_ids:
+                self.stdout.write(f'  OK    {label} — no orphans')
+                continue
+
+            count = Model.objects.filter(**{f'{fk_field}_id__in': orphan_ids}).count()
+            self.stdout.write(self.style.WARNING(
+                f'  FOUND {label} — {count} row(s) to unlink'
+            ))
+            if not dry_run:
+                updated = Model.objects.filter(**{f'{fk_field}_id__in': orphan_ids}).update(
+                    **{fk_field: None})
+                total_deleted += updated
+                self.stdout.write(self.style.SUCCESS(
+                    f'  UNLINKED {updated} {label} rows'
                 ))
 
         self.stdout.write('')
