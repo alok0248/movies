@@ -15781,6 +15781,8 @@ def db_connection_detail(request, pk):
 # ---------------------------------------------------------------- settings overview
 
 SETTINGS_OVERVIEW_DAYS = 7
+SETTINGS_OVERVIEW_CACHE_KEY = 'settings_overview_v1'
+SETTINGS_OVERVIEW_CACHE_SECONDS = 120
 
 
 def _day_series(model, date_field, days=SETTINGS_OVERVIEW_DAYS, **filters):
@@ -15851,15 +15853,12 @@ def _settings_health():
     return rows
 
 
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@cache_control(private=True, no_store=True)
-def settings_overview(request):
-    """The settings dashboard: configuration health, traffic and source mix.
+def _overview_context():
+    """Everything the overview shows, built once so it can be cached whole.
 
-    Every number here is read from the tables that already record it, so this
-    page duplicates no setting and no count that another page owns; it links to
-    the page that owns each one instead.
+    ``DataSourceUsageLog`` holds hundreds of thousands of rows, and summing
+    them is the one expensive read on this page, so the result is held for
+    ``SETTINGS_OVERVIEW_CACHE_SECONDS`` rather than paid on every open.
     """
     from .models import (TMDBMovie, TMDBTV, Subscriber, BlockedIP, TMDBApiKey,
                          DataSourceUsageLog, UserPageView, RequestLog)
@@ -15868,8 +15867,10 @@ def settings_overview(request):
     request_series = _day_series(RequestLog, 'created_at')
     blocked_series = _day_series(RequestLog, 'created_at', status_code__gte=400)
 
-    mix_rows = (DataSourceUsageLog.objects.values('source')
-                .annotate(total=Sum('usage_count')).order_by('-total'))
+    week_start = timezone.localdate() - datetime.timedelta(days=SETTINGS_OVERVIEW_DAYS - 1)
+    week_start_at = timezone.make_aware(datetime.datetime.combine(week_start, datetime.time.min))
+    mix_rows = (DataSourceUsageLog.objects.filter(created_at__gte=week_start_at)
+                .values('source').annotate(total=Sum('usage_count')).order_by('-total'))
     mix_total = sum(row['total'] or 0 for row in mix_rows) or 1
     mix = [{'label': dict(DataSourceUsageLog.SOURCE_CHOICES).get(row['source'], row['source']),
             'count': row['total'] or 0,
@@ -15887,7 +15888,7 @@ def settings_overview(request):
         for request_point, error_point in zip(request_series, blocked_series)
     ]
 
-    return render(request, 'core/settings_overview.html', {
+    return {
         'health': _settings_health(),
         'page_series': page_series,
         'request_series': request_series,
@@ -15908,7 +15909,24 @@ def settings_overview(request):
             {'label': 'Active API keys', 'value': TMDBApiKey.objects.filter(is_active=True).count(), 'icon': 'fa-key'},
             {'label': 'Subscribers', 'value': Subscriber.objects.count(), 'icon': 'fa-envelope'},
         ],
-    })
+    }
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@cache_control(private=True, no_store=True)
+def settings_overview(request):
+    """The settings dashboard: configuration health, traffic and source mix.
+
+    Every number here is read from the tables that already record it, so this
+    page duplicates no setting and no count that another page owns; it links to
+    the page that owns each one instead.
+    """
+    stats = cache.get(SETTINGS_OVERVIEW_CACHE_KEY)
+    if stats is None:
+        stats = _overview_context()
+        cache.set(SETTINGS_OVERVIEW_CACHE_KEY, stats, SETTINGS_OVERVIEW_CACHE_SECONDS)
+    return render(request, 'core/settings_overview.html', stats)
 
 
 SETTINGS_HUB = {
