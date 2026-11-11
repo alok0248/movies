@@ -17,7 +17,7 @@
             {% if counts.guests %}
                 <span class="pill bg-dark border border-secondary">{{ counts.guests }} guest sessions</span>
             {% endif %}
-            <a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;{% if q %}q={{ q|urlencode }}&amp;{% endif %}export=csv" title="Download this filtered list as CSV"><i class="fas fa-file-csv me-1"></i>CSV</a>
+            <a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;{% if devices_new %}nv={{ devices_new }}&amp;{% endif %}{% if q %}q={{ q|urlencode }}&amp;{% endif %}export=csv" title="Download this filtered list as CSV"><i class="fas fa-file-csv me-1"></i>CSV</a>
         </div>
     </div>
 
@@ -28,6 +28,15 @@
         <a class="fbtn {% if devices_view == 'free' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=free{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Free <span class="sub">{{ device_chips.free }}</span></a>
         <a class="fbtn {% if devices_view == 'expiring' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=expiring{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Expiring &le;7d <span class="sub">{{ device_chips.expiring }}</span></a>
         <a class="fbtn {% if devices_view == 'noacc' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=noacc{% if q %}&amp;q={{ q|urlencode }}{% endif %}">No account <span class="sub">{{ device_chips.noacc }}</span></a>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap mb-2 align-items-center">
+        <span class="sub me-1">New users:</span>
+        <a class="fbtn {% if not devices_new %}active{% endif %}" href="?tab=uniquedevices&amp;ds={{ devices_view }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" title="No time limit">Any time</a>
+        <a class="fbtn {% if devices_new == 'hour' %}active{% endif %}" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;nv=hour{% if q %}&amp;q={{ q|urlencode }}{% endif %}" title="Registered in the last hour">Last hour <span class="sub">{{ new_counts.hour }}</span></a>
+        <a class="fbtn {% if devices_new == 'day' %}active{% endif %}" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;nv=day{% if q %}&amp;q={{ q|urlencode }}{% endif %}" title="Registered in the last 24 hours">Last 24h <span class="sub">{{ new_counts.day }}</span></a>
+        <a class="fbtn {% if devices_new == 'week' %}active{% endif %}" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;nv=week{% if q %}&amp;q={{ q|urlencode }}{% endif %}" title="Registered in the last 7 days">This week <span class="sub">{{ new_counts.week }}</span></a>
+        <a class="fbtn {% if devices_new == 'month' %}active{% endif %}" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;nv=month{% if q %}&amp;q={{ q|urlencode }}{% endif %}" title="Registered in the last 30 days">Last 30 days <span class="sub">{{ new_counts.month }}</span></a>
     </div>
 
     <div class="table-responsive">
@@ -154,8 +163,8 @@
 
     {% if unique_page.has_other_pages %}
     <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
-        {% if unique_page.has_previous %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;upage={{ unique_page.previous_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
+        {% if unique_page.has_previous %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}{% if devices_new %}&amp;nv={{ devices_new }}{% endif %}&amp;upage={{ unique_page.previous_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
         <span class="sub">Devices {{ unique_page.number }} of {{ unique_page.paginator.num_pages }} &middot; {{ unique_page.paginator.count }} shown</span>
-        {% if unique_page.has_next %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;upage={{ unique_page.next_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
+        {% if unique_page.has_next %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}{% if devices_new %}&amp;nv={{ devices_new }}{% endif %}&amp;upage={{ unique_page.next_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
     </nav>
     {% endif %}

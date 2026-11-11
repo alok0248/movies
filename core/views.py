@@ -4492,6 +4492,24 @@ def android_app_users_full(request, app_id):
                     or needle in (r['model'] or '').lower()
                     or needle in (r['os'] or '').lower()]
 
+        # "New" means first registered with the app: the account's creation date
+        # when it has one, otherwise the install's first sighting. It combines
+        # with the status chips above and the search box.
+        windows = {'hour': timezone.timedelta(hours=1),
+                   'day': timezone.timedelta(hours=24),
+                   'week': timezone.timedelta(days=7),
+                   'month': timezone.timedelta(days=30)}
+        nview = (request.GET.get('nv') or '').strip().lower()
+        if nview not in windows:
+            nview = ''
+        now = timezone.now()
+        new_counts = {key: sum(1 for r in rows
+                               if r['registered'] and r['registered'] >= now - delta)
+                      for key, delta in windows.items()}
+        if nview:
+            cutoff = now - windows[nview]
+            rows = [r for r in rows if r['registered'] and r['registered'] >= cutoff]
+
         epoch = timezone.make_aware(datetime.datetime(1970, 1, 1))
         rows.sort(key=lambda r: (r['last_seen'] or epoch), reverse=True)
 
@@ -4542,7 +4560,8 @@ def android_app_users_full(request, app_id):
             row['recent'] = recent.get(row['email'], [])
 
         ctx.update({'unique_rows': page_rows, 'unique_page': unique_page,
-                    'devices_view': dview, 'device_chips': chips})
+                    'devices_view': dview, 'device_chips': chips,
+                    'devices_new': nview, 'new_counts': new_counts})
 
 
     elif tab == 'visits':
