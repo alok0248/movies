@@ -117,6 +117,32 @@
                 </div>
             </div>
         </div>
+
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body">
+                    <h6 class="text-white"><i class="fas fa-mobile-screen-button me-2"></i>Accounts on more than one device</h6>
+                    <div class="text-secondary small mb-2">Kept from the heartbeat, so a second phone no longer replaces the first one in every report.</div>
+                    <table class="table table-sm table-dark mb-0">
+                        <thead><tr><th>Account</th><th>Devices seen</th></tr></thead>
+                        <tbody>
+                            {% for row in multi_device %}
+                            <tr>
+                                <td class="text-white">{{ row.email }}</td>
+                                <td>
+                                    {% for device in row.devices %}
+                                    <span class="badge bg-secondary me-1">{{ device.device_model|default:device.device_id|truncatechars:22 }} · {{ device.app_version|default:'?' }}</span>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="2" class="text-secondary">No account has checked in from a second device yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

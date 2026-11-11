@@ -4724,10 +4724,21 @@ def data_health(request):
         last_seen_at__lt=now - timezone.timedelta(minutes=30),
         last_seen_at__gte=now - timezone.timedelta(hours=24)).order_by('-last_seen_at')[:20])
 
+    multi_device = []
+    for row in (AccountDevice.objects.values('email').order_by()
+                .annotate(devices=Count('id')).filter(devices__gt=1)
+                .order_by('-devices')[:15]):
+        multi_device.append({
+            'email': row['email'],
+            'devices': list(AccountDevice.objects.filter(email=row['email'])
+                            .order_by('-last_seen_at')[:4]),
+        })
+
     return render(request, 'core/data_health.html', {
         'checks': checks, 'builds': builds, 'groups': groups, 'silent': silent,
         'account_devices': AccountDevice.objects.count(),
         'latency_ms': _p95_latency_ms(),
+        'multi_device': multi_device,
     })
 
 
