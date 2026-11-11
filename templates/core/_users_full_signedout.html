@@ -8,9 +8,12 @@
             <div class="sect-title"><i class="fas fa-user-lock text-info me-2"></i>Accounts currently signed out of the app</div>
             <div class="sub">Signed out but still using the app — each row is that account's latest heartbeat, so IP, device and activity are as fresh as the app's last check-in (about 1 minute).</div>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <span class="pill bg-dark border border-secondary">{{ signed_out|length }} signed out</span>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <span class="pill bg-dark border border-secondary">{{ signed_out_total }} signed out</span>
             <span class="pill bg-success">{{ signed_out_online|default:0 }} online now</span>
+            {% if signed_out|length < signed_out_total %}
+                <span class="sub">newest {{ signed_out|length }} shown</span>
+            {% endif %}
         </div>
     </div>
 

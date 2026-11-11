@@ -4379,8 +4379,13 @@ def android_app_users_full(request, app_id):
             except (TypeError, ValueError, ZeroDivisionError):
                 return 0
 
+        signed_out_qs = UserHeartbeat.objects.filter(is_logged_in=False)
+        signed_out_online = signed_out_qs.filter(
+            last_seen_at__gte=timezone.now()
+            - timezone.timedelta(seconds=UserHeartbeat.ONLINE_WINDOW_SECONDS)).count()
+
         signed_out = []
-        for h in UserHeartbeat.objects.filter(is_logged_in=False).order_by('-last_seen_at')[:50]:
+        for h in signed_out_qs.order_by('-last_seen_at')[:50]:
             actions = [str(a) for a in (h.recent_actions or []) if str(a).strip()]
             signed_out.append({
                 'hb': h,
@@ -4395,7 +4400,8 @@ def android_app_users_full(request, app_id):
             })
 
         ctx['signed_out'] = signed_out
-        ctx['signed_out_online'] = sum(1 for row in signed_out if row['online'])
+        ctx['signed_out_total'] = signed_out_qs.count()
+        ctx['signed_out_online'] = signed_out_online
 
     if partial:
         # The tab bar asked for this one list: send the markup and nothing else.
