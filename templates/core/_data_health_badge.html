@@ -1,0 +1,45 @@
+{% if health_alerts %}
+<div id="dh-pop" hidden style="position:fixed;z-index:1200;width:290px;padding:.45rem;background:#15161f;border:1px solid rgba(255,255,255,.12);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.6);font-size:.74rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .45rem .4rem">
+        <span style="color:rgba(255,255,255,.45);font-size:.62rem;text-transform:uppercase;letter-spacing:.06em">Data health</span>
+        <span style="color:#fbbf24;font-size:.66rem">{{ health_alerts }} open</span>
+    </div>
+    {% for row in health_alert_rows %}
+    <a href="{% url 'data_health' %}#check-{{ row.slug }}" class="dh-row" style="display:flex;justify-content:space-between;gap:.6rem;padding:.4rem .45rem;border-radius:8px;color:rgba(255,255,255,.82);text-decoration:none">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row.label }}</span>
+        <span style="color:#fbbf24;font-variant-numeric:tabular-nums;flex:none">{{ row.count }}</span>
+    </a>
+    {% endfor %}
+    <a href="{% url 'data_health' %}" style="display:block;margin-top:.3rem;padding:.45rem;border-top:1px solid rgba(255,255,255,.08);color:#a5b4fc;text-decoration:none;font-size:.7rem">Open the health page</a>
+</div>
+<style>#dh-pop .dh-row:hover { background: rgba(255,255,255,.06); }</style>
+<script>
+    (function () {
+        var pop = document.getElementById('dh-pop');
+        if (!pop) { return; }
+        function place(trigger) {
+            var box = trigger.getBoundingClientRect();
+            pop.hidden = false;
+            pop.style.top = Math.max(8, Math.min(box.top - 6,
+                window.innerHeight - pop.offsetHeight - 8)) + 'px';
+            pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 10,
+                box.right + 10)) + 'px';
+        }
+        window.dhToggle = function (trigger) {
+            if (pop.hidden) { place(trigger); } else { pop.hidden = true; }
+            trigger.setAttribute('aria-expanded', String(!pop.hidden));
+        };
+        document.addEventListener('click', function (e) {
+            if (pop.hidden || pop.contains(e.target)) { return; }
+            if (e.target.closest && e.target.closest('[data-dh-badge]')) { return; }
+            pop.hidden = true;
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { pop.hidden = true; }
+        });
+        window.addEventListener('resize', function () { pop.hidden = true; });
+        var sidebar = document.getElementById('adminSidebar');
+        if (sidebar) { sidebar.addEventListener('scroll', function () { pop.hidden = true; }); }
+    })();
+</script>
+{% endif %}

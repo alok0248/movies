@@ -4669,45 +4669,33 @@ def data_health(request):
     day_ago = now - timezone.timedelta(hours=24)
     month_ago = now - timezone.timedelta(days=90)
 
-    shared_devices = (SyncedUser.objects.exclude(device_id='')
-                      .values('device_id').annotate(n=Count('id')).filter(n__gt=1).count())
     recent_views = set(ErrorLog.objects.filter(created_at__gte=day_ago)
                        .values_list('view_name', flat=True).distinct())
     earlier_views = set(ErrorLog.objects.filter(created_at__lt=day_ago)
                         .values_list('view_name', flat=True).distinct())
 
-    checks = [
-        {'label': 'Expired but still subscribed',
-         'count': SyncedUser.objects.filter(is_subscribed=True, valid_until__lt=today).count(),
-         'action': 'expire_subscriptions',
-         'hint': 'The app keeps granting paid access until these are cleared.'},
-        {'label': 'Accounts not marked verified',
-         'count': SyncedUser.objects.filter(is_email_verified=False).count(),
-         'action': 'sync_verification',
-         'hint': 'Playback gating reads this flag; it is rebuilt from the login account.'},
-        {'label': 'Accounts with no device id',
-         'count': SyncedUser.objects.filter(device_id='').count(), 'action': '',
-         'hint': 'They cannot be joined to an install record.'},
-        {'label': 'Device ids shared by two accounts', 'count': shared_devices, 'action': '',
-         'hint': 'Usually a reinstall that reused an id.'},
-        {'label': 'Install records with no account link',
-         'count': AndroidAppDevice.objects.filter(account_key='').count(),
-         'action': 'link_devices',
-         'hint': 'Tries the id first, then the recent addresses of each install.'},
-        {'label': 'Guest heartbeat rows',
-         'count': UserHeartbeat.objects.filter(email__startswith='guest_').count(),
-         'action': 'prune_app_data', 'hint': 'Pruned after 30 days of inactivity.'},
-        {'label': 'Device visits older than 90 days',
-         'count': AndroidAppDeviceVisit.objects.filter(visited_at__lt=month_ago).count(),
-         'action': 'prune_app_data', 'hint': 'Retention keeps the tables small.'},
-        {'label': 'App logs older than 90 days',
-         'count': AndroidAppLog.objects.filter(timestamp__lt=month_ago).count(),
-         'action': 'prune_app_data', 'hint': ''},
-        {'label': 'Errors captured in the last 24 hours',
-         'count': ErrorLog.objects.filter(created_at__gte=day_ago).count(), 'action': '',
-         'hint': '%d view(s) failing now that were not failing before.'
-                 % len(recent_views - earlier_views)},
-    ]
+    from .health import check_rows
+
+    meta = {
+        'expired': ('expire_subscriptions',
+                    'The app keeps granting paid access until these are cleared.'),
+        'unverified': ('sync_verification',
+                       'Playback gating reads this flag; it is rebuilt from the login account.'),
+        'nodevice': ('', 'They cannot be joined to an install record.'),
+        'shared': ('', 'Usually a reinstall that reused an id.'),
+        'unlinked': ('link_devices',
+                     'Tries the id first, then the recent addresses of each install.'),
+        'guests': ('prune_app_data', 'Pruned after 30 days of inactivity.'),
+        'visits': ('prune_app_data', 'Retention keeps the tables small.'),
+        'logs': ('prune_app_data', ''),
+        'errors': ('', '%d view(s) failing now that were not failing before.'
+                       % len(recent_views - earlier_views)),
+    }
+    checks = []
+    for slug, label, count in check_rows():
+        action, hint = meta.get(slug, ('', ''))
+        checks.append({'slug': slug, 'label': label, 'count': count,
+                       'action': action, 'hint': hint})
 
     builds = []
     for app_obj in AndroidApp.objects.all():
