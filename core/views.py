@@ -11143,6 +11143,7 @@ def api_user_heartbeat(request):
     )
 
     _record_heartbeat_activity(hb)
+    _link_installs_for_heartbeat(hb)
 
     prof = _get_synced_profile(email)
     return JsonResponse({
@@ -11190,15 +11191,39 @@ def api_user_forgot_password(request):
     return JsonResponse(resp)
 
 
+def _profile_for_ip(ip_address):
+    """The single account whose heartbeats come from this address, else None.
+
+    Guest sessions are ignored: a device that is signed out and signed in
+    heartbeats from the same address, and counting the guest as a second owner
+    would make every address look shared. Two real accounts on one address
+    (carrier NAT, an office) still resolve to None — guessing there would attach
+    someone else's visits to an account.
+    """
+    from .models import SyncedUser, UserHeartbeat
+
+    if not ip_address:
+        return None
+    emails = list(UserHeartbeat.objects.filter(ip_address=ip_address)
+                  .values_list('email', flat=True).distinct()[:10])
+    owners = {}
+    for email in emails:
+        profile = SyncedUser.objects.filter(email=email).exclude(device_id='').first()
+        if profile is not None:
+            owners[profile.pk] = profile
+    if len(owners) != 1:
+        return None
+    return next(iter(owners.values()))
+
+
 def _resolve_account_key(user_id, ip_address):
     """The account device id behind an install record, or '' when unknown.
 
     The app posts its account device id to sync and heartbeat but a different
     (per-install) id to the install/visit endpoint. When the two happen to be the
-    same value the id itself is the key. Otherwise the visitor's IP can bridge
-    them: if every heartbeat from that address belongs to one account, that
-    account is the owner. Shared addresses (carrier NAT, offices) resolve to
-    more than one email and deliberately resolve to nothing rather than guess.
+    same value the id itself is the key. Otherwise the visitor's IP bridges them:
+    if every real account heartbeating from that address is the same one, it
+    owns the install.
     """
     from .models import SyncedUser, UserHeartbeat
 
@@ -11206,14 +11231,31 @@ def _resolve_account_key(user_id, ip_address):
     if user_id and (SyncedUser.objects.filter(device_id=user_id).exists()
                     or UserHeartbeat.objects.filter(device_id=user_id).exists()):
         return user_id
-    if not ip_address:
-        return ''
-    emails = list(UserHeartbeat.objects.filter(ip_address=ip_address)
-                  .values_list('email', flat=True).distinct()[:5])
-    if len(emails) != 1:
-        return ''
-    profile = SyncedUser.objects.filter(email=emails[0]).exclude(device_id='').first()
+    profile = _profile_for_ip(ip_address)
     return profile.device_id if profile else ''
+
+
+def _link_installs_for_heartbeat(hb):
+    """Join install records that hit this account's address to the account.
+
+    Called on every heartbeat, when the address is current: an install that
+    requested something from the same IP in the last hour is that account's
+    device. Shared addresses are refused by ``_profile_for_ip``.
+    """
+    from .models import AndroidAppDevice, AndroidAppDeviceVisit
+
+    if not hb.ip_address or not hb.device_id:
+        return
+    profile = _profile_for_ip(hb.ip_address)
+    if profile is None or profile.device_id != hb.device_id:
+        return
+    since = timezone.now() - timezone.timedelta(hours=1)
+    device_pks = list(AndroidAppDeviceVisit.objects
+                      .filter(ip_address=hb.ip_address, visited_at__gte=since)
+                      .values_list('device_id', flat=True).distinct()[:20])
+    if device_pks:
+        AndroidAppDevice.objects.filter(pk__in=device_pks).exclude(
+            account_key=hb.device_id).update(account_key=hb.device_id)
 
 
 def _log_subscription_event(profile, actor, action, before=None):

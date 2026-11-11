@@ -29,15 +29,23 @@ class Command(BaseCommand):
         total = linked = 0
         for device in queryset.iterator():
             total += 1
-            last_ip = (AndroidAppDeviceVisit.objects.filter(device=device)
-                       .order_by('-visited_at').values_list('ip_address', flat=True).first())
-            key = _resolve_account_key(device.user_id, last_ip)
+            # The newest few addresses that install used, newest first: the last
+            # one may predate the account's current address by weeks.
+            addresses = list(AndroidAppDeviceVisit.objects.filter(device=device)
+                             .order_by('-visited_at')
+                             .values_list('ip_address', flat=True).distinct()[:5])
+            key, used_ip = '', None
+            for address in addresses:
+                key = _resolve_account_key(device.user_id, address)
+                if key and key != device.user_id:
+                    used_ip = address
+                    break
             if not key or key == device.user_id:
                 continue
             linked += 1
             self.stdout.write('  LINK  %s (app %s) -> %s  via %s' % (
                 device.user_id[:18], device.android_app_id, key[:18],
-                'ip ' + str(last_ip) if last_ip else 'id'))
+                'ip ' + str(used_ip) if used_ip else 'id'))
             if options['apply']:
                 device.account_key = key
                 device.save(update_fields=['account_key'])
