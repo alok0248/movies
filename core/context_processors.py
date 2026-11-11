@@ -232,3 +232,60 @@ def admin_badges(request):
         pass
 
     return {'admin_badges': badges}
+
+
+"""Values the admin chrome needs on every page."""
+
+from django.core.cache import cache
+from django.db.models import Count
+from django.utils import timezone
+
+ALERT_CACHE_KEY = 'data_health_alert_v1'
+ALERT_CACHE_SECONDS = 120
+
+
+def health_alert_count():
+    """How many data-health checks currently need a look.
+
+    Same questions the data-health page asks; counted here so the sidebar can
+    show one dot without importing a view.
+    """
+    from .models import (AndroidAppDevice, AndroidAppDeviceVisit, AndroidAppLog,
+                         ErrorLog, SyncedUser, UserHeartbeat)
+
+    now = timezone.now()
+    today = timezone.localdate()
+    day_ago = now - timezone.timedelta(hours=24)
+    month_ago = now - timezone.timedelta(days=90)
+    counts = [
+        SyncedUser.objects.filter(is_subscribed=True, valid_until__lt=today).count(),
+        SyncedUser.objects.filter(is_email_verified=False).count(),
+        SyncedUser.objects.filter(device_id='').count(),
+        (SyncedUser.objects.exclude(device_id='').values('device_id').order_by()
+         .annotate(n=Count('id')).filter(n__gt=1).count()),
+        AndroidAppDevice.objects.filter(account_key='').count(),
+        UserHeartbeat.objects.filter(email__startswith='guest_').count(),
+        AndroidAppDeviceVisit.objects.filter(visited_at__lt=month_ago).count(),
+        AndroidAppLog.objects.filter(timestamp__lt=month_ago).count(),
+        ErrorLog.objects.filter(created_at__gte=day_ago).count(),
+    ]
+    return sum(1 for n in counts if n)
+
+
+def data_health_alert(request):
+    """Expose ``health_alerts`` to the admin sidebar."""
+    if not (getattr(request, 'path', '') or '').startswith('/admin-dashboard'):
+        return {}
+    user = getattr(request, 'user', None)
+    if not (user and user.is_authenticated and user.is_staff):
+        return {}
+
+    count = cache.get(ALERT_CACHE_KEY)
+    if count is None:
+        try:
+            count = health_alert_count()
+        except Exception:      # a badge is never worth a broken page
+            return {}
+        cache.set(ALERT_CACHE_KEY, count, ALERT_CACHE_SECONDS)
+    return {'health_alerts': count}
+

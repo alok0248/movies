@@ -4656,6 +4656,7 @@ def data_health(request):
             label, flags = actions[action]
             try:
                 call_command(action, *flags, stdout=io.StringIO())
+                cache.delete('data_health_alert_v1')
                 messages.success(request, label + '.')
             except Exception as exc:
                 messages.error(request, 'Could not run %s: %s' % (action, exc))

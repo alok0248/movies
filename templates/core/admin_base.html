@@ -569,6 +569,7 @@
             </a>
             <a href="{% url 'data_health' %}" class="sb-item {% if 'data-health' in request.path %}active{% endif %}">
                 <i class="fas fa-heart-pulse"></i> Data Health
+                {% if health_alerts %}<span title="{{ health_alerts }} data-health check{{ health_alerts|pluralize }} need attention" style="width:7px;height:7px;border-radius:50%;background:#fbbf24;margin-left:auto;flex:none;box-shadow:0 0 0 2px rgba(251,191,36,.18)"></span>{% endif %}
             </a>
             <a href="{% url 'admin_analytics' %}" class="sb-item {% if 'admin-dashboard/analytics' in request.path and 'engagement' not in request.path %}active{% endif %}">
                 <i class="fas fa-chart-line"></i> User Analytics
