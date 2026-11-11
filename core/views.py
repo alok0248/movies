@@ -4642,6 +4642,7 @@ def data_health(request):
     from .models import (AccountDevice, AndroidApp, AndroidAppDevice,
                          AndroidAppDeviceVisit, AndroidAppLog, ErrorLog,
                          SyncedUser, UserHeartbeat)
+    from .health import ACK_WINDOW, acknowledged_slugs, check_rows
 
     actions = {
         'expire_subscriptions': ('Lapsed subscriptions cleared', ()),
@@ -4652,7 +4653,23 @@ def data_health(request):
 
     if request.method == 'POST':
         action = (request.POST.get('action') or '').strip()
-        if action in actions:
+        slug = (request.POST.get('slug') or '').strip()
+        if action in ('acknowledge', 'unacknowledge'):
+            from .models import HealthCheckAck
+            if slug not in {row[0] for row in check_rows()}:
+                messages.error(request, 'Unknown check.')
+            elif action == 'acknowledge':
+                HealthCheckAck.objects.update_or_create(
+                    slug=slug,
+                    defaults={'acknowledged_at': timezone.now(),
+                              'acknowledged_by': (request.user.get_username() or '')[:150]})
+                cache.delete('data_health_alert_v1')
+                messages.success(request, 'Dismissed for 24 hours; the badge ignores it until then.')
+            else:
+                HealthCheckAck.objects.filter(slug=slug).delete()
+                cache.delete('data_health_alert_v1')
+                messages.success(request, 'Dismissal cleared.')
+        elif action in actions:
             label, flags = actions[action]
             try:
                 call_command(action, *flags, stdout=io.StringIO())
@@ -4674,7 +4691,6 @@ def data_health(request):
     earlier_views = set(ErrorLog.objects.filter(created_at__lt=day_ago)
                         .values_list('view_name', flat=True).distinct())
 
-    from .health import check_rows
 
     meta = {
         'expired': ('expire_subscriptions',
@@ -4691,11 +4707,15 @@ def data_health(request):
         'errors': ('', '%d view(s) failing now that were not failing before.'
                        % len(recent_views - earlier_views)),
     }
+    acknowledged = acknowledged_slugs()
     checks = []
     for slug, label, count in check_rows():
         action, hint = meta.get(slug, ('', ''))
+        dismissed_at = acknowledged.get(slug)
         checks.append({'slug': slug, 'label': label, 'count': count,
-                       'action': action, 'hint': hint})
+                       'action': action, 'hint': hint,
+                       'acknowledged_at': dismissed_at,
+                       'ack_expires': (dismissed_at + ACK_WINDOW) if dismissed_at else None})
 
     builds = []
     for app_obj in AndroidApp.objects.all():

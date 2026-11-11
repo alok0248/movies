@@ -244,13 +244,13 @@ ALERT_CACHE_SECONDS = 120
 
 def health_alert_rows():
     """The checks that currently need a look, cached for two minutes."""
-    from .health import check_rows
+    from .health import open_check_rows
 
     rows = cache.get(ALERT_CACHE_KEY)
     if rows is None:
         try:
             rows = [{'slug': slug, 'label': label, 'count': count}
-                    for slug, label, count in check_rows() if count]
+                    for slug, label, count in open_check_rows()]
         except Exception:      # a badge is never worth a broken page
             return []
         cache.set(ALERT_CACHE_KEY, rows, ALERT_CACHE_SECONDS)

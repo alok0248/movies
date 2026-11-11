@@ -40,3 +40,21 @@ def check_rows():
         ('errors', 'Errors captured in the last 24 hours',
          ErrorLog.objects.filter(created_at__gte=day_ago).count()),
     ]
+
+
+ACK_WINDOW = timezone.timedelta(hours=24)
+
+
+def acknowledged_slugs(now=None):
+    """Slugs dismissed in the last 24 hours, with when they were dismissed."""
+    from .models import HealthCheckAck
+
+    now = now or timezone.now()
+    return dict(HealthCheckAck.objects.filter(acknowledged_at__gte=now - ACK_WINDOW)
+                .values_list('slug', 'acknowledged_at'))
+
+
+def open_check_rows(now=None):
+    """``check_rows()`` minus whatever is already dismissed."""
+    dismissed = acknowledged_slugs(now)
+    return [row for row in check_rows() if row[2] and row[0] not in dismissed]

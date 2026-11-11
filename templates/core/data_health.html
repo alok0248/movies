@@ -41,6 +41,29 @@
                         </button>
                     </form>
                     {% endif %}
+                    {% if check.count %}
+                        {% if check.acknowledged_at %}
+                        <div class="text-secondary small mt-2">
+                            <i class="fas fa-bell-slash me-1"></i>Dismissed {{ check.acknowledged_at|timesince }} ago — the badge ignores it until {{ check.ack_expires|date:'d M, H:i' }}.
+                        </div>
+                        <form method="post" class="mt-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="unacknowledge">
+                            <input type="hidden" name="slug" value="{{ check.slug }}">
+                            <button class="btn btn-sm btn-link text-decoration-none p-0" type="submit">Show it again</button>
+                        </form>
+                        {% else %}
+                        <form method="post" class="mt-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="acknowledge">
+                            <input type="hidden" name="slug" value="{{ check.slug }}">
+                            <button class="btn btn-sm btn-outline-secondary" type="submit"
+                                    title="Hide this check from the sidebar badge for 24 hours">
+                                <i class="fas fa-bell-slash me-1"></i>Dismiss 24h
+                            </button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
                 </div>
             </div>
         </div>

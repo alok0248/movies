@@ -3572,3 +3572,21 @@ class AlertIncident(models.Model):
 
     def __str__(self):
         return '%s since %s' % (self.check_key, self.opened_at.strftime('%Y-%m-%d %H:%M'))
+
+
+class HealthCheckAck(models.Model):
+    """A data-health check an operator has dismissed for a day.
+
+    The check keeps reporting its own count; this only tells the sidebar badge
+    that someone has already looked and does not need reminding again yet.
+    """
+    slug = models.CharField(max_length=32, unique=True)
+    acknowledged_at = models.DateTimeField(db_index=True)
+    acknowledged_by = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Health check dismissal'
+        verbose_name_plural = 'Health check dismissals'
+
+    def __str__(self):
+        return f'{self.slug} until {self.acknowledged_at:%Y-%m-%d %H:%M}'
