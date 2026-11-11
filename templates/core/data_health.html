@@ -1,9 +1,9 @@
-{% extends 'admin_base.html' %}
+{% extends 'core/admin_base.html' %}
 {% load static %}
 
 {% block title %}Data health{% endblock %}
 
-{% block content %}
+{% block admin_content %}
 <div class="container-fluid py-3">
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
         <div>
@@ -77,6 +77,7 @@
             <div class="card bg-dark border-secondary mb-3">
                 <div class="card-body">
                     <h6 class="text-white"><i class="fas fa-bug me-2"></i>Error types in the last 24h</h6>
+                    {% if latency_ms %}<div class="text-secondary small mb-1">p95 response {{ latency_ms }} ms over the last 24h</div>{% endif %}
                     <table class="table table-sm table-dark mb-0">
                         <thead><tr><th>Kind</th><th>View</th><th>Status</th><th>Count</th></tr></thead>
                         <tbody>

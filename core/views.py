@@ -4605,6 +4605,26 @@ def android_app_users_full(request, app_id):
     return render(request, 'core/android_app_users_full.html', ctx)
 
 
+def _p95_latency_ms(hours=24, limit=5000):
+    """95th-percentile response time, when the request log records one."""
+    from .models import RequestLog
+
+    candidate = next((f.name for f in RequestLog._meta.fields
+                      if f.name in ('duration_ms', 'response_ms', 'elapsed_ms',
+                                    'response_time_ms', 'duration')), '')
+    if not candidate:
+        return None
+    since = timezone.now() - timezone.timedelta(hours=hours)
+    values = [v for v in RequestLog.objects.filter(created_at__gte=since)
+              .values_list(candidate, flat=True)[:limit]
+              if isinstance(v, (int, float))]
+    if not values:
+        return 0
+    values.sort()
+    index = max(0, min(len(values) - 1, int(len(values) * 0.95) - 1))
+    return int(values[index])
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def data_health(request):
@@ -4707,6 +4727,7 @@ def data_health(request):
     return render(request, 'core/data_health.html', {
         'checks': checks, 'builds': builds, 'groups': groups, 'silent': silent,
         'account_devices': AccountDevice.objects.count(),
+        'latency_ms': _p95_latency_ms(),
     })
 
 
