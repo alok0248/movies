@@ -4561,7 +4561,9 @@ def android_app_users_full(request, app_id):
 
         ctx.update({'unique_rows': page_rows, 'unique_page': unique_page,
                     'devices_view': dview, 'device_chips': chips,
-                    'devices_new': nview, 'new_counts': new_counts})
+                    'devices_new': nview, 'new_counts': new_counts,
+                    # Row numbers continue across pages instead of restarting at 1.
+                    'row_offset': (unique_page.number - 1) * 25})
 
 
     elif tab == 'visits':
