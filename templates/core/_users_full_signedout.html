@@ -1,33 +1,118 @@
 {% load custom_filters %}
-    {% if signed_out %}
-    <hr class="border-secondary my-4">
-    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
-        <div class="sect-title"><i class="fas fa-user-lock text-info me-2"></i>Accounts currently signed out of the app</div>
-        <div class="sub">Still using the app as a guest — their heartbeat says <code>is_logged_in=false</code>.</div>
+    <!-- Accounts still using the app as a guest (heartbeat says is_logged_in=false).
+         Every column here is read from that account's newest heartbeat, which the
+         app posts about once a minute: device + app build, IP, the screen it is on,
+         the title being played and how far into it, and the app's recent actions. -->
+    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mt-3 mb-1">
+        <div>
+            <div class="sect-title"><i class="fas fa-user-lock text-info me-2"></i>Accounts currently signed out of the app</div>
+            <div class="sub">Signed out but still using the app — each row is that account's latest heartbeat, so IP, device and activity are as fresh as the app's last check-in (about 1 minute).</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="pill bg-dark border border-secondary">{{ signed_out|length }} signed out</span>
+            <span class="pill bg-success">{{ signed_out_online|default:0 }} online now</span>
+        </div>
     </div>
+
+    {% if signed_out %}
     <div class="table-responsive">
-        <table class="table table-dark table-hover mb-0">
+        <table class="table table-dark table-hover mb-0 align-middle">
             <thead>
-                <tr><th>Email</th><th>Device</th><th>Last seen</th><th>Screens</th><th></th></tr>
+                <tr>
+                    <th>Account</th>
+                    <th>Online &amp; IP</th>
+                    <th>App &amp; device</th>
+                    <th style="min-width:260px;">What they are doing</th>
+                    <th>Last seen</th>
+                    <th></th>
+                </tr>
             </thead>
             <tbody>
-                {% for h in signed_out %}
+                {% for r in signed_out %}
+                {% with h=r.hb %}
                 <tr>
-                    <td><code class="mono">{{ h.email }}</code></td>
                     <td>
-                        <div class="text-white">{{ h.device_model|default:'-' }}</div>
-                        <div class="sub">v{{ h.app_version|default:'-' }} · {{ h.os_version|default:'-' }}</div>
+                        <code class="mono">{{ r.email }}</code>
+                        <div class="mt-1 d-flex gap-1 flex-wrap">
+                            {% if h.is_email_verified %}
+                                <span class="pill bg-success">Verified</span>
+                            {% else %}
+                                <span class="pill bg-warning text-dark">Not verified</span>
+                            {% endif %}
+                            {% if h.app_user_id %}<span class="pill bg-dark border border-secondary">app id {{ h.app_user_id }}</span>{% endif %}
+                        </div>
                     </td>
-                    <td>{{ h.last_seen_at|timesince }} ago</td>
-                    <td class="sub">{{ h.current_screen|default:'—' }}{% if h.recent_actions %} · {{ h.recent_actions|length }} actions{% endif %}</td>
+                    <td>
+                        {% if r.online %}
+                            <span class="pill bg-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>Online</span>
+                        {% else %}
+                            <span class="pill bg-secondary">Offline</span>
+                        {% endif %}
+                        <div class="sub mt-1">
+                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono">{{ r.ip }}</code>{% else %}IP not reported{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="text-white">
+                            {% if h.device_model %}<i class="fab fa-android text-success me-1"></i>{{ h.device_model }}{% else %}Unknown device{% endif %}
+                        </div>
+                        <div class="sub">app v{{ h.app_version|default:'-' }} &middot; {{ h.os_version|default:'OS unknown' }}</div>
+                        {% if h.player_engine %}<div class="sub">player {{ h.player_engine }}</div>{% endif %}
+                        {% if h.device_id %}<div class="mono sub" title="{{ h.device_id }}">{{ h.device_id|truncatechars:22 }}</div>{% endif %}
+                    </td>
+                    <td>
+                        {% if h.current_screen %}
+                            <span class="pill bg-info text-dark"><i class="fas fa-mobile-screen me-1"></i>{{ h.current_screen|truncatechars:28 }}</span>
+                        {% endif %}
+
+                        {% if h.is_playing and h.media_title %}
+                            <div class="text-success fw-semibold mt-1 text-truncate" title="{{ h.media_title }}">
+                                <i class="fas fa-play me-1"></i>{{ h.media_title|truncatechars:38 }}
+                            </div>
+                            {% if h.media_is_tv %}<div class="sub">S{{ h.season|default:'?' }}E{{ h.episode|default:'?' }}</div>{% endif %}
+                            <div class="progress mt-1" style="height:5px;background:rgba(148,163,184,.25);">
+                                <div class="progress-bar bg-success" role="progressbar" style="width:{{ r.pct }}%;" aria-valuenow="{{ r.pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="sub">{{ r.watched_min }} / {{ r.total_min }} min &middot; {{ r.pct }}%</div>
+                        {% elif h.media_title %}
+                            <div class="text-secondary mt-1 text-truncate" title="{{ h.media_title }}">
+                                <i class="fas fa-pause me-1"></i>{{ h.media_title|truncatechars:38 }}
+                            </div>
+                            {% if h.media_is_tv %}<div class="sub">S{{ h.season|default:'?' }}E{{ h.episode|default:'?' }}</div>{% endif %}
+                            <div class="sub">paused at {{ r.pct }}%{% if h.duration_ms %} ({{ r.watched_min }} / {{ r.total_min }} min){% endif %}</div>
+                        {% elif not h.current_screen %}
+                            <span class="sub">No activity reported</span>
+                        {% endif %}
+
+                        {% if r.actions %}
+                            <details class="mt-1">
+                                <summary class="sub" style="cursor:pointer;">{{ r.actions|length }} recent action{{ r.actions|length|pluralize }}</summary>
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    {% for a in r.actions|slice:':12' %}
+                                        <span class="pill bg-dark border border-secondary text-light">{{ a|truncatechars:34 }}</span>
+                                    {% endfor %}
+                                </div>
+                            </details>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="text-white">{{ h.last_seen_at|timesince }} ago</div>
+                        <div class="sub">{{ h.last_seen_at|date:'Y-m-d H:i' }}</div>
+                    </td>
                     <td>
                         {% if h.user_id %}
                             <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'admin_user_detail' h.user_id %}"><i class="fas fa-id-card me-1"></i>Detail</a>
                         {% endif %}
                     </td>
                 </tr>
+                {% endwith %}
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+    {% else %}
+    <div class="text-center text-secondary py-4">
+        <i class="fas fa-user-lock fa-2x mb-2 d-block"></i>
+        No account is signed out of the app right now — everything heartbeating has a session.
     </div>
     {% endif %}

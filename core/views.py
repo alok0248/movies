@@ -4367,10 +4367,35 @@ def android_app_users_full(request, app_id):
     else:  # signed-out sessions
         # Still using the app as a guest (heartbeat says is_logged_in=False).
         # ------------------------------------------------- sessions signed out of the app
-        signed_out = list(UserHeartbeat.objects.filter(is_logged_in=False)
-                          .order_by('-last_seen_at')[:50])
+        # Each heartbeat row already carries the whole live picture (device,
+        # IP, screen, the title being played, its position, the app's recent
+        # actions), so the panel reads the row and derives the few display
+        # values here rather than storing another copy of them.
+        def _pct(position, duration):
+            try:
+                if not duration:
+                    return 0
+                return max(0, min(100, int(position * 100 / duration)))
+            except (TypeError, ValueError, ZeroDivisionError):
+                return 0
+
+        signed_out = []
+        for h in UserHeartbeat.objects.filter(is_logged_in=False).order_by('-last_seen_at')[:50]:
+            actions = [str(a) for a in (h.recent_actions or []) if str(a).strip()]
+            signed_out.append({
+                'hb': h,
+                'email': h.email,
+                'online': h.is_online,
+                'ip': h.ip_address or '',
+                'pct': _pct(h.playback_position_ms, h.duration_ms),
+                'watched_min': int((h.playback_position_ms or 0) // 60000),
+                'total_min': int((h.duration_ms or 0) // 60000),
+                'actions': actions,
+                'last_action': actions[0] if actions else '',
+            })
 
         ctx['signed_out'] = signed_out
+        ctx['signed_out_online'] = sum(1 for row in signed_out if row['online'])
 
     if partial:
         # The tab bar asked for this one list: send the markup and nothing else.
