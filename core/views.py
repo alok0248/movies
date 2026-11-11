@@ -4607,6 +4607,111 @@ def android_app_users_full(request, app_id):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def data_health(request):
+    """Data health: the checks an operator would otherwise run by hand.
+
+    Each card is one query against data that is already stored, with the command
+    that repairs it where a repair exists. Nothing runs automatically from here —
+    the buttons call the same management commands the cron jobs use.
+    """
+    import io
+
+    from django.core.management import call_command
+    from django.db.models import Count
+
+    from .models import (AccountDevice, AndroidApp, AndroidAppDevice,
+                         AndroidAppDeviceVisit, AndroidAppLog, ErrorLog,
+                         SyncedUser, UserHeartbeat)
+
+    actions = {
+        'expire_subscriptions': ('Lapsed subscriptions cleared', ()),
+        'link_devices': ('Install records linked to accounts', ('--apply',)),
+        'prune_app_data': ('Old visits, logs and guests pruned', ('--apply',)),
+        'sync_verification': ('Verification flags repaired from the login accounts', ('--apply',)),
+    }
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+        if action in actions:
+            label, flags = actions[action]
+            try:
+                call_command(action, *flags, stdout=io.StringIO())
+                messages.success(request, label + '.')
+            except Exception as exc:
+                messages.error(request, 'Could not run %s: %s' % (action, exc))
+        else:
+            messages.error(request, 'Unknown action.')
+        return redirect('data_health')
+
+    now = timezone.now()
+    today = timezone.localdate()
+    day_ago = now - timezone.timedelta(hours=24)
+    month_ago = now - timezone.timedelta(days=90)
+
+    shared_devices = (SyncedUser.objects.exclude(device_id='')
+                      .values('device_id').annotate(n=Count('id')).filter(n__gt=1).count())
+    recent_views = set(ErrorLog.objects.filter(created_at__gte=day_ago)
+                       .values_list('view_name', flat=True).distinct())
+    earlier_views = set(ErrorLog.objects.filter(created_at__lt=day_ago)
+                        .values_list('view_name', flat=True).distinct())
+
+    checks = [
+        {'label': 'Expired but still subscribed',
+         'count': SyncedUser.objects.filter(is_subscribed=True, valid_until__lt=today).count(),
+         'action': 'expire_subscriptions',
+         'hint': 'The app keeps granting paid access until these are cleared.'},
+        {'label': 'Accounts not marked verified',
+         'count': SyncedUser.objects.filter(is_email_verified=False).count(),
+         'action': 'sync_verification',
+         'hint': 'Playback gating reads this flag; it is rebuilt from the login account.'},
+        {'label': 'Accounts with no device id',
+         'count': SyncedUser.objects.filter(device_id='').count(), 'action': '',
+         'hint': 'They cannot be joined to an install record.'},
+        {'label': 'Device ids shared by two accounts', 'count': shared_devices, 'action': '',
+         'hint': 'Usually a reinstall that reused an id.'},
+        {'label': 'Install records with no account link',
+         'count': AndroidAppDevice.objects.filter(account_key='').count(),
+         'action': 'link_devices',
+         'hint': 'Tries the id first, then the recent addresses of each install.'},
+        {'label': 'Guest heartbeat rows',
+         'count': UserHeartbeat.objects.filter(email__startswith='guest_').count(),
+         'action': 'prune_app_data', 'hint': 'Pruned after 30 days of inactivity.'},
+        {'label': 'Device visits older than 90 days',
+         'count': AndroidAppDeviceVisit.objects.filter(visited_at__lt=month_ago).count(),
+         'action': 'prune_app_data', 'hint': 'Retention keeps the tables small.'},
+        {'label': 'App logs older than 90 days',
+         'count': AndroidAppLog.objects.filter(timestamp__lt=month_ago).count(),
+         'action': 'prune_app_data', 'hint': ''},
+        {'label': 'Errors captured in the last 24 hours',
+         'count': ErrorLog.objects.filter(created_at__gte=day_ago).count(), 'action': '',
+         'hint': '%d view(s) failing now that were not failing before.'
+                 % len(recent_views - earlier_views)},
+    ]
+
+    builds = []
+    for app_obj in AndroidApp.objects.all():
+        versions = list(UserHeartbeat.objects.exclude(app_version='')
+                        .values('app_version').annotate(n=Count('id')).order_by('-n')[:5])
+        builds.append({'app': app_obj, 'versions': versions,
+                       'required': app_obj.allowed_build_id})
+
+    groups = list(ErrorLog.objects.filter(created_at__gte=day_ago)
+                  .values('kind', 'view_name', 'status_code')
+                  .annotate(n=Count('id')).order_by('-n')[:8])
+
+    silent = list(UserHeartbeat.objects.filter(
+        is_playing=True,
+        last_seen_at__lt=now - timezone.timedelta(minutes=30),
+        last_seen_at__gte=now - timezone.timedelta(hours=24)).order_by('-last_seen_at')[:20])
+
+    return render(request, 'core/data_health.html', {
+        'checks': checks, 'builds': builds, 'groups': groups, 'silent': silent,
+        'account_devices': AccountDevice.objects.count(),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def android_app_failed_attempts(request, app_id):
     android_app = get_object_or_404(AndroidApp, id=app_id)
     failed_attempts = android_app.failed_attempts.all()
@@ -11144,6 +11249,7 @@ def api_user_heartbeat(request):
 
     _record_heartbeat_activity(hb)
     _link_installs_for_heartbeat(hb)
+    _remember_account_device(hb)
 
     prof = _get_synced_profile(email)
     return JsonResponse({
@@ -11256,6 +11362,20 @@ def _link_installs_for_heartbeat(hb):
     if device_pks:
         AndroidAppDevice.objects.filter(pk__in=device_pks).exclude(
             account_key=hb.device_id).update(account_key=hb.device_id)
+
+
+def _remember_account_device(hb):
+    """Keep the account's device list up to date from the heartbeat."""
+    from .models import AccountDevice
+
+    if not hb.email or not hb.device_id:
+        return
+    try:
+        AccountDevice.objects.update_or_create(
+            email=hb.email, device_id=hb.device_id,
+            defaults={'device_model': hb.device_model, 'app_version': hb.app_version})
+    except Exception as exc:  # pragma: no cover - never break a heartbeat
+        logger.warning('account device not recorded for %s: %s', hb.email, exc)
 
 
 def _log_subscription_event(profile, actor, action, before=None):
@@ -16268,6 +16388,20 @@ def _settings_health():
     return rows
 
 
+def _new_error_views(hours=24):
+    """View names failing now that were not failing in the previous week."""
+    from .models import ErrorLog
+
+    now = timezone.now()
+    recent = set(ErrorLog.objects.filter(created_at__gte=now - timezone.timedelta(hours=hours))
+                 .values_list('view_name', flat=True).distinct())
+    before = set(ErrorLog.objects.filter(
+        created_at__lt=now - timezone.timedelta(hours=hours),
+        created_at__gte=now - timezone.timedelta(days=7))
+        .values_list('view_name', flat=True).distinct())
+    return len(recent - before)
+
+
 def _overview_context():
     """Everything the overview shows, built once so it can be cached whole.
 
@@ -16276,7 +16410,8 @@ def _overview_context():
     ``SETTINGS_OVERVIEW_CACHE_SECONDS`` rather than paid on every open.
     """
     from .models import (TMDBMovie, TMDBTV, Subscriber, BlockedIP, TMDBApiKey,
-                         DataSourceUsageLog, UserPageView, RequestLog)
+                         DataSourceUsageLog, UserPageView, RequestLog, ErrorLog,
+                         UserHeartbeat)
 
     page_series = _day_series(UserPageView, 'viewed_at')
     request_series = _day_series(RequestLog, 'created_at')
@@ -16323,6 +16458,13 @@ def _overview_context():
             {'label': 'Active blocks', 'value': BlockedIP.objects.filter(is_active=True).count(), 'icon': 'fa-ban'},
             {'label': 'Active API keys', 'value': TMDBApiKey.objects.filter(is_active=True).count(), 'icon': 'fa-key'},
             {'label': 'Subscribers', 'value': Subscriber.objects.count(), 'icon': 'fa-envelope'},
+            {'label': 'Silent mid-play',
+             'value': UserHeartbeat.objects.filter(
+                 is_playing=True,
+                 last_seen_at__lt=timezone.now() - timezone.timedelta(minutes=30),
+                 last_seen_at__gte=timezone.now() - timezone.timedelta(hours=24)).count(),
+             'icon': 'fa-plug-circle-xmark'},
+            {'label': 'New error types / 24h', 'value': _new_error_views(), 'icon': 'fa-bug'},
         ],
     }
 

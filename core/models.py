@@ -1529,6 +1529,30 @@ class SyncedUser(models.Model):
         }
 
 
+class AccountDevice(models.Model):
+    """Every device an account has been seen on.
+
+    ``SyncedUser.device_id`` holds one device, so signing in on a second phone
+    overwrote the link and the first device vanished from every report. One row
+    per account+device keeps all of them, with the app version each one runs.
+    """
+    email = models.EmailField(db_index=True)
+    device_id = models.CharField(max_length=100, db_index=True)
+    device_model = models.CharField(max_length=100, blank=True, default='')
+    app_version = models.CharField(max_length=50, blank=True, default='')
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('email', 'device_id')
+        ordering = ['-last_seen_at']
+        verbose_name = 'Account device'
+        verbose_name_plural = 'Account devices'
+
+    def __str__(self):
+        return f"{self.email} on {self.device_id}"
+
+
 class SubscriptionEvent(models.Model):
     """One admin change to an account's subscription, kept for the record.
 

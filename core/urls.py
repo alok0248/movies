@@ -119,6 +119,7 @@ urlpatterns = [
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
     # Full-screen user + device list behind the "Users & Blocking" card (no side nav).
     path('admin-dashboard/android-apps/<int:app_id>/users-full/', views.android_app_users_full, name='android_app_users_full'),
+    path('admin-dashboard/data-health/', views.data_health, name='data_health'),
     # Public APK download — records the download, then serves the file.
     path('apps/download/<int:app_id>/', views.apk_download, name='apk_download'),
     path('admin-dashboard/android-apps/user-sync-reference/', views.android_user_sync_reference, name='android_user_sync_reference'),

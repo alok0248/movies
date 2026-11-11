@@ -23,6 +23,7 @@ USER_MODELS = {
     'userprofile',
     'heartbeatactivity',
     'subscriptionevent',
+    'accountdevice',
 }
 
 
