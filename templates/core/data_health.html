@@ -145,4 +145,36 @@
         </div>
     </div>
 </div>
+
+<style>
+    @keyframes dh-flash {
+        0%   { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+        10%  { box-shadow: 0 0 0 3px rgba(251,191,36,.65); }
+        70%  { box-shadow: 0 0 0 3px rgba(251,191,36,.35); }
+        100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+    }
+    .dh-flash { animation: dh-flash 2.6s ease-out; border-radius: .5rem; }
+    @media (prefers-reduced-motion: reduce) { .dh-flash { animation-duration: .01s; } }
+</style>
+<script>
+    (function () {
+        function focusCheck() {
+            var id = (window.location.hash || '').slice(1);
+            if (id.indexOf('check-') !== 0) { return; }
+            var card = document.getElementById(id);
+            if (!card) { return; }
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.remove('dh-flash');
+            void card.offsetWidth;          /* restart the animation on a repeat visit */
+            card.classList.add('dh-flash');
+            window.setTimeout(function () { card.classList.remove('dh-flash'); }, 2900);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', focusCheck);
+        } else {
+            focusCheck();
+        }
+        window.addEventListener('hashchange', focusCheck);
+    })();
+</script>
 {% endblock %}
