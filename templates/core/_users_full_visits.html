@@ -28,7 +28,7 @@
                     <td>{{ v.device_model|default:'-' }}</td>
                     <td class="sub">{{ v.os_version|default:'-' }}</td>
                     <td class="sub">{{ v.build_identifier|default:'—' }}</td>
-                    <td class="mono sub">{{ v.ip_address|default:'—' }}</td>
+                    <td class="mono sub">{% if v.ip_address %}<a href="https://iplocation.io/ip/{{ v.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ v.ip_address }}" style="color:inherit;text-decoration:none;">{{ v.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td>
                         {% if v.full_request %}
                         <details>

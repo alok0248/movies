@@ -308,7 +308,7 @@
                             <div class="ud-devbox">
                                 <div class="ud-mono" style="font-size:.7rem;">{{ d.device_id }}</div>
                                 <div class="ud-sub">{{ d.device_model|default:"Unknown model" }}{% if d.os_version %} · OS {{ d.os_version }}{% endif %} · {{ d.visits }} visit{{ d.visits|pluralize }}</div>
-                                <div class="ud-sub">First {{ d.first_seen|date:"Y-m-d"|default:"—" }} · Last {{ d.last_seen|date:"Y-m-d"|default:"—" }}{% if d.ip %} · {{ d.ip }}{% endif %}</div>
+                                <div class="ud-sub">First {{ d.first_seen|date:"Y-m-d"|default:"—" }} · Last {{ d.last_seen|date:"Y-m-d"|default:"—" }}{% if d.ip %} · <a href="https://iplocation.io/ip/{{ d.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ d.ip }}" style="color:inherit;text-decoration:none;">{{ d.ip }} <i class="fas fa-external-link-alt"></i></a>{% endif %}</div>
                             </div>
                             {% endfor %}
                             {% endif %}

@@ -478,7 +478,7 @@
                                             <span class="badge bg-secondary">{{ s.source }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-secondary">{{ s.ip_address|default:"—" }}</td>
+                                    <td class="text-secondary">{% if s.ip_address %}<a href="https://iplocation.io/ip/{{ s.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ s.ip_address }}" style="color:inherit;text-decoration:none;">{{ s.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                                     <td class="text-white">{{ s.device_model|default:s.user_agent|truncatechars:40|default:"—" }}</td>
                                     <td class="text-secondary">{{ s.logged_in_at|date:"M d, Y H:i" }}</td>
                                     <td>

@@ -68,7 +68,7 @@
         <span class="jn-pill {% if j.active %}jn-live{% else %}jn-off{% endif %}">{% if j.active %}On site{% else %}Left{% endif %}</span>
         <span class="jn-mono" title="{% if group == 'ip' %}IP address{% else %}Visitor id{% endif %}">{{ j.key|truncatechars:26 }}</span>
         {% for d in j.devices %}<span class="jn-pill jn-dev">{{ d }}</span>{% endfor %}
-        {% for ip in j.ips %}<span class="jn-pill jn-ip">{{ ip }}</span>{% endfor %}
+        {% for ip in j.ips %}<span class="jn-pill jn-ip"><a href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ ip }}" style="color:inherit;text-decoration:none;">{{ ip }} <i class="fas fa-external-link-alt"></i></a></span>{% endfor %}
         <span class="jn-sub">{{ j.views }} page{{ j.views|pluralize }} · {{ j.time }}s · started {{ j.first_seen|date:"M d H:i:s" }} · last {{ j.last_seen|timesince }} ago</span>
         <span class="jn-sub ms-auto">entry: <span class="jn-mono">{{ j.path|truncatechars:40 }}</span></span>
     </summary>

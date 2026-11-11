@@ -49,7 +49,7 @@
                         <div class="sub">{{ d.last_seen_at|date:'Y-m-d H:i' }}</div>
                     </td>
                     <td class="sub">{{ v.build_identifier|default:'-' }}</td>
-                    <td class="mono sub">{{ v.ip_address|default:'-' }}</td>
+                    <td class="mono sub">{% if v.ip_address %}<a href="https://iplocation.io/ip/{{ v.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ v.ip_address }}" style="color:inherit;text-decoration:none;">{{ v.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}-{% endif %}</td>
                     <td><a class="btn btn-sm btn-outline-light act-btn" href="{{ r.log_url }}"><i class="fas fa-terminal me-1"></i>Logs</a></td>
                 </tr>
 
@@ -109,7 +109,7 @@
                                             <tr>
                                                 <td class="sub">{{ dv.visited_at|date:'m-d H:i:s' }}</td>
                                                 <td class="sub">{{ dv.build_identifier|default:'-' }}</td>
-                                                <td class="mono sub">{{ dv.ip_address|default:'-' }}</td>
+                                                <td class="mono sub">{% if dv.ip_address %}<a href="https://iplocation.io/ip/{{ dv.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ dv.ip_address }}" style="color:inherit;text-decoration:none;">{{ dv.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}-{% endif %}</td>
                                                 <td>
                                                     {% if dv.full_request %}
                                                     <details>

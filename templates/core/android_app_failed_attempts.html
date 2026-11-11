@@ -32,7 +32,7 @@
                             <td>
                                 <span class="badge bg-danger">{{ attempt.get_failure_reason_display }}</span>
                             </td>
-                            <td>{{ attempt.ip_address|default:'-' }}</td>
+                            <td class="">{% if attempt.ip_address %}<a href="https://iplocation.io/ip/{{ attempt.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ attempt.ip_address }}" style="color:inherit;text-decoration:none;">{{ attempt.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}-{% endif %}</td>
                             <td>{{ attempt.request_identity|default:'-' }}</td>
                             <td>{{ attempt.build_identifier|default:'-' }}</td>
                         </tr>

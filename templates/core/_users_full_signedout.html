@@ -52,7 +52,7 @@
                             <span class="pill bg-secondary">Offline</span>
                         {% endif %}
                         <div class="sub mt-1">
-                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono">{{ r.ip }}</code>{% else %}IP not reported{% endif %}
+                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono"><a href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}" style="color:inherit;text-decoration:none;">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a></code>{% else %}IP not reported{% endif %}
                         </div>
                     </td>
                     <td>

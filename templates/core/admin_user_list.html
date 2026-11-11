@@ -237,7 +237,7 @@
                                             <span class="text-secondary small">{{ info.time|date:"M d, Y H:i" }}</span>
                                             {% if info.ip|default:"" %}
                                                 <span class="text-muted mx-1">•</span>
-                                                <span class="text-muted small" style="font-family:monospace;">{{ info.ip }}</span>
+                                                <span class="text-muted small" style="font-family:monospace;"><a href="https://iplocation.io/ip/{{ info.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ info.ip }}" style="color:inherit;text-decoration:none;">{{ info.ip }} <i class="fas fa-external-link-alt"></i></a></span>
                                             {% endif %}
                                             {% if info.app_version|default:"" %}
                                                 <span class="text-muted mx-1">•</span>

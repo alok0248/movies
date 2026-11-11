@@ -165,7 +165,7 @@
                 <tr>
                     <td class="adl-mono">{{ r.downloaded_at|date:"Y-m-d H:i:s" }}</td>
                     <td>{{ r.android_app.name|default:r.app_slug }}</td>
-                    <td class="adl-mono">{{ r.ip_address|default:"—" }}</td>
+                    <td class="adl-mono">{% if r.ip_address %}<a href="https://iplocation.io/ip/{{ r.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip_address }}" style="color:inherit;text-decoration:none;">{{ r.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td class="adl-mono adl-trunc" title="{{ r.file_name }}">{{ r.file_name|default:"" }}</td>
                     <td>{% if r.opened_app %}<span class="adl-badge adl-yes">opened</span>{% else %}<span class="adl-badge adl-no">no</span>{% endif %}</td>
                     <td class="adl-mono">{% if r.opened_at %}{{ r.opened_at|date:"Y-m-d H:i:s" }}{% endif %}</td>

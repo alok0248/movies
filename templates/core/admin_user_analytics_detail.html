@@ -143,7 +143,7 @@
                             {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
                         </span>
                     </td>
-                    <td class="text-secondary">{{ s.ip_address|default:"—" }}</td>
+                    <td class="text-secondary">{% if s.ip_address %}<a href="https://iplocation.io/ip/{{ s.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ s.ip_address }}" style="color:inherit;text-decoration:none;">{{ s.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td class="text-secondary">{{ s.device_model|default:"—" }}</td>
                     <td class="text-secondary">{{ s.logged_in_at|date:"M d, H:i" }}</td>
                     <td class="text-secondary">{{ s.last_seen_at|date:"M d, H:i" }}</td>

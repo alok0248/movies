@@ -1,7 +1,7 @@
 <div class="adw-section">
     <div class="adw-section-title">Address</div>
     <dl class="adw-kv">
-        <dt>IP</dt><dd class="adw-mono">{{ ip }}</dd>
+        <dt>IP</dt><dd class="adw-mono"><a href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ ip }}" style="color:inherit;text-decoration:none;">{{ ip }} <i class="fas fa-external-link-alt"></i></a></dd>
         <dt>Status</dt><dd>{% if row.is_active %}<span class="adw-chip on">Blocked</span>{% else %}<span class="adw-chip">Unblocked</span>{% endif %}{% if row.is_permanent %} <span class="adw-chip on">permanent</span>{% endif %}</dd>
         <dt>Blocked at</dt><dd>{{ row.blocked_at|date:"Y-m-d H:i:s" }}</dd>
         <dt>Blocked by</dt><dd>{{ row.blocked_by|default:"—" }}</dd>

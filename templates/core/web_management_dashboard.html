@@ -190,7 +190,7 @@
                             <tbody id="bot-top-ips-tbody">
                                 {% for bot_ip in bot_top_ips %}
                                 <tr>
-                                    <td><code class="text-warning">{{ bot_ip.ip_address }}</code></td>
+                                    <td><code class="text-warning"><a href="https://iplocation.io/ip/{{ bot_ip.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ bot_ip.ip_address }}" style="color:inherit;text-decoration:none;">{{ bot_ip.ip_address }} <i class="fas fa-external-link-alt"></i></a></code></td>
                                     <td>{{ bot_ip.request_count }}</td>
                                 </tr>
                                 {% endfor %}
@@ -210,7 +210,7 @@
                     <div id="bot-unique-ips" class="small text-light">
                         {% if bot_unique_ips %}
                             {% for ip in bot_unique_ips %}
-                                <div><code class="text-warning">{{ ip }}</code></div>
+                                <div><code class="text-warning"><a href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ ip }}" style="color:inherit;text-decoration:none;">{{ ip }} <i class="fas fa-external-link-alt"></i></a></code></div>
                             {% endfor %}
                         {% else %}
                             <div class="text-secondary">No bot IPs recorded yet.</div>
@@ -241,7 +241,7 @@
                         <tr>
                             <td><code class="text-info">{{ activity.visitor.visitor_id }}</code></td>
                             <td><code class="text-white">{{ activity.path }}</code></td>
-                            <td><code class="text-success">{{ activity.ip_address|default:"N/A" }}</code></td>
+                            <td><code class="text-success">{% if activity.ip_address %}<a href="https://iplocation.io/ip/{{ activity.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ activity.ip_address }}" style="color:inherit;text-decoration:none;">{{ activity.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}N/A{% endif %}</code></td>
                             <td>
                                 {% if activity.is_bot %}
                                     <span class="badge bg-warning text-dark">Bot</span>
@@ -385,7 +385,7 @@ function updateDashboard(data) {
         if (data.bot_top_ips.length) {
             botTopIpsTbody.innerHTML = data.bot_top_ips.map(botIp => `
                 <tr>
-                    <td><code class="text-warning">${botIp.ip_address}</code></td>
+                    <td><code class="text-warning">${botIp.ip_address ? '<a href="https://iplocation.io/ip/' + encodeURIComponent(botIp.ip_address) + '" target="_blank" rel="noopener noreferrer">' + botIp.ip_address + ' <i class="fas fa-external-link-alt"></i></a>' : '—'}</code></td>
                     <td>${botIp.request_count}</td>
                 </tr>
             `).join('');
@@ -397,7 +397,7 @@ function updateDashboard(data) {
     const botUniqueIps = document.getElementById('bot-unique-ips');
     if (botUniqueIps) {
         if (data.bot_unique_ips.length) {
-            botUniqueIps.innerHTML = data.bot_unique_ips.map(ip => `<div><code class="text-warning">${ip}</code></div>`).join('');
+            botUniqueIps.innerHTML = data.bot_unique_ips.map(ip => `<div><code class="text-warning">${ip ? '<a href="https://iplocation.io/ip/' + encodeURIComponent(ip) + '" target="_blank" rel="noopener noreferrer">' + ip + ' <i class="fas fa-external-link-alt"></i></a>' : '—'}</code></div>`).join('');
         } else {
             botUniqueIps.innerHTML = '<div class="text-secondary">No bot IPs recorded yet.</div>';
         }
@@ -410,7 +410,7 @@ function updateDashboard(data) {
             <tr>
                 <td><code class="text-info">${activity.visitor__visitor_id}</code></td>
                 <td><code class="text-white">${activity.path}</code></td>
-                <td><code class="text-success">${activity.ip_address || 'N/A'}</code></td>
+                <td><code class="text-success">${activity.ip_address ? '<a href="https://iplocation.io/ip/' + encodeURIComponent(activity.ip_address) + '" target="_blank" rel="noopener noreferrer">' + activity.ip_address + ' <i class="fas fa-external-link-alt"></i></a>' : '—'}</code></td>
                 <td>${activity.is_bot ? '<span class="badge bg-warning text-dark">Bot</span>' : '<span class="badge bg-primary">Human</span>'}</td>
                 <td data-datetime="${activity.visited_at}">${formatBrowserLocalTime(activity.visited_at)}</td>
             </tr>
