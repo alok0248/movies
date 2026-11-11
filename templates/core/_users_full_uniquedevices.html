@@ -1,20 +1,30 @@
 {% load custom_filters %}
     <!-- ======================= UNIQUE DEVICES =======================
-         One row per device the app has reported. A device can be known from
-         three places that do not always share a key: the account's sync
-         (SyncedUser.device_id), the heartbeat, and the install record
-         AndroidAppDevice, which is what carries the visit counters. The view
-         merges them on the device id, so an account row still shows its
-         subscription and, where the ids agree, its visits. -->
-    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mt-3 mb-2">
+         One row per device, merged from the account's sync and heartbeat (which
+         share an id space) and the install record that carries the visit
+         counters. Filter chips are links, so they work with and without JS. -->
+    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mt-3 mb-1">
         <div>
             <div class="sect-title"><i class="fas fa-mobile-screen-button text-warning me-2"></i>Unique devices</div>
-            <div class="sub">Every device the app has reported, with the account behind it, its subscription and how it uses the app. Subscription cells open that account's settings; History opens the user's activity.</div>
+            <div class="sub">Every device the app has reported, with the account behind it, its subscription and how it uses the app.</div>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <span class="pill bg-dark border border-secondary">{{ unique_page.paginator.count }} devices</span>
-            <span class="pill bg-info">{{ counts.anonymous_devices }} with no account</span>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <span class="pill bg-dark border border-secondary">{{ device_chips.all }} devices</span>
+            <span class="pill bg-success">{{ device_chips.online }} online</span>
+            {% if device_chips.expiring %}
+                <span class="pill bg-warning text-dark">{{ device_chips.expiring }} expiring &le;7d</span>
+            {% endif %}
+            <a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;{% if q %}q={{ q|urlencode }}&amp;{% endif %}export=csv" title="Download this filtered list as CSV"><i class="fas fa-file-csv me-1"></i>CSV</a>
         </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap mb-2">
+        <a class="fbtn {% if devices_view == 'all' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=all{% if q %}&amp;q={{ q|urlencode }}{% endif %}">All <span class="sub">{{ device_chips.all }}</span></a>
+        <a class="fbtn {% if devices_view == 'online' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=online{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Online <span class="sub">{{ device_chips.online }}</span></a>
+        <a class="fbtn {% if devices_view == 'paid' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=paid{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Paid <span class="sub">{{ device_chips.paid }}</span></a>
+        <a class="fbtn {% if devices_view == 'free' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=free{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Free <span class="sub">{{ device_chips.free }}</span></a>
+        <a class="fbtn {% if devices_view == 'expiring' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=expiring{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Expiring &le;7d <span class="sub">{{ device_chips.expiring }}</span></a>
+        <a class="fbtn {% if devices_view == 'noacc' %}active{% endif %}" href="?tab=uniquedevices&amp;ds=noacc{% if q %}&amp;q={{ q|urlencode }}{% endif %}">No account <span class="sub">{{ device_chips.noacc }}</span></a>
     </div>
 
     <div class="table-responsive">
@@ -25,7 +35,7 @@
                     <th>Account</th>
                     <th>Status</th>
                     <th>IP</th>
-                    <th style="min-width:170px;">Subscription</th>
+                    <th style="min-width:190px;">Subscription</th>
                     <th>First registered</th>
                     <th>Last seen online</th>
                     <th>Visits</th>
@@ -34,25 +44,20 @@
             </thead>
             <tbody>
                 {% for r in unique_rows %}
-                <tr>
+                <tr id="dev-row-{{ forloop.counter }}">
                     <td>
-                        <div class="text-white">
-                            <i class="fab fa-android text-success me-1"></i>{{ r.model|default:'Unknown device' }}
-                        </div>
+                        <div class="text-white"><i class="fab fa-android text-success me-1"></i>{{ r.model|default:'Unknown device' }}</div>
                         <div class="sub">{{ r.os|default:'OS unknown' }}</div>
                         <div class="mono sub" title="{{ r.id }}">{{ r.id|truncatechars:24 }}</div>
+                        {% if r.linked_by_ip %}<div class="sub text-info" title="The app reports a different id to the install endpoint; this row was joined to the account through the visit IP">linked by IP</div>{% endif %}
                     </td>
                     <td>
-                        {% if r.profile %}
-                            <a class="text-info" href="{% url 'synced_user_detail' r.profile.pk %}">{{ r.profile.display_name|default:r.profile.email }}</a>
-                            <div class="sub"><code class="mono">{{ r.profile.email }}</code></div>
+                        {% if r.profile_pk %}
+                            <a class="text-info" href="{% url 'synced_user_detail' r.profile_pk %}">{{ r.display_name|default:r.email }}</a>
+                            <div class="sub"><code class="mono">{{ r.email }}</code></div>
                             <div class="mt-1 d-flex gap-1 flex-wrap">
-                                {% if r.profile.is_email_verified %}
-                                    <span class="pill bg-success">Verified</span>
-                                {% else %}
-                                    <span class="pill bg-warning text-dark">Not verified</span>
-                                {% endif %}
-                                {% if r.profile.block_mode %}<span class="pill bg-danger">{{ r.profile.get_block_mode_display }}</span>{% endif %}
+                                {% if r.verified %}<span class="pill bg-success">Verified</span>{% else %}<span class="pill bg-warning text-dark">Not verified</span>{% endif %}
+                                {% if r.block_display %}<span class="pill bg-danger">{{ r.block_display }}</span>{% endif %}
                             </div>
                         {% elif r.kind == 'guest' %}
                             <code class="mono sub">{{ r.email }}</code>
@@ -64,29 +69,31 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if r.online %}
-                            <span class="pill bg-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>Online</span>
-                        {% else %}
-                            <span class="pill bg-secondary">Offline</span>
-                        {% endif %}
-                        {% if r.heartbeat and r.heartbeat.current_screen %}
-                            <div class="sub mt-1">{{ r.heartbeat.current_screen|truncatechars:20 }}</div>
-                        {% endif %}
+                        {% if r.online %}<span class="pill bg-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>Online</span>{% else %}<span class="pill bg-secondary">Offline</span>{% endif %}
+                        {% if r.screen %}<div class="sub mt-1">{{ r.screen|truncatechars:20 }}</div>{% endif %}
                     </td>
                     <td class="mono sub">
                         {% if r.ip %}<a href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}" style="color:inherit;text-decoration:none;">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}-{% endif %}
                     </td>
                     <td>
-                        {% if r.profile %}
-                            <a href="{% url 'synced_user_edit' r.profile.pk %}" title="Open subscription settings for {{ r.profile.email }}" style="text-decoration:none;">
-                                {% if r.profile.is_subscribed %}
-                                    <span class="pill bg-success"><i class="fas fa-crown me-1"></i>{{ r.profile.plan|default:'Subscribed' }}</span>
-                                    <div class="sub">{% if r.profile.valid_until %}until {{ r.profile.valid_until|date:'Y-m-d' }} &middot; {{ r.profile.days_remaining }}d left{% else %}no end date{% endif %}</div>
+                        {% if r.profile_pk %}
+                            <a href="{% url 'synced_user_edit' r.profile_pk %}" title="Open subscription settings for {{ r.email }}" style="text-decoration:none;">
+                                {% if r.is_subscribed %}
+                                    <span class="pill bg-success"><i class="fas fa-crown me-1"></i>{{ r.plan|default:'Subscribed' }}</span>
+                                    <div class="sub">{% if r.valid_until %}until {{ r.valid_until|date:'Y-m-d' }} &middot; {{ r.days_left }}d left{% else %}no end date{% endif %}</div>
                                 {% else %}
                                     <span class="pill bg-secondary">Free</span>
                                     <div class="sub text-info"><i class="fas fa-plus me-1"></i>add subscription</div>
                                 {% endif %}
                             </a>
+                            <div class="d-flex gap-1 flex-wrap mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" data-user="{{ r.profile_pk }}" data-subaction="7" title="Add 7 days">+7d</button>
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" data-user="{{ r.profile_pk }}" data-subaction="30" title="Add 30 days">+30d</button>
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" data-user="{{ r.profile_pk }}" data-subaction="90" title="Add 90 days">+90d</button>
+                                {% if r.is_subscribed %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger act-btn" data-user="{{ r.profile_pk }}" data-subaction="revoke" title="Remove the subscription">Revoke</button>
+                                {% endif %}
+                            </div>
                         {% else %}
                             <span class="sub">&mdash;</span>
                         {% endif %}
@@ -106,24 +113,37 @@
                         {% else %}<span class="sub">&mdash;</span>{% endif %}
                     </td>
                     <td>
-                        {% if r.device %}
-                            <div class="text-white">{{ r.total }} total</div>
-                            <div class="sub"><span class="{% if r.today %}text-success{% endif %}">{{ r.today }} today</span></div>
-                        {% else %}
+                        {% if r.total is None %}
                             <span class="sub">&mdash;</span>
                             <div class="sub">no install record</div>
+                        {% else %}
+                            <div class="text-white">{{ r.total }} total</div>
+                            <div class="sub"><span class="{% if r.today %}text-success{% endif %}">{{ r.today }} today</span></div>
+                        {% endif %}
+                        {% if r.recent %}
+                            <div class="sub mt-1" title="Latest heartbeat changes">
+                                {% for entry in r.recent %}
+                                    <div>
+                                        {% if entry.is_playing %}<i class="fas fa-play me-1"></i>{% else %}<i class="fas fa-mobile-screen me-1"></i>{% endif %}
+                                        {{ entry.media_title|default:entry.screen|default:'—'|truncatechars:26 }}
+                                        <span class="text-secondary">{{ entry.created_at|timesince }} ago</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
                         {% endif %}
                     </td>
                     <td>
-                        {% if r.history_url %}
-                            <a class="btn btn-sm btn-outline-light act-btn" href="{{ r.history_url }}" title="Open this user's activity history"><i class="fas fa-chart-line me-1"></i>History</a>
-                        {% else %}
-                            <a class="btn btn-sm btn-outline-secondary act-btn" href="?tab=visits&q={{ r.id|urlencode }}" title="No account to show activity for — see this device's requests"><i class="fas fa-list me-1"></i>Requests</a>
-                        {% endif %}
+                        <div class="d-flex flex-column gap-1">
+                            {% if r.history_url %}
+                                <a class="btn btn-sm btn-outline-light act-btn" href="{{ r.history_url }}" title="Open this user's activity history"><i class="fas fa-chart-line me-1"></i>History</a>
+                            {% else %}
+                                <a class="btn btn-sm btn-outline-secondary act-btn" href="?tab=visits&amp;q={{ r.id|urlencode }}" title="No account to show activity for — see this device's requests"><i class="fas fa-list me-1"></i>Requests</a>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="9" class="text-center text-secondary py-4"><i class="fas fa-mobile-screen fa-2x mb-2 d-block"></i>No devices recorded yet — they appear the first time the app opens.</td></tr>
+                <tr><td colspan="9" class="text-center text-secondary py-4"><i class="fas fa-mobile-screen fa-2x mb-2 d-block"></i>No device matches this filter.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -131,8 +151,8 @@
 
     {% if unique_page.has_other_pages %}
     <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
-        {% if unique_page.has_previous %}<a class="fbtn" href="?tab=uniquedevices&upage={{ unique_page.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
-        <span class="sub">Devices {{ unique_page.number }} of {{ unique_page.paginator.num_pages }} &middot; {{ unique_page.paginator.count }} unique</span>
-        {% if unique_page.has_next %}<a class="fbtn" href="?tab=uniquedevices&upage={{ unique_page.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
+        {% if unique_page.has_previous %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;upage={{ unique_page.previous_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
+        <span class="sub">Devices {{ unique_page.number }} of {{ unique_page.paginator.num_pages }} &middot; {{ unique_page.paginator.count }} shown</span>
+        {% if unique_page.has_next %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;upage={{ unique_page.next_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
     </nav>
     {% endif %}

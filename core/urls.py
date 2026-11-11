@@ -175,6 +175,7 @@ urlpatterns = [
     path('admin-dashboard/synced-users/', views.synced_users_list, name='synced_users_list'),
     path('admin-dashboard/synced-users/<int:user_id>/', views.synced_user_detail, name='synced_user_detail'),
     path('admin-dashboard/synced-users/<int:user_id>/edit/', views.synced_user_edit, name='synced_user_edit'),
+    path('admin-dashboard/synced-users/<int:user_id>/subscription/', views.synced_user_subscription_action, name='synced_user_subscription_action'),
     path('admin-dashboard/synced-users/<int:user_id>/delete/', views.synced_user_delete, name='synced_user_delete'),
     path('admin-dashboard/synced-users/<int:user_id>/resend-verification/', views.synced_user_resend_verification, name='synced_user_resend_verification'),
     path('admin-dashboard/synced-users/<int:user_id>/block/', views.synced_user_block, name='synced_user_block'),

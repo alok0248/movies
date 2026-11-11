@@ -27,6 +27,7 @@ from urllib.parse import urlparse as _urlparse, urlencode as _urlencode
 import json
 import logging
 import datetime
+import csv
 import requests
 import calendar
 import base64
@@ -4159,8 +4160,11 @@ def android_app_users_full(request, app_id):
     # signed-out list at the same time, which is what made it heavy. The tab
     # bar asks for ?partial=1 when the admin switches, so that swap needs no
     # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'devices', 'uniquedevices', 'signedout', 'visits')
+    TABS = ('accounts', 'uniquedevices', 'signedout', 'visits')
     tab = (request.GET.get('tab') or '').strip().lower()
+    legacy_devices = tab == 'devices'
+    if legacy_devices:
+        tab = 'uniquedevices'
     if tab not in TABS:
         tab = 'accounts'
     partial = request.GET.get('partial') == '1'
@@ -4196,6 +4200,11 @@ def android_app_users_full(request, app_id):
         set(SyncedUser.objects.exclude(device_id='').values_list('device_id', flat=True))
         | set(UserHeartbeat.objects.exclude(device_id='').values_list('device_id', flat=True))
         | set(all_devices.values_list('user_id', flat=True)))
+    _today = timezone.localdate()
+    counts['expiring'] = SyncedUser.objects.filter(
+        is_subscribed=True, valid_until__gte=_today,
+        valid_until__lte=_today + datetime.timedelta(days=7)).count()
+    counts['guests'] = UserHeartbeat.objects.filter(email__startswith='guest_').count()
     counts['anonymous_devices'] = all_devices.exclude(
         user_id__in=linked_device_ids if linked_device_ids else ['']
     ).count()
@@ -4358,100 +4367,183 @@ def android_app_users_full(request, app_id):
 
     elif tab == 'uniquedevices':
         # ------------------------------------------------------- unique devices
-        # One row per device the app has reported. A device can be known from
-        # three places that do not share a key on every install: the account's
-        # sync (SyncedUser.device_id), the heartbeat, and the install record
-        # AndroidAppDevice, which is what carries the visit counters. They are
-        # merged here on the device id the app sends, so an account still shows
-        # its subscription and, where the ids agree, its visits as well.
-        profiles = list(SyncedUser.objects.all())
-        heartbeats = list(UserHeartbeat.objects.all())
-        synced_by_email = {}
-        for prof in profiles:
-            synced_by_email.setdefault(prof.email, prof)
+        # One row per device, merged from the account's sync and heartbeat (those
+        # share an id space) and the install record that carries the visit
+        # counters (a different id, joined through account_key). Rows are plain
+        # primitives so the merged list can be cached for a minute and then
+        # filtered, searched and paginated without touching the database again.
+        from .models import HeartbeatActivity
 
-        entries = {}
-        for prof in profiles:
-            if prof.device_id:
-                entries.setdefault(prof.device_id, {})['profile'] = prof
-        for beat in heartbeats:
-            if beat.device_id:
-                entries.setdefault(beat.device_id, {})['heartbeat'] = beat
-        for install in all_devices:
-            entries.setdefault(install.user_id, {})['device'] = install
+        dview = (request.GET.get('ds') or '').strip().lower()
+        if dview not in ('', 'all', 'noacc', 'online', 'paid', 'free', 'expiring'):
+            dview = ''
+        if not dview:
+            dview = 'noacc' if legacy_devices else 'all'
 
-        account_ids = [prof.user_id for prof in profiles if prof.user_id]
-        account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
-                         if account_ids else {})
+        cache_key = 'app_unique_devices_v2_%s' % selected_app.id
+        merged = cache.get(cache_key)
+        if merged is None:
+            profiles = list(SyncedUser.objects.all())
+            heartbeats = list(UserHeartbeat.objects.all())
+            synced_by_email = {}
+            for prof in profiles:
+                synced_by_email.setdefault(prof.email, prof)
 
-        install_ids = [d.pk for d in all_devices]
-        last_ip, today_counts = {}, {}
-        if install_ids:
-            for row in (AndroidAppDeviceVisit.objects.filter(device_id__in=install_ids)
-                        .order_by('-visited_at')
-                        .values('device_id', 'ip_address')[:5000]):
-                last_ip.setdefault(row['device_id'], row['ip_address'])
-            day_start = timezone.make_aware(
-                datetime.datetime.combine(timezone.localdate(), datetime.time.min))
-            for row in (AndroidAppDeviceVisit.objects
-                        .filter(device_id__in=install_ids, visited_at__gte=day_start)
-                        .values('device_id').annotate(n=Count('id'))):
-                today_counts[row['device_id']] = row['n']
+            entries = {}
+            for prof in profiles:
+                if prof.device_id:
+                    entries.setdefault(prof.device_id, {})['profile'] = prof
+            for beat in heartbeats:
+                if beat.device_id:
+                    entries.setdefault(beat.device_id, {})['heartbeat'] = beat
+            for install in all_devices:
+                entries.setdefault(install.account_key or install.user_id, {}).setdefault(
+                    'installs', []).append(install)
 
-        unique_rows = []
-        for device_key, item in entries.items():
-            beat = item.get('heartbeat')
-            prof = item.get('profile') or (synced_by_email.get(beat.email) if beat else None)
-            install = item.get('device')
-            account = account_by_id.get(prof.user_id) if prof and prof.user_id else None
-            # The heartbeat is the live signal; a device with none falls back to
-            # its own last request and the same three-minute window.
-            online = beat.is_online if beat else bool(
-                install and install.last_seen_at
-                and (timezone.now() - install.last_seen_at).total_seconds()
-                <= UserHeartbeat.ONLINE_WINDOW_SECONDS)
-            last_seen = (beat.last_seen_at if beat
-                         else (install.last_seen_at if install
-                               else (prof.last_synced_at if prof else None)))
-            unique_rows.append({
-                'id': device_key,
-                'model': ((beat.device_model if beat else '')
-                          or (install.device_model if install else '')
-                          or (prof.device_model if prof else '')),
-                'os': ((beat.os_version if beat else '')
-                       or (install.os_version if install else '')
-                       or (prof.os_version if prof else '')),
-                'profile': prof,
-                'heartbeat': beat,
-                'device': install,
-                'account': account,
-                'email': (prof.email if prof else (beat.email if beat else '')),
-                'online': online,
-                'ip': ((beat.ip_address if beat and beat.ip_address else '')
-                       or (last_ip.get(install.pk) if install else '') or ''),
-                'today': today_counts.get(install.pk) if install else None,
-                'total': install.total_visits if install else None,
-                'last_seen': last_seen,
-                'registered': (prof.created_at if prof
-                               else (install.first_seen_at if install else None)),
-                'history_url': (reverse('admin_user_analytics_detail', args=[account.pk]) if account
-                                else (reverse('synced_user_detail', args=[prof.pk]) if prof else '')),
-                'kind': 'account' if prof else ('guest' if beat else 'install'),
-            })
+            account_ids = [prof.user_id for prof in profiles if prof.user_id]
+            account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
+                             if account_ids else {})
+
+            install_ids = [d.pk for d in all_devices]
+            last_ip, today_counts = {}, {}
+            if install_ids:
+                for row in (AndroidAppDeviceVisit.objects.filter(device_id__in=install_ids)
+                            .order_by('-visited_at')
+                            .values('device_id', 'ip_address')[:5000]):
+                    last_ip.setdefault(row['device_id'], row['ip_address'])
+                day_start = timezone.make_aware(
+                    datetime.datetime.combine(timezone.localdate(), datetime.time.min))
+                for row in (AndroidAppDeviceVisit.objects
+                            .filter(device_id__in=install_ids, visited_at__gte=day_start)
+                            .values('device_id').annotate(n=Count('id'))):
+                    today_counts[row['device_id']] = row['n']
+
+            merged = []
+            for device_key, item in entries.items():
+                beat = item.get('heartbeat')
+                prof = item.get('profile') or (synced_by_email.get(beat.email) if beat else None)
+                installs = item.get('installs') or []
+                account = account_by_id.get(prof.user_id) if prof and prof.user_id else None
+                online = beat.is_online if beat else any(
+                    i.last_seen_at and (timezone.now() - i.last_seen_at).total_seconds()
+                    <= UserHeartbeat.ONLINE_WINDOW_SECONDS for i in installs)
+                seen = [i.last_seen_at for i in installs if i.last_seen_at]
+                last_seen = (beat.last_seen_at if beat else
+                             (max(seen) if seen else (prof.last_synced_at if prof else None)))
+                visit_ip = next((last_ip.get(i.pk) for i in installs if last_ip.get(i.pk)), '')
+                first_seen = min([i.first_seen_at for i in installs if i.first_seen_at],
+                                 default=None)
+                merged.append({
+                    'id': device_key,
+                    'model': ((beat.device_model if beat else '')
+                              or next((i.device_model for i in installs if i.device_model), '')
+                              or (prof.device_model if prof else '')),
+                    'os': ((beat.os_version if beat else '')
+                           or next((i.os_version for i in installs if i.os_version), '')
+                           or (prof.os_version if prof else '')),
+                    'email': (prof.email if prof else (beat.email if beat else '')),
+                    'display_name': prof.display_name if prof else '',
+                    'profile_pk': prof.pk if prof else None,
+                    'verified': bool(prof.is_email_verified) if prof else False,
+                    'block_display': (prof.get_block_mode_display()
+                                      if prof and prof.block_mode else ''),
+                    'is_subscribed': bool(prof.is_subscribed) if prof else False,
+                    'plan': (prof.plan or '') if prof else '',
+                    'valid_until': prof.valid_until if prof else None,
+                    'days_left': prof.days_remaining if prof else 0,
+                    'account_pk': account.pk if account else None,
+                    'online': online,
+                    'screen': beat.current_screen if beat else '',
+                    'ip': ((beat.ip_address if beat and beat.ip_address else '') or visit_ip or ''),
+                    'today': (sum(today_counts.get(i.pk, 0) for i in installs)
+                              if installs else None),
+                    'total': sum(i.total_visits for i in installs) if installs else None,
+                    'last_seen': last_seen,
+                    'registered': (prof.created_at if prof else first_seen),
+                    'history_url': (reverse('admin_user_analytics_detail',
+                                            args=[account.pk]) if account
+                                    else (reverse('synced_user_detail',
+                                                  args=[prof.pk]) if prof else '')),
+                    'kind': 'account' if prof else ('guest' if beat else 'install'),
+                    'linked_by_ip': any(i.account_key and i.account_key != i.user_id
+                                        for i in installs),
+                })
+            cache.set(cache_key, merged, 60)
+
+        rows = merged
+        if dview == 'noacc':
+            rows = [r for r in rows if r['kind'] != 'account']
+        elif dview == 'online':
+            rows = [r for r in rows if r['online']]
+        elif dview == 'paid':
+            rows = [r for r in rows if r['is_subscribed']]
+        elif dview == 'free':
+            rows = [r for r in rows if r['profile_pk'] and not r['is_subscribed']]
+        elif dview == 'expiring':
+            limit = timezone.localdate() + datetime.timedelta(days=7)
+            rows = [r for r in rows if r['is_subscribed'] and r['valid_until']
+                    and r['valid_until'] <= limit]
 
         if q:
             needle = q.lower()
-            unique_rows = [row for row in unique_rows
-                           if needle in (row['id'] or '').lower()
-                           or needle in (row['email'] or '').lower()
-                           or needle in (row['model'] or '').lower()
-                           or needle in (row['os'] or '').lower()]
+            rows = [r for r in rows
+                    if needle in (r['id'] or '').lower()
+                    or needle in (r['email'] or '').lower()
+                    or needle in (r['model'] or '').lower()
+                    or needle in (r['os'] or '').lower()]
 
         epoch = timezone.make_aware(datetime.datetime(1970, 1, 1))
-        unique_rows.sort(key=lambda row: (row['last_seen'] or epoch), reverse=True)
+        rows.sort(key=lambda r: (r['last_seen'] or epoch), reverse=True)
 
-        unique_page = Paginator(unique_rows, 25).get_page(request.GET.get('upage') or 1)
-        ctx.update({'unique_rows': unique_page.object_list, 'unique_page': unique_page})
+        expiring_limit = timezone.localdate() + datetime.timedelta(days=7)
+
+        def _expiring(r):
+            return r['is_subscribed'] and r['valid_until'] and r['valid_until'] <= expiring_limit
+
+        chips = {
+            'all': len(merged),
+            'online': sum(1 for r in merged if r['online']),
+            'paid': sum(1 for r in merged if r['is_subscribed']),
+            'free': sum(1 for r in merged if r['profile_pk'] and not r['is_subscribed']),
+            'noacc': sum(1 for r in merged if r['kind'] != 'account'),
+            'expiring': sum(1 for r in merged if _expiring(r)),
+        }
+
+        if request.GET.get('export') == 'csv':
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = (
+                'attachment; filename="devices-app-%s.csv"' % selected_app.id)
+            writer = csv.writer(response)
+            writer.writerow(['device id', 'model', 'os', 'account', 'plan', 'valid until',
+                             'online', 'ip', 'first registered', 'last seen',
+                             'total visits', 'visits today'])
+            for r in rows:
+                writer.writerow([
+                    r['id'], r['model'], r['os'], r['email'], r['plan'],
+                    r['valid_until'] or '', 'yes' if r['online'] else 'no', r['ip'],
+                    r['registered'] or '', r['last_seen'] or '',
+                    '' if r['total'] is None else r['total'],
+                    '' if r['today'] is None else r['today']])
+            return response
+
+        unique_page = Paginator(rows, 25).get_page(request.GET.get('upage') or 1)
+        page_rows = list(unique_page.object_list)
+
+        # The newest few things each account did, from the heartbeat history.
+        recent = {}
+        page_emails = [r['email'] for r in page_rows if r['email']]
+        if page_emails:
+            for entry in (HeartbeatActivity.objects.filter(email__in=page_emails)
+                          .order_by('-created_at')[:25 * 4]):
+                bucket = recent.setdefault(entry.email, [])
+                if len(bucket) < 3:
+                    bucket.append(entry)
+        for row in page_rows:
+            row['recent'] = recent.get(row['email'], [])
+
+        ctx.update({'unique_rows': page_rows, 'unique_page': unique_page,
+                    'devices_view': dview, 'device_chips': chips})
+
 
     elif tab == 'visits':
         # ---------------------------------------------------------------- visits
@@ -4486,7 +4578,7 @@ def android_app_users_full(request, app_id):
             - timezone.timedelta(seconds=UserHeartbeat.ONLINE_WINDOW_SECONDS)).count()
 
         signed_out = []
-        for h in signed_out_qs.order_by('-last_seen_at')[:50]:
+        for h in signed_out_qs.order_by('-last_seen_at')[:500]:
             actions = [str(a) for a in (h.recent_actions or []) if str(a).strip()]
             signed_out.append({
                 'hb': h,
@@ -4500,7 +4592,9 @@ def android_app_users_full(request, app_id):
                 'last_action': actions[0] if actions else '',
             })
 
-        ctx['signed_out'] = signed_out
+        signed_out_page = Paginator(signed_out, 25).get_page(request.GET.get('spage') or 1)
+        ctx['signed_out'] = list(signed_out_page.object_list)
+        ctx['signed_out_page'] = signed_out_page
         ctx['signed_out_total'] = signed_out_qs.count()
         ctx['signed_out_online'] = signed_out_online
 
@@ -5013,6 +5107,13 @@ def android_app_endpoint(request, app_slug):
         # Increment total visits for device
         device.total_visits += 1
         device.save(update_fields=['total_visits', 'last_seen_at'])
+
+        # Keep the install record joined to the account that owns it, so the
+        # admin list can show one device with its account and its visits.
+        account_key = _resolve_account_key(user_id, ip_address)
+        if account_key and device.account_key != account_key:
+            device.account_key = account_key
+            device.save(update_fields=['account_key', 'last_seen_at'])
         
         # Build full request details for debugging
         full_request_data = {
@@ -9739,6 +9840,8 @@ def _admin_apply_subscription_edit(request):
             return _back()
         profile = SyncedUser(user_id=uid, email=email)
 
+    was_subscribed, was_plan, was_valid_until = (
+        profile.is_subscribed, profile.plan, profile.valid_until)
     profile.is_subscribed = is_subscribed
     profile.plan = plan if is_subscribed else ''
     profile.valid_until = valid_until if is_subscribed else None
@@ -9753,6 +9856,9 @@ def _admin_apply_subscription_edit(request):
         return _back()
 
     who = request.user.get_username()
+    _log_subscription_event(profile, who, 'account-page',
+                            {'is_subscribed': was_subscribed, 'plan': was_plan,
+                             'valid_until': was_valid_until})
     if is_subscribed:
         until = valid_until.isoformat() if valid_until else 'no end date'
         logger.info('admin %s set subscription for user %s: plan=%r until=%s',
@@ -11036,6 +11142,8 @@ def api_user_heartbeat(request):
         },
     )
 
+    _record_heartbeat_activity(hb)
+
     prof = _get_synced_profile(email)
     return JsonResponse({
         'status': 'success',
@@ -11080,6 +11188,76 @@ def api_user_forgot_password(request):
         # app still shows the OTP step, but there is nothing to validate.
         resp.update({'otp': None, 'resetToken': None, 'resetUid': None, 'resetUrl': None})
     return JsonResponse(resp)
+
+
+def _resolve_account_key(user_id, ip_address):
+    """The account device id behind an install record, or '' when unknown.
+
+    The app posts its account device id to sync and heartbeat but a different
+    (per-install) id to the install/visit endpoint. When the two happen to be the
+    same value the id itself is the key. Otherwise the visitor's IP can bridge
+    them: if every heartbeat from that address belongs to one account, that
+    account is the owner. Shared addresses (carrier NAT, offices) resolve to
+    more than one email and deliberately resolve to nothing rather than guess.
+    """
+    from .models import SyncedUser, UserHeartbeat
+
+    user_id = (user_id or '').strip()
+    if user_id and (SyncedUser.objects.filter(device_id=user_id).exists()
+                    or UserHeartbeat.objects.filter(device_id=user_id).exists()):
+        return user_id
+    if not ip_address:
+        return ''
+    emails = list(UserHeartbeat.objects.filter(ip_address=ip_address)
+                  .values_list('email', flat=True).distinct()[:5])
+    if len(emails) != 1:
+        return ''
+    profile = SyncedUser.objects.filter(email=emails[0]).exclude(device_id='').first()
+    return profile.device_id if profile else ''
+
+
+def _log_subscription_event(profile, actor, action, before=None):
+    """Record one subscription change; never let auditing break the save."""
+    from .models import SubscriptionEvent
+
+    before = before or {}
+    try:
+        SubscriptionEvent.objects.create(
+            profile_id=profile.pk,
+            email=profile.email,
+            actor=(actor or '')[:150],
+            action=(action or 'update')[:40],
+            was_subscribed=bool(before.get('is_subscribed')),
+            is_subscribed=bool(profile.is_subscribed),
+            old_plan=(before.get('plan') or '')[:100],
+            new_plan=(profile.plan or '')[:100],
+            old_valid_until=before.get('valid_until'),
+            new_valid_until=profile.valid_until,
+        )
+    except Exception as exc:  # pragma: no cover - auditing must not block a save
+        logger.warning('subscription event not recorded for %s: %s', profile.email, exc)
+
+
+def _record_heartbeat_activity(hb):
+    """Append what the newest heartbeat changed, then keep the log short."""
+    from .models import HeartbeatActivity
+
+    previous = HeartbeatActivity.objects.filter(email=hb.email).order_by('-created_at').first()
+    if previous and (previous.screen == hb.current_screen
+                     and previous.media_title == hb.media_title
+                     and previous.media_id == hb.media_id
+                     and previous.is_playing == hb.is_playing):
+        return
+    HeartbeatActivity.objects.create(
+        email=hb.email, device_id=hb.device_id, screen=hb.current_screen,
+        media_title=hb.media_title, media_id=hb.media_id, is_tv=hb.media_is_tv,
+        season=hb.season, episode=hb.episode, is_playing=hb.is_playing,
+        position_ms=hb.playback_position_ms, duration_ms=hb.duration_ms)
+    keep = HeartbeatActivity.ACTIVITY_KEEP
+    stale = list(HeartbeatActivity.objects.filter(email=hb.email)
+                 .order_by('-created_at').values_list('pk', flat=True)[keep:])
+    if stale:
+        HeartbeatActivity.objects.filter(pk__in=stale).delete()
 
 
 def _get_client_ip(request):
@@ -12649,6 +12827,9 @@ def synced_user_edit(request, user_id):
     """Admin: edit a synced user's subscription."""
     user_obj = get_object_or_404(SyncedUser, id=user_id)
     if request.method == 'POST':
+        was_subscribed = user_obj.is_subscribed
+        was_plan = user_obj.plan
+        was_valid_until = user_obj.valid_until
         user_obj.is_subscribed = request.POST.get('is_subscribed') == 'on'
         user_obj.plan = request.POST.get('plan', '')
         valid_until = request.POST.get('valid_until', '')
@@ -12659,9 +12840,64 @@ def synced_user_edit(request, user_id):
             user_obj.valid_until = None
         features_raw = request.POST.get('features', '')
         user_obj.features = [f.strip() for f in features_raw.split('\n') if f.strip()]
+        before = {'is_subscribed': was_subscribed, 'plan': was_plan,
+                  'valid_until': was_valid_until}
         user_obj.save()
+        _log_subscription_event(user_obj, request.user.get_username(), 'edit', before)
         return redirect('synced_users_list')
-    return render(request, 'core/synced_user_edit.html', {'synced_user': user_obj})
+    from .models import SubscriptionEvent
+    events = list(SubscriptionEvent.objects.filter(profile_id=user_obj.pk)[:20])
+    return render(request, 'core/synced_user_edit.html',
+                  {'synced_user': user_obj, 'subscription_events': events})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def synced_user_subscription_action(request, user_id):
+    """Admin: extend or revoke a subscription without leaving the device list.
+
+    The full editor is still there for plan names and end dates; this is the
+    common case (+7 / +30 / +90 days, or revoke) done in one request. Every
+    change writes a ``SubscriptionEvent`` so the record survives the overwrite.
+    """
+    profile = get_object_or_404(SyncedUser, id=user_id)
+    action = (request.POST.get('action') or '').strip().lower()
+    today = timezone.localdate()
+    before = {'is_subscribed': profile.is_subscribed, 'plan': profile.plan,
+              'valid_until': profile.valid_until}
+    label = ''
+
+    if action in ('7', '30', '90'):
+        days = int(action)
+        start = profile.valid_until if (profile.valid_until and profile.valid_until > today) else today
+        profile.valid_until = start + datetime.timedelta(days=days)
+        profile.is_subscribed = True
+        if not profile.plan:
+            profile.plan = 'VIP'
+        label = 'Extended by %d days — now until %s' % (days, profile.valid_until.isoformat())
+    elif action == 'revoke':
+        profile.is_subscribed = False
+        profile.plan = ''
+        profile.valid_until = None
+        profile.features = []
+        label = 'Subscription revoked'
+    else:
+        return JsonResponse({'ok': False, 'message': 'Unknown action'}, status=400)
+
+    profile.save()
+    _log_subscription_event(profile, request.user.get_username(), action, before)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'message': label,
+                             'is_subscribed': profile.is_subscribed,
+                             'plan': profile.plan or '',
+                             'valid_until': profile.valid_until.isoformat() if profile.valid_until else ''})
+    messages.success(request, label)
+    nxt = request.POST.get('next') or ''
+    if nxt.startswith('/') and not nxt.startswith('//'):
+        return redirect(nxt)
+    return redirect('synced_users_list')
 
 
 @login_required
@@ -15626,6 +15862,8 @@ def admin_user_subscription(request, user_id):
         user=detail_user,
         defaults={'email': detail_user.email, 'display_name': detail_user.first_name},
     )
+    was_subscribed, was_plan, was_valid_until = (
+        synced_profile.is_subscribed, synced_profile.plan, synced_profile.valid_until)
     synced_profile.is_subscribed = is_subscribed
     synced_profile.plan = plan
     synced_profile.features = features
@@ -15638,6 +15876,9 @@ def admin_user_subscription(request, user_id):
     elif not is_subscribed:
         synced_profile.valid_until = None
     synced_profile.save()
+    _log_subscription_event(synced_profile, request.user.get_username(), 'detail-page',
+                            {'is_subscribed': was_subscribed, 'plan': was_plan,
+                             'valid_until': was_valid_until})
 
     messages.success(request, f'Subscription updated for {detail_user.username}')
     return redirect('admin_user_detail', user_id=user_id)

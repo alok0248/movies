@@ -1232,6 +1232,13 @@ class AndroidAppDevice(models.Model):
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(auto_now=True)
     total_visits = models.PositiveIntegerField(default=0)
+    # The account's own device id (SyncedUser.device_id / heartbeat deviceId)
+    # when this install record is known to belong to that account. The app
+    # sends different ids to the sync/heartbeat and the install endpoints, so
+    # this is the join between them: set at visit time when the id matches or
+    # the visit IP resolves to one account, and backfilled by
+    # `manage.py link_devices`.
+    account_key = models.CharField(max_length=100, blank=True, default='', db_index=True)
     
     class Meta:
         unique_together = ('android_app', 'user_id')
@@ -1377,7 +1384,7 @@ class DataSourceUsageLog(models.Model):
     detail = models.CharField(max_length=255, blank=True, null=True)
     usage_count = models.PositiveIntegerField(default=0)
     last_used_at = models.DateTimeField(auto_now=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         unique_together = ('source', 'entity_type', 'entity_id', 'detail')
@@ -1522,6 +1529,35 @@ class SyncedUser(models.Model):
         }
 
 
+class SubscriptionEvent(models.Model):
+    """One admin change to an account's subscription, kept for the record.
+
+    ``SyncedUser`` only holds the current plan, so without this row there is no
+    way to tell who extended a subscription, when, or what it was before. Rows
+    are written by every path that edits a subscription (the profile editor, the
+    account page and the one-click extend buttons).
+    """
+    profile_id = models.IntegerField(db_index=True, null=True, blank=True)
+    email = models.EmailField(db_index=True)
+    actor = models.CharField(max_length=150, blank=True, default='')
+    action = models.CharField(max_length=40, blank=True, default='update')
+    was_subscribed = models.BooleanField(default=False)
+    is_subscribed = models.BooleanField(default=False)
+    old_plan = models.CharField(max_length=100, blank=True, default='')
+    new_plan = models.CharField(max_length=100, blank=True, default='')
+    old_valid_until = models.DateField(null=True, blank=True)
+    new_valid_until = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Subscription event'
+        verbose_name_plural = 'Subscription events'
+
+    def __str__(self):
+        return f"{self.email} {self.action} by {self.actor or 'admin'}"
+
+
 class UserHeartbeat(models.Model):
     """Latest 1-minute heartbeat from the Android app (POST /api/user/heartbeat).
 
@@ -1604,6 +1640,38 @@ class UserHeartbeat(models.Model):
             'playerEngine': self.player_engine,
             'recentActions': self.recent_actions or [],
         }
+
+
+class HeartbeatActivity(models.Model):
+    """What an app user was doing, one row per change the heartbeat reported.
+
+    ``UserHeartbeat`` keeps only the newest state, so the operator could see
+    what someone is watching *now* and never what they watched earlier. A row is
+    appended only when the screen, title or playback state changes, and the log
+    is pruned to the newest ``ACTIVITY_KEEP`` rows per account.
+    """
+    email = models.EmailField(db_index=True)
+    device_id = models.CharField(max_length=100, blank=True, default='')
+    screen = models.CharField(max_length=100, blank=True, default='')
+    media_title = models.CharField(max_length=255, blank=True, default='')
+    media_id = models.BigIntegerField(null=True, blank=True)
+    is_tv = models.BooleanField(default=False)
+    season = models.IntegerField(null=True, blank=True)
+    episode = models.IntegerField(null=True, blank=True)
+    is_playing = models.BooleanField(default=False)
+    position_ms = models.BigIntegerField(default=0)
+    duration_ms = models.BigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    ACTIVITY_KEEP = 50
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Heartbeat activity'
+        verbose_name_plural = 'Heartbeat activity'
+
+    def __str__(self):
+        return f"{self.email}: {self.media_title or self.screen}"
 
 
 class EmailVerification(models.Model):

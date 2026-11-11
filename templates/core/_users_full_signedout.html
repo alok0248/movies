@@ -11,9 +11,6 @@
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <span class="pill bg-dark border border-secondary">{{ signed_out_total }} signed out</span>
             <span class="pill bg-success">{{ signed_out_online|default:0 }} online now</span>
-            {% if signed_out|length < signed_out_total %}
-                <span class="sub">newest {{ signed_out|length }} shown</span>
-            {% endif %}
         </div>
     </div>
 
@@ -113,6 +110,13 @@
             </tbody>
         </table>
     </div>
+    {% if signed_out_page.has_other_pages %}
+    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
+        {% if signed_out_page.has_previous %}<a class="fbtn" href="?tab=signedout&spage={{ signed_out_page.previous_page_number }}">&laquo; Prev</a>{% endif %}
+        <span class="sub">Page {{ signed_out_page.number }} of {{ signed_out_page.paginator.num_pages }} &middot; {{ signed_out_page.paginator.count }} signed out</span>
+        {% if signed_out_page.has_next %}<a class="fbtn" href="?tab=signedout&spage={{ signed_out_page.next_page_number }}">Next &raquo;</a>{% endif %}
+    </nav>
+    {% endif %}
     {% else %}
     <div class="text-center text-secondary py-4">
         <i class="fas fa-user-lock fa-2x mb-2 d-block"></i>

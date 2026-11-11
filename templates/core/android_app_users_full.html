@@ -81,7 +81,6 @@
              reload, the other lists simply disappear). -->
         <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
             <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill bg-dark border border-secondary ms-1">{{ counts.total }}</span></a>
-            <a class="fbtn tabbtn {% if active_tab == 'devices' %}active{% endif %}" data-tab="devices" href="?tab=devices" role="tab" aria-selected="{% if active_tab == 'devices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-alt me-1"></i>Devices using the app with no account<span class="pill bg-warning text-dark ms-1">{{ counts.anonymous_devices }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill bg-dark border border-secondary ms-1">{{ counts.unique_devices }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill bg-dark border border-secondary ms-1">{{ counts.signed_out }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill bg-dark border border-secondary ms-1">{{ counts.visits }}</span></a>
@@ -278,6 +277,54 @@ function resendCode(id, btn) {
         if (href.indexOf('?tab=') !== 0) return;
         e.preventDefault();
         go(href);
+    });
+})();
+</script>
+<script>
+/* One-click subscription changes from the device list. The response is JSON so
+   only the panel is refreshed, never the page. */
+(function () {
+    window.__reloadPanel = function () {
+        var wrap = document.getElementById('panelWrap');
+        if (!wrap || !window.fetch) return;
+        fetch(location.pathname + location.search + (location.search ? '&' : '?') + 'partial=1', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.text(); }).then(function (html) {
+            wrap.innerHTML = html;
+        }).catch(function () {});
+    };
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-subaction]') : null;
+        if (!btn) return;
+        e.preventDefault();
+        var id = btn.getAttribute('data-user');
+        var action = btn.getAttribute('data-subaction');
+        var csrf = _csrf();
+        btn.disabled = true;
+        _status('Saving…');
+        fetch('/admin-dashboard/synced-users/' + id + '/subscription/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'action=' + encodeURIComponent(action)
+                + '&next=' + encodeURIComponent(location.pathname + location.search)
+        })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+            var data = res.data || {};
+            if (res.ok && data.ok) {
+                _status('<i class="fas fa-check me-1"></i>' + (data.message || 'Saved'), 'text-success');
+                if (window.__reloadPanel) window.__reloadPanel();
+            } else {
+                _status(data.message || 'Could not save', 'text-danger');
+            }
+        })
+        .catch(function () { _status('Request failed', 'text-danger'); })
+        .finally(function () { btn.disabled = false; });
     });
 })();
 </script>

@@ -21,6 +21,8 @@ USER_MODELS = {
     'emailmessage',
     'emaildelivery',
     'userprofile',
+    'heartbeatactivity',
+    'subscriptionevent',
 }
 
 

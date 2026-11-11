@@ -74,4 +74,37 @@
         </div>
     </div>
 </div>
+
+{% if subscription_events %}
+<div class="card bg-dark border-secondary shadow-sm mb-4">
+    <div class="card-body">
+        <h6 class="text-white mb-3"><i class="fas fa-clock-rotate-left me-2"></i>Subscription history</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-dark mb-0">
+                <thead><tr><th>When</th><th>By</th><th>Change</th><th>Until</th></tr></thead>
+                <tbody>
+                    {% for ev in subscription_events %}
+                    <tr>
+                        <td class="text-secondary">{{ ev.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>{{ ev.actor|default:'—' }}</td>
+                        <td>
+                            {% if ev.is_subscribed %}
+                                <span class="badge bg-success">{{ ev.new_plan|default:'subscribed' }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">free</span>
+                            {% endif %}
+                            <span class="text-secondary small">{{ ev.action }}</span>
+                            {% if ev.old_plan and ev.old_plan != ev.new_plan %}
+                                <span class="text-secondary small">from {{ ev.old_plan }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-secondary">{{ ev.new_valid_until|date:'Y-m-d'|default:'—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
