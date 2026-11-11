@@ -4159,7 +4159,7 @@ def android_app_users_full(request, app_id):
     # signed-out list at the same time, which is what made it heavy. The tab
     # bar asks for ?partial=1 when the admin switches, so that swap needs no
     # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'devices', 'signedout', 'visits')
+    TABS = ('accounts', 'devices', 'uniquedevices', 'signedout', 'visits')
     tab = (request.GET.get('tab') or '').strip().lower()
     if tab not in TABS:
         tab = 'accounts'
@@ -4351,6 +4351,75 @@ def android_app_users_full(request, app_id):
             'device_page': device_page,
             'no_account_only': no_account_only,
         })
+
+    elif tab == 'uniquedevices':
+        # ------------------------------------------------------- unique devices
+        # One row per device the app has ever opened on (the device id is unique
+        # per app), carrying the account it belongs to, that account's
+        # subscription, how long ago it registered and how much it uses the app.
+        # The usage numbers come from the two tables that already record them
+        # (AndroidAppDevice.total_visits and AndroidAppDeviceVisit), so nothing
+        # is stored twice for this screen.
+        devices_qs = all_devices.order_by('-last_seen_at')
+        if q:
+            devices_qs = devices_qs.filter(
+                Q(user_id__icontains=q) | Q(device_model__icontains=q)
+                | Q(os_version__icontains=q))
+
+        unique_page = Paginator(devices_qs, 25).get_page(request.GET.get('upage') or 1)
+        page_devices = list(unique_page.object_list)
+        device_pks = [d.pk for d in page_devices]
+        device_ids = [d.user_id for d in page_devices]
+
+        last_visit, today_counts = {}, {}
+        if device_pks:
+            for v in (AndroidAppDeviceVisit.objects.filter(device_id__in=device_pks)
+                      .order_by('-visited_at')
+                      .values('device_id', 'ip_address', 'build_identifier', 'visited_at')[:5000]):
+                last_visit.setdefault(v['device_id'], v)
+            day_start = timezone.make_aware(
+                datetime.datetime.combine(timezone.localdate(), datetime.time.min))
+            for row in (AndroidAppDeviceVisit.objects
+                        .filter(device_id__in=device_pks, visited_at__gte=day_start)
+                        .values('device_id').annotate(n=Count('id'))):
+                today_counts[row['device_id']] = row['n']
+
+        synced_by_device = {}
+        for su in SyncedUser.objects.filter(device_id__in=device_ids).order_by('-last_synced_at'):
+            synced_by_device.setdefault(su.device_id, su)
+        page_emails = [su.email for su in synced_by_device.values() if su.email]
+        hb_by_email = {h.email: h for h in UserHeartbeat.objects.filter(email__in=page_emails)}
+        account_ids = [su.user_id for su in synced_by_device.values() if su.user_id]
+        account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
+                         if account_ids else {})
+
+        unique_rows = []
+        for d in page_devices:
+            su = synced_by_device.get(d.user_id)
+            hb = hb_by_email.get(su.email) if su else None
+            visit = last_visit.get(d.pk)
+            account = account_by_id.get(su.user_id) if su and su.user_id else None
+            # The heartbeat is the live signal; a device with none falls back to
+            # its own last request and the same three-minute window.
+            online = hb.is_online if hb else bool(
+                d.last_seen_at
+                and (timezone.now() - d.last_seen_at).total_seconds() <= UserHeartbeat.ONLINE_WINDOW_SECONDS)
+            unique_rows.append({
+                'device': d,
+                'profile': su,
+                'heartbeat': hb,
+                'account': account,
+                'online': online,
+                'ip': (hb.ip_address if hb and hb.ip_address
+                       else (visit['ip_address'] if visit else '')),
+                'today': today_counts.get(d.pk, 0),
+                'last_seen': (hb.last_seen_at if hb else d.last_seen_at),
+                'registered': su.created_at if su else None,
+                'history_url': (reverse('admin_user_analytics_detail', args=[account.pk]) if account
+                                else (reverse('synced_user_detail', args=[su.pk]) if su else '')),
+            })
+
+        ctx.update({'unique_rows': unique_rows, 'unique_page': unique_page})
 
     elif tab == 'visits':
         # ---------------------------------------------------------------- visits
