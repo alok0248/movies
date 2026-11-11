@@ -1,13 +1,15 @@
 {% load custom_filters %}
     <!-- ======================= UNIQUE DEVICES =======================
-         One row per device id this app has seen. Everything except the
-         visit counters is read live: the account and its subscription from
-         SyncedUser, online / IP / last seen from the app's heartbeat, and the
-         totals from the device record itself. -->
+         One row per device the app has reported. A device can be known from
+         three places that do not always share a key: the account's sync
+         (SyncedUser.device_id), the heartbeat, and the install record
+         AndroidAppDevice, which is what carries the visit counters. The view
+         merges them on the device id, so an account row still shows its
+         subscription and, where the ids agree, its visits. -->
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mt-3 mb-2">
         <div>
             <div class="sect-title"><i class="fas fa-mobile-screen-button text-warning me-2"></i>Unique devices</div>
-            <div class="sub">Each device that has opened the app, with the account behind it and how it uses the app. Subscription cells open the account's subscription settings.</div>
+            <div class="sub">Every device the app has reported, with the account behind it, its subscription and how it uses the app. Subscription cells open that account's settings; History opens the user's activity.</div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <span class="pill bg-dark border border-secondary">{{ unique_page.paginator.count }} devices</span>
@@ -32,14 +34,13 @@
             </thead>
             <tbody>
                 {% for r in unique_rows %}
-                {% with d=r.device %}
                 <tr>
                     <td>
                         <div class="text-white">
-                            <i class="fab fa-android text-success me-1"></i>{{ d.device_model|default:'Unknown device' }}
+                            <i class="fab fa-android text-success me-1"></i>{{ r.model|default:'Unknown device' }}
                         </div>
-                        <div class="sub">{{ d.os_version|default:'OS unknown' }}</div>
-                        <div class="mono sub" title="{{ d.user_id }}">{{ d.user_id|truncatechars:24 }}</div>
+                        <div class="sub">{{ r.os|default:'OS unknown' }}</div>
+                        <div class="mono sub" title="{{ r.id }}">{{ r.id|truncatechars:24 }}</div>
                     </td>
                     <td>
                         {% if r.profile %}
@@ -53,9 +54,13 @@
                                 {% endif %}
                                 {% if r.profile.block_mode %}<span class="pill bg-danger">{{ r.profile.get_block_mode_display }}</span>{% endif %}
                             </div>
+                        {% elif r.kind == 'guest' %}
+                            <code class="mono sub">{{ r.email }}</code>
+                            <div class="mt-1"><span class="pill bg-warning text-dark">Guest session</span></div>
+                            <div class="sub">signed out of the app</div>
                         {% else %}
-                            <span class="pill bg-warning text-dark">No account</span>
-                            <div class="sub">guest device</div>
+                            <span class="pill bg-secondary">Install record only</span>
+                            <div class="sub">no account has used this device</div>
                         {% endif %}
                     </td>
                     <td>
@@ -92,7 +97,6 @@
                             <div class="sub">{{ r.registered|timesince }} ago</div>
                         {% else %}
                             <span class="sub">&mdash;</span>
-                            <div class="sub">device first seen {{ d.first_seen_at|date:'Y-m-d' }}</div>
                         {% endif %}
                     </td>
                     <td>
@@ -102,20 +106,22 @@
                         {% else %}<span class="sub">&mdash;</span>{% endif %}
                     </td>
                     <td>
-                        <div class="text-white">{{ d.total_visits }} total</div>
-                        <div class="sub">
-                            <span class="{% if r.today %}text-success{% endif %}">{{ r.today }} today</span>
-                        </div>
+                        {% if r.device %}
+                            <div class="text-white">{{ r.total }} total</div>
+                            <div class="sub"><span class="{% if r.today %}text-success{% endif %}">{{ r.today }} today</span></div>
+                        {% else %}
+                            <span class="sub">&mdash;</span>
+                            <div class="sub">no install record</div>
+                        {% endif %}
                     </td>
                     <td>
                         {% if r.history_url %}
                             <a class="btn btn-sm btn-outline-light act-btn" href="{{ r.history_url }}" title="Open this user's activity history"><i class="fas fa-chart-line me-1"></i>History</a>
                         {% else %}
-                            <a class="btn btn-sm btn-outline-secondary act-btn" href="?tab=visits&q={{ d.user_id|urlencode }}" title="No account to show activity for — see this device's requests"><i class="fas fa-list me-1"></i>Requests</a>
+                            <a class="btn btn-sm btn-outline-secondary act-btn" href="?tab=visits&q={{ r.id|urlencode }}" title="No account to show activity for — see this device's requests"><i class="fas fa-list me-1"></i>Requests</a>
                         {% endif %}
                     </td>
                 </tr>
-                {% endwith %}
                 {% empty %}
                 <tr><td colspan="9" class="text-center text-secondary py-4"><i class="fas fa-mobile-screen fa-2x mb-2 d-block"></i>No devices recorded yet — they appear the first time the app opens.</td></tr>
                 {% endfor %}

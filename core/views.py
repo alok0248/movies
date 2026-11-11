@@ -4192,6 +4192,10 @@ def android_app_users_full(request, app_id):
 
     all_devices = AndroidAppDevice.objects.filter(android_app=selected_app)
     counts['devices'] = all_devices.count()
+    counts['unique_devices'] = len(
+        set(SyncedUser.objects.exclude(device_id='').values_list('device_id', flat=True))
+        | set(UserHeartbeat.objects.exclude(device_id='').values_list('device_id', flat=True))
+        | set(all_devices.values_list('user_id', flat=True)))
     counts['anonymous_devices'] = all_devices.exclude(
         user_id__in=linked_device_ids if linked_device_ids else ['']
     ).count()
@@ -4354,72 +4358,100 @@ def android_app_users_full(request, app_id):
 
     elif tab == 'uniquedevices':
         # ------------------------------------------------------- unique devices
-        # One row per device the app has ever opened on (the device id is unique
-        # per app), carrying the account it belongs to, that account's
-        # subscription, how long ago it registered and how much it uses the app.
-        # The usage numbers come from the two tables that already record them
-        # (AndroidAppDevice.total_visits and AndroidAppDeviceVisit), so nothing
-        # is stored twice for this screen.
-        devices_qs = all_devices.order_by('-last_seen_at')
-        if q:
-            devices_qs = devices_qs.filter(
-                Q(user_id__icontains=q) | Q(device_model__icontains=q)
-                | Q(os_version__icontains=q))
+        # One row per device the app has reported. A device can be known from
+        # three places that do not share a key on every install: the account's
+        # sync (SyncedUser.device_id), the heartbeat, and the install record
+        # AndroidAppDevice, which is what carries the visit counters. They are
+        # merged here on the device id the app sends, so an account still shows
+        # its subscription and, where the ids agree, its visits as well.
+        profiles = list(SyncedUser.objects.all())
+        heartbeats = list(UserHeartbeat.objects.all())
+        synced_by_email = {}
+        for prof in profiles:
+            synced_by_email.setdefault(prof.email, prof)
 
-        unique_page = Paginator(devices_qs, 25).get_page(request.GET.get('upage') or 1)
-        page_devices = list(unique_page.object_list)
-        device_pks = [d.pk for d in page_devices]
-        device_ids = [d.user_id for d in page_devices]
+        entries = {}
+        for prof in profiles:
+            if prof.device_id:
+                entries.setdefault(prof.device_id, {})['profile'] = prof
+        for beat in heartbeats:
+            if beat.device_id:
+                entries.setdefault(beat.device_id, {})['heartbeat'] = beat
+        for install in all_devices:
+            entries.setdefault(install.user_id, {})['device'] = install
 
-        last_visit, today_counts = {}, {}
-        if device_pks:
-            for v in (AndroidAppDeviceVisit.objects.filter(device_id__in=device_pks)
-                      .order_by('-visited_at')
-                      .values('device_id', 'ip_address', 'build_identifier', 'visited_at')[:5000]):
-                last_visit.setdefault(v['device_id'], v)
-            day_start = timezone.make_aware(
-                datetime.datetime.combine(timezone.localdate(), datetime.time.min))
-            for row in (AndroidAppDeviceVisit.objects
-                        .filter(device_id__in=device_pks, visited_at__gte=day_start)
-                        .values('device_id').annotate(n=Count('id'))):
-                today_counts[row['device_id']] = row['n']
-
-        synced_by_device = {}
-        for su in SyncedUser.objects.filter(device_id__in=device_ids).order_by('-last_synced_at'):
-            synced_by_device.setdefault(su.device_id, su)
-        page_emails = [su.email for su in synced_by_device.values() if su.email]
-        hb_by_email = {h.email: h for h in UserHeartbeat.objects.filter(email__in=page_emails)}
-        account_ids = [su.user_id for su in synced_by_device.values() if su.user_id]
+        account_ids = [prof.user_id for prof in profiles if prof.user_id]
         account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
                          if account_ids else {})
 
+        install_ids = [d.pk for d in all_devices]
+        last_ip, today_counts = {}, {}
+        if install_ids:
+            for row in (AndroidAppDeviceVisit.objects.filter(device_id__in=install_ids)
+                        .order_by('-visited_at')
+                        .values('device_id', 'ip_address')[:5000]):
+                last_ip.setdefault(row['device_id'], row['ip_address'])
+            day_start = timezone.make_aware(
+                datetime.datetime.combine(timezone.localdate(), datetime.time.min))
+            for row in (AndroidAppDeviceVisit.objects
+                        .filter(device_id__in=install_ids, visited_at__gte=day_start)
+                        .values('device_id').annotate(n=Count('id'))):
+                today_counts[row['device_id']] = row['n']
+
         unique_rows = []
-        for d in page_devices:
-            su = synced_by_device.get(d.user_id)
-            hb = hb_by_email.get(su.email) if su else None
-            visit = last_visit.get(d.pk)
-            account = account_by_id.get(su.user_id) if su and su.user_id else None
+        for device_key, item in entries.items():
+            beat = item.get('heartbeat')
+            prof = item.get('profile') or (synced_by_email.get(beat.email) if beat else None)
+            install = item.get('device')
+            account = account_by_id.get(prof.user_id) if prof and prof.user_id else None
             # The heartbeat is the live signal; a device with none falls back to
             # its own last request and the same three-minute window.
-            online = hb.is_online if hb else bool(
-                d.last_seen_at
-                and (timezone.now() - d.last_seen_at).total_seconds() <= UserHeartbeat.ONLINE_WINDOW_SECONDS)
+            online = beat.is_online if beat else bool(
+                install and install.last_seen_at
+                and (timezone.now() - install.last_seen_at).total_seconds()
+                <= UserHeartbeat.ONLINE_WINDOW_SECONDS)
+            last_seen = (beat.last_seen_at if beat
+                         else (install.last_seen_at if install
+                               else (prof.last_synced_at if prof else None)))
             unique_rows.append({
-                'device': d,
-                'profile': su,
-                'heartbeat': hb,
+                'id': device_key,
+                'model': ((beat.device_model if beat else '')
+                          or (install.device_model if install else '')
+                          or (prof.device_model if prof else '')),
+                'os': ((beat.os_version if beat else '')
+                       or (install.os_version if install else '')
+                       or (prof.os_version if prof else '')),
+                'profile': prof,
+                'heartbeat': beat,
+                'device': install,
                 'account': account,
+                'email': (prof.email if prof else (beat.email if beat else '')),
                 'online': online,
-                'ip': (hb.ip_address if hb and hb.ip_address
-                       else (visit['ip_address'] if visit else '')),
-                'today': today_counts.get(d.pk, 0),
-                'last_seen': (hb.last_seen_at if hb else d.last_seen_at),
-                'registered': su.created_at if su else None,
+                'ip': ((beat.ip_address if beat and beat.ip_address else '')
+                       or (last_ip.get(install.pk) if install else '') or ''),
+                'today': today_counts.get(install.pk) if install else None,
+                'total': install.total_visits if install else None,
+                'last_seen': last_seen,
+                'registered': (prof.created_at if prof
+                               else (install.first_seen_at if install else None)),
                 'history_url': (reverse('admin_user_analytics_detail', args=[account.pk]) if account
-                                else (reverse('synced_user_detail', args=[su.pk]) if su else '')),
+                                else (reverse('synced_user_detail', args=[prof.pk]) if prof else '')),
+                'kind': 'account' if prof else ('guest' if beat else 'install'),
             })
 
-        ctx.update({'unique_rows': unique_rows, 'unique_page': unique_page})
+        if q:
+            needle = q.lower()
+            unique_rows = [row for row in unique_rows
+                           if needle in (row['id'] or '').lower()
+                           or needle in (row['email'] or '').lower()
+                           or needle in (row['model'] or '').lower()
+                           or needle in (row['os'] or '').lower()]
+
+        epoch = timezone.make_aware(datetime.datetime(1970, 1, 1))
+        unique_rows.sort(key=lambda row: (row['last_seen'] or epoch), reverse=True)
+
+        unique_page = Paginator(unique_rows, 25).get_page(request.GET.get('upage') or 1)
+        ctx.update({'unique_rows': unique_page.object_list, 'unique_page': unique_page})
 
     elif tab == 'visits':
         # ---------------------------------------------------------------- visits
