@@ -140,6 +140,11 @@
                     <span class="det">{{ row.detail }}</span>
                 </a>
                 {% endfor %}
+                <a href="{% url 'data_health' %}">
+                    <span class="ov-dot warn"></span>
+                    <span class="grp">Data · Health</span>
+                    <span class="det">Integrity checks and one-click repairs</span>
+                </a>
             </div>
         </section>
     </div>
