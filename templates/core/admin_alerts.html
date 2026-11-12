@@ -1,129 +1,93 @@
 {% extends 'core/admin_base.html' %}
 {% block title %}Alerts - Admin{% endblock %}
 {% block admin_content %}
-<style>
-    .aa-card {
-        background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18);
-        border-radius: 12px; padding: 1.1rem;
-    }
-    .aa-head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
-    .aa-icon {
-        width: 44px; height: 44px; border-radius: 12px;
-        background: linear-gradient(135deg, #f59e0b, #ef4444);
-        display: flex; align-items: center; justify-content: center;
-    }
-    .aa-sect { font-size: .95rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .45rem; }
-    .aa-sub { font-size: .74rem; color: #94a3b8; }
-    .aa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .9rem; }
-    .aa-field label { display: block; font-size: .74rem; color: #94a3b8; margin-bottom: .25rem; }
-    .aa-field input[type=text], .aa-field input[type=number], .aa-field input[type=email] {
-        width: 100%; padding: .38rem .55rem; border-radius: 8px;
-        border: 1px solid rgba(148,163,184,.3); background: rgba(15,23,42,.7);
-        color: #e2e8f0; font-size: .82rem;
-    }
-    .aa-check { display: flex; align-items: flex-start; gap: .45rem; font-size: .78rem; color: #cbd5e1; }
-    .aa-btn {
-        display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; font-weight: 600;
-        padding: .38rem .75rem; border-radius: 8px; border: 1px solid rgba(148,163,184,.35);
-        background: rgba(15,23,42,.7); color: #e2e8f0; cursor: pointer;
-    }
-    .aa-btn:hover { background: rgba(30,41,59,.95); }
-    .aa-btn.primary { border-color: #f59e0b; color: #fbbf24; background: rgba(245,158,11,.12); }
-    .aa-btn.danger { border-color: #f87171; color: #fca5a5; }
-    .aa-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-    .aa-table td { padding: .45rem .5rem; border-bottom: 1px solid rgba(148,163,184,.1); }
-    .aa-table tr:last-child td { border-bottom: 0; }
-    .aa-mono { font-family: Consolas, Menlo, monospace; font-size: .76rem; }
-    .aa-finding { display: flex; gap: .6rem; align-items: flex-start; padding: .45rem 0; border-bottom: 1px dashed rgba(148,163,184,.15); }
-    .aa-finding:last-child { border-bottom: 0; }
-    .aa-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: .35rem; flex: 0 0 auto; }
-    .aa-dot.ok { background: #34d399; }
-    .aa-dot.bad { background: #f87171; }
-    .aa-dot.unknown { background: #94a3b8; }
-</style>
+<style>    .aa-icon { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #f59e0b, #ef4444); display: flex; align-items: center; justify-content: center; }    .aa-check { display: flex; align-items: flex-start; gap: .45rem; font-size: .78rem; color: #cbd5e1; }    .aa-finding { display: flex; gap: .6rem; align-items: flex-start; padding: .45rem 0; border-bottom: 1px dashed rgba(148,163,184,.15); }
+    .aa-finding:last-child { border-bottom: 0; }</style>
 
 <div class="container-fluid py-3">
-    <div class="aa-head mb-3">
+    <div class="adm-card-head mb-3">
         <div class="aa-icon"><i class="fas fa-bell fa-lg text-white"></i></div>
         <div class="flex-grow-1">
             <h4 class="mb-0 text-white">Health &amp; Alerts</h4>
-            <div class="aa-sub">5xx rate, disk space and gunicorn workers — mailed or sent to Telegram when something breaks.</div>
+            <div class="adm-card-sub">5xx rate, disk space and gunicorn workers — mailed or sent to Telegram when something breaks.</div>
         </div>
         <form method="post" style="margin:0;">
             {% csrf_token %}
             <input type="hidden" name="action" value="run">
-            <button class="aa-btn" type="submit"><i class="fas fa-stethoscope"></i> Run check now</button>
+            <button class="adm-btn" type="submit"><i class="fas fa-stethoscope"></i> Run check now</button>
         </form>
         <form method="post" style="margin:0;">
             {% csrf_token %}
             <input type="hidden" name="action" value="test">
-            <button class="aa-btn primary" type="submit"><i class="fas fa-paper-plane"></i> Send test alert</button>
+            <button class="adm-btn is-warn" type="submit"><i class="fas fa-paper-plane"></i> Send test alert</button>
         </form>
     </div>
 
     {% if incidents_open %}
-    <div class="aa-card mb-3" style="border-color:rgba(239,68,68,.45);">
-        <div class="aa-sect mb-2" style="color:#fca5a5;"><i class="fas fa-triangle-exclamation"></i> Open incidents</div>
+    <div class="adm-card mb-3" style="border-color:rgba(239,68,68,.45);">
+        <div class="adm-card-title mb-2" style="color:#fca5a5;"><i class="fas fa-triangle-exclamation"></i> Open incidents</div>
         {% for inc in incidents_open %}
         <div class="aa-finding">
-            <span class="aa-dot bad"></span>
+            <span class="adm-dot is-bad"></span>
             <div class="flex-grow-1">
                 <strong class="text-white">{{ inc.title }}</strong>
-                <div class="aa-sub">{{ inc.detail }}</div>
-                <div class="aa-sub">
+                <div class="adm-card-sub">{{ inc.detail }}</div>
+                <div class="adm-card-sub">
                     open {{ inc.opened_at|timesince }} · seen {{ inc.occurrences }}×
                     {% if inc.acknowledged_at %} · acknowledged by {{ inc.acknowledged_by }}{% endif %}
                 </div>
             </div>
             {% if inc.acknowledged_at %}
-            <span class="aa-sub">acknowledged</span>
+            <span class="adm-card-sub">acknowledged</span>
             {% else %}
             <form method="post" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="ack_incident">
                 <input type="hidden" name="id" value="{{ inc.id }}">
-                <button class="aa-btn" type="submit"><i class="fas fa-check"></i> Acknowledge</button>
+                <button class="adm-btn" type="submit"><i class="fas fa-check"></i> Acknowledge</button>
             </form>
             {% endif %}
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <div class="aa-card mb-3">
-        <div class="aa-sub"><i class="fas fa-circle-check text-success me-1"></i> No open incidents — every enabled check is passing.</div>
+    <div class="adm-card mb-3">
+        <div class="adm-card-sub"><i class="fas fa-circle-check text-success me-1"></i> No open incidents — every enabled check is passing.</div>
     </div>
     {% endif %}
 
     {% if incidents_recent %}
-    <div class="aa-card mb-3">
-        <div class="aa-sect mb-2"><i class="fas fa-clock-rotate-left text-info"></i> Recent incidents</div>
-        <table class="aa-table">
+    <div class="adm-card mb-3">
+        <div class="adm-card-title mb-2"><i class="fas fa-clock-rotate-left text-info"></i> Recent incidents</div>
+        <div class="adm-table-wrap">
+        <table class="adm-table">
             {% for inc in incidents_recent %}
             <tr>
                 <td>{{ inc.title }}</td>
-                <td class="aa-sub">{{ inc.opened_at|date:"Y-m-d H:i" }}</td>
-                <td class="aa-sub">lasted {{ inc.duration }}</td>
-                <td class="aa-sub">{% if inc.acknowledged_by %}{{ inc.acknowledged_by }}{% else %}—{% endif %}</td>
+                <td class="adm-card-sub">{{ inc.opened_at|date:"Y-m-d H:i" }}</td>
+                <td class="adm-card-sub">lasted {{ inc.duration }}</td>
+                <td class="adm-card-sub">{% if inc.acknowledged_by %}{{ inc.acknowledged_by }}{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
         </table>
+        </div>
     </div>
     {% endif %}
 
     {% if findings %}
-    <div class="aa-card mb-3">
-        <div class="aa-sect mb-2"><i class="fas fa-wave-square text-info"></i> Last run</div>
+    <div class="adm-card mb-3">
+        <div class="adm-card-title mb-2"><i class="fas fa-wave-square text-info"></i> Last run</div>
         {% for f in findings %}
         <div class="aa-finding">
-            <span class="aa-dot {% if f.ok %}ok{% elif f.ok is None %}unknown{% else %}bad{% endif %}"></span>
+            <span class="adm-dot {% if f.ok %}is-on{% elif f.ok is None %}is-off{% else %}is-bad{% endif %}"></span>
             <div>
                 <strong class="text-white">{{ f.title }}</strong>
-                <div class="aa-sub">{{ f.detail }}</div>
+                <div class="adm-card-sub">{{ f.detail }}</div>
             </div>
         </div>
         {% endfor %}
         {% if delivery %}
-        <div class="aa-sub mt-2">
+        <div class="adm-card-sub mt-2">
             Delivered: {{ delivery.sent_email }} email(s){% if delivery.sent_telegram %}, Telegram{% endif %}.
             {% if delivery.errors %}Problems: {{ delivery.errors|join:'; ' }}{% endif %}
         </div>
@@ -131,22 +95,22 @@
     </div>
     {% endif %}
 
-    <div class="aa-card mb-3">
-        <div class="aa-sect mb-1"><i class="fas fa-user-plus text-success"></i> Who gets the alerts</div>
-        <div class="aa-sub mb-3">Any email address — it does not have to be an admin account. Every active
+    <div class="adm-card mb-3">
+        <div class="adm-card-title mb-1"><i class="fas fa-user-plus text-success"></i> Who gets the alerts</div>
+        <div class="adm-card-sub mb-3">Any email address — it does not have to be an admin account. Every active
             address receives one message per problem, throttled by the repeat window below.</div>
         <form method="post" class="d-flex flex-wrap gap-2 align-items-end" style="margin:0;">
             {% csrf_token %}
             <input type="hidden" name="action" value="add_recipient">
-            <div class="aa-field" style="min-width:220px;">
+            <div class="adm-field" style="min-width:220px;">
                 <label for="r-email">Email</label>
                 <input id="r-email" type="email" name="email" placeholder="you@example.com" required>
             </div>
-            <div class="aa-field" style="min-width:160px;">
+            <div class="adm-field" style="min-width:160px;">
                 <label for="r-name">Name (optional)</label>
                 <input id="r-name" type="text" name="name" placeholder="Ops">
             </div>
-            <div class="aa-field">
+            <div class="adm-field">
                 <label>Routed checks</label>
                 <div class="d-flex gap-2 align-items-center" style="height:31px;">
                     {% for key in incident_keys %}
@@ -154,18 +118,19 @@
                         <input type="checkbox" name="checks" value="{{ key }}"><span>{{ key }}</span>
                     </label>
                     {% endfor %}
-                    <span class="aa-sub" style="font-size:.7rem;">(none = all)</span>
+                    <span class="adm-card-sub" style="font-size:.7rem;">(none = all)</span>
                 </div>
             </div>
-            <button class="aa-btn primary" type="submit"><i class="fas fa-plus"></i> Add</button>
+            <button class="adm-btn is-warn" type="submit"><i class="fas fa-plus"></i> Add</button>
         </form>
 
         {% if recipients %}
-        <table class="aa-table mt-3">
+        <div class="adm-table-wrap">
+        <table class="adm-table mt-3">
             {% for r in recipients %}
             <tr>
-                <td class="aa-mono">{{ r.email }}</td>
-                <td class="aa-sub">{{ r.name|default:'—' }}</td>
+                <td class="adm-mono">{{ r.email }}</td>
+                <td class="adm-card-sub">{{ r.name|default:'—' }}</td>
                 <td>
                     <form method="post" style="margin:0;display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;">
                         {% csrf_token %}
@@ -177,37 +142,38 @@
                             <span>{{ key }}</span>
                         </label>
                         {% endfor %}
-                        <button class="aa-btn" type="submit" style="padding:.14rem .5rem;font-size:.68rem;">Save</button>
+                        <button class="adm-btn" type="submit" style="padding:.14rem .5rem;font-size:.68rem">Save</button>
                     </form>
                 </td>
                 <td>
-                    <span class="aa-sub">{% if r.is_active %}active{% else %}off{% endif %}</span>
+                    <span class="adm-card-sub">{% if r.is_active %}active{% else %}off{% endif %}</span>
                 </td>
                 <td class="text-end" style="white-space:nowrap;">
                     <form method="post" style="display:inline;margin:0;">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="toggle_recipient">
                         <input type="hidden" name="id" value="{{ r.id }}">
-                        <button class="aa-btn" type="submit">{% if r.is_active %}Turn off{% else %}Turn on{% endif %}</button>
+                        <button class="adm-btn" type="submit">{% if r.is_active %}Turn off{% else %}Turn on{% endif %}</button>
                     </form>
                     <form method="post" style="display:inline;margin:0;"
                           onsubmit="return confirm('Remove {{ r.email|escapejs }} from the alert list?');">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="remove_recipient">
                         <input type="hidden" name="id" value="{{ r.id }}">
-                        <button class="aa-btn danger" type="submit">Remove</button>
+                        <button class="adm-btn is-danger" type="submit">Remove</button>
                     </form>
                 </td>
             </tr>
             {% endfor %}
         </table>
+        </div>
         {% else %}
-        <div class="aa-sub mt-3">No recipients yet — alerts cannot be delivered until one is added.</div>
+        <div class="adm-card-sub mt-3">No recipients yet — alerts cannot be delivered until one is added.</div>
         {% endif %}
     </div>
 
-    <div class="aa-card">
-        <div class="aa-sect mb-1"><i class="fas fa-sliders text-warning"></i> What is checked, and how often</div>
+    <div class="adm-card">
+        <div class="adm-card-title mb-1"><i class="fas fa-sliders text-warning"></i> What is checked, and how often</div>
         <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="save">
@@ -220,20 +186,20 @@
                     <span>Send by Telegram</span></label>
             </div>
 
-            <div class="aa-grid">
-                <div class="aa-field">
+            <div class="adm-grid is-wide">
+                <div class="adm-field">
                     <label class="aa-check" style="margin-bottom:.3rem;">
                         <input type="checkbox" name="check_5xx" {% if conf.check_5xx %}checked{% endif %}>
                         <span>5xx rate</span></label>
                     <label for="five_xx_threshold">Alert above (%)</label>
                     <input id="five_xx_threshold" type="text" name="five_xx_threshold" value="{{ conf.five_xx_threshold }}">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label for="five_xx_window_minutes">Window (minutes)</label>
                     <input id="five_xx_window_minutes" type="number" min="1" max="1440"
                            name="five_xx_window_minutes" value="{{ conf.five_xx_window_minutes }}">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label class="aa-check" style="margin-bottom:.3rem;">
                         <input type="checkbox" name="check_disk" {% if conf.check_disk %}checked{% endif %}>
                         <span>Disk space</span></label>
@@ -241,7 +207,7 @@
                     <input id="disk_threshold" type="number" min="1" max="100"
                            name="disk_threshold" value="{{ conf.disk_threshold }}">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label class="aa-check" style="margin-bottom:.3rem;">
                         <input type="checkbox" name="check_workers" {% if conf.check_workers %}checked{% endif %}>
                         <span>Gunicorn workers</span></label>
@@ -249,29 +215,29 @@
                     <input id="min_workers" type="number" min="0" max="100"
                            name="min_workers" value="{{ conf.min_workers }}">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label for="repeat_minutes">Repeat window (minutes)</label>
                     <input id="repeat_minutes" type="number" min="1" max="10080"
                            name="repeat_minutes" value="{{ conf.repeat_minutes }}">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label for="quiet_start">Quiet hours from</label>
                     <input id="quiet_start" type="time" name="quiet_start" value="{{ conf.quiet_start }}">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label for="quiet_end">Quiet hours to</label>
                     <input id="quiet_end" type="time" name="quiet_end" value="{{ conf.quiet_end }}">
                 </div>
             </div>
 
-            <div class="aa-sect mt-4 mb-2"><i class="fab fa-telegram text-info"></i> Telegram (optional)</div>
-            <div class="aa-grid">
-                <div class="aa-field">
+            <div class="adm-card-title mt-4 mb-2"><i class="fab fa-telegram text-info"></i> Telegram (optional)</div>
+            <div class="adm-grid is-wide">
+                <div class="adm-field">
                     <label for="telegram_bot_token">Bot token</label>
                     <input id="telegram_bot_token" type="text" name="telegram_bot_token"
                            value="{{ conf.telegram_bot_token }}" placeholder="123456:ABC…">
                 </div>
-                <div class="aa-field">
+                <div class="adm-field">
                     <label for="telegram_chat_id">Chat id</label>
                     <input id="telegram_chat_id" type="text" name="telegram_chat_id"
                            value="{{ conf.telegram_chat_id }}" placeholder="-1001234567890">
@@ -279,12 +245,12 @@
             </div>
 
             <div class="mt-3">
-                <button class="aa-btn primary" type="submit"><i class="fas fa-check"></i> Save alert settings</button>
+                <button class="adm-btn is-warn" type="submit"><i class="fas fa-check"></i> Save alert settings</button>
             </div>
         </form>
-        <div class="aa-sub mt-3">
+        <div class="adm-card-sub mt-3">
             For unattended checks, add this to cron on the server:
-            <span class="aa-mono">*/5 * * * * cd /home/ubuntu/project/movies &amp;&amp; ./venv/bin/python manage.py check_health</span>
+            <span class="adm-mono">*/5 * * * * cd /home/ubuntu/project/movies &amp;&amp; ./venv/bin/python manage.py check_health</span>
         </div>
     </div>
 </div>

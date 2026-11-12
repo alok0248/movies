@@ -2,55 +2,17 @@
 {% load custom_filters %}
 
 {% block admin_content %}
-<style>
-    .dv-head { display:flex; align-items:center; gap:.9rem; margin:0 0 1.1rem; }
-    .dv-icon { width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center;
-               background:linear-gradient(135deg,#0ea5e9,#6366f1); color:#fff; font-size:1.1rem; flex:0 0 auto; }
-    .dv-head h4 { margin:0; font-size:1.05rem; font-weight:700; color:#e2e8f0; }
-    .dv-sub { font-size:.78rem; color:#94a3b8; }
-
-    .dv-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem; margin-bottom:1rem; }
-    .dv-stat { background:#0f172a; border:1px solid rgba(148,163,184,.18); border-radius:13px; padding:.8rem .9rem; }
-    .dv-stat .k { font-size:.66rem; letter-spacing:.09em; text-transform:uppercase; color:#94a3b8; font-weight:700; }
-    .dv-stat .v { font-size:1.25rem; font-weight:700; color:#e2e8f0; margin-top:.2rem; }
-    .dv-stat.warn .v { color:#fbbf24; }
-
-    .dv-card { background:#0f172a; border:1px solid rgba(148,163,184,.18); border-radius:14px; overflow:hidden; }
-    .dv-bar { display:flex; align-items:center; gap:.6rem; padding:.75rem .95rem; border-bottom:1px solid rgba(148,163,184,.14); flex-wrap:wrap; }
-    .dv-bar form { display:flex; align-items:center; gap:.45rem; margin:0; }
-    .dv-bar label { font-size:.75rem; color:#94a3b8; font-weight:600; }
-    .dv-bar input[type=number] { width:76px; background:rgba(148,163,184,.1); border:1px solid rgba(148,163,184,.3);
-                                 border-radius:8px; color:#e2e8f0; padding:.3rem .45rem; font-size:.8rem; }
-    .dv-btn { border:1px solid rgba(148,163,184,.3); background:rgba(148,163,184,.12); color:#e2e8f0;
-              border-radius:8px; padding:.32rem .7rem; font-size:.76rem; font-weight:600; cursor:pointer; font-family:inherit; }
-    .dv-btn:hover { background:rgba(148,163,184,.22); }
-    .dv-btn.danger { border-color:rgba(239,68,68,.45); background:rgba(239,68,68,.14); color:#fca5a5; }
-    .dv-btn.danger:hover { background:rgba(239,68,68,.24); }
-    .dv-btn:disabled { opacity:.4; cursor:not-allowed; }
-
-    .dv-table { width:100%; border-collapse:collapse; font-size:.8rem; }
-    .dv-table th { text-align:left; padding:.55rem .95rem; font-size:.66rem; letter-spacing:.09em; text-transform:uppercase;
-                   color:#94a3b8; border-bottom:1px solid rgba(148,163,184,.14); font-weight:700; white-space:nowrap; }
-    .dv-table td { padding:.62rem .95rem; border-bottom:1px solid rgba(148,163,184,.09); vertical-align:middle; color:#cbd5e1; }
-    .dv-table tr:last-child td { border-bottom:0; }
-    .dv-name { font-weight:600; color:#e2e8f0; }
+<style>    .dv-icon { width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+               background:linear-gradient(135deg,#0ea5e9,#6366f1); color:#fff; font-size:1.1rem; flex:0 0 auto; }    .dv-sub { font-size:.78rem; color:#94a3b8; }    .dv-name { font-weight:600; color:#e2e8f0; }
     .dv-note { font-size:.7rem; color:#7c8899; }
     .dv-num { font-variant-numeric:tabular-nums; }
     .dv-zero { color:#64748b; }
     .dv-prev { font-weight:700; }
     .dv-prev.some { color:#fbbf24; }
     .dv-err { color:#fca5a5; font-size:.72rem; }
-    .dv-foot { padding:.7rem .95rem; border-top:1px solid rgba(148,163,184,.14); font-size:.74rem; color:#94a3b8; }
+    .dv-foot { padding:.7rem .95rem; border-top:1px solid rgba(148,163,184,.14); font-size:.74rem; color:#94a3b8; }</style>
 
-    html[data-theme="light"] .dv-stat, html[data-theme="light"] .dv-card { background:#fff; border-color:#e2e8f0; }
-    html[data-theme="light"] .dv-head h4, html[data-theme="light"] .dv-stat .v,
-    html[data-theme="light"] .dv-name { color:#111827; }
-    html[data-theme="light"] .dv-table td { color:#334155; }
-    html[data-theme="light"] .dv-bar input[type=number] { background:#fff; color:#111827; border-color:#cbd5e1; }
-    html[data-theme="light"] .dv-btn { color:#111827; background:#f1f5f9; border-color:#cbd5e1; }
-</style>
-
-<div class="dv-head">
+<div class="adm-page-head">
     <div class="dv-icon"><i class="fas fa-database"></i></div>
     <div class="flex-grow-1">
         <h4>Data &amp; Retention</h4>
@@ -58,26 +20,27 @@
     </div>
 </div>
 
-<div class="dv-stats">
-    <div class="dv-stat"><div class="k">Rows in these tables</div><div class="v">{{ total_rows|intcomma }}</div></div>
-    <div class="dv-stat warn"><div class="k">Older than {{ days }} days</div><div class="v">{{ total_preview|intcomma }}</div></div>
+<div class="adm-grid is-wide">
+    <div class="adm-stat"><div class="adm-stat-label">Rows in these tables</div><div class="adm-stat-value">{{ total_rows|intcomma }}</div></div>
+    <div class="adm-stat warn"><div class="adm-stat-label">Older than {{ days }} days</div><div class="adm-stat-value">{{ total_preview|intcomma }}</div></div>
     {% if db_size %}
-    <div class="dv-stat"><div class="k">Database file</div><div class="v">{{ db_size|filesizeformat }}</div></div>
+    <div class="adm-stat"><div class="adm-stat-label">Database file</div><div class="adm-stat-value">{{ db_size|filesizeformat }}</div></div>
     {% endif %}
 </div>
 
-<div class="dv-card">
-    <div class="dv-bar">
+<div class="adm-card">
+    <div class="adm-card-foot">
         <form method="get" style="margin:0;">
             <label for="dv-days">Show rows older than</label>
             <input id="dv-days" type="number" min="1" max="3650" name="days" value="{{ days }}">
             <span class="dv-sub">days</span>
-            <button class="dv-btn" type="submit">Apply</button>
+            <button class="adm-btn" type="submit">Apply</button>
         </form>
         <span class="dv-sub" style="margin-left:auto;">Nothing is deleted until you press Purge on a row.</span>
     </div>
 
-    <table class="dv-table">
+    <div class="adm-table-wrap">
+    <table class="adm-table">
         <thead>
             <tr>
                 <th>Table</th>
@@ -105,7 +68,7 @@
                         <input type="hidden" name="action" value="purge">
                         <input type="hidden" name="table" value="{{ r.key }}">
                         <input type="hidden" name="days" value="{{ days }}">
-                        <button class="dv-btn danger" type="submit" {% if not r.preview %}disabled title="Nothing older than {{ days }} days"{% endif %}>
+                        <button class="adm-btn is-soft-danger" type="submit" {% if not r.preview %}disabled title="Nothing older than {{ days }} days"{% endif %}>
                             <i class="fas fa-broom"></i> Purge
                         </button>
                     </form>
@@ -114,6 +77,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     <div class="dv-foot">
         Purging deletes rows only — the tables, their indexes and the app's data stay intact. Every purge is written to the Audit Log.
     </div>

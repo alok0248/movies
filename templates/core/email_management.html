@@ -222,10 +222,10 @@
                             </div>
 
                             <div class="em-action-bar">
-                                <button class="btn btn-sm btn-outline-success" onclick="testSavedSmtp({{ addr.id }})" title="Test Connection" id="testBtn{{ addr.id }}"><i class="fas fa-vial"></i></button>
-                                <button class="btn btn-sm btn-outline-info" onclick="openEmailModal({{ addr.id }})" title="Edit"><i class="fas fa-pen"></i></button>
-                                <button class="btn btn-sm btn-outline-{% if addr.is_active %}warning{% else %}success{% endif %}" onclick="toggleEmail({{ addr.id }})" title="{% if addr.is_active %}Disable{% else %}Enable{% endif %}"><i class="fas fa-{% if addr.is_active %}pause{% else %}play{% endif %}"></i></button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="deleteEmail({{ addr.id }})" title="Delete"><i class="fas fa-trash"></i></button>
+                                <button class="btn btn-sm btn-outline-success" onclick="testSavedSmtp({{ addr.id }})" title="Test Connection" aria-label="Test Connection" id="testBtn{{ addr.id }}"><i class="fas fa-vial"></i></button>
+                                <button class="btn btn-sm btn-outline-info" onclick="openEmailModal({{ addr.id }})" title="Edit" aria-label="Edit"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-outline-{% if addr.is_active %}warning{% else %}success{% endif %}" onclick="toggleEmail({{ addr.id }})" title="{% if addr.is_active %}Disable{% else %}Enable{% endif %}" aria-label="{% if addr.is_active %}Disable{% else %}Enable{% endif %}"><i class="fas fa-{% if addr.is_active %}pause{% else %}play{% endif %}"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteEmail({{ addr.id }})" title="Delete" aria-label="Delete"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
                     </div>
@@ -266,8 +266,8 @@
                             <div class="em-tmpl-body">{{ tmpl.body }}</div>
                         </div>
                         <div class="em-action-bar flex-shrink-0">
-                            <button class="btn btn-sm btn-outline-info" onclick="openTemplateModal({{ tmpl.id }})" title="Edit"><i class="fas fa-pen"></i></button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate({{ tmpl.id }})" title="Delete"><i class="fas fa-trash"></i></button>
+                            <button class="btn btn-sm btn-outline-info" onclick="openTemplateModal({{ tmpl.id }})" title="Edit" aria-label="Edit"><i class="fas fa-pen"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate({{ tmpl.id }})" title="Delete" aria-label="Delete"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
                 </div>
@@ -355,7 +355,7 @@
                 <div class="d-flex justify-content-between align-items-center px-3 py-2" style="border-bottom:1px solid rgba(255,255,255,.06);">
                     <span style="color:#64748b;font-size:.78rem;"><i class="fas fa-list me-1"></i>Recent activity (last 50)</span>
                 </div>
-                <div class="table-responsive">
+                <div class="adm-table-wrap">
                     <table class="table table-dark table-hover mb-0" style="font-size:.82rem;">
                         <thead>
                             <tr style="border-bottom:1px solid rgba(255,255,255,.06);">
@@ -415,7 +415,7 @@
         <div class="modal-content" style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid rgba(255,255,255,.08);border-radius:14px;">
             <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,.06);">
                 <h5 class="text-white mb-0" style="font-size:1.05rem;"><i class="fas fa-envelope me-2" style="color:#38bdf8;"></i><span id="emailModalTitle">Add Email</span></h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button aria-label="Close" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <input type="hidden" id="emailId">
@@ -491,7 +491,7 @@
         <div class="modal-content" style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid rgba(255,255,255,.08);border-radius:14px;">
             <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,.06);">
                 <h5 class="text-white mb-0" style="font-size:1.05rem;"><i class="fas fa-file-alt me-2" style="color:#fbbf24;"></i><span id="tmplModalTitle">Add Template</span></h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button aria-label="Close" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <input type="hidden" id="tmplId">
@@ -538,7 +538,7 @@
         <div class="modal-content" style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid rgba(255,255,255,.08);border-radius:14px;">
             <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,.06);">
                 <h5 class="text-white mb-0" style="font-size:1.05rem;"><i class="fas fa-paper-plane me-2" style="color:#fbbf24;"></i>Send Test Mail</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button aria-label="Close" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="row g-3">

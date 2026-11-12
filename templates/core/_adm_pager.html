@@ -1,0 +1,60 @@
+{% comment %}
+Shared admin pager.
+
+Include it with the page object under either name:
+    {% include "core/_adm_pager.html" with pg=page_obj %}
+    {% include "core/_adm_pager.html" with pg=unique_page page_param="upage" %}
+
+It keeps every other query parameter from request.GET (filters, search, sort,
+view, tab) and only rewrites the page number, so links never drop the current
+state. page_param names that query parameter (default "page").
+Pass page_sizes (a comma separated string of numbers) to render a page-size
+selector; the view must read the same ?per_page= value.
+{% endcomment %}
+{% if pg %}{% with pgv=pg %}
+{% firstof page_param "page" as pp %}
+{% if pgv.paginator.num_pages > 1 or pgv.paginator.count %}
+<div class="adm-pager{% if pgv.paginator.num_pages > 1 %} mt-3{% endif %}">
+    <div class="adm-pager-info">
+        {% if pgv.paginator.count %}
+            {{ pgv.start_index|default:0 }}–{{ pgv.end_index|default:0 }} of {{ pgv.paginator.count }}
+        {% else %}No results{% endif %}
+        {% if pgv.paginator.num_pages > 1 %}
+            <span class="adm-muted">· page {{ pgv.number }} of {{ pgv.paginator.num_pages }}</span>
+        {% endif %}
+    </div>
+    {% if pgv.paginator.num_pages > 1 %}
+    <div class="adm-pager-links">
+        {% if pgv.has_previous %}
+        <a class="adm-btn is-quiet is-sm" rel="prev" aria-label="First page"
+           href="?{% for k, v in request.GET.items %}{% if k != pp and k != 'per_page' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}{{ pp }}=1"><i class="fas fa-angles-left"></i></a>
+        <a class="adm-btn is-sm" rel="prev"
+           href="?{% for k, v in request.GET.items %}{% if k != pp and k != 'per_page' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}{{ pp }}={{ pgv.previous_page_number }}"><i class="fas fa-chevron-left"></i> Newer</a>
+        {% else %}
+        <button class="adm-btn is-quiet is-sm" type="button" disabled aria-label="First page"><i class="fas fa-angles-left"></i></button>
+        <button class="adm-btn is-sm" type="button" disabled><i class="fas fa-chevron-left"></i> Newer</button>
+        {% endif %}
+
+        {% if pgv.has_next %}
+        <a class="adm-btn is-sm" rel="next"
+           href="?{% for k, v in request.GET.items %}{% if k != pp and k != 'per_page' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}{{ pp }}={{ pgv.next_page_number }}">Older <i class="fas fa-chevron-right"></i></a>
+        <a class="adm-btn is-quiet is-sm" rel="next" aria-label="Last page"
+           href="?{% for k, v in request.GET.items %}{% if k != pp and k != 'per_page' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}{{ pp }}={{ pgv.paginator.num_pages }}"><i class="fas fa-angles-right"></i></a>
+        {% else %}
+        <button class="adm-btn is-sm" type="button" disabled>Older <i class="fas fa-chevron-right"></i></button>
+        <button class="adm-btn is-quiet is-sm" type="button" disabled aria-label="Last page"><i class="fas fa-angles-right"></i></button>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if page_sizes %}
+    <form class="adm-pager-size" method="get">
+        {% for k, v in request.GET.items %}{% if k != pp and k != 'per_page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+        <label for="adm-per-page">Per page</label>
+        <select id="adm-per-page" name="per_page" onchange="this.form.submit()">
+            {% for size in page_sizes %}<option value="{{ size }}"{% if size|stringformat:"s" == per_page|stringformat:"s" %} selected{% endif %}>{{ size }}</option>{% endfor %}
+        </select>
+        <noscript><button class="adm-btn is-sm" type="submit">Apply</button></noscript>
+    </form>
+    {% endif %}
+</div>
+{% endif %}{% endwith %}{% endif %}

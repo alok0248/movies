@@ -4,182 +4,88 @@
 {% block title %}Overview - Admin{% endblock %}
 
 {% block admin_content %}
-<style>
-    .ad-page { max-width: 1500px; }
-    .ad-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .ad-title { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; margin: 0; }
-    .ad-sub { font-size: .76rem; color: #94a3b8; margin-top: .2rem; }
-    .ad-btn {
-        display: inline-flex; align-items: center; gap: .35rem;
-        padding: .35rem .7rem; border-radius: 8px; font-size: .75rem; cursor: pointer;
-        border: 1px solid rgba(96,165,250,.3); background: rgba(96,165,250,.12);
-        color: #93c5fd; text-decoration: none;
-    }
-    .ad-btn:hover { background: rgba(96,165,250,.22); color: #bfdbfe; }
-    .ad-btn.ghost { border-color: rgba(148,163,184,.28); background: rgba(148,163,184,.1); color: #cbd5e1; }
-    .ad-btn.ghost:hover { background: rgba(148,163,184,.18); color: #e2e8f0; }
-    .ad-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; margin-bottom: 1rem; }
-    .ad-kpi {
-        display: block; text-decoration: none;
-        background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16);
-        border-radius: 10px; padding: .6rem .75rem;
-    }
-    a.ad-kpi:hover { border-color: rgba(96,165,250,.4); background: rgba(15,23,42,.8); }
-    .ad-kpi .k {
-        font-size: .6rem; text-transform: uppercase; letter-spacing: .04em;
-        color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .ad-kpi .v { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; margin-top: .1rem; }
-    .ad-kpi .v.warn { color: #fbbf24; }
-    .ad-kpi .v.bad { color: #f87171; }
-    .ad-kpi .n { font-size: .64rem; color: #64748b; margin-top: .1rem; }
-    .ad-card {
-        background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16);
-        border-radius: 12px; margin-bottom: 1rem; overflow: hidden;
-    }
-    .ad-card-head {
-        display: flex; align-items: center; justify-content: space-between; gap: .6rem;
-        padding: .6rem .85rem; border-bottom: 1px solid rgba(148,163,184,.14);
-    }
-    .ad-card-title { font-size: .8rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .4rem; }
-    .ad-card-note { font-size: .68rem; color: #64748b; }
-    .ad-scroll { overflow-x: auto; }
-    table.ad-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
-    table.ad-table thead th {
-        position: sticky; top: 0; z-index: 1;
-        background: #0f172a; text-align: left; white-space: nowrap;
-        font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
-        color: #94a3b8; font-weight: 600; padding: .45rem .7rem;
-        border-bottom: 1px solid rgba(148,163,184,.2);
-    }
-    table.ad-table tbody td {
-        padding: .42rem .7rem; border-bottom: 1px solid rgba(148,163,184,.08);
-        color: #cbd5e1; vertical-align: middle;
-    }
-    table.ad-table tbody tr:hover td { background: rgba(148,163,184,.06); }
-    table.ad-table tbody tr:last-child td { border-bottom: 0; }
-    table.ad-table tfoot td {
-        padding: .45rem .7rem; border-top: 1px solid rgba(148,163,184,.16);
-        color: #94a3b8; font-size: .72rem;
-    }
-    .ad-num { text-align: right; font-variant-numeric: tabular-nums; }
-    .ad-mono { font-family: Consolas, Menlo, monospace; font-size: .72rem; color: #e2e8f0; }
-    .ad-muted { color: #64748b; }
-    .ad-tag {
-        display: inline-block; padding: .05rem .35rem; border-radius: 5px;
-        font-size: .62rem; font-weight: 600; letter-spacing: .02em;
-    }
-    .ad-tag.ok { background: rgba(52,211,153,.14); color: #34d399; border: 1px solid rgba(52,211,153,.3); }
-    .ad-tag.off { background: rgba(148,163,184,.14); color: #94a3b8; border: 1px solid rgba(148,163,184,.3); }
-    .ad-tag.bad { background: rgba(248,113,113,.16); color: #f87171; border: 1px solid rgba(248,113,113,.3); }
-    .ad-tag.warn { background: rgba(251,191,36,.16); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
-    .ad-tag.web { background: rgba(148,163,184,.14); color: #cbd5e1; }
-    .ad-empty { padding: 1.5rem 1rem; text-align: center; color: #64748b; font-size: .8rem; }
-    .ad-meter { height: 6px; border-radius: 4px; background: rgba(148,163,184,.16); overflow: hidden; margin-top: .35rem; }
-    .ad-meter span { display: block; height: 100%; background: #34d399; }
-    .ad-meter span.warn { background: #fbbf24; }
-    .ad-meter span.bad { background: #f87171; }
-    .ad-res { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem .9rem; padding: .8rem .85rem; }
-    .ad-res .lbl { display: flex; justify-content: space-between; align-items: baseline; font-size: .7rem; color: #94a3b8; }
-    .ad-res .val { font-size: .78rem; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; }
-    .ad-facts { padding: .3rem .85rem .85rem; display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .9rem; }
-    .ad-facts div { display: flex; justify-content: space-between; font-size: .71rem; color: #94a3b8; border-bottom: 1px solid rgba(148,163,184,.08); padding: .22rem 0; }
-    .ad-facts strong { color: #e2e8f0; font-variant-numeric: tabular-nums; }
-    .ad-health { display: inline-flex; align-items: center; gap: .4rem; padding: .28rem .6rem; border-radius: 20px; font-size: .7rem; font-weight: 700; }
-    .ad-health.ok { background: rgba(52,211,153,.14); color: #34d399; }
-    .ad-health.bad { background: rgba(248,113,113,.16); color: #f87171; }
-    .ad-health.warn { background: rgba(251,191,36,.16); color: #fbbf24; }
-    .ad-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-    .ad-inc { display: flex; gap: .6rem; padding: .45rem .85rem; border-bottom: 1px solid rgba(148,163,184,.08); }
-    .ad-inc:last-child { border-bottom: 0; }
-    .ad-inc-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: .35rem; flex: 0 0 auto; background: #94a3b8; }
-    .ad-inc-dot.bad { background: #f87171; }
-    .ad-inc-dot.ok { background: #34d399; }
-    .ad-tr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: .3rem; }
-    .ad-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .7rem; color: #94a3b8; padding: 0 .85rem .7rem; }
-    html[data-theme="light"] .ad-title,
-    html[data-theme="light"] .ad-kpi .v,
-    html[data-theme="light"] .ad-card-title,
-    html[data-theme="light"] .ad-mono,
-    html[data-theme="light"] .ad-res .val,
-    html[data-theme="light"] .ad-facts strong { color: #0f172a; }
-    html[data-theme="light"] .ad-card,
-    html[data-theme="light"] .ad-kpi { background: rgba(255,255,255,.7); border-color: rgba(100,116,139,.22); }
-    html[data-theme="light"] table.ad-table thead th { background: #e2e8f0; color: #475569; }
-    html[data-theme="light"] table.ad-table tbody td { color: #334155; }
-</style>
-
-<div class="container-fluid py-3 ad-page">
-    <div class="ad-head">
+<div class="container-fluid py-3" style="max-width:1500px">
+    <div class="adm-page-head">
         <div>
-            <h4 class="ad-title"><i class="fas fa-gauge-high me-2" style="color:#60a5fa"></i>Overview</h4>
-            <div class="ad-sub">API health, traffic, devices and server load in one place &mdash; every figure links to the page behind it.</div>
+            <h4 class="adm-page-title"><i class="fas fa-gauge-high me-2"></i>Overview</h4>
+            <p class="adm-page-sub">API health, traffic, devices and server load in one place &mdash; every figure links to the page behind it.</p>
         </div>
-        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+        <div class="adm-btn-group">
             {% if failing_checks %}
-            <span class="ad-health bad"><span class="ad-dot"></span>{{ failing_checks|length }} check{{ failing_checks|length|pluralize }} failing</span>
+            <span class="adm-badge is-danger"><span class="adm-dot is-bad"></span>{{ failing_checks|length }} check{{ failing_checks|length|pluralize }} failing</span>
             {% elif open_incidents %}
-            <span class="ad-health warn"><span class="ad-dot"></span>{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</span>
+            <span class="adm-badge is-warn"><span class="adm-dot is-warn"></span>{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</span>
             {% else %}
-            <span class="ad-health ok"><span class="ad-dot"></span>All checks passing</span>
+            <span class="adm-badge is-ok"><span class="adm-dot is-on"></span>All checks passing</span>
             {% endif %}
-            <a class="ad-btn ghost" href="{% url 'admin_dashboard' %}"><i class="fas fa-sync-alt"></i>Refresh</a>
+            <a class="adm-btn" href="{% url 'admin_dashboard' %}"><i class="fas fa-sync-alt"></i>Refresh</a>
         </div>
     </div>
 
-    <div class="ad-kpis">
-        <a class="ad-kpi" href="{% url 'admin_dashboard' %}">
+    <!-- Headline figures. Each number is stated here once; the cards below carry
+         the breakdown and the links, so nothing is printed twice on this page. -->
+    <div class="adm-grid" style="margin-bottom:1rem">
+        <a class="adm-kpi" href="{% url 'admin_dashboard' %}">
             <div class="k">Visitors today</div>
             <div class="v">{{ visitors_today }}</div>
             <div class="n">{{ user_count }} accounts</div>
         </a>
-        <a class="ad-kpi" href="{% url 'android_app_dashboard' %}">
+        <a class="adm-kpi" href="{% url 'android_app_dashboard' %}">
             <div class="k">Android connections</div>
             <div class="v">{{ android.conn_today }}</div>
-            <div class="n">today &middot; {{ android.conn_week }} in 7 days</div>
+            <div class="n">{{ android.conn_week }} in 7 days</div>
         </a>
-        <a class="ad-kpi" href="{% url 'traffic_control' %}">
+        <a class="adm-kpi" href="{% url 'traffic_control' %}">
             <div class="k">Refused today (403)</div>
-            <div class="v {% if traffic_totals.blocked_today_hits %}warn{% endif %}">{{ traffic_totals.blocked_today_hits }}</div>
+            <div class="v {% if traffic_totals.blocked_today_hits %}is-warn{% endif %}">{{ traffic_totals.blocked_today_hits }}</div>
             <div class="n">{{ blocked_now }} address{{ blocked_now|pluralize }} blocked now</div>
         </a>
-        <a class="ad-kpi" href="{% url 'api_error_log' %}">
+        <a class="adm-kpi" href="{% url 'api_error_log' %}">
             <div class="k">API errors (24h)</div>
-            <div class="v {% if android.api_5xx_day %}bad{% elif api_errors_day %}warn{% endif %}">{{ android.api_errors_day }}</div>
-            <div class="n">{{ android.api_5xx_day }} server error{{ android.api_5xx_day|pluralize }} &middot; {{ api_errors_day }} all kinds</div>
+            <div class="v {% if android.api_5xx_day %}is-bad{% elif api_errors_day %}is-warn{% endif %}">{{ api_errors_day }}</div>
+            <div class="n">{{ android.api_errors_day }} on Android paths</div>
         </a>
-        <a class="ad-kpi" href="{% url 'devices_ips' %}">
+        <a class="adm-kpi" href="{% url 'devices_ips' %}">
             <div class="k">Devices tracked</div>
             <div class="v">{{ devices.devices }}</div>
-            <div class="n">{{ devices.ips }} address{{ devices.ips|pluralize }} &middot; {{ devices.new_day }} new in 24h</div>
+            <div class="n">distinct fingerprints on record</div>
         </a>
-        <a class="ad-kpi" href="{% url 'admin_alerts' %}">
+        <a class="adm-kpi" href="{% url 'admin_alerts' %}">
             <div class="k">Server errors (24h)</div>
-            <div class="v {% if five_xx_pct > 2 %}bad{% endif %}">{{ five_xx_pct|floatformat:1 }}%</div>
+            <div class="v {% if five_xx_pct > 2 %}is-bad{% endif %}">{{ five_xx_pct|floatformat:1 }}%</div>
             <div class="n">{{ five_xx_failed }} of {{ five_xx_total }} requests</div>
         </a>
+        <a class="adm-kpi" href="{% url 'synced_users_list' %}">
+            <div class="k">Accounts blocked today</div>
+            <div class="v">{{ blocked_today }}</div>
+            <div class="n">blocked from the user pages</div>
+        </a>
+        <a class="adm-kpi" href="{% url 'admin_history_calendar' %}">
+            <div class="k">Play sessions today</div>
+            <div class="v">{{ plays_today }}</div>
+            <div class="n">watch sessions recorded</div>
+        </a>
     </div>
-
     <div class="row g-3">
         <!-- API health: the Android endpoints -->
         <div class="col-xl-7">
-            <div class="ad-card">
-                <div class="ad-card-head">
-                    <div class="ad-card-title"><i class="fab fa-android" style="color:#34d399"></i>API health &mdash; Android endpoints</div>
-                    <div style="display:flex;gap:.5rem;align-items:center">
-                        <span class="ad-card-note">{{ android.active_apps }}/{{ android.total_apps }} app{{ android.total_apps|pluralize }} active &middot; {{ android.builds_active }} build{{ android.builds_active|pluralize }} seen this week</span>
-                        <a class="ad-btn ghost" href="{% url 'android_app_dashboard' %}"><i class="fas fa-arrow-right"></i></a>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fab fa-android"></i>API health &mdash; Android endpoints</div>
+                    <div class="adm-btn-group ms-auto">
+                        <span class="adm-sub">{{ android.active_apps }}/{{ android.total_apps }} app{{ android.total_apps|pluralize }} active &middot; {{ android.builds_active }} build{{ android.builds_active|pluralize }} seen this week &middot; {% if android.last_seen %}last connection {{ android.last_seen|date:'Y-m-d H:i' }}{% else %}no connections recorded{% endif %}</span>
+                        <a class="adm-btn is-quiet is-sm" href="{% url 'android_app_dashboard' %}" aria-label="Open Android analytics"><i class="fas fa-arrow-right"></i></a>
                     </div>
                 </div>
-                <div class="ad-scroll">
-                    <table class="ad-table">
+                <div class="adm-table-wrap">
+                    <table class="adm-table">
                         <thead>
                             <tr>
                                 <th>App</th>
                                 <th>State</th>
-                                <th class="ad-num">Today</th>
-                                <th class="ad-num">7 days</th>
-                                <th class="ad-num">Rejected 24h</th>
+                                <th class="num">Today</th>
+                                <th class="num">7 days</th>
+                                <th class="num">Rejected 24h</th>
                                 <th>Build</th>
                                 <th>Last connection</th>
                             </tr>
@@ -187,62 +93,53 @@
                         <tbody>
                             {% for a in android.apps %}
                             <tr>
-                                <td><span class="ad-mono">{{ a.name }}</span></td>
+                                <td><span class="adm-mono">{{ a.name }}</span></td>
                                 <td>
-                                    {% if a.is_active %}<span class="ad-tag ok">active</span>
-                                    {% else %}<span class="ad-tag off">disabled</span>{% endif %}
+                                    {% if a.is_active %}<span class="adm-badge is-ok">active</span>
+                                    {% else %}<span class="adm-badge is-off">disabled</span>{% endif %}
                                 </td>
-                                <td class="ad-num">{{ a.today }}</td>
-                                <td class="ad-num">{{ a.week }}</td>
-                                <td class="ad-num">
-                                    {% if a.fails %}<span class="ad-tag bad">{{ a.fails }}</span>{% else %}<span class="ad-muted">0</span>{% endif %}
+                                <td class="num">{{ a.today }}</td>
+                                <td class="num">{{ a.week }}</td>
+                                <td class="num">
+                                    {% if a.fails %}<span class="adm-badge is-danger">{{ a.fails }}</span>{% else %}<span class="adm-muted">0</span>{% endif %}
                                 </td>
-                                <td class="ad-mono">{{ a.build|default:'—' }}</td>
-                                <td class="ad-muted">{% if a.last_seen %}{{ a.last_seen|date:'Y-m-d H:i' }}{% else %}never{% endif %}</td>
+                                <td class="adm-mono">{{ a.build|default:'&mdash;' }}</td>
+                                <td class="adm-muted">{% if a.last_seen %}{{ a.last_seen|date:'Y-m-d H:i' }}{% else %}never{% endif %}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="ad-empty">No Android apps registered yet.</td></tr>
+                            <tr><td colspan="7" class="adm-empty"><i class="fab fa-android"></i>No Android apps registered yet.</td></tr>
                             {% endfor %}
                         </tbody>
-                        {% if android.apps %}
-                        <tfoot>
-                            <tr>
-                                <td colspan="2">Total</td>
-                                <td class="ad-num">{{ android.conn_today }}</td>
-                                <td class="ad-num">{{ android.conn_week }}</td>
-                                <td class="ad-num">{{ android.fail_day }}</td>
-                                <td colspan="2" class="ad-muted">
-                                    {% if android.last_seen %}last connection {{ android.last_seen|date:'Y-m-d H:i' }}{% else %}no connections recorded{% endif %}
-                                </td>
-                            </tr>
-                        </tfoot>
-                        {% endif %}
                     </table>
                 </div>
-                <div class="row g-0" style="border-top:1px solid rgba(148,163,184,.14)">
-                    <div class="col-sm-6" style="border-right:1px solid rgba(148,163,184,.14)">
-                        <div class="ad-card-note" style="padding:.55rem .85rem .1rem">Why the gate refused (24h)</div>
-                        {% for r in android.top_reasons %}
-                        <div class="ad-inc">
-                            <span class="ad-inc-dot bad"></span>
-                            <div style="flex:1;font-size:.74rem;color:#cbd5e1">{{ r.label }}</div>
-                            <span class="ad-tag bad">{{ r.n }}</span>
+                <div class="row g-0" style="border-top:1px solid var(--adm-line)">
+                    <div class="col-sm-6" style="border-right:1px solid var(--adm-line)">
+                        <div class="adm-sub" style="padding:.55rem .9rem .1rem">Why the gate refused (24h) <span class="adm-badge is-danger ms-1">{{ android.fail_day }} rejected</span></div>
+                        <div class="adm-rows">
+                            {% for r in android.top_reasons %}
+                            <div class="adm-row">
+                                <span class="adm-dot is-bad"></span>
+                                <div class="adm-row-body"><div class="adm-row-title">{{ r.label }}</div></div>
+                                <span class="adm-badge is-danger">{{ r.n }}</span>
+                            </div>
+                            {% empty %}
+                            <div class="adm-empty" style="padding:1rem">Nothing refused in the last 24 hours.</div>
+                            {% endfor %}
                         </div>
-                        {% empty %}
-                        <div class="ad-empty" style="padding:.8rem">Nothing refused in the last 24 hours.</div>
-                        {% endfor %}
                     </div>
                     <div class="col-sm-6">
-                        <div class="ad-card-note" style="padding:.55rem .85rem .1rem">Busiest failing endpoints (24h)</div>
-                        {% for p in android.top_paths %}
-                        <div class="ad-inc">
-                            <span class="ad-inc-dot {% if p.status >= 500 %}bad{% endif %}"></span>
-                            <div style="flex:1;font-size:.72rem;color:#cbd5e1" class="ad-mono text-truncate" title="{{ p.path }}">{{ p.path|truncatechars:44 }}</div>
-                            <span class="ad-tag {% if p.status >= 500 %}bad{% else %}warn{% endif %}">{{ p.status }} &middot; {{ p.n }}</span>
+                        <div class="adm-sub" style="padding:.55rem .9rem .1rem">Busiest failing endpoints (24h)</div>
+                        <div class="adm-rows">
+                            {% for p in android.top_paths %}
+                            <div class="adm-row">
+                                <span class="adm-dot {% if p.status >= 500 %}is-bad{% else %}is-warn{% endif %}"></span>
+                                <div class="adm-row-body"><div class="adm-row-title adm-mono adm-trunc" title="{{ p.path }}">{{ p.path|truncatechars:44 }}</div></div>
+                                <span class="adm-badge {% if p.status >= 500 %}is-danger{% else %}is-warn{% endif %}">{{ p.status }} &middot; {{ p.n }}</span>
+                            </div>
+                            {% empty %}
+                            <div class="adm-empty" style="padding:1rem">No API errors recorded in the last 24 hours.</div>
+                            {% endfor %}
                         </div>
-                        {% empty %}
-                        <div class="ad-empty" style="padding:.8rem">No API errors recorded in the last 24 hours.</div>
-                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -250,173 +147,136 @@
 
         <!-- Server resources + alerts -->
         <div class="col-xl-5">
-            <div class="ad-card">
-                <div class="ad-card-head">
-                    <div class="ad-card-title"><i class="fas fa-microchip" style="color:#a78bfa"></i>Server resources</div>
-                    <div style="display:flex;gap:.5rem;align-items:center">
-                        <span class="ad-card-note">{{ resources.cpu_count }} vCPU</span>
-                        <a class="ad-btn ghost" href="{% url 'system_resource_dashboard' %}"><i class="fas fa-arrow-right"></i></a>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-microchip"></i>Server resources</div>
+                    <div class="adm-btn-group ms-auto">
+                        <span class="adm-sub">{{ resources.cpu_count }} vCPU</span>
+                        <a class="adm-btn is-quiet is-sm" href="{% url 'system_resource_dashboard' %}" aria-label="Open system resources"><i class="fas fa-arrow-right"></i></a>
                     </div>
                 </div>
-                <div class="ad-res">
+                <div class="adm-gauges">
                     <div>
-                        <div class="lbl"><span>CPU</span><span class="val">{% if resources.cpu is not None %}{{ resources.cpu }}%{% else %}—{% endif %}</span></div>
-                        <div class="ad-meter"><span class="{% if resources.cpu and resources.cpu >= 90 %}bad{% elif resources.cpu and resources.cpu >= 75 %}warn{% endif %}" style="width:{{ resources.cpu|default:0 }}%"></span></div>
+                        <div class="adm-gauge-head"><span>CPU</span><span class="adm-gauge-val">{% if resources.cpu is not None %}{{ resources.cpu }}%{% else %}&mdash;{% endif %}</span></div>
+                        <div class="adm-meter"><span class="{% if resources.cpu and resources.cpu >= 90 %}is-bad{% elif resources.cpu and resources.cpu >= 75 %}is-warn{% endif %}" style="width:{{ resources.cpu|default:0 }}%"></span></div>
                     </div>
                     <div>
-                        <div class="lbl"><span>Memory</span><span class="val">{% if resources.mem_pct is not None %}{{ resources.mem_pct }}%{% else %}—{% endif %}</span></div>
-                        <div class="ad-meter"><span class="{% if resources.mem_pct and resources.mem_pct >= 90 %}bad{% elif resources.mem_pct and resources.mem_pct >= 75 %}warn{% endif %}" style="width:{{ resources.mem_pct|default:0 }}%"></span></div>
+                        <div class="adm-gauge-head"><span>Memory</span><span class="adm-gauge-val">{% if resources.mem_pct is not None %}{{ resources.mem_pct }}%{% else %}&mdash;{% endif %}</span></div>
+                        <div class="adm-meter"><span class="{% if resources.mem_pct and resources.mem_pct >= 90 %}is-bad{% elif resources.mem_pct and resources.mem_pct >= 75 %}is-warn{% endif %}" style="width:{{ resources.mem_pct|default:0 }}%"></span></div>
                     </div>
                     <div>
-                        <div class="lbl"><span>Disk</span><span class="val">{% if resources.disk_pct is not None %}{{ resources.disk_pct }}%{% else %}—{% endif %}</span></div>
-                        <div class="ad-meter"><span class="{% if resources.disk_pct and resources.disk_pct >= 90 %}bad{% elif resources.disk_pct and resources.disk_pct >= 75 %}warn{% endif %}" style="width:{{ resources.disk_pct|default:0 }}%"></span></div>
+                        <div class="adm-gauge-head"><span>Disk</span><span class="adm-gauge-val">{% if resources.disk_pct is not None %}{{ resources.disk_pct }}%{% else %}&mdash;{% endif %}</span></div>
+                        <div class="adm-meter"><span class="{% if resources.disk_pct and resources.disk_pct >= 90 %}is-bad{% elif resources.disk_pct and resources.disk_pct >= 75 %}is-warn{% endif %}" style="width:{{ resources.disk_pct|default:0 }}%"></span></div>
                     </div>
                     <div>
-                        <div class="lbl"><span>Database</span><span class="val">{{ resources.db_size }}</span></div>
-                        <div class="n" style="font-size:.64rem;color:#64748b;margin-top:.3rem">{% if ext_db_size != '--' %}external {{ ext_db_size }} &middot; {% endif %}active: {{ active_db }}</div>
+                        <div class="adm-gauge-head"><span>Database</span><span class="adm-gauge-val">{{ resources.db_size }}</span></div>
+                        <div class="adm-gauge-note">{% if ext_db_size != '--' %}external {{ ext_db_size }} &middot; {% endif %}active: {{ active_db }}</div>
                     </div>
                 </div>
-                <div class="ad-facts">
-                    <div><span>Uptime</span><strong>{% if resources.uptime_days is not None %}{{ resources.uptime_days }} d{% else %}—{% endif %}</strong></div>
-                    <div><span>Load</span><strong>{% if resources.load %}{{ resources.load|join:" / " }}{% else %}—{% endif %}</strong></div>
-                    <div><span>Memory used</span><strong>{% if resources.mem_total %}{{ resources.mem_used|filesizeformat }} / {{ resources.mem_total|filesizeformat }}{% else %}—{% endif %}</strong></div>
-                    <div><span>Disk used</span><strong>{% if resources.disk_total %}{{ resources.disk_used|filesizeformat }} / {{ resources.disk_total|filesizeformat }}{% else %}—{% endif %}</strong></div>
+                <div class="adm-facts" style="padding:0 .9rem .9rem">
+                    <div><span>Uptime</span><strong>{% if resources.uptime_days is not None %}{{ resources.uptime_days }} d{% else %}&mdash;{% endif %}</strong></div>
+                    <div><span>Load</span><strong>{% if resources.load %}{{ resources.load|join:" / " }}{% else %}&mdash;{% endif %}</strong></div>
+                    <div><span>Memory used</span><strong>{% if resources.mem_total %}{{ resources.mem_used|filesizeformat }} / {{ resources.mem_total|filesizeformat }}{% else %}&mdash;{% endif %}</strong></div>
+                    <div><span>Disk used</span><strong>{% if resources.disk_total %}{{ resources.disk_used|filesizeformat }} / {{ resources.disk_total|filesizeformat }}{% else %}&mdash;{% endif %}</strong></div>
                 </div>
             </div>
 
-            <div class="ad-card">
-                <div class="ad-card-head">
-                    <div class="ad-card-title"><i class="fas fa-triangle-exclamation" style="color:{% if failing_checks or open_incidents %}#f87171{% else %}#34d399{% endif %}"></i>Alerts</div>
-                    <div style="display:flex;gap:.5rem;align-items:center">
-                        <span class="ad-card-note">{{ findings|length }} check{{ findings|length|pluralize }} run</span>
-                        <a class="ad-btn ghost" href="{% url 'admin_alerts' %}"><i class="fas fa-arrow-right"></i></a>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-triangle-exclamation"></i>Alerts</div>
+                    <div class="adm-btn-group ms-auto">
+                        <span class="adm-sub">{{ findings|length }} check{{ findings|length|pluralize }} run</span>
+                        <a class="adm-btn is-quiet is-sm" href="{% url 'admin_alerts' %}" aria-label="Open health and alerts"><i class="fas fa-arrow-right"></i></a>
                     </div>
                 </div>
-                {% for inc in open_incidents %}
-                <div class="ad-inc">
-                    <span class="ad-inc-dot bad"></span>
-                    <div style="flex:1">
-                        <div style="font-size:.76rem;color:#e2e8f0">{{ inc.title }}</div>
-                        <div class="ad-card-note">{{ inc.detail|default:'—'|truncatechars:90 }} &middot; open {{ inc.opened_at|date:'d M H:i' }}{% if inc.acknowledged_by %} &middot; ack by {{ inc.acknowledged_by }}{% endif %}</div>
+                <div class="adm-rows">
+                    {% for inc in open_incidents %}
+                    <div class="adm-row">
+                        <span class="adm-dot is-bad"></span>
+                        <div class="adm-row-body">
+                            <div class="adm-row-title">{{ inc.title }}</div>
+                            <div class="adm-row-note">{{ inc.detail|default:'&mdash;'|truncatechars:90 }} &middot; open {{ inc.opened_at|date:'d M H:i' }}{% if inc.acknowledged_by %} &middot; ack by {{ inc.acknowledged_by }}{% endif %}</div>
+                        </div>
+                        <span class="adm-badge is-danger">incident</span>
                     </div>
-                </div>
-                {% endfor %}
-                {% for f in findings %}
-                <div class="ad-inc">
-                    <span class="ad-inc-dot {% if f.ok %}ok{% elif f.ok is None %}{% else %}bad{% endif %}"></span>
-                    <div style="flex:1">
-                        <div style="font-size:.75rem;color:#e2e8f0">{{ f.title }}</div>
-                        <div class="ad-card-note">{{ f.detail }}</div>
+                    {% endfor %}
+                    {% for f in findings %}
+                    <div class="adm-row">
+                        <span class="adm-dot {% if f.ok %}is-on{% elif f.ok is None %}is-off{% else %}is-bad{% endif %}"></span>
+                        <div class="adm-row-body">
+                            <div class="adm-row-title">{{ f.title }}</div>
+                            <div class="adm-row-note">{{ f.detail }}</div>
+                        </div>
                     </div>
+                    {% empty %}
+                    <div class="adm-empty"><i class="fas fa-heart-pulse"></i>No health checks ran &mdash; open Health &amp; Alerts.</div>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <div class="ad-empty">No health checks ran &mdash; open Health &amp; Alerts.</div>
-                {% endfor %}
             </div>
         </div>
     </div>
-
     <!-- Traffic -->
-    <div class="ad-card">
-        <div class="ad-card-head">
-            <div class="ad-card-title"><i class="fas fa-chart-area" style="color:#22d3ee"></i>Traffic, last 14 days</div>
-            <div style="display:flex;gap:.5rem;align-items:center">
-                <span class="ad-card-note">Web {{ traffic_totals.web_14 }} &middot; Android {{ traffic_totals.android_14 }} &middot; {{ traffic_totals.blocked_headers }} header rule{{ traffic_totals.blocked_headers|pluralize }}</span>
-                <a class="ad-btn ghost" href="{% url 'traffic_control' %}"><i class="fas fa-arrow-right"></i></a>
+    <div class="adm-card">
+        <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-chart-area"></i>Traffic, last 14 days</div>
+            <div class="adm-btn-group ms-auto">
+                <span class="adm-sub">Web {{ traffic_totals.web_14 }} &middot; Android {{ traffic_totals.android_14 }} &middot; {{ traffic_totals.blocked_headers }} header rule{{ traffic_totals.blocked_headers|pluralize }}</span>
+                <a class="adm-btn is-quiet is-sm" href="{% url 'traffic_control' %}" aria-label="Open traffic control"><i class="fas fa-arrow-right"></i></a>
             </div>
         </div>
-        <div style="padding:.6rem .5rem 0">
+        <div class="adm-card-body tight">
             <div style="height:210px"><canvas id="trafficChart"></canvas></div>
         </div>
-        <div class="ad-legend">
-            <span><span class="ad-tr-dot" style="background:#22d3ee"></span>Web <strong style="color:#e2e8f0">{{ traffic_totals.web_today }}</strong> today</span>
-            <span><span class="ad-tr-dot" style="background:#34d399"></span>Android <strong style="color:#e2e8f0">{{ traffic_totals.android_today }}</strong> today</span>
-            <span><span class="ad-tr-dot" style="background:#f87171"></span>Refused <strong style="color:#e2e8f0">{{ traffic_totals.blocked_today_hits }}</strong> today</span>
-            <span>Rate limit: 150 req / 5 min per address, confirmed bots only</span>
+        <div class="adm-card-foot">
+            <div class="adm-legend">
+                <span><span class="adm-dot" style="background:#22d3ee"></span>Web</span>
+                <span><span class="adm-dot" style="background:#34d399"></span>Android</span>
+                <span><span class="adm-dot" style="background:#f87171"></span>Refused</span>
+                <span>Rate limit: 150 req / 5 min per address, confirmed bots only</span>
+            </div>
         </div>
     </div>
 
     <div class="row g-3">
         <!-- Devices and IPs -->
         <div class="col-xl-6">
-            <div class="ad-card">
-                <div class="ad-card-head">
-                    <div class="ad-card-title"><i class="fas fa-mobile-screen-button" style="color:#60a5fa"></i>Devices &amp; IPs</div>
-                    <a class="ad-btn ghost" href="{% url 'devices_ips' %}">Open <i class="fas fa-arrow-right"></i></a>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-mobile-screen-button"></i>Devices &amp; IPs</div>
+                    <a class="adm-btn is-quiet is-sm ms-auto" href="{% url 'devices_ips' %}">Open <i class="fas fa-arrow-right"></i></a>
                 </div>
-                <div class="ad-kpis" style="margin:.7rem .85rem 0">
-                    <a class="ad-kpi" href="{% url 'devices_ips' %}" style="background:rgba(148,163,184,.06)"><div class="k">Devices</div><div class="v">{{ devices.devices }}</div></a>
-                    <a class="ad-kpi" href="{% url 'devices_ips' %}" style="background:rgba(148,163,184,.06)"><div class="k">Addresses</div><div class="v">{{ devices.ips }}</div></a>
-                    <a class="ad-kpi" href="{% url 'devices_ips' %}" style="background:rgba(148,163,184,.06)"><div class="k">Accounts</div><div class="v">{{ devices.accounts }}</div></a>
-                    <a class="ad-kpi" href="{% url 'devices_ips' %}" style="background:rgba(148,163,184,.06)"><div class="k">Awaiting country</div><div class="v {% if devices.unknown_country %}warn{% endif %}">{{ devices.unknown_country }}</div></a>
+                <div class="adm-card-body tight">
+                    <div class="adm-grid">
+                        <a class="adm-kpi" href="{% url 'devices_ips' %}"><div class="k">Addresses</div><div class="v">{{ devices.ips }}</div></a>
+                        <a class="adm-kpi" href="{% url 'devices_ips' %}"><div class="k">Accounts</div><div class="v">{{ devices.accounts }}</div></a>
+                        <a class="adm-kpi" href="{% url 'devices_ips' %}"><div class="k">Awaiting country</div><div class="v {% if devices.unknown_country %}is-warn{% endif %}">{{ devices.unknown_country }}</div></a>
+                        <a class="adm-kpi" href="{% url 'devices_ips' %}"><div class="k">New pairs (24h)</div><div class="v">{{ devices.new_day }}</div></a>
+                    </div>
                 </div>
-                <div class="ad-facts" style="padding:.6rem .85rem .85rem">
-                    <div><span>Accounts on several devices</span><strong{% if devices.multi_device %} style="color:#fbbf24"{% endif %}>{{ devices.multi_device }}</strong></div>
-                    <div><span>Accounts from several addresses</span><strong{% if devices.multi_ip %} style="color:#fbbf24"{% endif %}>{{ devices.multi_ip }}</strong></div>
-                    <div><span>New device/address pairs (24h)</span><strong>{{ devices.new_day }}</strong></div>
-                    <div><span>Last activity</span><strong>{% if devices.last_seen %}{{ devices.last_seen|date:'d M H:i' }}{% else %}—{% endif %}</strong></div>
+                <div class="adm-facts" style="padding:0 .9rem .9rem">
+                    <div><span>Accounts on several devices</span><strong{% if devices.multi_device %} class="adm-text-warn"{% endif %}>{{ devices.multi_device }}</strong></div>
+                    <div><span>Accounts from several addresses</span><strong{% if devices.multi_ip %} class="adm-text-warn"{% endif %}>{{ devices.multi_ip }}</strong></div>
+                    <div><span>Last activity</span><strong>{% if devices.last_seen %}{{ devices.last_seen|date:'d M H:i' }}{% else %}&mdash;{% endif %}</strong></div>
                 </div>
             </div>
         </div>
 
-        <!-- Today at a glance -->
+        <!-- Poster repair -->
         <div class="col-xl-6">
-            <div class="ad-card">
-                <div class="ad-card-head">
-                    <div class="ad-card-title"><i class="fas fa-clock" style="color:#fbbf24"></i>Today at a glance</div>
-                    <a class="ad-btn ghost" href="{% url 'request_log' %}">Requests <i class="fas fa-arrow-right"></i></a>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-image"></i>Poster repair</div>
+                    <span class="adm-sub ms-auto">Fetch missing posters from TMDB for history and watchlist rows</span>
                 </div>
-                <div class="ad-scroll">
-                    <table class="ad-table">
-                        <tbody>
-                            <tr>
-                                <td>Blocked addresses</td>
-                                <td class="ad-num">{{ blocked_now }}</td>
-                                <td class="ad-muted">Added today: {{ traffic_totals.new_today }} &middot; permanent: {{ traffic_totals.permanent }}</td>
-                                <td class="ad-num"><a class="ad-btn ghost" href="{% url 'traffic_control' %}">Open</a></td>
-                            </tr>
-                            <tr>
-                                <td>Accounts blocked today</td>
-                                <td class="ad-num">{{ blocked_today }}</td>
-                                <td class="ad-muted">Blocked from the user pages</td>
-                                <td class="ad-num"><a class="ad-btn ghost" href="{% url 'synced_users_list' %}">Open</a></td>
-                            </tr>
-                            <tr>
-                                <td>API errors (24h)</td>
-                                <td class="ad-num">{{ api_errors_day }}</td>
-                                <td class="ad-muted">{{ android.api_errors_day }} on Android API paths</td>
-                                <td class="ad-num"><a class="ad-btn ghost" href="{% url 'api_error_log' %}">Open</a></td>
-                            </tr>
-                            <tr>
-                                <td>5xx rate (24h)</td>
-                                <td class="ad-num">{{ five_xx_pct|floatformat:1 }}%</td>
-                                <td class="ad-muted">{{ five_xx_failed }} of {{ five_xx_total }} requests</td>
-                                <td class="ad-num"><a class="ad-btn ghost" href="{% url 'admin_alerts' %}">Open</a></td>
-                            </tr>
-                            <tr>
-                                <td>Play sessions today</td>
-                                <td class="ad-num">{{ plays_today }}</td>
-                                <td class="ad-muted">Watch sessions recorded</td>
-                                <td class="ad-num"><a class="ad-btn ghost" href="{% url 'admin_history_calendar' %}">Open</a></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="adm-card-body">
+                    <div class="adm-btn-group">
+                        <button type="button" class="adm-btn is-quiet" onclick="backfillPosters('PlayHistory')"><i class="fas fa-history"></i>Play history</button>
+                        <button type="button" class="adm-btn is-quiet" onclick="backfillPosters('WatchList')"><i class="fas fa-bookmark"></i>Watchlist</button>
+                        <button type="button" class="adm-btn" onclick="backfillPosters('both')"><i class="fas fa-magic"></i>Fix all</button>
+                    </div>
+                    <div id="backfillResult" class="adm-sub" style="margin-top:.5rem"></div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Poster repair (kept from the old dashboard) -->
-    <div class="ad-card">
-        <div class="ad-card-head">
-            <div class="ad-card-title"><i class="fas fa-image" style="color:#94a3b8"></i>Poster repair</div>
-            <div class="ad-card-note">Fetch missing posters from TMDB for history and watchlist rows</div>
-        </div>
-        <div style="display:flex;gap:.5rem;padding:.7rem .85rem;flex-wrap:wrap">
-            <button class="ad-btn ghost" onclick="backfillPosters('PlayHistory')"><i class="fas fa-history"></i>Play history</button>
-            <button class="ad-btn ghost" onclick="backfillPosters('WatchList')"><i class="fas fa-bookmark"></i>Watchlist</button>
-            <button class="ad-btn" onclick="backfillPosters('both')"><i class="fas fa-magic"></i>Fix all</button>
-            <div id="backfillResult" style="font-size:.75rem;color:#94a3b8;align-self:center"></div>
         </div>
     </div>
 </div>
@@ -426,10 +286,17 @@
 (function () {
     var el = document.getElementById('trafficChart');
     if (!el || typeof Chart === 'undefined') return;
-    var dark = document.documentElement.getAttribute('data-theme') !== 'light';
-    var ink = dark ? 'rgba(255,255,255,.55)' : 'rgba(15,23,42,.6)';
-    var grid = dark ? 'rgba(255,255,255,.06)' : 'rgba(15,23,42,.08)';
-    new Chart(el, {
+    // Axis and legend ink come from the theme variables, so a theme switch
+    // while the page is open repaints them instead of leaving stale colours.
+    function inkColours() {
+        var cs = getComputedStyle(document.documentElement);
+        return {
+            ink: cs.getPropertyValue('--text-2').trim() || 'rgba(15,23,42,.6)',
+            grid: cs.getPropertyValue('--border').trim() || 'rgba(15,23,42,.08)'
+        };
+    }
+    var start = inkColours();
+    var chart = new Chart(el, {
         type: 'line',
         data: {
             labels: {{ traffic.labels|safe }},
@@ -449,20 +316,29 @@
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: ink, boxWidth: 10, font: { size: 10 } } },
+                legend: { labels: { color: start.ink, boxWidth: 10, font: { size: 10 } } },
                 tooltip: { backgroundColor: 'rgba(15,23,42,.95)', borderColor: 'rgba(148,163,184,.3)', borderWidth: 1 }
             },
             scales: {
-                x: { ticks: { color: ink, font: { size: 9 } }, grid: { color: grid } },
-                y: { beginAtZero: true, ticks: { color: ink, font: { size: 9 }, precision: 0 }, grid: { color: grid } }
+                x: { ticks: { color: start.ink, font: { size: 9 } }, grid: { color: start.grid } },
+                y: { beginAtZero: true, ticks: { color: start.ink, font: { size: 9 }, precision: 0 }, grid: { color: start.grid } }
             }
         }
     });
+    new MutationObserver(function () {
+        var c = inkColours();
+        chart.options.plugins.legend.labels.color = c.ink;
+        chart.options.scales.x.ticks.color = c.ink;
+        chart.options.scales.y.ticks.color = c.ink;
+        chart.options.scales.x.grid.color = c.grid;
+        chart.options.scales.y.grid.color = c.grid;
+        chart.update('none');
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 
 function backfillPosters(model) {
     var el = document.getElementById('backfillResult');
-    el.textContent = 'Fetching posters from TMDB…';
+    el.textContent = 'Fetching posters from TMDB...';
     var fd = new FormData();
     fd.append('model', model);
     fd.append('limit', '100');
@@ -473,7 +349,7 @@ function backfillPosters(model) {
             var r = d.results || {}, ph = r.play_history || {}, wl = r.watchlist || {}, parts = [d.message];
             if (ph.total !== undefined) parts.push('History: ' + (ph.updated || 0) + ' updated, ' + (ph.skipped || 0) + ' skipped');
             if (wl.total !== undefined) parts.push('Watchlist: ' + (wl.updated || 0) + ' updated, ' + (wl.skipped || 0) + ' skipped');
-            el.textContent = parts.join(' · ');
+            el.textContent = parts.join(' \u00b7 ');
         })
         .catch(function () { el.textContent = 'Network error'; });
 }

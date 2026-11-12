@@ -4,19 +4,19 @@
 <div class="container mt-4">
     <h1 class="mb-4">{{ action }} Navbar Item</h1>
     <div class="d-flex justify-content-between mb-3">
-        <a href="{% url 'navbar_item_list' %}" class="btn btn-secondary">&larr; Back to Navbar Items</a>
+        <a href="{% url 'navbar_item_list' %}" class="adm-btn">&larr; Back to Navbar Items</a>
     </div>
     
     <div class="row">
         <div class="col-md-8">
-            <div class="card bg-dark border-secondary">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary">
+                <div class="adm-card-body">
                     <form method="post">
                         {% csrf_token %}
                         
                         {% for field in form %}
                             <div class="mb-3">
-                                <label for="{{ field.id_for_label }}" class="form-label text-white">{{ field.label }}</label>
+                                <label for="{{ field.id_for_label }}" class="adm-label text-white">{{ field.label }}</label>
                                 {% if field.field.widget.input_type == 'checkbox' %}
                                     {{ field }}
                                 {% else %}
@@ -33,7 +33,7 @@
                             </div>
                         {% endfor %}
                         
-                        <button type="submit" class="btn btn-primary mt-3">Save</button>
+                        <button type="submit" class="adm-btn is-primary mt-3">Save</button>
                     </form>
                 </div>
             </div>

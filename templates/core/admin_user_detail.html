@@ -5,44 +5,44 @@
 {% block title %}{{ detail_user.username }} - User Detail{% endblock %}
 
 {% block admin_content %}
-<div class="container py-4" style="max-width: 1100px;">
+<div class="container-fluid py-3" style="max-width:1200px">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div class="adm-page-head">
         <div>
-            <a href="{% url 'admin_user_list' %}" class="text-decoration-none" style="color: #60a5fa;">
+            <a href="{% url 'admin_user_list' %}" class="adm-link">
                 <i class="fas fa-arrow-left me-1"></i> Back to Users
             </a>
             <div class="d-flex align-items-center gap-3 mt-2">
                 {% if synced_profile and synced_profile.photo_url %}
                     <img src="{{ synced_profile.photo_url }}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid {% if synced_profile.is_subscribed %}#22c55e{% else %}#64748b{% endif %};">
                 {% else %}
-                    <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#4F46E5,#7C3AED);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;font-weight:700;">{{ detail_user.first_name|first|default:detail_user.username|first|upper }}</div>
+                    <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#4F46E5,#7C3AED);display:flex;align-items:center;justify-content:center;color:rgb(255,255,255);font-size:1.6rem;font-weight:700;">{{ detail_user.first_name|first|default:detail_user.username|first|upper }}</div>
                 {% endif %}
                 <div>
-                    <h1 class="text-white mb-0">{{ detail_user.first_name }} {{ detail_user.last_name|default:detail_user.username }}</h1>
+                    <h1 class="adm-page-title">{{ detail_user.first_name }} {{ detail_user.last_name|default:detail_user.username }}</h1>
                     <div class="d-flex align-items-center gap-2 mt-1">
-                        <span class="text-secondary">{{ detail_user.email }}</span>
+                        <span class="adm-sub">{{ detail_user.email }}</span>
                         {% if not detail_user.is_active %}
-                            <span class="badge bg-danger">Blocked</span>
+                            <span class="adm-badge is-danger">Blocked</span>
                         {% endif %}
                         {% if detail_user.is_superuser %}
-                            <span class="badge bg-warning text-dark">Super Admin</span>
+                            <span class="adm-badge is-warn">Super Admin</span>
                         {% elif detail_user.is_staff %}
-                            <span class="badge bg-info">Staff</span>
+                            <span class="adm-badge is-info">Staff</span>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
-        <div class="d-flex gap-2">
-            <a href="{% url 'admin_user_edit' detail_user.id %}" class="btn btn-warning"><i class="fas fa-edit me-1"></i>Edit</a>
+        <div class="adm-btn-group">
+            <a href="{% url 'admin_user_edit' detail_user.id %}" class="adm-btn is-warn"><i class="fas fa-edit me-1"></i>Edit</a>
             {% if not detail_user.is_active %}
             <form method="post" action="{% url 'admin_user_resend_verification' detail_user.id %}" onsubmit="return confirm('Send a fresh verification code to {{ detail_user.email }}?')">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-info"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
+                <button type="submit" class="adm-btn"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
             </form>
             {% endif %}
-            <button class="btn btn-{% if detail_user.is_active %}outline-warning{% else %}outline-success{% endif %}" onclick="toggleBlock({{ detail_user.id }})">
+            <button class="adm-btn {% if detail_user.is_active %}is-quiet{% else %}is-ok{% endif %}" onclick="toggleBlock({{ detail_user.id }})">
                 <i class="fas fa-{% if detail_user.is_active %}ban{% else %}check{% endif %} me-1"></i>{% if detail_user.is_active %}Block{% else %}Unblock{% endif %}
             </button>
         </div>
@@ -52,38 +52,38 @@
         <!-- Left Column -->
         <div class="col-lg-8">
             <!-- Subscription Card -->
-            <div class="card border-secondary shadow-sm mb-4 {% if synced_profile and synced_profile.is_subscribed %}border-success{% endif %}">
-                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
-                    <h5 class="text-white mb-0"><i class="fas fa-crown me-2" style="color:{% if synced_profile and synced_profile.is_subscribed %}#22c55e{% else %}#64748b{% endif %};"></i>Subscription</h5>
-                    <button class="btn btn-sm btn-outline-light" onclick="openSubscriptionModal()">
+            <div class="adm-card mb-4 {% if synced_profile and synced_profile.is_subscribed %}border-success{% endif %}">
+                <div class="adm-card-head">
+                    <h2 class="adm-card-title"><i class="fas fa-crown me-2" style="color:{% if synced_profile and synced_profile.is_subscribed %}#22c55e{% else %}#64748b{% endif %};"></i>Subscription</h2>
+                    <button class="adm-btn is-sm" onclick="openSubscriptionModal()">
                         <i class="fas fa-edit me-1"></i>Manage
                     </button>
                 </div>
-                <div class="card-body">
+                <div class="adm-card-body">
                     {% if synced_profile and synced_profile.is_subscribed %}
                         <div class="row g-3 text-center">
                             <div class="col-md-3">
                                 <div class="p-3 rounded" style="background:rgba(34,197,94,.1);">
                                     <div class="h4 text-success mb-1">{{ synced_profile.plan|default:"VIP" }}</div>
-                                    <div class="text-secondary small">Plan</div>
+                                    <div class="adm-sub">Plan</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="p-3 rounded" style="background:rgba(56,189,248,.1);">
                                     <div class="h4 text-info mb-1">{{ synced_profile.valid_until|date:"M d, Y"|default:"—" }}</div>
-                                    <div class="text-secondary small">Valid Until</div>
+                                    <div class="adm-sub">Valid Until</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="p-3 rounded" style="background:rgba(168,85,247,.1);">
                                     <div class="h4 mb-1" style="color:#a855f7;">{{ synced_profile.days_remaining }}</div>
-                                    <div class="text-secondary small">Days Left</div>
+                                    <div class="adm-sub">Days Left</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="p-3 rounded" style="background:rgba(251,191,36,.1);">
                                     <div class="h4 text-warning mb-1">{{ synced_profile.features|length }}</div>
-                                    <div class="text-secondary small">Features</div>
+                                    <div class="adm-sub">Features</div>
                                 </div>
                             </div>
                         </div>
@@ -92,7 +92,7 @@
                             <div class="text-secondary small mb-2">Active Features:</div>
                             <div class="d-flex flex-wrap gap-2">
                                 {% for f in synced_profile.features %}
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2"><i class="fas fa-check me-1"></i>{{ f }}</span>
+                                    <span class="adm-badge is-ok"><i class="fas fa-check me-1"></i>{{ f }}</span>
                                 {% endfor %}
                             </div>
                         </div>
@@ -100,8 +100,8 @@
                     {% else %}
                         <div class="text-center py-4">
                             <div class="text-secondary mb-3"><i class="fas fa-user-tag fa-2x"></i></div>
-                            <div class="text-secondary">No active subscription</div>
-                            <button class="btn btn-outline-success mt-2" onclick="openSubscriptionModal()">
+                            <div class="adm-sub">No active subscription</div>
+                            <button class="adm-btn mt-2" onclick="openSubscriptionModal()">
                                 <i class="fas fa-crown me-1"></i>Assign Plan
                             </button>
                         </div>
@@ -111,57 +111,57 @@
 
             <!-- Cloud Data -->
             {% if cloud_data %}
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary">
-                    <h5 class="text-white mb-0"><i class="fas fa-cloud me-2 text-info"></i>Cloud Sync Data <span class="badge bg-info ms-2">v{{ cloud_data.data_version }}</span></h5>
+            <div class="adm-card mb-4">
+                <div class="adm-card-head">
+                    <h2 class="adm-card-title"><i class="fas fa-cloud me-2 text-info"></i>Cloud Sync Data <span class="adm-badge is-info ms-2">v{{ cloud_data.data_version }}</span></h2>
                 </div>
-                <div class="card-body">
+                <div class="adm-card-body">
                     <!-- Clickable Stat Boxes -->
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
-                            <button class="btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-playback')" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);">
+                            <button class="adm-btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-playback')" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <div><div class="h4 text-info mb-0">{{ cloud_data.playback_progress|length }}</div><div class="text-secondary small">Playback Entries</div></div>
+                                    <div><div class="h4 text-info mb-0">{{ cloud_data.playback_progress|length }}</div><div class="adm-sub">Playback Entries</div></div>
                                     <i class="fas fa-chevron-down text-info" id="icon-cloud-playback"></i>
                                 </div>
                             </button>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-watchlist')" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);">
+                            <button class="adm-btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-watchlist')" style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <div><div class="h4 text-warning mb-0">{{ cloud_data.watchlist_ids|length }}</div><div class="text-secondary small">Watchlist Items</div></div>
+                                    <div><div class="h4 text-warning mb-0">{{ cloud_data.watchlist_ids|length }}</div><div class="adm-sub">Watchlist Items</div></div>
                                     <i class="fas fa-chevron-down text-warning" id="icon-cloud-watchlist"></i>
                                 </div>
                             </button>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-seen')" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);">
+                            <button class="adm-btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-seen')" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <div><div class="h4 mb-0" style="color:#a855f7;">{{ cloud_data.seen_keys|length }}</div><div class="text-secondary small">Seen Items</div></div>
+                                    <div><div class="h4 mb-0" style="color:#a855f7;">{{ cloud_data.seen_keys|length }}</div><div class="adm-sub">Seen Items</div></div>
                                     <i class="fas fa-chevron-down" style="color:#a855f7;" id="icon-cloud-seen"></i>
                                 </div>
                             </button>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-favorites')" style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);">
+                            <button class="adm-btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-favorites')" style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <div><div class="h4 text-success mb-0">{{ cloud_data.favorites|length }}</div><div class="text-secondary small">Favorites</div></div>
+                                    <div><div class="h4 text-success mb-0">{{ cloud_data.favorites|length }}</div><div class="adm-sub">Favorites</div></div>
                                     <i class="fas fa-chevron-down text-success" id="icon-cloud-favorites"></i>
                                 </div>
                             </button>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-history')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);">
+                            <button class="adm-btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-history')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <div><div class="h4 text-danger mb-0">{{ cloud_data.watch_history|length }}</div><div class="text-secondary small">Watch History</div></div>
+                                    <div><div class="h4 text-danger mb-0">{{ cloud_data.watch_history|length }}</div><div class="adm-sub">Watch History</div></div>
                                     <i class="fas fa-chevron-down text-danger" id="icon-cloud-history"></i>
                                 </div>
                             </button>
                         </div>
                         <div class="col-md-4">
-                            <button class="btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-ratings')" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.2);">
+                            <button class="adm-btn w-100 text-start p-3 rounded" onclick="toggleSection('cloud-ratings')" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.2);">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <div><div class="h4 text-secondary mb-0">{{ cloud_data.user_ratings|length }}</div><div class="text-secondary small">Ratings</div></div>
+                                    <div><div class="h4 text-secondary mb-0">{{ cloud_data.user_ratings|length }}</div><div class="adm-sub">Ratings</div></div>
                                     <i class="fas fa-chevron-down text-secondary" id="icon-cloud-ratings"></i>
                                 </div>
                             </button>
@@ -173,9 +173,9 @@
                         <hr class="border-secondary">
                         <h6 class="text-white mb-3"><i class="fas fa-play-circle me-2 text-info"></i>Playback Progress</h6>
                         {% if cloud_data.playback_progress %}
-                        <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
-                            <table class="table table-dark table-sm small mb-0">
-                                <thead class="sticky-top"><tr style="background:#1e1e2a;"><th style="width:40px;"></th><th>Title</th><th>Type</th><th>S/E</th><th>Progress</th><th>Updated</th></tr></thead>
+                        <div class="adm-table-wrap" style="max-height:400px;overflow-y:auto;">
+                            <table class="adm-table">
+                                <thead class="sticky-top"><tr><th style="width:40px;"></th><th>Title</th><th>Type</th><th>S/E</th><th>Progress</th><th>Updated</th></tr></thead>
                                 <tbody>
                                 {% for key, entry in cloud_data.playback_progress.items %}
                                     {% with pos=entry.positionMs|default:0 dur=entry.durationMs|default:0 mid=entry.mediaId|default:0 %}
@@ -185,27 +185,27 @@
                                         </td>
                                         <td class="text-white">
                                             {% if mid %}{% if entry.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ entry.title|default:key }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ entry.title|default:key }}</a>{% endif %}{% else %}{{ entry.title|default:key }}{% endif %}
-                                            {% if entry.season and entry.season >= 0 %}<span class="text-secondary small"> S{{ entry.season }}E{{ entry.episode }}</span>{% endif %}
-                                            {% if entry.episodeTitle %}<div class="text-secondary small">{{ entry.episodeTitle }}</div>{% endif %}
+                                            {% if entry.season and entry.season >= 0 %}<span class="adm-sub"> S{{ entry.season }}E{{ entry.episode }}</span>{% endif %}
+                                            {% if entry.episodeTitle %}<div class="adm-sub">{{ entry.episodeTitle }}</div>{% endif %}
                                         </td>
-                                        <td>{% if entry.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td>
-                                        <td class="text-secondary">{% if entry.season and entry.season >= 0 %}S{{ entry.season }}E{{ entry.episode }}{% else %}—{% endif %}</td>
+                                        <td>{% if entry.isTv %}<span class="adm-badge is-tv">TV</span>{% else %}<span class="adm-badge is-movie">Movie</span>{% endif %}</td>
+                                        <td class="adm-sub">{% if entry.season and entry.season >= 0 %}S{{ entry.season }}E{{ entry.episode }}{% else %}—{% endif %}</td>
                                         <td>
                                             {% if dur > 0 %}
                                             <div class="d-flex align-items-center gap-2">
-                                                <div class="progress flex-grow-1" style="height:6px;width:80px;"><div class="progress-bar bg-info" style="width:{% widthratio pos dur 100 %}%;"></div></div>
-                                                <span class="text-secondary" style="font-size:.7rem;">{% widthratio pos dur 100 %}%</span>
+                                                <div class="adm-meter flex-grow-1" style="width:80px;"><span class="is-info" style="width:{% widthratio pos dur 100 %}%;"></span></div>
+                                                <span class="adm-sub" style="font-size:.7rem;">{% widthratio pos dur 100 %}%</span>
                                             </div>
                                             {% endif %}
                                         </td>
-                                        <td class="text-secondary small">{{ entry.lastUpdated|default:"—" }}</td>
+                                        <td class="adm-sub">{{ entry.lastUpdated|default:"—" }}</td>
                                     </tr>
                                     {% endwith %}
                                 {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-                        {% else %}<div class="text-secondary small">No playback data</div>{% endif %}
+                        {% else %}<div class="adm-sub">No playback data</div>{% endif %}
                     </div>
 
                     <!-- Watchlist Detail -->
@@ -213,7 +213,7 @@
                         <hr class="border-secondary">
                         <h6 class="text-white mb-3"><i class="fas fa-bookmark me-2 text-warning"></i>Watchlist</h6>
                         {% if cloud_data.watchlist_ids %}
-                        <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
+                        <div class="adm-table-wrap"><table class="adm-table">
                             <thead><tr><th style="width:40px;"></th><th>Title</th><th>Type</th><th>Action</th></tr></thead>
                             <tbody>
                             {% for item in cloud_data.watchlist_ids %}
@@ -222,13 +222,13 @@
                                         {% if item.posterPath %}<img src="https://image.tmdb.org/t/p/w92{{ item.posterPath }}" alt="" style="width:32px;height:48px;object-fit:cover;border-radius:4px;">{% else %}<div style="width:32px;height:48px;border-radius:4px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;"><i class="fas fa-film text-secondary" style="font-size:.6rem;"></i></div>{% endif %}
                                     </td>
                                     <td class="text-white">{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ item.title|default:"—" }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ item.title|default:"—" }}</a>{% endif %}{% else %}{{ item.title|default:"—" }}{% endif %}{% endwith %}</td>
-                                    <td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td>
-                                    <td>{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
+                                    <td>{% if item.isTv %}<span class="adm-badge is-tv">TV</span>{% else %}<span class="adm-badge is-movie">Movie</span>{% endif %}</td>
+                                    <td>{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
                                 </tr>
                             {% endfor %}
                             </tbody>
                         </table></div>
-                        {% else %}<div class="text-secondary small">No watchlist items</div>{% endif %}
+                        {% else %}<div class="adm-sub">No watchlist items</div>{% endif %}
                     </div>
 
                     <!-- Seen Items Detail -->
@@ -236,8 +236,8 @@
                         <hr class="border-secondary">
                         <h6 class="text-white mb-3"><i class="fas fa-eye me-2" style="color:#a855f7;"></i>Seen Items</h6>
                         {% if cloud_data.seen_keys %}
-                        <div class="d-flex flex-wrap gap-2">{% for key in cloud_data.seen_keys %}<span class="badge" style="background:rgba(168,85,247,.1);color:#c084fc;border:1px solid rgba(168,85,247,.2);">{{ key }}</span>{% endfor %}</div>
-                        {% else %}<div class="text-secondary small">No seen items</div>{% endif %}
+                        <div class="d-flex flex-wrap gap-2">{% for key in cloud_data.seen_keys %}<span class="adm-badge is-violet">{{ key }}</span>{% endfor %}</div>
+                        {% else %}<div class="adm-sub">No seen items</div>{% endif %}
                     </div>
 
                     <!-- Favorites Detail -->
@@ -245,7 +245,7 @@
                         <hr class="border-secondary">
                         <h6 class="text-white mb-3"><i class="fas fa-heart me-2 text-success"></i>Favorites</h6>
                         {% if cloud_data.favorites %}
-                        <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
+                        <div class="adm-table-wrap"><table class="adm-table">
                             <thead><tr><th style="width:40px;"></th><th>Title</th><th>Type</th><th>Action</th></tr></thead>
                             <tbody>
                             {% for item in cloud_data.favorites %}
@@ -254,13 +254,13 @@
                                         {% if item.posterPath %}<img src="https://image.tmdb.org/t/p/w92{{ item.posterPath }}" alt="" style="width:32px;height:48px;object-fit:cover;border-radius:4px;">{% else %}<div style="width:32px;height:48px;border-radius:4px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;"><i class="fas fa-film text-secondary" style="font-size:.6rem;"></i></div>{% endif %}
                                     </td>
                                     <td class="text-white">{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ item.title|default:"—" }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ item.title|default:"—" }}</a>{% endif %}{% else %}{{ item.title|default:"—" }}{% endif %}{% endwith %}</td>
-                                    <td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td>
-                                    <td>{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
+                                    <td>{% if item.isTv %}<span class="adm-badge is-tv">TV</span>{% else %}<span class="adm-badge is-movie">Movie</span>{% endif %}</td>
+                                    <td>{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
                                 </tr>
                             {% endfor %}
                             </tbody>
                         </table></div>
-                        {% else %}<div class="text-secondary small">No favorites</div>{% endif %}
+                        {% else %}<div class="adm-sub">No favorites</div>{% endif %}
                     </div>
 
                     <!-- Watch History Detail -->
@@ -268,7 +268,7 @@
                         <hr class="border-secondary">
                         <h6 class="text-white mb-3"><i class="fas fa-history me-2 text-danger"></i>Watch History</h6>
                         {% if cloud_data.watch_history %}
-                        <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
+                        <div class="adm-table-wrap"><table class="adm-table">
                             <thead><tr><th style="width:40px;"></th><th>Title</th><th>Type</th><th>S/E</th><th>Watched At</th><th>Action</th></tr></thead>
                             <tbody>
                             {% for item in cloud_data.watch_history %}
@@ -277,15 +277,15 @@
                                         {% if item.posterPath %}<img src="https://image.tmdb.org/t/p/w92{{ item.posterPath }}" alt="" style="width:32px;height:48px;object-fit:cover;border-radius:4px;">{% else %}<div style="width:32px;height:48px;border-radius:4px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;"><i class="fas fa-film text-secondary" style="font-size:.6rem;"></i></div>{% endif %}
                                     </td>
                                     <td class="text-white">{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ item.title|default:"—" }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ item.title|default:"—" }}</a>{% endif %}{% else %}{{ item.title|default:"—" }}{% endif %}{% endwith %}</td>
-                                    <td>{% if item.isTv %}<span class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;">TV</span>{% else %}<span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;">Movie</span>{% endif %}</td>
-                                    <td class="text-secondary">{% if item.season and item.season >= 0 %}S{{ item.season }}E{{ item.episode }}{% else %}—{% endif %}</td>
-                                    <td class="text-secondary small">{{ item.watchedAt|default:item.lastUpdated|default:"—" }}</td>
-                                    <td>{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
+                                    <td>{% if item.isTv %}<span class="adm-badge is-tv">TV</span>{% else %}<span class="adm-badge is-movie">Movie</span>{% endif %}</td>
+                                    <td class="adm-sub">{% if item.season and item.season >= 0 %}S{{ item.season }}E{{ item.episode }}{% else %}—{% endif %}</td>
+                                    <td class="adm-sub">{{ item.watchedAt|default:item.lastUpdated|default:"—" }}</td>
+                                    <td>{% with mid=item.mediaId|default:'' %}{% if mid %}{% if item.isTv %}<a href="/series/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% endif %}{% endif %}{% endwith %}</td>
                                 </tr>
                             {% endfor %}
                             </tbody>
                         </table></div>
-                        {% else %}<div class="text-secondary small">No watch history</div>{% endif %}
+                        {% else %}<div class="adm-sub">No watch history</div>{% endif %}
                     </div>
 
                     <!-- Ratings Detail -->
@@ -293,7 +293,7 @@
                         <hr class="border-secondary">
                         <h6 class="text-white mb-3"><i class="fas fa-star me-2 text-secondary"></i>User Ratings</h6>
                         {% if cloud_data.user_ratings %}
-                        <div class="table-responsive"><table class="table table-dark table-sm small mb-0">
+                        <div class="adm-table-wrap"><table class="adm-table">
                             <thead><tr><th>Media ID</th><th>Rating</th></tr></thead>
                             <tbody>
                             {% for key, rating in cloud_data.user_ratings.items %}
@@ -301,7 +301,7 @@
                             {% endfor %}
                             </tbody>
                         </table></div>
-                        {% else %}<div class="text-secondary small">No ratings</div>{% endif %}
+                        {% else %}<div class="adm-sub">No ratings</div>{% endif %}
                     </div>
 
                     <div class="text-secondary small mt-2"><i class="fas fa-clock me-1"></i>Last synced: {{ cloud_data.last_synced_at|date:"M d, Y H:i" }}</div>
@@ -310,21 +310,21 @@
             {% endif %}
 
             <!-- Play History -->
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
-                    <h5 class="text-white mb-0"><i class="fas fa-history me-2 text-warning"></i>Play History <span class="badge bg-secondary ms-2">{{ play_history|length }}</span></h5>
-                    <div class="d-flex gap-2">
-                        <a href="{% url 'admin_user_play_history' detail_user.id %}" target="_blank" class="btn btn-sm btn-outline-light"><i class="fas fa-external-link-alt me-1"></i>View User History</a>
-                        <a href="{% url 'admin_history_calendar' %}?user_id={{ detail_user.id }}" class="btn btn-sm btn-outline-warning"><i class="fas fa-calendar-alt me-1"></i>Calendar</a>
+            <div class="adm-card mb-4">
+                <div class="adm-card-head">
+                    <h2 class="adm-card-title"><i class="fas fa-history me-2 text-warning"></i>Play History <span class="adm-badge is-off ms-2">{{ play_history|length }}</span></h2>
+                    <div class="adm-btn-group">
+                        <a href="{% url 'admin_user_play_history' detail_user.id %}" target="_blank" class="adm-btn is-sm"><i class="fas fa-external-link-alt me-1"></i>View User History</a>
+                        <a href="{% url 'admin_history_calendar' %}?user_id={{ detail_user.id }}" class="adm-btn is-sm"><i class="fas fa-calendar-alt me-1"></i>Calendar</a>
                     </div>
                 </div>
                 {% if play_history %}
-                <div class="card-body">
+                <div class="adm-card-body">
                     <!-- Poster grid (same look as the user play-history page) -->
                     <div class="row g-3">
                         {% for h in play_history %}
                         <div class="col-4 col-md-3 col-lg-2">
-                            <div class="card bg-dark border-secondary shadow-sm h-100" style="overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+                            <div class="adm-card" style="overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
                                 {% if h.tmdb_id > 0 %}<a href="{% if h.media_type == 'tv' or h.season_number %}/series/id/{{ h.tmdb_id }}/{% else %}/movies/id/{{ h.tmdb_id }}/{% endif %}" target="_blank" class="text-decoration-none" style="display:block;" title="{{ h.title }}">{% endif %}
                                     <div style="position:relative;padding-top:150%;overflow:hidden;background:#1a1a2e;">
                                         {% if h.poster_path %}
@@ -344,16 +344,16 @@
                                         </div>
                                         {% endif %}
                                         {% if h.completed %}
-                                        <div style="position:absolute;top:6px;right:6px;"><span class="badge bg-success bg-opacity-75"><i class="fas fa-check"></i></span></div>
+                                        <div style="position:absolute;top:6px;right:6px;"><span class="adm-badge is-ok bg-opacity-75"><i class="fas fa-check"></i></span></div>
                                         {% endif %}
                                     </div>
                                 {% if h.tmdb_id > 0 %}</a>{% endif %}
-                                <div class="card-body p-2">
+                                <div class="adm-card-body p-2">
                                     <div class="text-white small fw-semibold text-truncate" style="font-size:.75rem;">{{ h.title }}</div>
                                     {% if h.season_number and h.episode_number %}
-                                    <div class="text-secondary" style="font-size:.65rem;">S{{ h.season_number }}E{{ h.episode_number }}{% if h.episode_title %} &middot; {{ h.episode_title }}{% endif %}</div>
+                                    <div class="adm-sub" style="font-size:.65rem;">S{{ h.season_number }}E{{ h.episode_number }}{% if h.episode_title %} &middot; {{ h.episode_title }}{% endif %}</div>
                                     {% endif %}
-                                    <div class="text-secondary" style="font-size:.65rem;">{{ h.last_played_at|date:"M d, H:i" }} &middot; {{ h.formatted_duration }} watched</div>
+                                    <div class="adm-sub" style="font-size:.65rem;">{{ h.last_played_at|date:"M d, H:i" }} &middot; {{ h.formatted_duration }} watched</div>
                                 </div>
                             </div>
                         </div>
@@ -361,9 +361,9 @@
                     </div>
 
                     <!-- Detail table -->
-                    <div class="table-responsive mt-3" style="max-height:400px;overflow-y:auto;">
-                        <table class="table table-dark table-sm mb-0">
-                            <thead class="sticky-top"><tr style="background:#1e1e2a;"><th style="width:50px;"></th><th>Title</th><th>Type</th><th>Progress</th><th>Last Played</th><th></th></tr></thead>
+                    <div class="adm-table-wrap mt-3" style="max-height:400px;overflow-y:auto;">
+                        <table class="adm-table">
+                            <thead class="sticky-top"><tr><th style="width:50px;"></th><th>Title</th><th>Type</th><th>Progress</th><th>Last Played</th><th></th></tr></thead>
                             <tbody>
                             {% for h in play_history %}
                                 <tr>
@@ -372,20 +372,18 @@
                                     </td>
                                     <td class="text-white">
                                         {% if h.tmdb_id > 0 %}{% with mid=h.tmdb_id %}{% if h.media_type == 'tv' or h.season_number %}<a href="/series/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ h.title }}</a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="text-white text-decoration-none">{{ h.title }}</a>{% endif %}{% endwith %}{% else %}{{ h.title }}{% endif %}
-                                        {% if h.season_number %}<span class="text-secondary"> S{{ h.season_number }}E{{ h.episode_number }}</span>{% endif %}
-                                        {% if h.episode_title %}<div class="text-secondary small">{{ h.episode_title }}</div>{% endif %}
+                                        {% if h.season_number %}<span class="adm-sub"> S{{ h.season_number }}E{{ h.episode_number }}</span>{% endif %}
+                                        {% if h.episode_title %}<div class="adm-sub">{{ h.episode_title }}</div>{% endif %}
                                     </td>
-                                    <td><span class="badge {% if h.media_type == 'tv' or h.season_number %}bg-info{% else %}bg-purple{% endif %}" style="{% if h.media_type != 'tv' and not h.season_number %}background:rgba(168,85,247,.2);color:#c084fc;{% endif %}">{% if h.media_type == 'tv' or h.season_number %}TV{% else %}{{ h.media_type|upper }}{% endif %}</span></td>
+                                    <td><span class="adm-badge {% if h.media_type == 'tv' or h.season_number %}is-tv{% else %}is-movie{% endif %}">{% if h.media_type == 'tv' or h.season_number %}TV{% else %}{{ h.media_type|upper }}{% endif %}</span></td>
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
-                                            <div class="progress flex-grow-1" style="height:6px;width:100px;">
-                                                <div class="progress-bar {% if h.completed %}bg-success{% else %}bg-info{% endif %}" style="width:{{ h.progress_percent }}%;"></div>
-                                            </div>
-                                            <span class="text-secondary small">{{ h.progress_percent }}%</span>
+                                            <div class="adm-meter flex-grow-1" style="width:100px;"><span{% if not h.completed %} class="is-info"{% endif %} style="width:{{ h.progress_percent }}%;"></span></div>
+                                            <span class="adm-sub">{{ h.progress_percent }}%</span>
                                         </div>
                                     </td>
-                                    <td class="text-secondary small">{{ h.last_played_at|date:"M d, H:i" }}</td>
-                                    <td>{% if h.tmdb_id > 0 %}{% with mid=h.tmdb_id %}{% if h.media_type == 'tv' or h.season_number %}<a href="/series/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Play"><i class="fas fa-play"></i></a>{% endif %}{% endwith %}{% endif %}</td>
+                                    <td class="adm-sub">{{ h.last_played_at|date:"M d, H:i" }}</td>
+                                    <td>{% if h.tmdb_id > 0 %}{% with mid=h.tmdb_id %}{% if h.media_type == 'tv' or h.season_number %}<a href="/series/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% else %}<a href="/movies/id/{{ mid }}/" target="_blank" class="adm-btn is-sm" title="Play" aria-label="Play this title"><i class="fas fa-play"></i></a>{% endif %}{% endwith %}{% endif %}</td>
                                 </tr>
                             {% endfor %}
                             </tbody>
@@ -393,9 +391,9 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="card-body text-center py-4">
+                <div class="adm-card-body text-center py-4">
                     <i class="fas fa-play-circle fa-2x text-secondary mb-2"></i>
-                    <div class="text-secondary small">No play history yet for this user.</div>
+                    <div class="adm-sub">No play history yet for this user.</div>
                 </div>
                 {% endif %}
             </div>
@@ -404,89 +402,93 @@
         <!-- Right Column -->
         <div class="col-lg-4">
             <!-- Account Info -->
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-user-circle me-2 text-primary"></i>Account</h5></div>
-                <div class="card-body">
-                    <table class="table table-dark table-borderless mb-0 small">
-                        <tr><td class="text-secondary" style="width:40%">User ID</td><td class="text-white">#{{ detail_user.id }}</td></tr>
-                        <tr><td class="text-secondary">Username</td><td class="text-white fw-bold">{{ detail_user.username }}</td></tr>
-                        <tr><td class="text-secondary">Email</td><td class="text-info">{{ detail_user.email|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">Full Name</td><td class="text-white">{{ detail_user.first_name }} {{ detail_user.last_name }}</td></tr>
-                        <tr><td class="text-secondary">Has Password</td><td>{% if detail_user.has_usable_password %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-warning text-dark">No</span>{% endif %}</td></tr>
-                        <tr><td class="text-secondary">Email Verified</td><td>{% if detail_user.is_active %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td></tr>
-                        <tr><td class="text-secondary">Joined</td><td class="text-white">{{ detail_user.date_joined|date:"M d, Y" }}</td></tr>
-                        <tr><td class="text-secondary">Last Login</td><td class="text-white">{{ detail_user.last_login|date:"M d, Y H:i"|default:"Never" }}</td></tr>
+            <div class="adm-card mb-4">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-user-circle me-2 text-primary"></i>Account</h2></div>
+                <div class="adm-card-body">
+                    <div class="adm-table-wrap">
+                    <table class="adm-table">
+                        <tr><td class="adm-sub" style="width:40%">User ID</td><td class="text-white">#{{ detail_user.id }}</td></tr>
+                        <tr><td class="adm-sub">Username</td><td class="text-white fw-bold">{{ detail_user.username }}</td></tr>
+                        <tr><td class="adm-sub">Email</td><td class="text-info">{{ detail_user.email|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">Full Name</td><td class="text-white">{{ detail_user.first_name }} {{ detail_user.last_name }}</td></tr>
+                        <tr><td class="adm-sub">Has Password</td><td>{% if detail_user.has_usable_password %}<span class="adm-badge is-ok">Yes</span>{% else %}<span class="adm-badge is-warn">No</span>{% endif %}</td></tr>
+                        <tr><td class="adm-sub">Email Verified</td><td>{% if detail_user.is_active %}<span class="adm-badge is-ok">Yes</span>{% else %}<span class="adm-badge is-danger">No</span>{% endif %}</td></tr>
+                        <tr><td class="adm-sub">Joined</td><td class="text-white">{{ detail_user.date_joined|date:"M d, Y" }}</td></tr>
+                        <tr><td class="adm-sub">Last Login</td><td class="text-white">{{ detail_user.last_login|date:"M d, Y H:i"|default:"Never" }}</td></tr>
                     </table>
+                    </div>
                 </div>
             </div>
 
             <!-- Device Info -->
             {% if synced_profile %}
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-mobile-alt me-2 text-info"></i>Android Device</h5></div>
-                <div class="card-body">
-                    <table class="table table-dark table-borderless mb-0 small">
-                        <tr><td class="text-secondary" style="width:40%">Device</td><td class="text-white">{{ synced_profile.device_model|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">OS</td><td class="text-white">Android {{ synced_profile.os_version|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">App Version</td><td class="text-white">{{ synced_profile.app_version|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">Build</td><td class="text-white">#{{ synced_profile.build_number|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">Device ID</td><td class="text-white text-break" style="font-size:.7rem;">{{ synced_profile.device_id|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">Google ID</td><td class="text-white text-break" style="font-size:.7rem;">{{ synced_profile.google_id|default:"—" }}</td></tr>
-                        <tr><td class="text-secondary">Last Synced</td><td class="text-white">{{ synced_profile.last_synced_at|date:"M d, Y H:i" }}</td></tr>
+            <div class="adm-card mb-4">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-mobile-alt me-2 text-info"></i>Android Device</h2></div>
+                <div class="adm-card-body">
+                    <div class="adm-table-wrap">
+                    <table class="adm-table">
+                        <tr><td class="adm-sub" style="width:40%">Device</td><td class="text-white">{{ synced_profile.device_model|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">OS</td><td class="text-white">Android {{ synced_profile.os_version|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">App Version</td><td class="text-white">{{ synced_profile.app_version|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">Build</td><td class="text-white">#{{ synced_profile.build_number|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">Device ID</td><td class="text-white text-break" style="font-size:.7rem;">{{ synced_profile.device_id|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">Google ID</td><td class="text-white text-break" style="font-size:.7rem;">{{ synced_profile.google_id|default:"—" }}</td></tr>
+                        <tr><td class="adm-sub">Last Synced</td><td class="text-white">{{ synced_profile.last_synced_at|date:"M d, Y H:i" }}</td></tr>
                     </table>
+                    </div>
                 </div>
             </div>
             {% endif %}
 
             <!-- Login Tracker -->
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-chart-line me-2 text-warning"></i>Login Tracker</h5></div>
-                <div class="card-body">
+            <div class="adm-card mb-4">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-chart-line me-2 text-warning"></i>Login Tracker</h2></div>
+                <div class="adm-card-body">
                     <div class="row g-3 mb-3">
                         <div class="col-4 text-center">
-                            <div class="h4 mb-0" style="color:#f59e0b;">{{ total_logins }}</div>
-                            <div class="text-secondary small">Total Logins</div>
+                            <div class="h4 mb-0 text-warning">{{ total_logins }}</div>
+                            <div class="adm-sub">Total Logins</div>
                         </div>
                         <div class="col-4 text-center">
-                            <div class="h4 mb-0" style="color:#22d3ee;">{{ active_sessions }}</div>
-                            <div class="text-secondary small">Active Sessions</div>
+                            <div class="h4 mb-0 text-info">{{ active_sessions }}</div>
+                            <div class="adm-sub">Active Sessions</div>
                         </div>
                         <div class="col-4 text-center">
                             {% if last_source == 'android' %}
-                                <div class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;font-size:.9rem;"><i class="fas fa-mobile-alt me-1"></i>Android</div>
+                                <div class="adm-badge is-violet"><i class="fas fa-mobile-alt me-1"></i>Android</div>
                             {% elif last_source == 'web' %}
-                                <div class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.9rem;"><i class="fas fa-globe me-1"></i>Web</div>
+                                <div class="adm-badge is-primary"><i class="fas fa-globe me-1"></i>Web</div>
                             {% else %}
-                                <div class="badge bg-secondary">Unknown</div>
+                                <div class="adm-badge is-off">Unknown</div>
                             {% endif %}
-                            <div class="text-secondary small">Last Source</div>
+                            <div class="adm-sub">Last Source</div>
                         </div>
                     </div>
 
                     {% if sessions %}
-                    <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
-                        <table class="table table-dark table-hover table-sm mb-0 small">
+                    <div class="adm-table-wrap" style="max-height:300px;overflow-y:auto;">
+                        <table class="adm-table">
                             <thead><tr><th>Source</th><th>IP</th><th>Device</th><th>Logged In</th><th>Status</th></tr></thead>
                             <tbody>
                             {% for s in sessions %}
                                 <tr>
                                     <td>
                                         {% if s.source == 'android' %}
-                                            <span class="badge" style="background:rgba(168,85,247,.15);color:#c084fc;"><i class="fas fa-mobile-alt me-1"></i>Android</span>
+                                            <span class="adm-badge is-violet"><i class="fas fa-mobile-alt me-1"></i>Android</span>
                                         {% elif s.source == 'web' %}
-                                            <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;"><i class="fas fa-globe me-1"></i>Web</span>
+                                            <span class="adm-badge is-primary"><i class="fas fa-globe me-1"></i>Web</span>
                                         {% else %}
-                                            <span class="badge bg-secondary">{{ s.source }}</span>
+                                            <span class="adm-badge is-off">{{ s.source }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-secondary">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% ip_geo_chip s.ip_address %}{% else %}—{% endif %}</td>
+                                    <td class="adm-sub">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% ip_geo_chip s.ip_address %}{% else %}—{% endif %}</td>
                                     <td class="text-white">{{ s.device_model|default:s.user_agent|truncatechars:40|default:"—" }}</td>
-                                    <td class="text-secondary">{{ s.logged_in_at|date:"M d, Y H:i" }}</td>
+                                    <td class="adm-sub">{{ s.logged_in_at|date:"M d, Y H:i" }}</td>
                                     <td>
                                         {% if s.is_active %}
-                                            <span class="badge" style="background:rgba(34,211,238,.15);color:#22d3ee;"><i class="fas fa-circle" style="font-size:.45rem;"></i> Active</span>
+                                            <span class="adm-badge is-ok"><i class="fas fa-circle" style="font-size:.45rem;"></i> Active</span>
                                         {% else %}
-                                            <span class="badge bg-secondary">Offline</span>
+                                            <span class="adm-badge is-off">Offline</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -504,10 +506,10 @@
             </div>
 
             <!-- Quick Actions -->
-            <div class="card bg-dark border-secondary shadow-sm">
-                <div class="card-header border-secondary"><h5 class="text-white mb-0"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</h5></div>
-                <div class="card-body d-grid gap-2">
-                    <button class="btn btn-outline-danger btn-sm" onclick="deleteUser({{ detail_user.id }}, '{{ detail_user.username }}')">
+            <div class="adm-card">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</h2></div>
+                <div class="adm-card-body d-grid gap-2">
+                    <button class="adm-btn is-sm" onclick="deleteUser({{ detail_user.id }}, '{{ detail_user.username }}')">
                         <i class="fas fa-trash me-1"></i>Delete User
                     </button>
                 </div>
@@ -519,16 +521,16 @@
 <!-- Subscription Modal -->
 <div class="modal fade" id="subModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content" style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);">
-            <div class="modal-header border-secondary">
-                <h5 class="text-white"><i class="fas fa-crown me-2 text-warning"></i>Manage Subscription</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="adm-card-title"><i class="fas fa-crown me-2 text-warning"></i>Manage Subscription</h2>
+                <button aria-label="Close" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{% url 'admin_user_subscription' detail_user.id %}">
                 {% csrf_token %}
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label text-white">Status</label>
+                        <label class="adm-label">Status</label>
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" name="is_subscribed" id="subActive" {% if synced_profile and synced_profile.is_subscribed %}checked{% endif %} onchange="toggleSubFields()">
                             <label class="form-check-label text-white" for="subActive">Active Subscription</label>
@@ -536,8 +538,8 @@
                     </div>
                     <div id="subFields" style="{% if not synced_profile or not synced_profile.is_subscribed %}display:none;{% endif %}">
                         <div class="mb-3">
-                            <label class="form-label text-white">Plan Name</label>
-                            <select name="plan" class="form-select bg-dark text-white border-secondary">
+                            <label class="adm-label">Plan Name</label>
+                            <select name="plan" class="adm-select">
                                 <option value="Standard Free" {% if synced_profile.plan == 'Standard Free' %}selected{% endif %}>Standard Free</option>
                                 <option value="VIP Premium" {% if synced_profile.plan == 'VIP Premium' %}selected{% endif %}>VIP Premium</option>
                                 <option value="VIP Pro" {% if synced_profile.plan == 'VIP Pro' %}selected{% endif %}>VIP Pro</option>
@@ -546,23 +548,23 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label text-white">Custom Plan Name <span class="text-secondary">(if Custom selected)</span></label>
-                            <input type="text" name="custom_plan" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Family Plan">
+                            <label class="adm-label">Custom Plan Name <span class="adm-sub">(if Custom selected)</span></label>
+                            <input type="text" name="custom_plan" class="adm-input" placeholder="e.g. Family Plan">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label text-white">Valid Until</label>
-                            <input type="date" name="valid_until" class="form-control bg-dark text-white border-secondary" value="{% if synced_profile.valid_until %}{{ synced_profile.valid_until|date:'Y-m-d' }}{% endif %}">
+                            <label class="adm-label">Valid Until</label>
+                            <input type="date" name="valid_until" class="adm-input" value="{% if synced_profile.valid_until %}{{ synced_profile.valid_until|date:'Y-m-d' }}{% endif %}">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label text-white">Features <span class="text-secondary">(one per line)</span></label>
-                            <textarea name="features" class="form-control bg-dark text-white border-secondary" rows="5" placeholder="100% Ad-Free Streaming&#10;4K Ultra HD&#10;VIP Live TV Channels">{% for f in synced_profile.features %}{{ f }}
+                            <label class="adm-label">Features <span class="adm-sub">(one per line)</span></label>
+                            <textarea name="features" class="adm-input" rows="5" placeholder="100% Ad-Free Streaming&#10;4K Ultra HD&#10;VIP Live TV Channels">{% for f in synced_profile.features %}{{ f }}
 {% endfor %}</textarea>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Save Subscription</button>
+                <div class="modal-footer">
+                    <button type="button" class="adm-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="adm-btn is-primary"><i class="fas fa-save me-1"></i>Save Subscription</button>
                 </div>
             </form>
         </div>

@@ -7,13 +7,13 @@
             <p class="text-secondary mb-0">Store app credentials, allowed endpoint identity, build requirements, APK, and the JSON payload served by the protected API.</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">&larr; Back to Android Apps</a>
-            <a href="{% url 'android_app_dashboard' %}" class="btn btn-outline-info">Analytics Dashboard</a>
+            <a href="{% url 'android_app_list' %}" class="adm-btn">&larr; Back to Android Apps</a>
+            <a href="{% url 'android_app_dashboard' %}" class="adm-btn">Analytics Dashboard</a>
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-lg">
-        <div class="card-body p-4 p-lg-5">
+    <div class="adm-card bg-dark border-secondary shadow-lg">
+        <div class="adm-card-body p-4 p-lg-5">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 {% if form.non_field_errors %}
@@ -22,33 +22,33 @@
 
                 <div class="row g-4">
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.name.label }}</label>
+                        <label class="adm-label text-white">{{ form.name.label }}</label>
                         {{ form.name }}
                         {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:', ' }}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.slug.label }}</label>
+                        <label class="adm-label text-white">{{ form.slug.label }}</label>
                         {{ form.slug }}
                         <div class="form-text text-secondary">Leave blank to auto-generate from the Android app name.</div>
                         {% if form.slug.errors %}<div class="text-danger small mt-1">{{ form.slug.errors|join:', ' }}</div>{% endif %}
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.allowed_endpoint.label }}</label>
+                        <label class="adm-label text-white">{{ form.allowed_endpoint.label }}</label>
                         {{ form.allowed_endpoint }}
                         <div class="form-text text-secondary">Only requests that identify this saved app endpoint value will receive the JSON response.</div>
                         {% if form.allowed_endpoint.errors %}<div class="text-danger small mt-1">{{ form.allowed_endpoint.errors|join:', ' }}</div>{% endif %}
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.allowed_build_id.label }}</label>
+                        <label class="adm-label text-white">{{ form.allowed_build_id.label }}</label>
                         {{ form.allowed_build_id }}
                         <div class="form-text text-secondary">If the build id does not match, the endpoint returns an update-app message and APK URL.</div>
                         {% if form.allowed_build_id.errors %}<div class="text-danger small mt-1">{{ form.allowed_build_id.errors|join:', ' }}</div>{% endif %}
                     </div>
 
                     <div class="col-12">
-                        <label class="form-label text-white">{{ form.apk_file.label }}</label>
+                        <label class="adm-label text-white">{{ form.apk_file.label }}</label>
                         {{ form.apk_file }}
                         <div class="form-text text-secondary">Upload the APK that should be returned when the client must update.</div>
                         {% if android_app and android_app.apk_file %}
@@ -58,18 +58,18 @@
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.access_username.label }}</label>
+                        <label class="adm-label text-white">{{ form.access_username.label }}</label>
                         {{ form.access_username }}
                         {% if form.access_username.errors %}<div class="text-danger small mt-1">{{ form.access_username.errors|join:', ' }}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.access_password.label }}</label>
+                        <label class="adm-label text-white">{{ form.access_password.label }}</label>
                         {{ form.access_password }}
                         {% if form.access_password.errors %}<div class="text-danger small mt-1">{{ form.access_password.errors|join:', ' }}</div>{% endif %}
                     </div>
 
                     <div class="col-12">
-                        <label class="form-label text-white">{{ form.json_payload_input.label }}</label>
+                        <label class="adm-label text-white">{{ form.json_payload_input.label }}</label>
                         {{ form.json_payload_input }}
                         <div class="form-text text-secondary">{{ form.json_payload_input.help_text }}</div>
                         {% if form.json_payload_input.errors %}<div class="text-danger small mt-1">{{ form.json_payload_input.errors|join:', ' }}</div>{% endif %}
@@ -91,13 +91,13 @@
                         {% if form.log_collection_enabled.errors %}<div class="text-danger small mt-1">{{ form.log_collection_enabled.errors|join:', ' }}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.data_retention_days.label }}</label>
+                        <label class="adm-label text-white">{{ form.data_retention_days.label }}</label>
                         {{ form.data_retention_days }}
                         <div class="form-text text-secondary">Days to keep analytics logs. Older data is auto-deleted.</div>
                         {% if form.data_retention_days.errors %}<div class="text-danger small mt-1">{{ form.data_retention_days.errors|join:', ' }}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label text-white">{{ form.log_retention_days.label }}</label>
+                        <label class="adm-label text-white">{{ form.log_retention_days.label }}</label>
                         {{ form.log_retention_days }}
                         <div class="form-text text-secondary">Days to keep Android app log entries (app_logs). Older logs are auto-deleted.</div>
                         {% if form.log_retention_days.errors %}<div class="text-danger small mt-1">{{ form.log_retention_days.errors|join:', ' }}</div>{% endif %}
@@ -112,8 +112,8 @@
                 {% endif %}
 
                 <div class="d-flex gap-2 mt-4 flex-wrap">
-                    <button type="submit" class="btn btn-success px-4">Save Android App</button>
-                    <a href="{% url 'android_app_list' %}" class="btn btn-outline-light">Cancel</a>
+                    <button type="submit" class="adm-btn is-ok px-4">Save Android App</button>
+                    <a href="{% url 'android_app_list' %}" class="adm-btn">Cancel</a>
                 </div>
             </form>
         </div>

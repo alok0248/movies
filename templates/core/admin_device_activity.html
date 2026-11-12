@@ -1,119 +1,92 @@
 {% extends 'core/admin_base.html' %}
 {% block title %}Device Activity - Admin{% endblock %}
 {% block admin_content %}
-<style>
-    .da-card { background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; padding: 1rem 1.1rem; }
-    .da-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; margin: 0; }
-    .da-sub { font-size: .74rem; color: #94a3b8; }
-    .da-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem; margin-bottom: .9rem; }
-    .da-stat { background: rgba(15,23,42,.6); border: 1px solid rgba(148,163,184,.16); border-radius: 10px; padding: .6rem .75rem; }
-    .da-stat b { display: block; font-size: 1.2rem; color: #e2e8f0; }
-    .da-stat span { font-size: .68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
-    .da-table { width: 100%; font-size: .78rem; }
-    .da-table th { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8;
-        border-bottom: 1px solid rgba(148,163,184,.2); padding: .45rem .5rem; text-align: left; white-space: nowrap; }
-    .da-table td { padding: .48rem .5rem; border-bottom: 1px solid rgba(148,163,184,.1); color: #cbd5e1; }
-    .da-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .35rem; }
-    .da-on { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.15); }
-    .da-off { background: #64748b; }
-    .da-now { font-size: .72rem; color: #cbd5e1; }
-    .da-now b { color: #f8fafc; }
-    .da-btn { font-size: .72rem; padding: .2rem .55rem; border-radius: 7px; text-decoration: none;
-        border: 1px solid rgba(56,189,248,.45); color: #38bdf8; }
-    .da-btn:hover { background: rgba(56,189,248,.12); color: #7dd3fc; }
-    .da-tab { font-size: .74rem; padding: .24rem .65rem; border-radius: 8px; text-decoration: none;
-        border: 1px solid rgba(148,163,184,.35); color: #cbd5e1; background: rgba(15,23,42,.7); }
-    .da-tab:hover { background: rgba(30,41,59,.95); color: #fff; }
-    .da-tab.active { background: #38bdf8; border-color: #38bdf8; color: #082f49; font-weight: 600; }
-    .da-type { font-size: .66rem; font-weight: 600; padding: .12rem .45rem; border-radius: 6px; }
-    .da-type-tv { background: rgba(168,85,247,.18); color: #c084fc; }
-    .da-type-phone { background: rgba(56,189,248,.16); color: #7dd3fc; }
-    .da-type-unknown { background: rgba(148,163,184,.16); color: #94a3b8; }
-</style>
-
-<div class="da-card mb-3">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+<div class="container-fluid py-3" style="max-width:1500px">
+    <div class="adm-page-head">
         <div>
-            <h2 class="da-title"><i class="fas fa-mobile-screen-button me-2" style="color:#38bdf8"></i>Device activity</h2>
-            <div class="da-sub">Actual online time per unique device, accumulated from the 1-minute app heartbeat.</div>
+            <h4 class="adm-page-title"><i class="fas fa-mobile-screen-button me-2"></i>Device activity</h4>
+            <p class="adm-page-sub">Actual online time per unique device, accumulated from the 1-minute app heartbeat.</p>
         </div>
-        <form method="get" class="d-flex gap-2">
-            <input type="text" name="q" value="{{ search }}" placeholder="Filter by device or email"
-                   style="padding:.32rem .55rem;border-radius:8px;border:1px solid rgba(148,163,184,.3);background:rgba(15,23,42,.7);color:#e2e8f0;font-size:.78rem">
-            <button class="da-btn" type="submit">Search</button>
+        <form method="get" class="adm-btn-group">
+            <input class="adm-input" type="text" name="q" value="{{ search }}" placeholder="Filter by device or email" style="width:15rem">
+            <button class="adm-btn" type="submit">Search</button>
         </form>
     </div>
 
-    <div class="da-grid">
-        <div class="da-stat"><b>{{ device_count }}</b><span>devices shown</span></div>
-        <div class="da-stat"><b>{{ online_now }}</b><span>online now</span></div>
-        <div class="da-stat"><b>{{ online_today_text }}</b><span>total online today</span></div>
-        <div class="da-stat"><b>{{ tv_count }}</b><span>TVs tracked</span></div>
-        <div class="da-stat"><b>{{ tv_today_text }}</b><span>TV online today</span></div>
-        <div class="da-stat"><b>{{ phone_today_text }}</b><span>phone online today</span></div>
+    <div class="adm-grid" style="margin-bottom:1rem">
+        <div class="adm-stat"><b>{{ device_count }}</b><span>devices shown</span></div>
+        <div class="adm-stat"><b>{{ online_now }}</b><span>online now</span></div>
+        <div class="adm-stat"><b>{{ online_today_text }}</b><span>total online today</span></div>
+        <div class="adm-stat"><b>{{ tv_count }}</b><span>TVs tracked</span></div>
+        <div class="adm-stat"><b>{{ tv_today_text }}</b><span>TV online today</span></div>
+        <div class="adm-stat"><b>{{ phone_today_text }}</b><span>phone online today</span></div>
     </div>
 
-    <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
-        <a class="da-tab {% if type_filter == 'all' %}active{% endif %}"
-           href="?type=all{% if search %}&q={{ search|urlencode }}{% endif %}">All devices</a>
-        <a class="da-tab {% if type_filter == 'tv' %}active{% endif %}"
-           href="?type=tv{% if search %}&q={{ search|urlencode }}{% endif %}"><i class="fas fa-tv me-1"></i>TVs only &middot; {{ tv_online_now }} online</a>
-        <a class="da-tab {% if type_filter == 'phone' %}active{% endif %}"
-           href="?type=phone{% if search %}&q={{ search|urlencode }}{% endif %}"><i class="fas fa-mobile-screen me-1"></i>Phones only &middot; {{ phone_online_now }} online</a>
-    </div>
+    <div class="adm-card">
+        <div class="adm-card-body">
+            <div class="adm-pills mb-2">
+                <a class="{% if type_filter == 'all' %}active{% endif %}"
+                   href="?type=all{% if search %}&q={{ search|urlencode }}{% endif %}">All devices</a>
+                <a class="{% if type_filter == 'tv' %}active{% endif %}"
+                   href="?type=tv{% if search %}&q={{ search|urlencode }}{% endif %}"><i class="fas fa-tv me-1"></i>TVs only &middot; {{ tv_online_now }} online</a>
+                <a class="{% if type_filter == 'phone' %}active{% endif %}"
+                   href="?type=phone{% if search %}&q={{ search|urlencode }}{% endif %}"><i class="fas fa-mobile-screen me-1"></i>Phones only &middot; {{ phone_online_now }} online</a>
+            </div>
 
-    {% if devices %}
-    <div class="table-responsive">
-        <table class="da-table">
-            <thead>
-                <tr>
-                    <th>Status</th><th>Type</th><th>Device</th><th>Account</th><th>Now</th>
-                    <th>Online today</th><th>Offline today</th><th>7 days</th><th>30 days</th><th>Last seen</th><th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for device in devices %}
-                <tr>
-                    <td>
-                        <span class="da-dot {% if device.is_online %}da-on{% else %}da-off{% endif %}"></span>
-                        {% if device.is_online %}Online{% else %}Offline{% endif %}
-                    </td>
-                    <td>
-                        <span class="da-type {% if device.device_type == 'tv' %}da-type-tv{% elif device.device_type == 'phone' %}da-type-phone{% else %}da-type-unknown{% endif %}">
-                            {% if device.device_type == 'tv' %}<i class="fas fa-tv me-1"></i>{% elif device.device_type == 'phone' %}<i class="fas fa-mobile-screen me-1"></i>{% endif %}{{ device.device_type_label }}
-                        </span>
-                    </td>
-                    <td>
-                        <code style="font-size:.7rem;color:#94a3b8">{{ device.device_id|truncatechars:18 }}</code>
-                        {% if device.device_model %}<div class="da-sub">{{ device.device_model|truncatechars:22 }}</div>{% endif %}
-                    </td>
-                    <td>{{ device.email|default:"guest" }}</td>
-                    <td class="da-now">
-                        {% if device.activity %}
-                            {% if device.activity.isPlaying %}
-                                <b>{{ device.activity.mediaTitle|default:"Playing" }}</b>
-                                {% if device.activity.isTv %}
-                                    {% if device.activity.season %}<span class="da-sub">S{{ device.activity.season }}E{{ device.activity.episode }}</span>{% endif %}
-                                {% endif %}
-                                <div class="da-sub">{{ device.activity.playerEngine|default:"player" }}</div>
-                            {% else %}
-                                <span class="da-sub">{{ device.activity.currentScreen|default:"-" }}</span>
-                            {% endif %}
-                        {% else %}<span class="da-sub">-</span>{% endif %}
-                    </td>
-                    <td><span style="color:#22c55e">{{ device.online_today_text }}</span></td>
-                    <td><span style="color:#94a3b8">{{ device.offline_today_text }}</span></td>
-                    <td>{{ device.online_week_text }}</td>
-                    <td>{{ device.online_month_text }}</td>
-                    <td class="da-sub">{{ device.last_seen_at|date:"d M H:i" }}</td>
-                    <td><a class="da-btn" href="{% url 'device_activity_detail' device.device_id %}">Graph</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            {% if devices %}
+            <div class="adm-table-wrap">
+                <table class="adm-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th><th>Type</th><th>Device</th><th>Account</th><th>Now</th>
+                            <th class="num">Online today</th><th class="num">Offline today</th><th class="num">7 days</th><th class="num">30 days</th><th>Last seen</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in devices %}
+                        <tr>
+                            <td>
+                                <span class="adm-dot {% if device.is_online %}is-on{% else %}is-off{% endif %}"></span>
+                                {% if device.is_online %}Online{% else %}Offline{% endif %}
+                            </td>
+                            <td>
+                                <span class="adm-badge {% if device.device_type == 'tv' %}is-tv{% elif device.device_type == 'phone' %}is-movie{% else %}is-off{% endif %}">
+                                    {% if device.device_type == 'tv' %}<i class="fas fa-tv me-1"></i>{% elif device.device_type == 'phone' %}<i class="fas fa-mobile-screen me-1"></i>{% endif %}{{ device.device_type_label }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="adm-mono">{{ device.device_id|truncatechars:18 }}</span>
+                                {% if device.device_model %}<div class="adm-sub">{{ device.device_model|truncatechars:22 }}</div>{% endif %}
+                            </td>
+                            <td>{{ device.email|default:"guest" }}</td>
+                            <td>
+                                {% if device.activity %}
+                                    {% if device.activity.isPlaying %}
+                                        <b>{{ device.activity.mediaTitle|default:"Playing" }}</b>
+                                        {% if device.activity.isTv %}
+                                            {% if device.activity.season %}<span class="adm-sub">S{{ device.activity.season }}E{{ device.activity.episode }}</span>{% endif %}
+                                        {% endif %}
+                                        <div class="adm-sub">{{ device.activity.playerEngine|default:"player" }}</div>
+                                    {% else %}
+                                        <span class="adm-sub">{{ device.activity.currentScreen|default:"-" }}</span>
+                                    {% endif %}
+                                {% else %}<span class="adm-sub">-</span>{% endif %}
+                            </td>
+                            <td class="num text-success">{{ device.online_today_text }}</td>
+                            <td class="num adm-muted">{{ device.offline_today_text }}</td>
+                            <td class="num">{{ device.online_week_text }}</td>
+                            <td class="num">{{ device.online_month_text }}</td>
+                            <td class="adm-sub">{{ device.last_seen_at|date:"d M H:i" }}</td>
+                            <td><a class="adm-btn is-sm" href="{% url 'device_activity_detail' device.device_id %}">Graph</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="adm-empty"><i class="fas fa-mobile-screen-button"></i>No heartbeats recorded yet. Devices appear here once the app runs with this build.</div>
+            {% endif %}
+        </div>
     </div>
-    {% else %}
-    <div class="da-sub">No heartbeats recorded yet. Devices appear here once the app runs with this build.</div>
-    {% endif %}
 </div>
 {% endblock %}

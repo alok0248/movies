@@ -13,19 +13,9 @@
     .ov-tile i {
         width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
         border-radius: 8px; background: rgba(99,102,241,.15); color: #a5b4fc; font-size: .74rem; flex: none;
-    }
-    .ov-val { font-size: 1.05rem; font-weight: 800; color: #fff; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    .ov-lab { font-size: .65rem; color: rgba(255,255,255,.4); margin-top: .1rem; }
+    }    .ov-lab { font-size: .65rem; color: rgba(255,255,255,.4); margin-top: .1rem; }
     .ov-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: .7rem; }
-    @media (max-width: 860px) { .ov-grid { grid-template-columns: 1fr; } }
-    .ov-card {
-        background: rgba(255,255,255,.022); border: 1px solid rgba(255,255,255,.07);
-        border-radius: 14px; padding: .85rem .95rem 1rem; min-width: 0;
-    }
-    .ov-card > header { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .75rem; }
-    .ov-card h3 { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #a5b4fc; margin: 0; }
-    .ov-card header span { font-size: .66rem; color: rgba(255,255,255,.35); }
-    .ov-bars { display: flex; align-items: flex-end; gap: .35rem; height: 108px; }
+    @media (max-width: 860px) { .ov-grid { grid-template-columns: 1fr; } }    .ov-bars { display: flex; align-items: flex-end; gap: .35rem; height: 108px; }
     .ov-day { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; }
     .ov-day b {
         display: block; width: 100%; max-width: 22px; border-radius: 5px 5px 2px 2px; min-height: 3px;
@@ -54,14 +44,7 @@
     .ov-dot.warn { background: #fbbf24; }
     .ov-health .grp { color: rgba(255,255,255,.35); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; }
     .ov-health .det { color: rgba(255,255,255,.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ov-empty { font-size: .72rem; color: rgba(255,255,255,.35); padding: .6rem .2rem; }
-    html[data-theme="light"] .ov-tile, html[data-theme="light"] .ov-card { background: #fff; border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .ov-val { color: #111; }
-    html[data-theme="light"] .ov-lab, html[data-theme="light"] .ov-card header span,
-    html[data-theme="light"] .ov-axis span, html[data-theme="light"] .ov-health .grp,
-    html[data-theme="light"] .ov-health .det, html[data-theme="light"] .ov-empty { color: rgba(0,0,0,.45); }
-    html[data-theme="light"] .ov-card h3 { color: #4338ca; }
-    html[data-theme="light"] .ov-health a { color: rgba(0,0,0,.78); }
+    .ov-empty { font-size: .72rem; color: rgba(255,255,255,.35); padding: .6rem .2rem; }    html[data-theme="light"] .ov-health a { color: rgba(0,0,0,.78); }
     html[data-theme="light"] .ov-health a:hover { background: rgba(0,0,0,.04); }
     html[data-theme="light"] .ov-mix-row { color: rgba(0,0,0,.7); }
 </style>
@@ -72,7 +55,7 @@
         <div class="ov-tile">
             <i class="fas {{ tile.icon }}"></i>
             <div>
-                <div class="ov-val">{{ tile.value }}</div>
+                <div class="adm-stat-value">{{ tile.value }}</div>
                 <div class="ov-lab">{{ tile.label }}</div>
             </div>
         </div>
@@ -80,7 +63,7 @@
     </div>
 
     <div class="ov-grid">
-        <section class="ov-card">
+        <section class="adm-card">
             <header><h3>Requests and errors</h3><span>last {{ days }} days</span></header>
             <div class="ov-bars">
                 {% for day in traffic_series %}
@@ -99,7 +82,7 @@
             </div>
         </section>
 
-        <section class="ov-card">
+        <section class="adm-card">
             <header><h3>Page views</h3><span>{{ week_views }} this week</span></header>
             <div class="ov-bars">
                 {% for day in page_series %}
@@ -113,7 +96,7 @@
             </div>
         </section>
 
-        <section class="ov-card">
+        <section class="adm-card">
             <header><h3>Where content came from</h3><span>last {{ days }} days</span></header>
             {% if mix %}
             <div class="ov-mix">
@@ -130,7 +113,7 @@
             {% endif %}
         </section>
 
-        <section class="ov-card">
+        <section class="adm-card">
             <header><h3>Configuration</h3><span>every link opens its own panel</span></header>
             <div class="ov-health">
                 {% for row in health %}

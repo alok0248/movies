@@ -10,26 +10,7 @@
         border-radius: 16px;
         padding: 1.5rem 2rem;
         margin-bottom: 1.5rem;
-    }
-    .eng-stat-card {
-        background: rgba(255,255,255,.03);
-        border: 1px solid rgba(255,255,255,.06);
-        border-radius: 14px;
-        padding: 1.2rem;
-        text-align: center;
-    }
-    .eng-stat-card:hover { border-color: rgba(255,255,255,.12); transform: translateY(-2px); }
-    .eng-stat-num { font-size: 1.8rem; font-weight: 800; line-height: 1.1; }
-    .eng-stat-label { font-size: .72rem; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .05em; margin-top: .25rem; }
-    .chart-card {
-        background: rgba(255,255,255,.03);
-        border: 1px solid rgba(255,255,255,.06);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-    .chart-card h6 { font-size: .85rem; font-weight: 700; margin-bottom: 1rem; }
-    .chart-container { position: relative; width: 100%; }
+    }    .chart-container { position: relative; width: 100%; }
     .chart-container canvas { width: 100% !important; }
     .retention-bar {
         display: flex; align-items: center; gap: .75rem;
@@ -51,9 +32,7 @@
         font-size: .72rem; font-weight: 800;
         background: rgba(255,255,255,.06); color: rgba(255,255,255,.5);
     }
-    .watched-rank.top3 { background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; }
-    .watched-title { font-size: .82rem; font-weight: 600; }
-    .watched-meta { font-size: .7rem; color: rgba(255,255,255,.35); }
+    .watched-rank.top3 { background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; }    .watched-meta { font-size: .7rem; color: rgba(255,255,255,.35); }
     .watched-count { margin-left: auto; font-size: .82rem; font-weight: 700; color: #fbbf24; }
 
     /* Filter pills */
@@ -67,20 +46,11 @@
     .filter-group a.active { background: rgba(251,191,36,.2); color: #fbbf24; }
     .filter-bar {
         display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
-    }
-    .filter-label { font-size: .72rem; color: rgba(255,255,255,.35); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-
-    html[data-theme="light"] .eng-stat-card, html[data-theme="light"] .chart-card {
-        background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08);
-    }
-    html[data-theme="light"] .eng-stat-label, html[data-theme="light"] .watched-meta { color: rgba(0,0,0,.45); }
-    html[data-theme="light"] .watched-rank { background: rgba(0,0,0,.06); color: rgba(0,0,0,.5); }
+    }    html[data-theme="light"] .watched-rank { background: rgba(0,0,0,.06); color: rgba(0,0,0,.5); }
     html[data-theme="light"] .retention-track { background: rgba(0,0,0,.06); }
     html[data-theme="light"] .filter-group { border-color: rgba(0,0,0,.12); }
     html[data-theme="light"] .filter-group a { color: rgba(0,0,0,.45); background: rgba(0,0,0,.02); }
-    html[data-theme="light"] .filter-group a.active { background: rgba(251,191,36,.15); color: #b45309; }
-    html[data-theme="light"] .filter-label { color: rgba(0,0,0,.35); }
-    html[data-theme="light"] .retention-label { color: rgba(0,0,0,.6); }
+    html[data-theme="light"] .filter-group a.active { background: rgba(251,191,36,.15); color: #b45309; }    html[data-theme="light"] .retention-label { color: rgba(0,0,0,.6); }
     html[data-theme="light"] .watched-count { color: #b45309; }
 </style>
 
@@ -96,21 +66,21 @@
 
 <!-- Filter Bar -->
 <div class="filter-bar mb-4">
-    <span class="filter-label">Period</span>
+    <span class="adm-label">Period</span>
     <div class="filter-group">
         <a href="?days=7&platform={{ platform_filter }}&reg={{ reg_filter }}" class="{% if days == 7 %}active{% endif %}">7D</a>
         <a href="?days=14&platform={{ platform_filter }}&reg={{ reg_filter }}" class="{% if days == 14 %}active{% endif %}">14D</a>
         <a href="?days=30&platform={{ platform_filter }}&reg={{ reg_filter }}" class="{% if days == 30 %}active{% endif %}">30D</a>
     </div>
 
-    <span class="filter-label">Platform</span>
+    <span class="adm-label">Platform</span>
     <div class="filter-group">
         <a href="?days={{ days }}&platform=all&reg={{ reg_filter }}" class="{% if platform_filter == 'all' %}active{% endif %}">All</a>
         <a href="?days={{ days }}&platform=web&reg={{ reg_filter }}" class="{% if platform_filter == 'web' %}active{% endif %}">🌐 Web</a>
         <a href="?days={{ days }}&platform=android&reg={{ reg_filter }}" class="{% if platform_filter == 'android' %}active{% endif %}">📱 Android</a>
     </div>
 
-    <span class="filter-label">Users</span>
+    <span class="adm-label">Users</span>
     <div class="filter-group">
         <a href="?days={{ days }}&platform={{ platform_filter }}&reg=all" class="{% if reg_filter == 'all' %}active{% endif %}">All</a>
         <a href="?days={{ days }}&platform={{ platform_filter }}&reg=registered" class="{% if reg_filter == 'registered' %}active{% endif %}">✅ Registered</a>
@@ -121,27 +91,27 @@
 <!-- Summary Stats -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-        <div class="eng-stat-card">
-            <div class="eng-stat-num" style="color:#fbbf24;">{{ total_plays }}</div>
-            <div class="eng-stat-label">Total Plays</div>
+        <div class="adm-stat">
+            <div class="adm-stat-value" style="color:#fbbf24;">{{ total_plays }}</div>
+            <div class="adm-stat-label">Total Plays</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="eng-stat-card">
-            <div class="eng-stat-num" style="color:#4ade80;">{{ unique_watching_users }}</div>
-            <div class="eng-stat-label">Active Viewers</div>
+        <div class="adm-stat">
+            <div class="adm-stat-value" style="color:#4ade80;">{{ unique_watching_users }}</div>
+            <div class="adm-stat-label">Active Viewers</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="eng-stat-card">
-            <div class="eng-stat-num" style="color:#60a5fa;">{{ avg_plays_per_user }}</div>
-            <div class="eng-stat-label">Plays / User</div>
+        <div class="adm-stat">
+            <div class="adm-stat-value" style="color:#60a5fa;">{{ avg_plays_per_user }}</div>
+            <div class="adm-stat-label">Plays / User</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="eng-stat-card">
-            <div class="eng-stat-num" style="color:#a78bfa;">{{ avg_session }}<small style="font-size:.5em;opacity:.5;">s</small></div>
-            <div class="eng-stat-label">Avg Session</div>
+        <div class="adm-stat">
+            <div class="adm-stat-value" style="color:#a78bfa;">{{ avg_session }}<small style="font-size:.5em;opacity:.5;">s</small></div>
+            <div class="adm-stat-label">Avg Session</div>
         </div>
     </div>
 </div>
@@ -149,7 +119,7 @@
 <!-- Charts Row 1: DAU + Content Type -->
 <div class="row g-4 mb-4">
     <div class="col-lg-8">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-users me-2" style="color:#4ade80;"></i>Daily Active Users</h6>
             <div class="chart-container" style="height:280px;">
                 <canvas id="dauChart"></canvas>
@@ -157,7 +127,7 @@
         </div>
     </div>
     <div class="col-lg-4">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-pie-chart me-2" style="color:#a78bfa;"></i>Content Type</h6>
             <div class="chart-container" style="height:280px;">
                 <canvas id="contentTypeChart"></canvas>
@@ -169,7 +139,7 @@
 <!-- Charts Row 2: Platform + Registration Breakdown -->
 <div class="row g-4 mb-4">
     <div class="col-lg-6">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-layer-group me-2" style="color:#22d3ee;"></i>Platform Breakdown</h6>
             <div class="chart-container" style="height:250px;">
                 <canvas id="platformChart"></canvas>
@@ -177,7 +147,7 @@
         </div>
     </div>
     <div class="col-lg-6">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-user-check me-2" style="color:#f472b6;"></i>Registered vs Guest</h6>
             <div class="chart-container" style="height:250px;">
                 <canvas id="regChart"></canvas>
@@ -189,7 +159,7 @@
 <!-- Charts Row 3: Peak Hours + Daily Plays -->
 <div class="row g-4 mb-4">
     <div class="col-lg-6">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-clock me-2" style="color:#f472b6;"></i>Peak Viewing Hours</h6>
             <div class="chart-container" style="height:250px;">
                 <canvas id="peakHoursChart"></canvas>
@@ -197,7 +167,7 @@
         </div>
     </div>
     <div class="col-lg-6">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-play-circle me-2" style="color:#60a5fa;"></i>Daily Plays</h6>
             <div class="chart-container" style="height:250px;">
                 <canvas id="dailyPlaysChart"></canvas>
@@ -209,14 +179,14 @@
 <!-- Most Watched + Retention -->
 <div class="row g-4 mb-4">
     <div class="col-lg-7">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-trophy me-2" style="color:#fbbf24;"></i>Most Watched Content</h6>
             <div id="mostWatchedList">
                 {% for item in most_watched %}
                 <div class="watched-item">
                     <div class="watched-rank {% if forloop.counter <= 3 %}top3{% endif %}">{{ forloop.counter }}</div>
                     <div>
-                        <div class="watched-title">{{ item.title|default:"Unknown" }}</div>
+                        <div class="adm-item-title">{{ item.title|default:"Unknown" }}</div>
                         <div class="watched-meta">
                             {% if item.media_type == 'tv' %}📺 TV Show{% else %}🎬 Movie{% endif %}
                             &middot; {{ item.unique_users }} user{{ item.unique_users|pluralize }}
@@ -231,7 +201,7 @@
         </div>
     </div>
     <div class="col-lg-5">
-        <div class="chart-card">
+        <div class="adm-card">
             <h6><i class="fas fa-redo me-2" style="color:#22d3ee;"></i>User Retention</h6>
             <p class="text-secondary small mb-3">Day-over-day return rate</p>
             {% for r in retention_data %}

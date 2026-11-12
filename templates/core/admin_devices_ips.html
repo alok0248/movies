@@ -3,114 +3,49 @@
 {% block title %}Devices &amp; IPs - Admin{% endblock %}
 {% block admin_content %}
 <style>
-    .ad-page { max-width: 1500px; }
-    .ad-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .ad-title { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; margin: 0; }
-    .ad-sub { font-size: .76rem; color: #94a3b8; margin-top: .2rem; }
-    .ad-search { display: flex; gap: .4rem; }
-    .ad-search input {
-        background: rgba(15,23,42,.7); border: 1px solid rgba(148,163,184,.25);
-        border-radius: 8px; color: #e2e8f0; font-size: .78rem; padding: .35rem .6rem;
-        min-width: 230px; outline: none;
-    }
-    .ad-search input:focus { border-color: rgba(96,165,250,.55); }
-    .ad-btn {
-        display: inline-flex; align-items: center; gap: .35rem;
-        padding: .35rem .7rem; border-radius: 8px; font-size: .75rem; cursor: pointer;
-        border: 1px solid rgba(96,165,250,.3); background: rgba(96,165,250,.12);
-        color: #93c5fd; text-decoration: none;
-    }
-    .ad-btn:hover { background: rgba(96,165,250,.22); color: #bfdbfe; }
-    .ad-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; margin-bottom: 1rem; }
-    .ad-kpi {
-        background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16);
-        border-radius: 10px; padding: .6rem .75rem;
-    }
-    .ad-kpi .k {
-        font-size: .6rem; text-transform: uppercase; letter-spacing: .04em;
-        color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .ad-kpi .v { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; margin-top: .1rem; }
-    .ad-kpi .v.warn { color: #fbbf24; }
-    .ad-card {
-        background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16);
-        border-radius: 12px; margin-bottom: 1rem; overflow: hidden;
-    }
-    .ad-card-head {
-        display: flex; align-items: center; justify-content: space-between; gap: .6rem;
-        padding: .6rem .85rem; border-bottom: 1px solid rgba(148,163,184,.14);
-    }
-    .ad-card-title { font-size: .8rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .4rem; }
-    .ad-card-note { font-size: .68rem; color: #64748b; }
-    .ad-scroll { overflow-x: auto; }
-    table.ad-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
-    table.ad-table thead th {
-        position: sticky; top: 0; z-index: 1;
-        background: #0f172a; text-align: left; white-space: nowrap;
-        font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
-        color: #94a3b8; font-weight: 600; padding: .45rem .7rem;
-        border-bottom: 1px solid rgba(148,163,184,.2);
-    }
-    table.ad-table tbody td {
-        padding: .42rem .7rem; border-bottom: 1px solid rgba(148,163,184,.08);
-        color: #cbd5e1; vertical-align: middle;
-    }
-    table.ad-table tbody tr:hover td { background: rgba(148,163,184,.06); }
-    table.ad-table tbody tr:last-child td { border-bottom: 0; }
-    .ad-num { text-align: right; font-variant-numeric: tabular-nums; }
-    .ad-mono { font-family: Consolas, Menlo, monospace; font-size: .72rem; color: #e2e8f0; }
-    .ad-muted { color: #64748b; }
-    .ad-tag {
-        display: inline-block; padding: .05rem .35rem; border-radius: 5px;
-        font-size: .62rem; font-weight: 600; letter-spacing: .02em;
-    }
-    .ad-tag.multi { background: rgba(251,191,36,.16); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
-    .ad-tag.and { background: rgba(96,165,250,.14); color: #93c5fd; border: 1px solid rgba(96,165,250,.28); }
-    .ad-tag.web { background: rgba(148,163,184,.14); color: #cbd5e1; }
-    .ad-empty { padding: 2rem 1rem; text-align: center; color: #64748b; font-size: .8rem; }
-</style>
+    .ad-page { max-width: 1500px; }</style>
 
 <div class="container-fluid py-3 ad-page">
-    <div class="ad-head">
+    <div class="adm-page-head">
         <div>
-            <h4 class="ad-title"><i class="fas fa-mobile-screen-button me-2" style="color:#60a5fa"></i>Devices &amp; IPs</h4>
-            <div class="ad-sub">
+            <h4 class="adm-page-title"><i class="fas fa-mobile-screen-button me-2" style="color:#60a5fa"></i>Devices &amp; IPs</h4>
+            <div class="adm-page-sub">
                 Every device and address seen in traffic, with the account behind it and the country of each address.
                 A device keeps a row per address, so network changes stay visible.
             </div>
         </div>
-        <form method="get" class="ad-search">
+        <form method="get" class="adm-btn-group">
             <input type="search" name="q" value="{{ q }}" placeholder="IP, account or device id" aria-label="Search devices and IPs">
-            <button type="submit" class="ad-btn"><i class="fas fa-search"></i>Search</button>
-            {% if q %}<a class="ad-btn" href="{% url 'devices_ips' %}"><i class="fas fa-times"></i>Clear</a>{% endif %}
-            <a class="ad-btn" href="{% url 'devices_ips' %}{% if q %}?q={{ q|urlencode }}{% endif %}" title="Reload from the database"><i class="fas fa-sync-alt"></i></a>
+            <button type="submit" class="adm-btn"><i class="fas fa-search"></i>Search</button>
+            {% if q %}<a class="adm-btn" href="{% url 'devices_ips' %}"><i class="fas fa-times"></i>Clear</a>{% endif %}
+            <a class="adm-btn" href="{% url 'devices_ips' %}{% if q %}?q={{ q|urlencode }}{% endif %}" title="Reload from the database" aria-label="Reload from the database"><i class="fas fa-sync-alt"></i></a>
         </form>
     </div>
 
-    <div class="ad-kpis">
-        <div class="ad-kpi"><div class="k">Devices</div><div class="v">{{ summary.devices }}</div></div>
-        <div class="ad-kpi"><div class="k">Addresses</div><div class="v">{{ summary.ips }}</div></div>
-        <div class="ad-kpi"><div class="k">Accounts</div><div class="v">{{ summary.accounts }}</div></div>
-        <div class="ad-kpi"><div class="k">Multi-device</div><div class="v">{{ summary.multi_device }}</div></div>
-        <div class="ad-kpi"><div class="k">Multi-IP</div><div class="v">{{ summary.multi_ip }}</div></div>
-        <div class="ad-kpi"><div class="k">Awaiting country</div><div class="v {% if summary.unknown_country %}warn{% endif %}">{{ summary.unknown_country }}</div></div>
+    <div class="adm-grid">
+        <div class="adm-stat"><div class="adm-stat-label">Devices</div><div class="adm-stat-value">{{ summary.devices }}</div></div>
+        <div class="adm-stat"><div class="adm-stat-label">Addresses</div><div class="adm-stat-value">{{ summary.ips }}</div></div>
+        <div class="adm-stat"><div class="adm-stat-label">Accounts</div><div class="adm-stat-value">{{ summary.accounts }}</div></div>
+        <div class="adm-stat"><div class="adm-stat-label">Multi-device</div><div class="adm-stat-value">{{ summary.multi_device }}</div></div>
+        <div class="adm-stat"><div class="adm-stat-label">Multi-IP</div><div class="adm-stat-value">{{ summary.multi_ip }}</div></div>
+        <div class="adm-stat {% if summary.unknown_country %}warn{% endif %}"><div class="adm-stat-label">Awaiting country</div><div class="adm-stat-value">{{ summary.unknown_country }}</div></div>
     </div>
 
-    <div class="ad-card">
-        <div class="ad-card-head">
-            <div class="ad-card-title"><i class="fas fa-users" style="color:#a78bfa"></i>Accounts</div>
-            <div class="ad-card-note">{{ account_rows|length }} account{{ account_rows|length|pluralize }} in view</div>
+    <div class="adm-card">
+        <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-users" style="color:#a78bfa"></i>Accounts</div>
+            <div class="adm-card-sub">{{ account_rows|length }} account{{ account_rows|length|pluralize }} in view</div>
         </div>
-        <div class="ad-scroll">
-            <table class="ad-table">
+        <div class="adm-table-wrap">
+            <table class="adm-table">
                 <thead>
                     <tr>
                         <th>Account</th>
-                        <th class="ad-num">Devices</th>
-                        <th class="ad-num">Addresses</th>
+                        <th class="num">Devices</th>
+                        <th class="num">Addresses</th>
                         <th>Countries</th>
                         <th>Platforms</th>
-                        <th class="ad-num">Requests</th>
+                        <th class="num">Requests</th>
                         <th>Last seen</th>
                         <th>Flags</th>
                     </tr>
@@ -120,37 +55,37 @@
                     <tr>
                         <td>
                             {% if a.username == '(anonymous)' %}
-                                <span class="ad-muted">{{ a.username }}</span>
+                                <span class="adm-muted">{{ a.username }}</span>
                             {% else %}
-                                <span class="ad-mono">{{ a.username }}</span>
+                                <span class="adm-mono">{{ a.username }}</span>
                             {% endif %}
                         </td>
-                        <td class="ad-num">{{ a.device_count }}</td>
-                        <td class="ad-num">{{ a.ip_count }}</td>
+                        <td class="num">{{ a.device_count }}</td>
+                        <td class="num">{{ a.ip_count }}</td>
                         <td>{{ a.country_list }}</td>
                         <td>{{ a.platform_list }}</td>
-                        <td class="ad-num">{{ a.hits }}</td>
-                        <td class="ad-muted">{{ a.last_seen|date:'Y-m-d H:i' }}</td>
+                        <td class="num">{{ a.hits }}</td>
+                        <td class="adm-muted">{{ a.last_seen|date:'Y-m-d H:i' }}</td>
                         <td>
-                            {% if a.device_count > 1 %}<span class="ad-tag multi" title="This account signed in from more than one device">multi-device</span>{% endif %}
-                            {% if a.ip_count > 1 %}<span class="ad-tag multi" title="This account was seen from more than one address">multi-IP</span>{% endif %}
+                            {% if a.device_count > 1 %}<span class="adm-badge is-warn" title="This account signed in from more than one device">multi-device</span>{% endif %}
+                            {% if a.ip_count > 1 %}<span class="adm-badge is-warn" title="This account was seen from more than one address">multi-IP</span>{% endif %}
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="8" class="ad-empty">No device or address recorded yet. Traffic will appear here as it arrives.</td></tr>
+                    <tr><td colspan="8" class="adm-empty">No device or address recorded yet. Traffic will appear here as it arrives.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
-    <div class="ad-card">
-        <div class="ad-card-head">
-            <div class="ad-card-title"><i class="fas fa-route" style="color:#34d399"></i>Device &rarr; address history</div>
-            <div class="ad-card-note">Newest first, 600 rows max</div>
+    <div class="adm-card">
+        <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-route" style="color:#34d399"></i>Device &rarr; address history</div>
+            <div class="adm-card-sub">Newest first, 600 rows max</div>
         </div>
-        <div class="ad-scroll">
-            <table class="ad-table">
+        <div class="adm-table-wrap">
+            <table class="adm-table">
                 <thead>
                     <tr>
                         <th>Device</th>
@@ -158,7 +93,7 @@
                         <th>Platform</th>
                         <th>Address</th>
                         <th>Country</th>
-                        <th class="ad-num">Requests</th>
+                        <th class="num">Requests</th>
                         <th>First seen</th>
                         <th>Last seen</th>
                     </tr>
@@ -166,20 +101,20 @@
                 <tbody>
                     {% for row in rows %}
                     <tr>
-                        <td class="ad-mono">{{ row.device_id|default:'unknown' }}</td>
+                        <td class="adm-mono">{{ row.device_id|default:'unknown' }}</td>
                         <td>
-                            {% if row.username %}<span class="ad-mono">{{ row.username }}</span>
-                            {% else %}<span class="ad-muted">anonymous</span>{% endif %}
+                            {% if row.username %}<span class="adm-mono">{{ row.username }}</span>
+                            {% else %}<span class="adm-muted">anonymous</span>{% endif %}
                         </td>
-                        <td><span class="ad-tag web">{{ row.platform|default:'web' }}</span></td>
-                        <td class="ad-mono">{{ row.ip }}</td>
+                        <td><span class="adm-badge is-off">{{ row.platform|default:'web' }}</span></td>
+                        <td class="adm-mono">{{ row.ip }}</td>
                         <td>{% ip_geo_chip row.ip %}</td>
-                        <td class="ad-num">{{ row.hits }}</td>
-                        <td class="ad-muted">{{ row.first_seen|date:'Y-m-d H:i' }}</td>
-                        <td class="ad-muted">{{ row.last_seen|date:'Y-m-d H:i' }}</td>
+                        <td class="num">{{ row.hits }}</td>
+                        <td class="adm-muted">{{ row.first_seen|date:'Y-m-d H:i' }}</td>
+                        <td class="adm-muted">{{ row.last_seen|date:'Y-m-d H:i' }}</td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="8" class="ad-empty">Nothing recorded yet.</td></tr>
+                    <tr><td colspan="8" class="adm-empty">Nothing recorded yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

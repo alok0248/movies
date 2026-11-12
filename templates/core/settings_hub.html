@@ -2,33 +2,7 @@
 
 {% block admin_content %}
 <style>
-    .st-wrap { max-width: 1180px; }
-    .st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .st-title { font-size: 1.3rem; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.015em; }
-    .st-sub { font-size: .75rem; color: rgba(255,255,255,.42); margin-top: .25rem; max-width: 72ch; line-height: 1.5; }
-    .st-chip {
-        display: inline-flex; align-items: center; gap: .4rem; padding: .32rem .65rem; border-radius: 999px;
-        font-size: .68rem; color: rgba(255,255,255,.55); background: rgba(255,255,255,.05);
-        border: 1px solid rgba(255,255,255,.08); white-space: nowrap;
-    }
-    .st-chip i { font-size: .55rem; color: #6ee7b7; }
-    .st-tabs {
-        display: flex; gap: .3rem; flex-wrap: wrap; align-items: center;
-        border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 1.05rem; padding-bottom: .1rem;
-    }
-    .st-tabs.st-single { display: none; }
-    .st-tab {
-        display: inline-flex; align-items: center; gap: .45rem;
-        padding: .5rem .85rem; border-radius: 10px 10px 0 0;
-        font-size: .79rem; font-weight: 600; text-decoration: none;
-        color: rgba(255,255,255,.5); border: 1px solid transparent; border-bottom: 0;
-        cursor: pointer; background: transparent;
-        transition: color .16s ease, background .16s ease, border-color .16s ease;
-    }
-    .st-tab:hover { color: rgba(255,255,255,.88); background: rgba(255,255,255,.045); }
-    .st-tab.active { color: #fff; background: rgba(99,102,241,.15); border-color: rgba(99,102,241,.34); }
-    .st-tabs .st-spacer { flex: 1; }
-    .st-links a { font-size: .7rem; color: rgba(255,255,255,.42); text-decoration: none; margin-left: .8rem; }
+    .st-wrap { max-width: 1180px; }    .st-sub { font-size: .75rem; color: rgba(255,255,255,.42); margin-top: .25rem; max-width: 72ch; line-height: 1.5; }    .st-links a { font-size: .7rem; color: rgba(255,255,255,.42); text-decoration: none; margin-left: .8rem; }
     .st-links a:hover { color: #a5b4fc; }
     #st-panel { position: relative; min-height: 140px; transition: opacity .18s ease; }
     #st-panel.loading { opacity: .4; pointer-events: none; }
@@ -44,23 +18,16 @@
     .st-toast.in { opacity: 1; transform: none; }
     .st-toast.ok { border-left: 3px solid #34d399; }
     .st-toast.warn { border-left: 3px solid #fbbf24; }
-    .st-toast.bad { border-left: 3px solid #f87171; }
-    html[data-theme="light"] .st-title { color: #111; }
-    html[data-theme="light"] .st-sub, html[data-theme="light"] .st-chip { color: rgba(0,0,0,.5); }
-    html[data-theme="light"] .st-chip { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .st-tabs { border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .st-tab { color: rgba(0,0,0,.55); }
-    html[data-theme="light"] .st-tab.active { color: #111; background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.3); }
-    html[data-theme="light"] .st-toast { background: #fff; color: #111; border-color: rgba(0,0,0,.1); }
+    .st-toast.bad { border-left: 3px solid #f87171; }    html[data-theme="light"] .st-toast { background: #fff; color: #111; border-color: rgba(0,0,0,.1); }
 </style>
 
 <div class="st-wrap">
-    <div class="st-head">
+    <div class="adm-page-head">
         <div>
-            <h2 class="st-title">{{ group_title }}</h2>
+            <h2 class="adm-page-title">{{ group_title }}</h2>
             <div class="st-sub">{{ group_subtitle }}</div>
         </div>
-        <div class="st-chip"><i class="fas fa-circle"></i> <span id="st-state">{{ active_label }}</span></div>
+        <div class="adm-chip"><i class="fas fa-circle"></i> <span id="st-state">{{ active_label }}</span></div>
     </div>
 
     <nav class="st-tabs{% if tabs|length < 2 %} st-single{% endif %}" id="st-tabs" aria-label="{{ group_title }} settings sections">

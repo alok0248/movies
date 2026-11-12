@@ -1,371 +1,258 @@
 {% extends 'core/admin_base.html' %}
 {% load ip_geo %}
 {% block admin_content %}
+<div class="container-fluid py-3" style="max-width:1500px">
 
-<style>
-    .analytics-hero {
-        background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(168,85,247,.08));
-        border: 1px solid rgba(56,189,248,.2);
-        border-radius: 16px;
-        padding: 1.8rem 2rem;
-        margin-bottom: 1.5rem;
-    }
-    .stat-card {
-        background: var(--bg-2);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 1.2rem;
-        transition: all .25s;
-    }
-    .stat-card:hover {
-        border-color: rgba(56,189,248,.3);
-        transform: translateY(-2px);
-    }
-    .stat-num {
-        font-size: 2rem;
-        font-weight: 800;
-        line-height: 1.1;
-    }
-    .chart-bar {
-        height: 8px;
-        border-radius: 4px;
-        background: rgba(255,255,255,.06);
-        overflow: hidden;
-        margin-top: 4px;
-    }
-    .chart-bar-fill {
-        height: 100%;
-        border-radius: 4px;
-        transition: width .5s ease;
-    }
-    .platform-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: .25rem .7rem;
-        border-radius: 8px;
-        font-size: .75rem;
-        font-weight: 600;
-    }
-    .table-analytics tbody tr {
-        transition: background .15s;
-    }
-    .table-analytics tbody tr:hover {
-        background: rgba(255,255,255,.03);
-    }
-    .table-analytics td {
-        vertical-align: middle;
-        padding: .7rem .8rem;
-        font-size: .82rem;
-        border-color: rgba(255,255,255,.06);
-    }
-    .table-analytics th {
-        font-size: .75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: .05em;
-        opacity: .5;
-        border-color: rgba(255,255,255,.06);
-        padding: .6rem .8rem;
-    }
-    .conn-card {
-        display: block;
-        padding: 1rem;
-        border-radius: 12px;
-        background: rgba(255,255,255,.03);
-        border: 1px solid var(--border);
-        text-decoration: none;
-        height: 100%;
-        cursor: pointer;
-        transition: all .2s;
-    }
-    .conn-card:hover {
-        border-color: rgba(56,189,248,.45);
-        background: rgba(56,189,248,.07);
-        transform: translateY(-2px);
-    }
-    .conn-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        margin-top: .7rem;
-        padding: .3rem .7rem;
-        border-radius: 8px;
-        font-size: .72rem;
-        font-weight: 600;
-        background: rgba(56,189,248,.14);
-        border: 1px solid rgba(56,189,248,.35);
-        color: #7dd3fc;
-    }
-    .conn-card:hover .conn-btn { background: rgba(56,189,248,.25); color: #bae6fd; }
-    .session-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        display: inline-block;
-    }
-    .session-dot.active { background: #22c55e; animation: pulse-dot 2s infinite; }
-    .session-dot.inactive { background: #6b7280; }
-    @keyframes pulse-dot {
-        0%, 100% { opacity: 1; }
-        50% { opacity: .4; }
-    }
-</style>
-
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <div>
-        <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">
-            <i class="fas fa-chart-line me-2" style="background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>User Analytics
-        </h1>
-        <small class="text-secondary">
-            {% if custom_range %}{{ range_label }}{% else %}Last {{ days }} days{% endif %}
-            · {{ days }} day{{ days|pluralize }} · Updated: {% now "M d, Y H:i" %}
-        </small>
+    <div class="adm-page-head">
+        <div>
+            <h1 class="adm-page-title"><i class="fas fa-chart-line me-2"></i>User Analytics</h1>
+            <p class="adm-page-sub">
+                {% if custom_range %}{{ range_label }}{% else %}Last {{ days }} days{% endif %}
+                · {{ days }} day{{ days|pluralize }} · Updated: {% now "M d, Y H:i" %}
+            </p>
+        </div>
+        <div class="adm-btn-group">
+            <a href="?days=1" class="adm-btn is-sm {% if not custom_range and days == 1 %}is-primary{% endif %}">Today</a>
+            <a href="?days=7" class="adm-btn is-sm {% if not custom_range and days == 7 %}is-primary{% endif %}">7 Days</a>
+            <a href="?days=30" class="adm-btn is-sm {% if not custom_range and days == 30 %}is-primary{% endif %}">30 Days</a>
+            <form method="get" class="adm-btn-group" style="margin:0;">
+                <input type="date" name="start" value="{{ range_start }}" max="{{ range_end }}" class="adm-input" style="width:145px;">
+                <span class="adm-muted">→</span>
+                <input type="date" name="end" value="{{ range_end }}" class="adm-input" style="width:145px;">
+                <button class="adm-btn is-sm is-primary" type="submit">Apply</button>
+            </form>
+        </div>
     </div>
-    <div class="d-flex gap-2 flex-wrap align-items-center">
-        <a href="?days=1" class="btn btn-sm {% if not custom_range and days == 1 %}btn-primary{% else %}btn-outline-secondary{% endif %}">Today</a>
-        <a href="?days=7" class="btn btn-sm {% if not custom_range and days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7 Days</a>
-        <a href="?days=30" class="btn btn-sm {% if not custom_range and days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}">30 Days</a>
-        <form method="get" class="d-flex gap-1 align-items-center" style="margin:0;">
-            <input type="date" name="start" value="{{ range_start }}" max="{{ range_end }}"
-                   class="form-control form-control-sm" style="width:145px;background:#0f172a;color:#e2e8f0;border:1px solid rgba(148,163,184,.3);">
-            <span class="text-secondary small">→</span>
-            <input type="date" name="end" value="{{ range_end }}"
-                   class="form-control form-control-sm" style="width:145px;background:#0f172a;color:#e2e8f0;border:1px solid rgba(148,163,184,.3);">
-            <button class="btn btn-sm btn-primary" type="submit">Apply</button>
-        </form>
+
+    <div class="adm-sub mb-3">
+        <i class="fas fa-code-compare me-1"></i>
+        Compared with the previous {{ days }} day{{ days|pluralize }}: {{ prev_label }}
+        — {{ prev_views }} view{{ prev_views|pluralize }} and {{ prev_visitors }} visitor{{ prev_visitors|pluralize }}.
     </div>
-</div>
 
-<div class="text-secondary small mb-3" style="margin-top:-.4rem;">
-    <i class="fas fa-code-compare me-1"></i>
-    Compared with the previous {{ days }} day{{ days|pluralize }}: {{ prev_label }}
-    — {{ prev_views }} view{{ prev_views|pluralize }} and {{ prev_visitors }} visitor{{ prev_visitors|pluralize }}.
-</div>
-
-<!-- Overview Stats -->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="stat-card">
-            <div class="text-secondary small mb-1"><i class="fas fa-eye me-1"></i>Total Page Views</div>
-            <div class="stat-num" style="color:#38bdf8;">{{ total_views|floatformat:0 }}</div>
-            {% if delta_views is not None %}<div class="small {% if delta_views >= 0 %}text-success{% else %}text-danger{% endif %}">
+    <div class="adm-grid mb-3">
+        <div class="adm-stat">
+            <b>{{ total_views|floatformat:0 }}</b>
+            <span><i class="fas fa-eye me-1"></i>Total Page Views</span>
+            {% if delta_views is not None %}<div class="adm-sub {% if delta_views >= 0 %}text-success{% else %}text-danger{% endif %}">
                 {% if delta_views >= 0 %}+{% endif %}{{ delta_views }}% vs previous</div>{% endif %}
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="stat-card">
-            <div class="text-secondary small mb-1"><i class="fas fa-clock me-1"></i>Total Time Spent</div>
-            <div class="stat-num" style="color:#a855f7;">{% if total_time > 3600 %}{{ total_time|floatformat:0|truncatechars:4 }}h{% elif total_time > 60 %}{{ total_time|floatformat:0|truncatechars:4 }}m{% else %}{{ total_time|floatformat:0 }}s{% endif %}</div>
-            {% if delta_avg_time is not None %}<div class="small {% if delta_avg_time >= 0 %}text-success{% else %}text-danger{% endif %}">
+        <div class="adm-stat">
+            <b>{% if total_time > 3600 %}{{ total_time|floatformat:0|truncatechars:4 }}h{% elif total_time > 60 %}{{ total_time|floatformat:0|truncatechars:4 }}m{% else %}{{ total_time|floatformat:0 }}s{% endif %}</b>
+            <span><i class="fas fa-clock me-1"></i>Total Time Spent</span>
+            {% if delta_avg_time is not None %}<div class="adm-sub {% if delta_avg_time >= 0 %}text-success{% else %}text-danger{% endif %}">
                 {% if delta_avg_time >= 0 %}+{% endif %}{{ delta_avg_time }}% avg/page</div>{% endif %}
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="stat-card">
-            <div class="text-secondary small mb-1"><i class="fas fa-users me-1"></i>Unique Visitors</div>
-            <div class="stat-num" style="color:#22c55e;">{{ unique_visitors }}</div>
-            {% if delta_visitors is not None %}<div class="small {% if delta_visitors >= 0 %}text-success{% else %}text-danger{% endif %}">
+        <div class="adm-stat">
+            <b>{{ unique_visitors }}</b>
+            <span><i class="fas fa-users me-1"></i>Unique Visitors</span>
+            {% if delta_visitors is not None %}<div class="adm-sub {% if delta_visitors >= 0 %}text-success{% else %}text-danger{% endif %}">
                 {% if delta_visitors >= 0 %}+{% endif %}{{ delta_visitors }}% vs previous</div>{% endif %}
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="stat-card">
-            <div class="text-secondary small mb-1"><i class="fas fa-user-check me-1"></i>Logged-in Users</div>
-            <div class="stat-num" style="color:#f59e0b;">{{ unique_users }}</div>
-        </div>
-    </div>
-</div>
-
-<!-- Platform Breakdown + Daily Views -->
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="stat-card h-100">
-            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-desktop me-2 text-info"></i>Platform Breakdown</h6>
-            {% for p in platform_data %}
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="platform-badge {% if p.platform == 'web' %}bg-primary{% elif p.platform == 'android' %}bg-success{% else %}bg-warning text-dark{% endif %}">
-                    {% if p.platform == 'web' %}<i class="fas fa-globe"></i> Web
-                    {% elif p.platform == 'android' %}<i class="fab fa-android"></i> Android
-                    {% elif p.platform == 'ios' %}<i class="fab fa-apple"></i> iOS
-                    {% else %}<i class="fas fa-question"></i> {{ p.platform }}{% endif %}
-                </span>
-                <span>
-                    <span class="fw-bold text-white">{{ p.views }}</span>
-                    <small class="text-secondary">views</small>
-                    {% if p.total_time %}<small class="text-secondary"> · {{ p.total_time|floatformat:0 }}s</small>{% endif %}
-                </span>
-            </div>
-            <div class="chart-bar">
-                <div class="chart-bar-fill" style="width:{% widthratio p.views total_views 100 %}%;background:{% if p.platform == 'web' %}#3b82f6{% elif p.platform == 'android' %}#22c55e{% else %}#f59e0b{% endif %};"></div>
-            </div>
-            {% empty %}
-            <div class="text-secondary text-center py-3" style="font-size:.85rem;">No platform data yet</div>
-            {% endfor %}
+        <div class="adm-stat">
+            <b>{{ unique_users }}</b>
+            <span><i class="fas fa-user-check me-1"></i>Logged-in Users</span>
         </div>
     </div>
 
-    <div class="col-md-8">
-        <div class="stat-card h-100">
-            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-chart-area me-2 text-info"></i>Daily Views ({{ daily_days }} days)</h6>
-            <div class="d-flex align-items-end gap-1" style="height:120px;">
-                {% for d in daily_views %}
-                <div class="flex-fill text-center" title="{{ d.date }}: {{ d.views }} views" style="min-width:0;">
-                    <div style="height:{% if d.views %}{% widthratio d.views max_daily_views 96 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#3b82f6,#818cf8);border-radius:4px 4px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};transition:height .5s;width:100%;"></div>
-                    <small class="text-secondary" style="font-size:.6rem;">{{ d.date|slice:"-5:" }}</small>
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="adm-card is-tile">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-desktop"></i>Platform Breakdown</h2></div>
+                <div class="adm-card-body is-fill">
+                    {% for p in platform_data %}
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="adm-badge {% if p.platform == 'web' %}is-primary{% elif p.platform == 'android' %}is-ok{% else %}is-warn{% endif %}">
+                            {% if p.platform == 'web' %}<i class="fas fa-globe"></i> Web
+                            {% elif p.platform == 'android' %}<i class="fab fa-android"></i> Android
+                            {% elif p.platform == 'ios' %}<i class="fab fa-apple"></i> iOS
+                            {% else %}<i class="fas fa-question"></i> {{ p.platform }}{% endif %}
+                        </span>
+                        <span>
+                            <strong>{{ p.views }}</strong>
+                            <span class="adm-sub">views</span>
+                            {% if p.total_time %}<span class="adm-sub"> · {{ p.total_time|floatformat:0 }}s</span>{% endif %}
+                        </span>
+                    </div>
+                    <div class="adm-meter">
+                        <span class="{% if p.platform == 'web' %}is-info{% elif p.platform != 'android' %}is-warn{% endif %}" style="width:{% widthratio p.views total_views 100 %}%;"></span>
+                    </div>
+                    <div class="mb-2"></div>
+                    {% empty %}
+                    <div class="adm-empty py-3"><i class="fas fa-desktop"></i>No platform data yet</div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Top Pages -->
-<div class="stat-card mb-4">
-    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-file-alt me-2 text-info"></i>Top Pages</h6>
-    <div class="table-responsive">
-        <table class="table table-dark table-analytics mb-0">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Page</th>
-                    <th>Views</th>
-                    <th>Total Time</th>
-                    <th>Avg Time</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in top_pages %}
-                <tr>
-                    <td class="text-secondary">{{ forloop.counter }}</td>
-                    <td>
-                        <a href="{{ p.path }}" target="_blank" class="text-info text-decoration-none">{{ p.page_title|default:p.path|truncatechars:60 }}</a>
-                    </td>
-                    <td class="fw-bold text-white">{{ p.views }}</td>
-                    <td class="text-secondary">{{ p.total_time|default:0 }}s</td>
-                    <td class="text-secondary">{% if p.avg_time %}{{ p.avg_time|floatformat:1 }}s{% else %}—{% endif %}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="5" class="text-center text-secondary py-3">No page views yet</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Most Active Users + Active Sessions -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="stat-card h-100">
-            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-trophy me-2 text-warning"></i>Most Active Users</h6>
-            <div class="table-responsive">
-                <table class="table table-dark table-analytics mb-0">
-                    <thead><tr><th>User</th><th>Views</th><th>Time</th><th></th></tr></thead>
-                    <tbody>
-                        {% for u in active_users %}
-                        <tr>
-                            <td class="text-white">{{ u.user__username|default:"Anonymous" }}</td>
-                            <td>{{ u.views }}</td>
-                            <td class="text-secondary">{{ u.total_time|default:0 }}s</td>
-                            <td><a href="{% url 'admin_user_analytics_detail' user_id=0 %}" class="text-info" style="font-size:.75rem;" onclick="event.preventDefault();">Detail</a></td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-secondary py-3">No active users</td></tr>
+        <div class="col-md-8">
+            <div class="adm-card is-tile">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-chart-area"></i>Daily Views ({{ daily_days }} days)</h2></div>
+                <div class="adm-card-body is-fill">
+                    <div class="d-flex align-items-end gap-1" style="height:120px;">
+                        {% for d in daily_views %}
+                        <div class="flex-fill text-center" title="{{ d.date }}: {{ d.views }} views" style="min-width:0;">
+                            <div style="height:{% if d.views %}{% widthratio d.views max_daily_views 96 %}{% else %}0{% endif %}px;background:linear-gradient(to top,#3b82f6,#818cf8);border-radius:4px 4px 0 0;min-height:{% if d.views %}2px{% else %}0{% endif %};transition:height .5s;width:100%;"></div>
+                            <small class="adm-sub" style="font-size:.6rem;">{{ d.date|slice:"-5:" }}</small>
+                        </div>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-6">
-        <div class="stat-card h-100">
-            <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-signal me-2 text-success"></i>Active Sessions</h6>
-            <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
-                <table class="table table-dark table-analytics mb-0">
-                    <thead><tr><th>User</th><th>Source</th><th>IP</th><th>Status</th></tr></thead>
-                    <tbody>
-                        {% for s in active_sessions %}
+    <div class="adm-card mb-3">
+        <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-file-alt"></i>Top Pages</h2></div>
+        <div class="adm-card-body flush">
+            <div class="adm-table-wrap">
+                <table class="adm-table">
+                    <thead>
                         <tr>
-                            <td class="text-white">{{ s.user.username }}</td>
+                            <th>#</th>
+                            <th>Page</th>
+                            <th class="num">Views</th>
+                            <th class="num">Total Time</th>
+                            <th class="num">Avg Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in top_pages %}
+                        <tr>
+                            <td class="adm-sub">{{ forloop.counter }}</td>
                             <td>
-                                <span class="platform-badge {% if s.source == 'web' %}bg-primary{% elif s.source == 'android' %}bg-success{% else %}bg-secondary{% endif %}">
-                                    {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
-                                </span>
+                                <a href="{{ p.path }}" target="_blank" class="adm-link">{{ p.page_title|default:p.path|truncatechars:60 }}</a>
                             </td>
-                            <td class="text-secondary" style="font-size:.78rem;">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% ip_geo_chip s.ip_address %}{% else %}—{% endif %}</td>
-                            <td><span class="session-dot {% if s.is_active %}active{% else %}inactive{% endif %}"></span></td>
+                            <td class="num">{{ p.views }}</td>
+                            <td class="num adm-sub">{{ p.total_time|default:0 }}s</td>
+                            <td class="num adm-sub">{% if p.avg_time %}{{ p.avg_time|floatformat:1 }}s{% else %}—{% endif %}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="4" class="text-center text-secondary py-3">No active sessions</td></tr>
+                        <tr><td colspan="5"><div class="adm-empty"><i class="fas fa-file-alt"></i>No page views yet</div></td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Connection Details -->
-<div class="stat-card mb-4">
-    <h6 class="text-white fw-bold mb-3" style="font-size:.85rem;"><i class="fas fa-plug me-2 text-info"></i>Connection Summary (Web vs Android)</h6>
-    <div class="row g-3">
-        {% for p in platform_data %}
-        <div class="col-md-4">
-            <a class="conn-card" href="{% url 'request_log' %}?tab=users&amp;platform={{ p.platform|urlencode }}" title="Open the Requests &amp; Users page on the active / inactive list for {{ p.platform }}">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    {% if p.platform == 'web' %}
-                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
-                    {% elif p.platform == 'android' %}
-                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
-                    {% else %}
-                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(168,85,247,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-apple" style="color:#a855f7;"></i></div>
-                    {% endif %}
-                    <div>
-                        <div class="fw-bold text-white text-capitalize">{{ p.platform }}</div>
-                        <small class="text-secondary">{{ p.views }} views</small>
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="adm-card is-tile">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-trophy"></i>Most Active Users</h2></div>
+                <div class="adm-card-body flush">
+                    <div class="adm-table-wrap">
+                        <table class="adm-table">
+                            <thead><tr><th>User</th><th class="num">Views</th><th class="num">Time</th><th></th></tr></thead>
+                            <tbody>
+                                {% for u in active_users %}
+                                <tr>
+                                    <td>{{ u.user__username|default:"Anonymous" }}</td>
+                                    <td class="num">{{ u.views }}</td>
+                                    <td class="num adm-sub">{{ u.total_time|default:0 }}s</td>
+                                    <td><a href="{% url 'admin_user_analytics_detail' user_id=0 %}" class="adm-link adm-sub" onclick="event.preventDefault();">Detail</a></td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4"><div class="adm-empty"><i class="fas fa-trophy"></i>No active users</div></td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="row g-2 small">
-                    <div class="col-6">
-                        <div class="text-secondary">Total Time</div>
-                        <div class="text-white fw-bold">{% widthratio p.total_time 1 1 %}s</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-secondary">Avg/View</div>
-                        <div class="text-white fw-bold">{% if p.views %}{% widthratio p.total_time p.views 1 %}{% else %}0{% endif %}s</div>
-                    </div>
-                </div>
-                <span class="conn-btn"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
-            </a>
+            </div>
         </div>
-        {% empty %}
-        <div class="col-md-4">
-            <a class="conn-card" href="{% url 'request_log' %}?tab=users&amp;platform=web" title="Open the Requests &amp; Users page on the active / inactive list for web">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
-                    <div>
-                        <div class="fw-bold text-white">Web</div>
-                        <small class="text-secondary">No views in this range</small>
+
+        <div class="col-md-6">
+            <div class="adm-card is-tile">
+                <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-signal"></i>Active Sessions</h2></div>
+                <div class="adm-card-body flush">
+                    <div class="adm-table-wrap" style="max-height:280px;overflow-y:auto;">
+                        <table class="adm-table">
+                            <thead><tr><th>User</th><th>Source</th><th>IP</th><th>Status</th></tr></thead>
+                            <tbody>
+                                {% for s in active_sessions %}
+                                <tr>
+                                    <td>{{ s.user.username }}</td>
+                                    <td>
+                                        <span class="adm-badge {% if s.source == 'web' %}is-primary{% elif s.source == 'android' %}is-ok{% else %}is-off{% endif %}">
+                                            {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="adm-sub">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% ip_geo_chip s.ip_address %}{% else %}—{% endif %}</td>
+                                    <td><span class="adm-dot {% if s.is_active %}is-on{% else %}is-off{% endif %}"></span></td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4"><div class="adm-empty"><i class="fas fa-signal"></i>No active sessions</div></td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <span class="conn-btn"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
-            </a>
+            </div>
         </div>
-        <div class="col-md-4">
-            <a class="conn-card" href="{% url 'request_log' %}?tab=users&amp;platform=android" title="Open the Requests &amp; Users page on the active / inactive list for android">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
-                    <div>
-                        <div class="fw-bold text-white">Android</div>
-                        <small class="text-secondary">No views in this range</small>
-                    </div>
+    </div>
+
+    <div class="adm-card">
+        <div class="adm-card-head"><h2 class="adm-card-title"><i class="fas fa-plug"></i>Connection Summary (Web vs Android)</h2></div>
+        <div class="adm-card-body">
+            <div class="row g-3">
+                {% for p in platform_data %}
+                <div class="col-md-4">
+                    <a class="adm-card is-tile" href="{% url 'request_log' %}?tab=users&amp;platform={{ p.platform|urlencode }}" title="Open the Requests &amp; Users page on the active / inactive list for {{ p.platform }}">
+                        <div class="adm-card-body">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                {% if p.platform == 'web' %}
+                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
+                                {% elif p.platform == 'android' %}
+                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
+                                {% else %}
+                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(168,85,247,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-apple" style="color:#a855f7;"></i></div>
+                                {% endif %}
+                                <div>
+                                    <div class="adm-card-title text-capitalize">{{ p.platform }}</div>
+                                    <div class="adm-card-sub">{{ p.views }} views</div>
+                                </div>
+                            </div>
+                            <div class="adm-facts">
+                                <div><span>Total Time</span><span>{% widthratio p.total_time 1 1 %}s</span></div>
+                                <div><span>Avg/View</span><span>{% if p.views %}{% widthratio p.total_time p.views 1 %}{% else %}0{% endif %}s</span></div>
+                            </div>
+                            <span class="adm-btn is-sm mt-3"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
+                        </div>
+                    </a>
                 </div>
-                <span class="conn-btn"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
-            </a>
+                {% empty %}
+                <div class="col-md-4">
+                    <a class="adm-card is-tile" href="{% url 'request_log' %}?tab=users&amp;platform=web" title="Open the Requests &amp; Users page on the active / inactive list for web">
+                        <div class="adm-card-body">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;"><i class="fas fa-globe" style="color:#3b82f6;"></i></div>
+                                <div>
+                                    <div class="adm-card-title">Web</div>
+                                    <div class="adm-card-sub">No views in this range</div>
+                                </div>
+                            </div>
+                            <span class="adm-btn is-sm mt-3"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a class="adm-card is-tile" href="{% url 'request_log' %}?tab=users&amp;platform=android" title="Open the Requests &amp; Users page on the active / inactive list for android">
+                        <div class="adm-card-body">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;"><i class="fab fa-android" style="color:#22c55e;"></i></div>
+                                <div>
+                                    <div class="adm-card-title">Android</div>
+                                    <div class="adm-card-sub">No views in this range</div>
+                                </div>
+                            </div>
+                            <span class="adm-btn is-sm mt-3"><i class="fas fa-users"></i> View active users <i class="fas fa-arrow-right"></i></span>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
         </div>
-        {% endfor %}
     </div>
 </div>
-
 {% endblock %}

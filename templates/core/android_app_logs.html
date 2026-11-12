@@ -8,8 +8,8 @@
             <p class="text-secondary mb-0">{{ selected_app.name }} &mdash; Logs received from the Android app ({{ total_count }} total)</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#logApiHelperModal"><i class="fas fa-plug me-1"></i>API Connection</button>
-            <a href="{% url 'android_app_dashboard_detail' selected_app.id %}" class="btn btn-outline-light">&larr; Back to Analytics</a>
+            <button class="adm-btn is-sm" data-bs-toggle="modal" data-bs-target="#logApiHelperModal"><i class="fas fa-plug me-1"></i>API Connection</button>
+            <a href="{% url 'android_app_dashboard_detail' selected_app.id %}" class="adm-btn">&larr; Back to Analytics</a>
         </div>
     </div>
 
@@ -24,12 +24,12 @@
     {% endif %}
 
     <!-- Filters -->
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-body py-3">
+    <div class="adm-card bg-dark border-secondary shadow-sm mb-4">
+        <div class="adm-card-body py-3">
             <form method="get" class="d-flex gap-2 flex-wrap align-items-end">
                 <div>
                     <label class="text-secondary small d-block">Level</label>
-                    <select name="level" class="form-select form-select-sm bg-dark text-white border-secondary" style="min-width:110px;">
+                    <select name="level" class="adm-select bg-dark text-white border-secondary" style="min-width:110px;">
                         <option value="">All</option>
                         <option value="debug" {% if level_filter == 'debug' %}selected{% endif %}>Debug</option>
                         <option value="info" {% if level_filter == 'info' %}selected{% endif %}>Info</option>
@@ -40,7 +40,7 @@
                 </div>
                 <div>
                     <label class="text-secondary small d-block">Tag</label>
-                    <select name="tag" class="form-select form-select-sm bg-dark text-white border-secondary" style="min-width:130px;">
+                    <select name="tag" class="adm-select bg-dark text-white border-secondary" style="min-width:130px;">
                         <option value="">All</option>
                         {% for tag in all_tags %}
                         <option value="{{ tag }}" {% if tag_filter == tag %}selected{% endif %}>{{ tag }}</option>
@@ -49,37 +49,37 @@
                 </div>
                 <div>
                     <label class="text-secondary small d-block">User ID</label>
-                    <input type="text" name="user_id" value="{{ user_filter }}" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Filter by user ID" style="min-width:180px;">
+                    <input type="text" name="user_id" value="{{ user_filter }}" class="adm-input bg-dark text-white border-secondary" placeholder="Filter by user ID" style="min-width:180px;">
                 </div>
                 <div>
                     <label class="text-secondary small d-block">Search message / data</label>
-                    <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Search..." style="min-width:220px;">
+                    <input type="text" name="q" value="{{ search }}" class="adm-input bg-dark text-white border-secondary" placeholder="Search..." style="min-width:220px;">
                 </div>
-                <button type="submit" class="btn btn-sm btn-info">Filter</button>
-                <a href="{% url 'android_app_logs_page' selected_app.id %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                <button type="submit" class="adm-btn is-sm is-info">Filter</button>
+                <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm">Clear</a>
             </form>
         </div>
     </div>
 
     <!-- Logs -->
-    <div class="card bg-dark border-secondary shadow-sm">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm">
+        <div class="adm-card-body">
             {% if logs %}
             <div class="d-flex flex-column gap-2">
                 {% for log in logs %}
                 <div class="border border-secondary rounded">
-                    <button class="btn w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.querySelector('.icon').textContent=d.style.display==='none'?'▶':'▼';">
+                    <button class="adm-btn w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.querySelector('.icon').textContent=d.style.display==='none'?'▶':'▼';">
                         <span class="d-flex align-items-center gap-2 flex-wrap">
                             {% if log.level == 'error' or log.level == 'fatal' %}
-                            <span class="badge bg-danger">{{ log.get_level_display }}</span>
+                            <span class="adm-badge is-danger">{{ log.get_level_display }}</span>
                             {% elif log.level == 'warn' %}
-                            <span class="badge bg-warning text-dark">{{ log.get_level_display }}</span>
+                            <span class="adm-badge is-warn text-dark">{{ log.get_level_display }}</span>
                             {% elif log.level == 'debug' %}
-                            <span class="badge bg-secondary">{{ log.get_level_display }}</span>
+                            <span class="adm-badge is-off">{{ log.get_level_display }}</span>
                             {% else %}
-                            <span class="badge bg-info">{{ log.get_level_display }}</span>
+                            <span class="adm-badge is-info">{{ log.get_level_display }}</span>
                             {% endif %}
-                            {% if log.tag %}<span class="badge bg-dark border border-secondary text-info">{{ log.tag }}</span>{% endif %}
+                            {% if log.tag %}<span class="adm-badge is-off border border-secondary text-info">{{ log.tag }}</span>{% endif %}
                             <span class="text-white small">{{ log.timestamp }}</span>
                             <span class="text-secondary small">{{ log.device_model|default:"-" }} / {{ log.os_version|default:"-" }}</span>
                             {% if log.user_id %}<span class="text-info small">{{ log.user_id }}</span>{% endif %}
@@ -107,7 +107,7 @@
                         </div>
                         {% endif %}
                         <div class="mt-2">
-                            <a href="{% url 'android_app_log_delete' selected_app.id log.id %}" class="btn btn-sm btn-outline-danger" onclick="return confirmTyped(event, {what: 'this log entry'});"><i class="fas fa-trash me-1"></i>Delete</a>
+                            <a href="{% url 'android_app_log_delete' selected_app.id log.id %}" class="adm-btn is-sm" onclick="return confirmTyped(event, {what: 'this log entry'});"><i class="fas fa-trash me-1"></i>Delete</a>
                         </div>
                     </div>
                 </div>
@@ -119,7 +119,7 @@
                     <span class="text-secondary small">Showing 200 of {{ total_count }} logs. Use filters to narrow down.</span>
                     {% endif %}
                 </div>
-                <a href="{% url 'android_app_logs_clear' selected_app.id %}" class="btn btn-sm btn-outline-danger" onclick="return confirmTyped(event, {what: 'all {{ total_count }} log entries'});"><i class="fas fa-trash me-1"></i>Delete All Logs</a>
+                <a href="{% url 'android_app_logs_clear' selected_app.id %}" class="adm-btn is-sm" onclick="return confirmTyped(event, {what: 'all {{ total_count }} log entries'});"><i class="fas fa-trash me-1"></i>Delete All Logs</a>
             </div>
             {% else %}
             <div class="text-center py-5 text-secondary">No logs received yet. Send logs from the Android app using the API.</div>
@@ -134,7 +134,7 @@
         <div class="modal-content bg-dark border-secondary">
             <div class="modal-header border-secondary">
                 <h5 class="modal-title text-white"><i class="fas fa-plug me-2 text-info"></i>Log API Connection</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button aria-label="Close" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p class="text-secondary small mb-3">Use this API to send logs from your Android app for debugging. All logs are stored and visible on this page.</p>
@@ -157,7 +157,7 @@
                     <!-- cURL -->
                     <div class="tab-pane fade show active" id="tab-curl-log">
                         <div class="position-relative">
-                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyCode('curlLogCode')"><i class="fas fa-copy me-1"></i>Copy</button>
+                            <button class="adm-btn is-sm position-absolute top-0 end-0 m-2" onclick="copyCode('curlLogCode')"><i class="fas fa-copy me-1"></i>Copy</button>
                             <pre class="text-info small mb-0 p-3 rounded" id="curlLogCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">curl -X POST "{{ request.scheme }}://{{ request.get_host }}/api/android-apps/{{ selected_app.slug }}/log/" \
   -u "{{ selected_app.access_username }}:{{ selected_app.access_password }}" \
   -H "Content-Type: application/json" \
@@ -180,7 +180,7 @@
                     <!-- Python -->
                     <div class="tab-pane fade" id="tab-python-log">
                         <div class="position-relative">
-                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyCode('pythonLogCode')"><i class="fas fa-copy me-1"></i>Copy</button>
+                            <button class="adm-btn is-sm position-absolute top-0 end-0 m-2" onclick="copyCode('pythonLogCode')"><i class="fas fa-copy me-1"></i>Copy</button>
                             <pre class="text-info small mb-0 p-3 rounded" id="pythonLogCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">import requests
 
 url = "{{ request.scheme }}://{{ request.get_host }}/api/android-apps/{{ selected_app.slug }}/log/"
@@ -213,7 +213,7 @@ print(response.status_code, response.json())</pre>
                     <!-- Kotlin -->
                     <div class="tab-pane fade" id="tab-kotlin-log">
                         <div class="position-relative">
-                            <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyCode('kotlinLogCode')"><i class="fas fa-copy me-1"></i>Copy</button>
+                            <button class="adm-btn is-sm position-absolute top-0 end-0 m-2" onclick="copyCode('kotlinLogCode')"><i class="fas fa-copy me-1"></i>Copy</button>
                             <pre class="text-info small mb-0 p-3 rounded" id="kotlinLogCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -255,18 +255,18 @@ sendLog("API key failed to load", level = "error", tag = "Auth", data = JSONObje
                 <!-- Request Body Reference -->
                 <div class="mt-4">
                     <h6 class="text-white mb-2"><i class="fas fa-list me-1 text-warning"></i>Request Body Fields</h6>
-                    <div class="table-responsive">
-                        <table class="table table-dark table-sm mb-0 align-middle small">
+                    <div class="adm-table-wrap">
+                        <table class="adm-table mb-0 align-middle small">
                             <thead><tr><th>Field</th><th>Required</th><th>Description</th><th>Example</th></tr></thead>
                             <tbody>
-                                <tr><td><code class="text-info">message</code></td><td><span class="badge bg-success">Yes</span></td><td class="text-secondary">Log message text</td><td><code class="text-white">"API key loaded"</code></td></tr>
-                                <tr><td><code class="text-info">level</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">debug, info, warn, error, fatal</td><td><code class="text-white">"error"</code></td></tr>
-                                <tr><td><code class="text-info">tag</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">Category / component name</td><td><code class="text-white">"Auth"</code></td></tr>
-                                <tr><td><code class="text-info">user_id</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">Device user ID (or send via header)</td><td><code class="text-white">"a1b2c3d4"</code></td></tr>
-                                <tr><td><code class="text-info">build_identifier</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">Build version (or send via X-Android-Build)</td><td><code class="text-white">"42"</code></td></tr>
-                                <tr><td><code class="text-info">device_model</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">Device model (or send via X-Android-Device)</td><td><code class="text-white">"Pixel 7"</code></td></tr>
-                                <tr><td><code class="text-info">os_version</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">Android version (or send via X-Android-OS-Version)</td><td><code class="text-white">"14"</code></td></tr>
-                                <tr><td><code class="text-info">data</code></td><td><span class="badge bg-secondary">No</span></td><td class="text-secondary">JSON object with extra context (stack trace, params, etc.)</td><td><code class="text-white">{"url": "..."}</code></td></tr>
+                                <tr><td><code class="text-info">message</code></td><td><span class="adm-badge is-ok">Yes</span></td><td class="text-secondary">Log message text</td><td><code class="text-white">"API key loaded"</code></td></tr>
+                                <tr><td><code class="text-info">level</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">debug, info, warn, error, fatal</td><td><code class="text-white">"error"</code></td></tr>
+                                <tr><td><code class="text-info">tag</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">Category / component name</td><td><code class="text-white">"Auth"</code></td></tr>
+                                <tr><td><code class="text-info">user_id</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">Device user ID (or send via header)</td><td><code class="text-white">"a1b2c3d4"</code></td></tr>
+                                <tr><td><code class="text-info">build_identifier</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">Build version (or send via X-Android-Build)</td><td><code class="text-white">"42"</code></td></tr>
+                                <tr><td><code class="text-info">device_model</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">Device model (or send via X-Android-Device)</td><td><code class="text-white">"Pixel 7"</code></td></tr>
+                                <tr><td><code class="text-info">os_version</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">Android version (or send via X-Android-OS-Version)</td><td><code class="text-white">"14"</code></td></tr>
+                                <tr><td><code class="text-info">data</code></td><td><span class="adm-badge is-off">No</span></td><td class="text-secondary">JSON object with extra context (stack trace, params, etc.)</td><td><code class="text-white">{"url": "..."}</code></td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -275,14 +275,14 @@ sendLog("API key failed to load", level = "error", tag = "Auth", data = JSONObje
                 <!-- Responses -->
                 <div class="mt-4">
                     <h6 class="text-white mb-2"><i class="fas fa-exchange-alt me-1 text-warning"></i>Possible Responses</h6>
-                    <div class="table-responsive">
-                        <table class="table table-dark table-sm mb-0 align-middle small">
+                    <div class="adm-table-wrap">
+                        <table class="adm-table mb-0 align-middle small">
                             <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
                             <tbody>
-                                <tr><td><span class="badge bg-success">201</span></td><td class="text-secondary">Log saved successfully</td></tr>
-                                <tr><td><span class="badge bg-danger">400</span></td><td class="text-secondary">Invalid JSON or missing message field</td></tr>
-                                <tr><td><span class="badge bg-danger">403</span></td><td class="text-secondary">Invalid credentials or log collection disabled</td></tr>
-                                <tr><td><span class="badge bg-secondary">404</span></td><td class="text-secondary">App slug not found</td></tr>
+                                <tr><td><span class="adm-badge is-ok">201</span></td><td class="text-secondary">Log saved successfully</td></tr>
+                                <tr><td><span class="adm-badge is-danger">400</span></td><td class="text-secondary">Invalid JSON or missing message field</td></tr>
+                                <tr><td><span class="adm-badge is-danger">403</span></td><td class="text-secondary">Invalid credentials or log collection disabled</td></tr>
+                                <tr><td><span class="adm-badge is-off">404</span></td><td class="text-secondary">App slug not found</td></tr>
                             </tbody>
                         </table>
                     </div>

@@ -1,18 +1,17 @@
 {% extends 'core/admin_base.html' %}
-{% load static %}
 
 {% block title %}Data health{% endblock %}
 
 {% block admin_content %}
-<div class="container-fluid py-3">
-    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+<div class="container-fluid py-3" style="max-width:1500px">
+    <div class="adm-page-head">
         <div>
-            <h4 class="text-white mb-0"><i class="fas fa-heart-pulse text-danger me-2"></i>Data health</h4>
-            <div class="text-secondary small">Checks against data that is already stored. Each repair runs the same command the scheduled jobs use.</div>
+            <h4 class="adm-page-title"><i class="fas fa-heart-pulse me-2"></i>Data health</h4>
+            <p class="adm-page-sub">Checks against data that is already stored. Each repair runs the same command the scheduled jobs use.</p>
         </div>
-        <div class="d-flex gap-2">
-            <span class="badge bg-secondary">{{ account_devices }} account devices</span>
-            <a class="btn btn-sm btn-outline-light" href="{% url 'settings_root' %}"><i class="fas fa-gear me-1"></i>Settings</a>
+        <div class="adm-btn-group">
+            <span class="adm-badge is-off">{{ account_devices }} account devices</span>
+            <a class="adm-btn is-sm" href="{% url 'settings_root' %}"><i class="fas fa-gear"></i>Settings</a>
         </div>
     </div>
 
@@ -22,44 +21,44 @@
         {% endfor %}
     {% endif %}
 
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-3">
         {% for check in checks %}
         <div class="col-md-6 col-xl-4">
-            <div id="check-{{ check.slug }}" class="card bg-dark border-{% if check.count %}warning{% else %}secondary{% endif %} h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                        <div class="text-white fw-semibold">{{ check.label }}</div>
-                        <span class="badge {% if check.count %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ check.count }}</span>
-                    </div>
-                    {% if check.hint %}<div class="text-secondary small mt-1">{{ check.hint }}</div>{% endif %}
+            <div id="check-{{ check.slug }}" class="adm-card" style="height:100%">
+                <div class="adm-card-head">
+                    <div class="adm-card-title">{{ check.label }}</div>
+                    <span class="adm-badge {% if check.count %}is-warn{% else %}is-ok{% endif %} ms-auto">{{ check.count }}</span>
+                </div>
+                <div class="adm-card-body">
+                    {% if check.hint %}<div class="adm-sub">{{ check.hint }}</div>{% endif %}
                     {% if check.action and check.count %}
-                    <form method="post" class="mt-2">
+                    <form method="post" style="margin-top:.55rem">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="{{ check.action }}">
-                        <button class="btn btn-sm btn-outline-warning" type="submit">
-                            <i class="fas fa-wand-magic-sparkles me-1"></i>Fix with {{ check.action }}
+                        <button class="adm-btn is-warn is-sm" type="submit">
+                            <i class="fas fa-wand-magic-sparkles"></i>Fix with {{ check.action }}
                         </button>
                     </form>
                     {% endif %}
                     {% if check.count %}
                         {% if check.acknowledged_at %}
-                        <div class="text-secondary small mt-2">
+                        <div class="adm-sub" style="margin-top:.55rem">
                             <i class="fas fa-bell-slash me-1"></i>Dismissed {{ check.acknowledged_at|timesince }} ago — the badge ignores it until {{ check.ack_expires|date:'d M, H:i' }}.
                         </div>
-                        <form method="post" class="mt-1">
+                        <form method="post" style="margin-top:.3rem">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="unacknowledge">
                             <input type="hidden" name="slug" value="{{ check.slug }}">
-                            <button class="btn btn-sm btn-link text-decoration-none p-0" type="submit">Show it again</button>
+                            <button class="adm-btn is-quiet is-sm" type="submit">Show it again</button>
                         </form>
                         {% else %}
-                        <form method="post" class="mt-2">
+                        <form method="post" style="margin-top:.55rem">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="acknowledge">
                             <input type="hidden" name="slug" value="{{ check.slug }}">
-                            <button class="btn btn-sm btn-outline-secondary" type="submit"
+                            <button class="adm-btn is-sm" type="submit"
                                     title="Hide this check from the sidebar badge for 24 hours">
-                                <i class="fas fa-bell-slash me-1"></i>Dismiss 24h
+                                <i class="fas fa-bell-slash"></i>Dismiss 24h
                             </button>
                         </form>
                         {% endif %}
@@ -72,24 +71,28 @@
 
     <div class="row g-3">
         <div class="col-lg-6">
-            <div class="card bg-dark border-secondary h-100">
-                <div class="card-body">
-                    <h6 class="text-white"><i class="fas fa-mobile-screen me-2"></i>App build adoption</h6>
-                    <div class="text-secondary small mb-2">Versions the app is actually reporting. A required build is enforced at the connect endpoint.</div>
+            <div class="adm-card" style="height:100%">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-mobile-screen"></i>App build adoption</div>
+                </div>
+                <div class="adm-card-body">
+                    <p class="adm-sub" style="margin-bottom:.7rem">Versions the app is actually reporting. A required build is enforced at the connect endpoint.</p>
                     {% for build in builds %}
-                    <div class="mb-3">
-                        <div class="text-white small">{{ build.app.name }}</div>
-                        <div class="text-secondary small">required: <code>{{ build.required|default:'any build' }}</code></div>
-                        <table class="table table-sm table-dark mb-0">
-                            <thead><tr><th>Version</th><th>Devices</th></tr></thead>
-                            <tbody>
-                                {% for version in build.versions %}
-                                <tr><td class="text-white">{{ version.app_version }}</td><td>{{ version.n }}</td></tr>
-                                {% empty %}
-                                <tr><td colspan="2" class="text-secondary">No heartbeats yet.</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div{% if not forloop.last %} class="mb-3"{% endif %}>
+                        <div class="adm-item-title">{{ build.app.name }}</div>
+                        <div class="adm-sub">required: <span class="adm-mono">{{ build.required|default:'any build' }}</span></div>
+                        <div class="adm-table-wrap">
+                            <table class="adm-table" style="margin-top:.3rem">
+                                <thead><tr><th>Version</th><th class="num">Devices</th></tr></thead>
+                                <tbody>
+                                    {% for version in build.versions %}
+                                    <tr><td class="adm-mono">{{ version.app_version }}</td><td class="num">{{ version.n }}</td></tr>
+                                    {% empty %}
+                                    <tr><td colspan="2" class="adm-empty">No heartbeats yet.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -97,72 +100,84 @@
         </div>
 
         <div class="col-lg-6">
-            <div class="card bg-dark border-secondary mb-3">
-                <div class="card-body">
-                    <h6 class="text-white"><i class="fas fa-bug me-2"></i>Error types in the last 24h</h6>
-                    {% if latency_ms %}<div class="text-secondary small mb-1">p95 response {{ latency_ms }} ms over the last 24h</div>{% endif %}
-                    <table class="table table-sm table-dark mb-0">
-                        <thead><tr><th>Kind</th><th>View</th><th>Status</th><th>Count</th></tr></thead>
-                        <tbody>
-                            {% for group in groups %}
-                            <tr>
-                                <td>{{ group.kind }}</td>
-                                <td class="text-white">{{ group.view_name|default:'—' }}</td>
-                                <td><span class="badge {% if group.status_code >= 500 %}bg-danger{% else %}bg-secondary{% endif %}">{{ group.status_code }}</span></td>
-                                <td>{{ group.n }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="text-secondary">No errors captured.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div class="adm-card mb-3">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-bug"></i>Error types in the last 24h</div>
+                </div>
+                <div class="adm-card-body">
+                    {% if latency_ms %}<div class="adm-sub" style="margin-bottom:.4rem">p95 response {{ latency_ms }} ms over the last 24h</div>{% endif %}
+                    <div class="adm-table-wrap">
+                        <table class="adm-table">
+                            <thead><tr><th>Kind</th><th>View</th><th class="num">Status</th><th class="num">Count</th></tr></thead>
+                            <tbody>
+                                {% for group in groups %}
+                                <tr>
+                                    <td>{{ group.kind }}</td>
+                                    <td>{{ group.view_name|default:'—' }}</td>
+                                    <td class="num"><span class="adm-badge {% if group.status_code >= 500 %}is-danger{% else %}is-off{% endif %}">{{ group.status_code }}</span></td>
+                                    <td class="num">{{ group.n }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="adm-empty">No errors captured.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            <div class="card bg-dark border-secondary">
-                <div class="card-body">
-                    <h6 class="text-white"><i class="fas fa-plug-circle-xmark me-2"></i>Silent mid-play</h6>
-                    <div class="text-secondary small mb-2">Playback was active, then the heartbeat stopped for over 30 minutes — the pattern a crash leaves behind.</div>
-                    <table class="table table-sm table-dark mb-0">
-                        <thead><tr><th>Account</th><th>Title</th><th>Last seen</th></tr></thead>
-                        <tbody>
-                            {% for beat in silent %}
-                            <tr>
-                                <td class="text-white">{{ beat.email }}</td>
-                                <td>{{ beat.media_title|default:'—'|truncatechars:28 }}</td>
-                                <td class="text-secondary">{{ beat.last_seen_at|timesince }} ago</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-secondary">Nobody went quiet mid-play.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-plug-circle-xmark"></i>Silent mid-play</div>
+                </div>
+                <div class="adm-card-body">
+                    <p class="adm-sub" style="margin-bottom:.7rem">Playback was active, then the heartbeat stopped for over 30 minutes — the pattern a crash leaves behind.</p>
+                    <div class="adm-table-wrap">
+                        <table class="adm-table">
+                            <thead><tr><th>Account</th><th>Title</th><th>Last seen</th></tr></thead>
+                            <tbody>
+                                {% for beat in silent %}
+                                <tr>
+                                    <td>{{ beat.email }}</td>
+                                    <td>{{ beat.media_title|default:'—'|truncatechars:28 }}</td>
+                                    <td class="adm-muted">{{ beat.last_seen_at|timesince }} ago</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="adm-empty">Nobody went quiet mid-play.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="col-12">
-            <div class="card bg-dark border-secondary">
-                <div class="card-body">
-                    <h6 class="text-white"><i class="fas fa-mobile-screen-button me-2"></i>Accounts on more than one device</h6>
-                    <div class="text-secondary small mb-2">Kept from the heartbeat, so a second phone no longer replaces the first one in every report.</div>
-                    <table class="table table-sm table-dark mb-0">
-                        <thead><tr><th>Account</th><th>Devices seen</th></tr></thead>
-                        <tbody>
-                            {% for row in multi_device %}
-                            <tr>
-                                <td class="text-white">{{ row.email }}</td>
-                                <td>
-                                    {% for device in row.devices %}
-                                    <span class="badge bg-secondary me-1">{{ device.device_model|default:device.device_id|truncatechars:22 }} · {{ device.app_version|default:'?' }}</span>
-                                    {% endfor %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="2" class="text-secondary">No account has checked in from a second device yet.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <div class="adm-card-title"><i class="fas fa-mobile-screen-button"></i>Accounts on more than one device</div>
+                </div>
+                <div class="adm-card-body">
+                    <p class="adm-sub" style="margin-bottom:.7rem">Kept from the heartbeat, so a second phone no longer replaces the first one in every report.</p>
+                    <div class="adm-table-wrap">
+                        <table class="adm-table">
+                            <thead><tr><th>Account</th><th>Devices seen</th></tr></thead>
+                            <tbody>
+                                {% for row in multi_device %}
+                                <tr>
+                                    <td>{{ row.email }}</td>
+                                    <td>
+                                        {% for device in row.devices %}
+                                        <span class="adm-badge is-off me-1">{{ device.device_model|default:device.device_id|truncatechars:22 }} · {{ device.app_version|default:'?' }}</span>
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="2" class="adm-empty">No account has checked in from a second device yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

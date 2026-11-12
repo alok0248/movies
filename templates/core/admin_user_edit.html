@@ -14,45 +14,45 @@
     {% for msg in messages %}
         <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
             {{ msg }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <button aria-label="Close" type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     {% endfor %}
     {% endif %}
 
-    <div class="card bg-dark border-secondary">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary">
+        <div class="adm-card-body">
             <form method="POST">
                 {% csrf_token %}
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Username</label>
-                    <input type="text" name="username" class="form-control bg-dark text-white border-secondary" value="{{ edit_user.username }}" required>
+                    <label class="adm-label text-white">Username</label>
+                    <input type="text" name="username" class="adm-input bg-dark text-white border-secondary" value="{{ edit_user.username }}" required>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Email <span class="text-secondary">(read-only)</span></label>
-                    <input type="email" class="form-control bg-dark text-secondary border-secondary" value="{{ edit_user.email }}" disabled>
+                    <label class="adm-label text-white">Email <span class="text-secondary">(read-only)</span></label>
+                    <input type="email" class="adm-input bg-dark text-secondary border-secondary" value="{{ edit_user.email }}" disabled>
                     <div class="form-text text-muted">Email cannot be changed from here.</div>
                 </div>
 
                 <div class="row mb-3">
                     <div class="col">
-                        <label class="form-label text-white">First Name</label>
-                        <input type="text" name="first_name" class="form-control bg-dark text-white border-secondary" value="{{ edit_user.first_name }}">
+                        <label class="adm-label text-white">First Name</label>
+                        <input type="text" name="first_name" class="adm-input bg-dark text-white border-secondary" value="{{ edit_user.first_name }}">
                     </div>
                     <div class="col">
-                        <label class="form-label text-white">Last Name</label>
-                        <input type="text" name="last_name" class="form-control bg-dark text-white border-secondary" value="{{ edit_user.last_name }}">
+                        <label class="adm-label text-white">Last Name</label>
+                        <input type="text" name="last_name" class="adm-input bg-dark text-white border-secondary" value="{{ edit_user.last_name }}">
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">New Password <span class="text-secondary">(leave blank to keep current)</span></label>
-                    <input type="password" name="password" class="form-control bg-dark text-white border-secondary" placeholder="Enter new password or leave blank">
+                    <label class="adm-label text-white">New Password <span class="text-secondary">(leave blank to keep current)</span></label>
+                    <input type="password" name="password" class="adm-input bg-dark text-white border-secondary" placeholder="Enter new password or leave blank">
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Status</label>
+                    <label class="adm-label text-white">Status</label>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if edit_user.is_active %}checked{% endif %}>
                         <label class="form-check-label text-white" for="is_active">Active</label>
@@ -60,7 +60,7 @@
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label text-white">Role</label>
+                    <label class="adm-label text-white">Role</label>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="is_staff" id="is_staff" {% if edit_user.is_staff %}checked{% endif %}>
                         <label class="form-check-label text-white" for="is_staff">Staff (can access admin)</label>
@@ -71,7 +71,7 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100">
+                <button type="submit" class="adm-btn is-primary w-100">
                     <i class="fas fa-save me-1"></i> Save Changes
                 </button>
             </form>
@@ -80,11 +80,11 @@
 
     {% if synced_profile %}
     <!-- Android Sync Profile -->
-    <div class="card bg-dark border-secondary mt-4">
-        <div class="card-header border-secondary">
+    <div class="adm-card bg-dark border-secondary mt-4">
+        <div class="adm-card-head border-secondary">
             <h5 class="text-white mb-0"><i class="fas fa-mobile-alt me-2 text-green-400"></i>Android Sync Profile</h5>
         </div>
-        <div class="card-body">
+        <div class="adm-card-body">
             <div class="row g-3 small">
                 <div class="col-md-6">
                     <div class="text-secondary">Device</div>
@@ -106,9 +106,9 @@
                     <div class="text-secondary">Subscription</div>
                     <div class="text-white">
                         {% if synced_profile.is_subscribed %}
-                            <span class="badge bg-success">{{ synced_profile.plan }}</span> until {{ synced_profile.valid_until }}
+                            <span class="adm-badge is-ok">{{ synced_profile.plan }}</span> until {{ synced_profile.valid_until }}
                         {% else %}
-                            <span class="badge bg-secondary">Free</span>
+                            <span class="adm-badge is-off">Free</span>
                         {% endif %}
                     </div>
                 </div>

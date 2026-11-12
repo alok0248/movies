@@ -8,37 +8,12 @@
         padding: 2rem; margin: 2rem 0 1.5rem;
     }
     .api-hero h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 .4rem; }
-    .api-hero p { color: rgba(255,255,255,.55); margin: 0; font-size: .9rem; }
-    .api-card {
-        background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
-        border-radius: 14px; margin-bottom: 1.25rem; overflow: hidden;
-    }
-    .api-card-head {
-        display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
-        padding: .9rem 1.2rem; cursor: pointer; user-select: none;
-        border-bottom: 1px solid rgba(255,255,255,.05);
-    }
-    .api-card-head:hover { background: rgba(255,255,255,.03); }
-    .api-card.open .api-card-head { border-bottom-color: rgba(255,255,255,.08); }
-    .api-method {
+    .api-hero p { color: rgba(255,255,255,.55); margin: 0; font-size: .9rem; }    .api-method {
         font-size: .66rem; font-weight: 800; letter-spacing: .06em;
         padding: .25rem .55rem; border-radius: 6px; min-width: 52px; text-align: center;
     }
     .api-method.GET { background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
-    .api-method.POST { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
-    .api-card-path { font-family: monospace; font-size: .88rem; color: #e2e2f0; font-weight: 600; }
-    .api-card-title { font-size: .82rem; color: rgba(255,255,255,.5); flex: 1; min-width: 200px; }
-    .api-chevron { margin-left: auto; color: rgba(255,255,255,.35); transition: transform .25s; }
-    .api-card.open .api-chevron { transform: rotate(180deg); }
-    .api-card-body { display: none; padding: 1.2rem; }
-    .api-card.open .api-card-body { display: block; }
-    .api-desc { color: rgba(255,255,255,.6); font-size: .84rem; line-height: 1.6; margin: 0 0 1rem; }
-    .api-label {
-        font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
-        color: rgba(255,255,255,.35); margin: 1rem 0 .45rem;
-    }
-    .api-label:first-child { margin-top: 0; }
-    .api-code {
+    .api-method.POST { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }    .api-chevron { margin-left: auto; color: rgba(255,255,255,.35); transition: transform .25s; }    .api-desc { color: rgba(255,255,255,.6); font-size: .84rem; line-height: 1.6; margin: 0 0 1rem; }    .api-code {
         background: #0d0e14; border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
         padding: .85rem 1rem; font-family: monospace; font-size: .78rem; line-height: 1.65;
         color: #c9d1d9; overflow-x: auto; white-space: pre; margin: 0;
@@ -46,65 +21,18 @@
     .api-code .k { color: #79c0ff; }
     .api-code .s { color: #a5d6ff; }
     .api-code .g { color: #7ee787; }
-    .api-code .c { color: #8b949e; }
-    table.api-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-    table.api-table th {
-        text-align: left; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
-        color: rgba(255,255,255,.35); padding: .45rem .7rem; border-bottom: 1px solid rgba(255,255,255,.07);
-    }
-    table.api-table td { padding: .5rem .7rem; border-bottom: 1px solid rgba(255,255,255,.04); color: rgba(255,255,255,.7); vertical-align: top; }
-    table.api-table code { color: #a5d6ff; background: rgba(99,102,241,.08); padding: .1rem .35rem; border-radius: 5px; font-size: .76rem; }
-    .api-req-badge { font-size: .62rem; font-weight: 700; padding: .1rem .4rem; border-radius: 5px; }
-    .api-req-badge.req { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
-    .api-req-badge.opt { background: rgba(255,255,255,.06); color: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.1); }
-    .api-note {
+    .api-code .c { color: #8b949e; }    .api-note {
         background: rgba(56,189,248,.07); border: 1px solid rgba(56,189,248,.2);
         border-radius: 10px; padding: .75rem 1rem; font-size: .8rem; color: rgba(255,255,255,.65);
         display: flex; gap: .6rem; margin: 1rem 0 0;
     }
     .api-note i { color: #38bdf8; margin-top: .15rem; }
-    .api-copy-btn {
-        margin-left: auto; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
-        color: rgba(255,255,255,.55); border-radius: 7px; font-size: .68rem;
-        padding: .3rem .7rem; cursor: pointer; transition: all .15s; flex-shrink: 0;
-    }
-    .api-copy-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
     @media(max-width:768px) {
-        .api-hero { padding: 1.3rem; }
-        .api-card-title { display: none; }
-    }
+        .api-hero { padding: 1.3rem; }    }
     /* ===== LIGHT THEME ===== */
-    html[data-theme="light"] .api-hero p { color: rgba(25,25,45,.6); }
-    html[data-theme="light"] .api-card { background: #ffffff; border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .api-card-head { border-bottom-color: rgba(0,0,0,.07); }
-    html[data-theme="light"] .api-card-head:hover { background: rgba(0,0,0,.02); }
-    html[data-theme="light"] .api-card.open .api-card-head { border-bottom-color: rgba(0,0,0,.1); }
-    html[data-theme="light"] .api-method.GET { color: #15803d; }
-    html[data-theme="light"] .api-method.POST { color: #b45309; }
-    html[data-theme="light"] .api-card-path { color: #1f2937; }
-    html[data-theme="light"] .api-card-title { color: rgba(25,25,45,.55); }
-    html[data-theme="light"] .api-chevron { color: rgba(25,25,45,.4); }
-    html[data-theme="light"] .api-desc { color: rgba(25,25,45,.72); }
-    html[data-theme="light"] .api-label { color: rgba(25,25,45,.45); }
-    html[data-theme="light"] table.api-table th { color: rgba(25,25,45,.5); border-bottom-color: rgba(0,0,0,.1); }
-    html[data-theme="light"] table.api-table td { color: rgba(25,25,45,.8); border-bottom-color: rgba(0,0,0,.05); }
-    html[data-theme="light"] table.api-table code { color: #1d4ed8; background: rgba(99,102,241,.1); }
-    html[data-theme="light"] .api-req-badge.req { color: #b91c1c; }
-    html[data-theme="light"] .api-req-badge.opt { color: rgba(25,25,45,.5); background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.1); }
-    html[data-theme="light"] .api-note { color: rgba(25,25,45,.78); }
-    html[data-theme="light"] .api-copy-btn { background: rgba(0,0,0,.04); color: rgba(25,25,45,.6); border-color: rgba(0,0,0,.12); }
-    html[data-theme="light"] .api-copy-btn:hover { background: rgba(0,0,0,.08); color: #12122a; }
-    /* ===== DARK THEME READABILITY ===== */
-    html[data-theme="dark"] .api-hero p,
-    html[data-theme="dark"] .api-card-title,
-    html[data-theme="dark"] .api-desc { color: rgba(255,255,255,.72); }
-    html[data-theme="dark"] .api-label,
-    html[data-theme="dark"] .api-chevron { color: rgba(255,255,255,.55); }
-    html[data-theme="dark"] table.api-table th { color: rgba(255,255,255,.55); }
-    html[data-theme="dark"] .api-req-badge.opt { color: rgba(255,255,255,.72); }
-    html[data-theme="dark"] .api-note { color: rgba(255,255,255,.78); }
-    html[data-theme="dark"] .api-copy-btn { color: rgba(255,255,255,.7); }
-</style>
+    html[data-theme="light"] .api-hero p { color: rgba(25,25,45,.6); }    html[data-theme="light"] .api-method.GET { color: #15803d; }
+    html[data-theme="light"] .api-method.POST { color: #b45309; }    html[data-theme="light"] .api-chevron { color: rgba(25,25,45,.4); }
+    html[data-theme="light"] .api-desc { color: rgba(25,25,45,.72); }    html[data-theme="light"] .api-note { color: rgba(25,25,45,.78); }    html[data-theme="dark"] .api-note { color: rgba(255,255,255,.78); }</style>
 
 <div class="container api-docs-wrap">
     <div class="api-hero">
@@ -129,20 +57,20 @@
     </div>
 
     <!-- ============ AUTH ============ -->
-    <div class="api-label" id="sec-auth" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">1 · Authentication &amp; Connection</div>
+    <div class="adm-label" id="sec-auth" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">1 · Authentication &amp; Connection</div>
 
-    <div class="api-card open">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card open">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GUIDE</span>
             <span class="api-card-path">How to connect from the app</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Base URL</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Base URL</div>
             <p class="api-desc">All endpoints are relative to the server origin:</p>
             <pre class="api-code" data-copy>https://newmovies.linkpc.net</pre>
 
-            <div class="api-label">Step 1 — Android app identity (Basic Auth)</div>
+            <div class="adm-label">Step 1 — Android app identity (Basic Auth)</div>
             <p class="api-desc">
                 The user &amp; sync endpoints are protected with <b>HTTP Basic Auth</b> using the
                 <code>access_username</code> / <code>access_password</code> of a registered
@@ -154,14 +82,14 @@ X-App-Slug: my-app
 X-App-Build: 225
 User-Agent: okhttp/4.12.0</pre>
 
-            <div class="api-label">Step 2 — User JWT</div>
+            <div class="adm-label">Step 2 — User JWT</div>
  <p class="api-desc">
                 Login and register return a <b>JWT access + refresh token pair</b> for the end user.
                 Send the access token as a Bearer header on user-scoped calls like profile:
             </p>
             <pre class="api-code" data-copy>Authorization: Bearer &lt;access_token&gt;</pre>
 
-            <div class="api-label">Step 3 — Streaming endpoints</div>
+            <div class="adm-label">Step 3 — Streaming endpoints</div>
             <p class="api-desc">
                 Streaming endpoints (<code>/api/links/</code>) are open
                 (same-origin AJAX + app calls) — no Basic Auth, no JWT. Send <code>Accept: application/json</code>.
@@ -174,22 +102,22 @@ User-Agent: okhttp/4.12.0</pre>
       </div>
 
     <!-- ============ USER & SYNC ============ -->
-    <div class="api-label" id="sec-user" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">2 · User &amp; Sync API</div>
+    <div class="adm-label" id="sec-user" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">2 · User &amp; Sync API</div>
 
-    <div class="api-card open">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card open">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GUIDE</span>
             <span class="api-card-path">Shared plumbing · app-facing endpoints</span>
-            <span class="api-card-title">Rules that apply to google-login and both delete endpoints</span>
+            <span class="adm-card-title">Rules that apply to google-login and both delete endpoints</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 These rules apply to <code>POST /api/user/google-login/</code>,
                 <code>POST /api/user/delete/request-otp/</code> and <code>POST /api/user/delete/</code>.
             </p>
 
-            <div class="api-label">Always JSON, always non-empty</div>
+            <div class="adm-label">Always JSON, always non-empty</div>
             <p class="api-desc">
                 Send <code>Content-Type: application/json</code> and <code>Accept: application/json</code>.
                 <b>Every</b> response is JSON — including 4xx/5xx — and always carries a human-readable
@@ -200,7 +128,7 @@ User-Agent: okhttp/4.12.0</pre>
   "message": "Verification code is required"
 }</pre>
 
-            <div class="api-label">Method &amp; transport guards</div>
+            <div class="adm-label">Method &amp; transport guards</div>
             <p class="api-desc">
                 All three endpoints are <b>POST-only</b> — any other verb (including <code>HEAD</code>) returns
                 <code>405</code> with a JSON body, not an HTML page. In production they are also <b>HTTPS-only</b>:
@@ -212,7 +140,7 @@ User-Agent: okhttp/4.12.0</pre>
 // plain HTTP in production
 403  {"status":"error","message":"This endpoint requires a secure (HTTPS) connection."}</pre>
 
-            <div class="api-label">Identity &amp; headers</div>
+            <div class="adm-label">Identity &amp; headers</div>
             <p class="api-desc">
                 All three require the Android app's Basic Auth. The app-identity headers are optional but
                 recommended. The <code>Host</code> header is honoured as sent, so the app may call the
@@ -225,7 +153,7 @@ X-Android-App: #198
 X-Android-Build: 1
 X-Android-User-Email: user@gmail.com</pre>
 
-            <div class="api-label">Status codes</div>
+            <div class="adm-label">Status codes</div>
             <p class="api-desc">
                 <code>400</code> bad/missing input · <code>401</code> bad app credentials or unverifiable Google token ·
                 <code>403</code> insecure transport or blocked account · <code>404</code> no such account ·
@@ -241,24 +169,24 @@ X-Android-User-Email: user@gmail.com</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/sync/</span>
-            <span class="api-card-title">Sync app data ↔ cloud (watchlist, history, settings)</span>
+            <span class="adm-card-title">Sync app data ↔ cloud (watchlist, history, settings)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Bidirectional sync between the app and the server. Merges the app's <code>userData</code>
                 into the user's cloud record, pulls web watchlist/history into cloud, and returns the
                 merged payload + subscription. Throttled to one full sync per user per <b>45&nbsp;s</b> —
                 within the window it answers from stored cloud data with the same payload shape.
             </p>
-            <div class="api-label">Auth</div>
+            <div class="adm-label">Auth</div>
             <pre class="api-code" data-copy>Authorization: Basic base64(app_user:app_pass)
 Content-Type: application/json</pre>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",        // required
   "userData": {                       // optional — app's local data to merge up
@@ -271,7 +199,7 @@ Content-Type: application/json</pre>
     "deletedPlaylistItems": [...]     //   them back for 24 h (e.g. "pl_1:44").
   }
 }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "message": "User data synced successfully",
@@ -291,16 +219,16 @@ Content-Type: application/json</pre>
         </div>
     </div>
 
-    <div class="api-label" style="font-size:.85rem; color:#81c784; margin-top:2rem;">2a · Deletion Sync API <span style="color:#94a3b8;">(app → server, real-time)</span></div>
+    <div class="adm-label" style="font-size:.85rem; color:#81c784; margin-top:2rem;">2a · Deletion Sync API <span style="color:#94a3b8;">(app → server, real-time)</span></div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/history/delete/</span>
-            <span class="api-card-title">Delete watch-history items</span>
+            <span class="adm-card-title">Delete watch-history items</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Call the moment the user removes history items or marks them as not watched. Purges
                 <code>watchHistory</code> + the matching <code>playbackProgress</code> entries, deletes the
@@ -309,10 +237,10 @@ Content-Type: application/json</pre>
                 reconcile immediately. Deleting an id that is absent still records its tombstone
                 (it may exist on another device); safe to retry.
             </p>
-            <div class="api-label">Auth</div>
+            <div class="adm-label">Auth</div>
             <pre class="api-code" data-copy>Authorization: Basic base64(app_user:app_pass)
 Content-Type: application/json</pre>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",   // required
   "ids": [603, 155]              // media ids
@@ -321,7 +249,7 @@ Content-Type: application/json</pre>
                 <i class="fas fa-info-circle"></i>
                 <span>Body variants: also accepts <code>"mediaId": 603</code> (singular), <code>"mediaIds": [...]</code>, <code>"items": [{"mediaId": 603}, ...]</code> or <code>"deleteType": "history"</code>. Mixing a singular id with <code>deleteType</code> works on every deletion endpoint.</span>
             </div>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "message": "History deleted",
@@ -335,20 +263,20 @@ Content-Type: application/json</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/watchlist/delete/</span>
-            <span class="api-card-title">Remove watchlist items</span>
+            <span class="adm-card-title">Remove watchlist items</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Same contract as history/delete: purges the items from the cloud watchlist, mirrors the
                 deletion into the web watchlist rows, and tombstones each id so bidirectional merge can
                 never bring them back. Response shape identical (<code>message: "Watchlist items deleted"</code>).
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",
   "ids": [603, 155]              // or "items": [{"mediaId": 603}, ...]
@@ -356,19 +284,19 @@ Content-Type: application/json</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/playlist/delete/</span>
-            <span class="api-card-title">Delete custom playlists</span>
+            <span class="adm-card-title">Delete custom playlists</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Removes whole playlists from cloud data and tombstones their ids. Response
                 <code>message: "Playlists deleted"</code>, same 200/error contract as above.
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",
   "playlistIds": ["pl_1", "pl_2"]   // or "ids" / "items"
@@ -376,21 +304,21 @@ Content-Type: application/json</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/playlist/item/delete/</span>
-            <span class="api-card-title">Remove items inside a playlist</span>
+            <span class="adm-card-title">Remove items inside a playlist</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Removes specific items from specific playlists without deleting the playlist. Items are
                 addressed by <code>"playlistId:mediaId"</code> keys (canonical) or the compact
                 <code>playlistId</code> + <code>itemIds</code> form. Tombstoned as
                 <code>"pid:iid"</code> keys, also returned in <code>userData.deletedPlaylistItems</code>.
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",
   "playlistId": "pl_1",           // compact form:
@@ -402,38 +330,38 @@ Content-Type: application/json</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/history/clear/</span>
-            <span class="api-card-title">Clear all history</span>
+            <span class="adm-card-title">Clear all history</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 "Clear all" / "Delete all" on the phone. Empties <code>watchHistory</code> +
                 <code>playbackProgress</code>, deletes every web history row, and tombstones every id
                 that was present — so other devices purge it too on their next sync. Body carries only
                 the email; response <code>message: "History cleared"</code>.
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{ "email": "user@example.com" }</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/watchlist/clear/</span>
-            <span class="api-card-title">Clear entire watchlist</span>
+            <span class="adm-card-title">Clear entire watchlist</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Empties the cloud watchlist, deletes every web watchlist row and tombstones every id
                 that was present. Same request/response contract as history/clear.
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{ "email": "user@example.com" }</pre>
             <div class="api-note">
                 <i class="fas fa-info-circle"></i>
@@ -442,16 +370,16 @@ Content-Type: application/json</pre>
         </div>
     </div>
 
-    <div class="api-label" style="font-size:.85rem; color:#81c784; margin-top:2rem;">2b · Heartbeat &amp; Access Control <span style="color:#94a3b8;">(app → server, every 60 s)</span></div>
+    <div class="adm-label" style="font-size:.85rem; color:#81c784; margin-top:2rem;">2b · Heartbeat &amp; Access Control <span style="color:#94a3b8;">(app → server, every 60 s)</span></div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/heartbeat/</span>
-            <span class="api-card-title">1-min heartbeat + real-time activity telemetry</span>
+            <span class="adm-card-title">1-min heartbeat + real-time activity telemetry</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 The app fires this once a minute from a background loop so the admin panel can show who is
                 online, what they are watching, which screen they're on and which app version they run.
@@ -460,12 +388,12 @@ Content-Type: application/json</pre>
                 <b>3&nbsp;minutes</b>. The response echoes the account's verification and block state so the
                 app can react immediately — see Access Control below.
             </p>
-            <div class="api-label">Auth</div>
+            <div class="adm-label">Auth</div>
             <pre class="api-code" data-copy>Authorization: Basic base64(app_user:app_pass)
 Content-Type: application/json
 X-Android-App: 198
 X-Android-Build: 1</pre>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "action": "heartbeat",
   "email": "user@example.com",     // required
@@ -491,7 +419,7 @@ X-Android-Build: 1</pre>
     "recentActions": ["screen_home@1729079980000"]
   }
 }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "isEmailVerified": true,
@@ -506,19 +434,19 @@ X-Android-Build: 1</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method" style="background: rgba(239,68,68,.18); color:#f87171; border: 1px solid rgba(239,68,68,.35);">BLOCK</span>
             <span class="api-card-path">Access Control</span>
-            <span class="api-card-title">How an admin block reaches the app</span>
+            <span class="adm-card-title">How an admin block reaches the app</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 An admin can restrict a user from the Synced-Users panel. The mode is stored per account and
                 enforced on every API call; the app reacts to the HTTP status. There are three modes:
             </p>
-            <div class="api-label">Modes &amp; enforcement</div>
+            <div class="adm-label">Modes &amp; enforcement</div>
             <pre class="api-code" data-copy>full  → EVERY endpoint returns 403 {"code":"access_blocked"}
         App shows "access restricted", no data is pulled.
 
@@ -529,7 +457,7 @@ app   → data APIs (sync, deletions, register, …) return 503
 play  → playback/source endpoints (e.g. /api/videasy/sources/)
         return 403 so movies & series won't play. Browsing
         stays allowed.</pre>
-            <div class="api-label">Blocked response</div>
+            <div class="adm-label">Blocked response</div>
             <pre class="api-code" data-copy>HTTP/1.1 403 Forbidden
 {
   "status": "error",
@@ -544,23 +472,23 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/register/</span>
-            <span class="api-card-title">Create account (sends verification email)</span>
+            <span class="adm-card-title">Create account (sends verification email)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">Registers a user, hashes the password, and sends a verification email/OTP. User must verify before login.</p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",
   "password": "secret123",
   "username": "optional",
   "firstName": "optional"
 }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "message": "...",
@@ -570,24 +498,24 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/login/</span>
-            <span class="api-card-title">Authenticate user → JWT pair + cloud data</span>
+            <span class="adm-card-title">Authenticate user → JWT pair + cloud data</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Authenticates email + password (rate-limited by IP <i>and</i> email), returns JWT tokens,
                 profile, subscription and merged cloud data. Unverified accounts get 403 + <code>requiresVerification</code>.
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "email": "user@example.com",
   "password": "secret123"
 }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "user": {
@@ -600,17 +528,17 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/refresh/</span>
-            <span class="api-card-title">Renew an expired access token</span>
+            <span class="adm-card-title">Renew an expired access token</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Request body</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{ "refresh": "eyJ..." }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "tokens": { "access": "eyJ...", "refresh": "eyJ..." }
@@ -618,14 +546,14 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/google-login/</span>
-            <span class="api-card-title">Sign in (or sign up) with a Google ID token</span>
+            <span class="adm-card-title">Sign in (or sign up) with a Google ID token</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 The app posts the Google <code>id_token</code> (a signed JWT). The server verifies it against
                 Google's keys, checks the audience, issuer, expiry and <code>email_verified</code>, then takes the
@@ -648,14 +576,14 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
                 Linking or creating sets <code>auth_provider = "google"</code> and <code>is_email_verified = true</code>.
                 The account email must be a real, verified Google address — unverified Google emails are rejected.
             </p>
-            <div class="api-label">Request body</div>
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
   "email": "user@gmail.com",        // hint only — never trusted for identity
   "displayName": "Alok Kumar",       // ignored for identity, used as a fallback name
   "photoUrl": "https://lh3.googleusercontent.com/a/..."
 }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "message": "Signed in with Google",
@@ -663,7 +591,7 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
   "subscription": { "isSubscribed": false, "plan": "Free" },
   "userData": { ...cloud data... }
 }</pre>
-            <div class="api-label">Errors</div>
+            <div class="adm-label">Errors</div>
             <pre class="api-code" data-copy>400  {"status":"error","message":"Invalid JSON body"}
 401  {"status":"error","message":"Google token verification failed"}
 403  {"status":"error","message":"...account blocked..."}
@@ -672,14 +600,14 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/delete/request-otp/ · /api/user/delete/</span>
-            <span class="api-card-title">Delete the account (2 steps, emailed OTP) OR delete items (1 step)</span>
+            <span class="adm-card-title">Delete the account (2 steps, emailed OTP) OR delete items (1 step)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 <code>/api/user/delete/</code> is <b>one path with two modes</b>. The server picks the mode from the
                 body you send, never by guessing:
@@ -691,7 +619,7 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
                     and must name a target with <code>deleteType</code> (or <code>action: "delete"</code> plus <code>deleteType</code>).</li>
             </ul>
 
-            <div class="api-label">Mode A · Account deletion — step 1: request the code</div>
+            <div class="adm-label">Mode A · Account deletion — step 1: request the code</div>
             <p class="api-desc">
                 Emails a 6-digit code. Nothing is deleted at this step. The code is stored <b>hashed</b> (never in
                 plaintext), expires in <b>10&nbsp;minutes</b>, allows <b>5 attempts</b>, and is rate-limited to
@@ -704,7 +632,7 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
 404  { "status": "error", "message": "No account found with this email address." }
 429  { "status": "error", "message": "...please wait..." }</pre>
 
-            <div class="api-label">Mode A · Account deletion — step 2: confirm</div>
+            <div class="adm-label">Mode A · Account deletion — step 2: confirm</div>
             <p class="api-desc">
                 Validates the code, then permanently deletes the account, its synced data, watch history, watchlist
                 and sessions, revokes every token, and burns the code. All-or-nothing: if a step fails the account
@@ -722,7 +650,7 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
 500  { "status": "error", "message": "Could not delete the account. Please try again." }</pre>
             <div class="api-note"><i class="fas fa-exclamation-triangle"></i><span>A non-2xx keeps the user signed in and leaves local data untouched — the app only wipes local data after this returns 2xx. <code>500</code> is safe to retry; <code>400</code> is not.</span></div>
 
-            <div class="api-label">Mode B · Item deletion — one step, no OTP</div>
+            <div class="adm-label">Mode B · Item deletion — one step, no OTP</div>
             <p class="api-desc">
                 Removes individual records from the user's cloud data and records a <b>tombstone</b> so the items are
                 not re-uploaded by the next sync. The account itself is never touched. Send the same
@@ -735,27 +663,27 @@ play  → playback/source endpoints (e.g. /api/videasy/sources/)
   "deleteType": "history",     // required in this mode
   "ids": [550, 157336]         // required for history / watchlist / playlist_item
 }</pre>
-            <div class="api-label">Accepted <code>deleteType</code> values</div>
+            <div class="adm-label">Accepted <code>deleteType</code> values</div>
             <pre class="api-code" data-copy>history          remove the given watch-history entries   (needs ids)
 clear_history    wipe all watch history                    (no ids)
 watchlist        remove the given watchlist entries        (needs ids)
 clear_watchlist  wipe the whole watchlist                  (no ids)
 playlist         delete whole playlists by id              (needs ids)
 playlist_item    delete single items from a playlist      (needs ids)</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "message": "History deleted",
   "deleted": [550],
   "userData": { ...updated cloud payload... }
 }</pre>
-            <div class="api-label">The account must already exist</div>
+            <div class="adm-label">The account must already exist</div>
             <p class="api-desc">
                 This mode deletes data from an existing account — it never creates one. An unknown
                 <code>email</code> returns <code>404</code> and no user is created.
             </p>
             <pre class="api-code" data-copy>404  { "status": "error", "message": "No account found with this email address." }</pre>
-            <div class="api-label">Ambiguous request is refused</div>
+            <div class="adm-label">Ambiguous request is refused</div>
             <p class="api-desc">
                 If you send neither an <code>otp</code> nor a <code>deleteType</code>, the server will <b>not</b> guess.
                 It returns <code>400</code> and says what it needs:
@@ -768,17 +696,17 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/api/user/profile/</span>
-            <span class="api-card-title">Fetch profile + subscription via JWT</span>
+            <span class="adm-card-title">Fetch profile + subscription via JWT</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Auth</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Auth</div>
             <pre class="api-code" data-copy>Authorization: Bearer &lt;access_token&gt;</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "status": "success",
   "user": { "userId": "usr_1", "email": "...", ... },
@@ -787,50 +715,50 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/forgot-password/</span>
-            <span class="api-card-title">Send password-reset OTP to email</span>
+            <span class="adm-card-title">Send password-reset OTP to email</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Request body</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{ "email": "user@example.com" }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{ "status": "success", "message": "..." }</pre>
             <div class="api-note"><i class="fas fa-info-circle"></i><span>Then verify with <code>/api/user/verify-reset-otp/</code>, then set the new password with <code>/api/user/reset-password/</code>.</span></div>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/verify-reset-otp/ · /api/user/reset-password/</span>
-            <span class="api-card-title">Complete the password reset flow</span>
+            <span class="adm-card-title">Complete the password reset flow</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Request bodies</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Request bodies</div>
             <pre class="api-code" data-copy>// verify-reset-otp
 { "email": "user@example.com", "otp": "123456" }
 
 // reset-password
 { "email": "user@example.com", "otp": "123456", "password": "newSecret123" }</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{ "status": "success" }</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/user/verify-email/ · /api/user/resend-verification/</span>
-            <span class="api-card-title">Email verification (OTP)</span>
+            <span class="adm-card-title">Email verification (OTP)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Request bodies</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Request bodies</div>
             <pre class="api-code" data-copy>// verify-email
 { "email": "user@example.com", "otp": "123456" }
 
@@ -840,37 +768,39 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
     </div>
 
     <!-- ============ STREAMING ============ -->
-    <div class="api-label" id="sec-stream" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">3 · Streaming / Extraction API</div>
+    <div class="adm-label" id="sec-stream" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">3 · Streaming / Extraction API</div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/api/links/</span>
-            <span class="api-card-title">Direct stream links for native players (ExoPlayer / VLC)</span>
+            <span class="adm-card-title">Direct stream links for native players (ExoPlayer / VLC)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 The main extraction endpoint for apps. Queries all upstream servers in parallel, decrypts
                 their payloads, and returns every playable link — raw CDN URL first, plus a
                 server-proxied HLS URL that rewrites manifests so any player can stream even CDNs
                 that block unknown clients. Results cached 3&nbsp;min.
             </p>
-            <div class="api-label">Query params</div>
-            <table class="api-table">
+            <div class="adm-label">Query params</div>
+            <div class="adm-table-wrap">
+            <table class="adm-table">
                 <thead><tr><th>Param</th><th></th><th>Description</th></tr></thead>
                 <tbody>
-                    <tr><td><code>tmdb_id</code></td><td><span class="api-req-badge req">required</span></td><td>TMDB id of the movie/series</td></tr>
-                    <tr><td><code>type</code></td><td><span class="api-req-badge req">required</span></td><td><code>movie</code> or <code>tv</code></td></tr>
-                    <tr><td><code>season</code></td><td><span class="api-req-badge opt">optional</span></td><td>Season number (tv only)</td></tr>
-                    <tr><td><code>episode</code></td><td><span class="api-req-badge opt">optional</span></td><td>Episode number (tv only)</td></tr>
-                    <tr><td><code>lang</code></td><td><span class="api-req-badge opt">optional</span></td><td>Filter sources by language, e.g. <code>hindi</code></td></tr>
-                    <tr><td><code>server</code></td><td><span class="api-req-badge opt">optional</span></td><td>Restrict to one upstream server name</td></tr>
+                    <tr><td><code>tmdb_id</code></td><td><span class="adm-badge req">required</span></td><td>TMDB id of the movie/series</td></tr>
+                    <tr><td><code>type</code></td><td><span class="adm-badge req">required</span></td><td><code>movie</code> or <code>tv</code></td></tr>
+                    <tr><td><code>season</code></td><td><span class="adm-badge opt">optional</span></td><td>Season number (tv only)</td></tr>
+                    <tr><td><code>episode</code></td><td><span class="adm-badge opt">optional</span></td><td>Episode number (tv only)</td></tr>
+                    <tr><td><code>lang</code></td><td><span class="adm-badge opt">optional</span></td><td>Filter sources by language, e.g. <code>hindi</code></td></tr>
+                    <tr><td><code>server</code></td><td><span class="adm-badge opt">optional</span></td><td>Restrict to one upstream server name</td></tr>
                 </tbody>
             </table>
-            <div class="api-label">Example request</div>
+            </div>
+            <div class="adm-label">Example request</div>
             <pre class="api-code" data-copy>curl "https://newmovies.linkpc.net/api/links/?tmdb_id=550&type=movie"</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "success": true,
   "title": "Fight Club",
@@ -893,32 +823,32 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
                 <span>Playback strategy for native players: try <code>url</code> first; if the CDN refuses (403/CORS/IP-bound), play <code>proxy_url</code>. Try each link in order before giving up.</span>
             </div>
         </div>
-    </div><div class="api-card">
-    <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    </div><div class="adm-card">
+    <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
         <span class="api-method GET">GET</span>
         <span class="api-card-path">/ajax/player-episodes/</span>
-            <span class="api-card-title">Episode list for a series season</span>
+            <span class="adm-card-title">Episode list for a series season</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Query params</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Query params</div>
             <pre class="api-code" data-copy>tmdb_id, season</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{ "success": true, "episodes": [ { "episode_number": 1, "name": "...", ... } ] }</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/ajax/player-subtitles/ · /ajax/stremio-subtitles/</span>
-            <span class="api-card-title">Subtitle tracks for a title</span>
+            <span class="adm-card-title">Subtitle tracks for a title</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Query params</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Query params</div>
             <pre class="api-code" data-copy>tmdb_id, type, season, episode, lang (preferred language)</pre>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "success": true,
   "subtitles": [ { "label": "English", "url": "https://...", "lang": "en" } ]
@@ -926,47 +856,47 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/proxy/&lt;host&gt;/&lt;path&gt;</span>
-            <span class="api-card-title">Server-side HLS/segment proxy (no scheme in the URL)</span>
+            <span class="adm-card-title">Server-side HLS/segment proxy (no scheme in the URL)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Streams any upstream URL through the server and rewrites HLS manifests so segment URLs
                 stay on the proxy. The <code>target</code> has <b>no</b> <code>https://</code> scheme —
                 the view adds it. Used automatically by <code>proxy_url</code> from <code>/api/links/</code>.
             </p>
-            <div class="api-label">Example</div>
+            <div class="adm-label">Example</div>
             <pre class="api-code" data-copy>GET /proxy/sun.peakstorm.top/r6/abc/index.m3u8
 // → server fetches https://sun.peakstorm.top/r6/abc/index.m3u8</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/api/player/?tmdb_id=&amp;type=</span>
-            <span class="api-card-title">Full web player page (browser embed)</span>
+            <span class="adm-card-title">Full web player page (browser embed)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Query params</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Query params</div>
             <pre class="api-code" data-copy>tmdb_id, type (movie|tv), season, episode, lang</pre>
             <div class="api-note"><i class="fas fa-info-circle"></i><span>Returns HTML, not JSON — load it in a WebView if the app wants the full web player experience instead of native playback.</span></div>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/direct-player/?tmdb_id=&amp;type=</span>
-            <span class="api-card-title">Direct-links browser player page (hls.js + auto fallback)</span>
+            <span class="adm-card-title">Direct-links browser player page (hls.js + auto fallback)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 Standalone browser page that calls <code>/api/links/</code> and plays the extracted links
                 with hls.js — raw CDN first, then the proxy route, auto-advancing to the next link when
@@ -976,23 +906,23 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
     </div>
 
     <!-- ============ APP CONFIG ============ -->
-    <div class="api-label" id="sec-app" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">4 · App Config API</div>
+    <div class="adm-label" id="sec-app" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">4 · App Config API</div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/api/android-apps/&lt;app_slug&gt;/</span>
-            <span class="api-card-title">Remote app configuration (identity + access gating)</span>
+            <span class="adm-card-title">Remote app configuration (identity + access gating)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 The app calls its own slug at startup. The server checks the app is active, validates the
                 device identity / build ID against the <a href="{% url 'android_app_list' %}">Android Apps</a>
                 config (allowed endpoint, allowed build ids, ranges like <code>225-250</code>), logs the
                 access, and returns the app's stored JSON config.
             </p>
-            <div class="api-label">Response 200</div>
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{
   "success": true,
   "config": { ...app's stored config JSON... }
@@ -1004,15 +934,15 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method POST">POST</span>
             <span class="api-card-path">/api/android-apps/&lt;app_slug&gt;/log/</span>
-            <span class="api-card-title">App → server log shipping</span>
+            <span class="adm-card-title">App → server log shipping</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Request body</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Request body</div>
             <pre class="api-code" data-copy>{
   "level": "error",
   "message": "Player failed to start",
@@ -1022,55 +952,55 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
     </div>
 
     <!-- ============ CINEPLAYER ============ -->
-    <div class="api-label" id="sec-cineplayer" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">5 · CinePlayer Relay API</div>
+    <div class="adm-label" id="sec-cineplayer" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">5 · CinePlayer Relay API</div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/cineplayer/api/whoami/</span>
-            <span class="api-card-title">Relay identity probe</span>
+            <span class="adm-card-title">Relay identity probe</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <pre class="api-code" data-copy>{ "ok": true, "user": "...", "server": "..." }</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/cineplayer/api/resolve/tmdb/&lt;tmdb_id&gt;/</span>
-            <span class="api-card-title">Resolve a TMDB id → CinePlayer VOD id</span>
+            <span class="adm-card-title">Resolve a TMDB id → CinePlayer VOD id</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Example</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Example</div>
             <pre class="api-code" data-copy>GET /cineplayer/api/resolve/tmdb/550/</pre>
             <div class="api-note"><i class="fas fa-info-circle"></i><span>Falls back to local relay data when the gateway is unreachable.</span></div>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/cineplayer/api/title/&lt;vod_id&gt;/</span>
-            <span class="api-card-title">Title metadata</span>
+            <span class="adm-card-title">Title metadata</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
-            <div class="api-label">Response 200</div>
+        <div class="adm-card-body">
+            <div class="adm-label">Response 200</div>
             <pre class="api-code" data-copy>{ "ok": true, "title": { "name": "...", "streams": [...] } }</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/cineplayer/api/stream/&lt;vod_id&gt;/</span>
-            <span class="api-card-title">Stream URL for a VOD id</span>
+            <span class="adm-card-title">Stream URL for a VOD id</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <pre class="api-code" data-copy>{ "ok": true, "url": "https://..." }</pre>
             <div class="api-note">
                 <i class="fas fa-info-circle"></i>
@@ -1081,28 +1011,28 @@ playlist_item    delete single items from a playlist      (needs ids)</pre>
     </div>
 
     <!-- ============ MISC ============ -->
-    <div class="api-label" id="sec-misc" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">6 · Utilities</div>
+    <div class="adm-label" id="sec-misc" style="font-size:.85rem; color:#818cf8; margin-top:2rem;">6 · Utilities</div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/api/health</span>
-            <span class="api-card-title">Health probe (for uptime monitors)</span>
+            <span class="adm-card-title">Health probe (for uptime monitors)</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <pre class="api-code" data-copy>{ "status": "ok" }</pre>
         </div>
     </div>
 
-    <div class="api-card">
-        <div class="api-card-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="adm-card">
+        <div class="adm-card-head" onclick="this.parentElement.classList.toggle('open')">
             <span class="api-method GET">GET</span>
             <span class="api-card-path">/ajax/toggle-watchlist/ · /ajax/check-watchlist/ · /ajax/record-play/ · /ajax/play-progress/ · /ajax/resume-position/</span>
-            <span class="api-card-title">Web session AJAX — watchlist &amp; playback progress</span>
+            <span class="adm-card-title">Web session AJAX — watchlist &amp; playback progress</span>
             <i class="fas fa-chevron-down api-chevron"></i>
         </div>
-        <div class="api-card-body">
+        <div class="adm-card-body">
             <p class="api-desc">
                 CSRF-protected same-origin endpoints used by the website itself. Native apps should use
                 <code>/api/user/sync/</code> instead of these.

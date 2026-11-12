@@ -5,7 +5,7 @@
         <div class="sect-title"><i class="fas fa-history text-info me-2"></i>Recent visits</div>
         <div class="sub">{{ counts.visits }} requests &middot; kept {{ selected_app.data_retention_days }} days (older ones are auto-deleted) &middot; expand <strong>Request</strong> for the full HTTP headers</div>
     </div>
-    <div class="table-responsive">
+    <div class="adm-table-wrap">
         <table class="table table-dark table-hover mb-0">
             <thead>
                 <tr>
@@ -47,10 +47,4 @@
         </table>
     </div>
 
-    {% if visits_page.has_other_pages %}
-    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
-        {% if visits_page.has_previous %}<a class="fbtn" href="?tab=visits&vpage={{ visits_page.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
-        <span class="sub">Visits {{ visits_page.number }} of {{ visits_page.paginator.num_pages }} &middot; {{ visits_page.paginator.count }} requests</span>
-        {% if visits_page.has_next %}<a class="fbtn" href="?tab=visits&vpage={{ visits_page.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
-    </nav>
-    {% endif %}
+    {% include "core/_adm_pager.html" with pg=visits_page page_param="vpage" %}

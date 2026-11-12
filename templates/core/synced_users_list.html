@@ -8,39 +8,39 @@
             <p class="text-secondary mb-0">All Android app users who have synced via the user sync API.</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'android_app_dashboard' %}" class="btn btn-outline-light">&larr; Back to Analytics</a>
+            <a href="{% url 'android_app_dashboard' %}" class="adm-btn">&larr; Back to Analytics</a>
         </div>
     </div>
 
     <!-- Stats Cards -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body text-center">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body text-center">
                     <div class="display-5 text-white fw-bold">{{ total }}</div>
                     <div class="text-secondary small mt-1"><i class="fas fa-users me-1"></i>Total Users</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-success shadow-sm h-100">
-                <div class="card-body text-center">
+            <div class="adm-card bg-dark border-success shadow-sm h-100">
+                <div class="adm-card-body text-center">
                     <div class="display-5 text-success fw-bold">{{ subscribed }}</div>
                     <div class="text-secondary small mt-1"><i class="fas fa-crown me-1"></i>Subscribed</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-warning shadow-sm h-100">
-                <div class="card-body text-center">
+            <div class="adm-card bg-dark border-warning shadow-sm h-100">
+                <div class="adm-card-body text-center">
                     <div class="display-5 text-warning fw-bold">{{ free }}</div>
                     <div class="text-secondary small mt-1"><i class="fas fa-user me-1"></i>Free Users</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-info shadow-sm h-100">
-                <div class="card-body text-center">
+            <div class="adm-card bg-dark border-info shadow-sm h-100">
+                <div class="adm-card-body text-center">
                     {% if total > 0 %}
                         <div class="display-5 text-info fw-bold">{{ subscribed|floatformat:0 }}%</div>
                     {% else %}
@@ -53,16 +53,16 @@
     </div>
 
     <!-- Users Table -->
-    <div class="card bg-dark border-secondary shadow-lg">
-        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+    <div class="adm-card bg-dark border-secondary shadow-lg">
+        <div class="adm-card-head border-secondary d-flex justify-content-between align-items-center">
             <span class="text-white fw-semibold">All Users ({{ total }})</span>
             <div class="input-group input-group-sm" style="max-width:250px;">
-                <input type="text" id="userSearch" class="form-control bg-dark text-white border-secondary" placeholder="Search users..." oninput="filterUsers()">
+                <input type="text" id="userSearch" class="adm-input bg-dark text-white border-secondary" placeholder="Search users..." oninput="filterUsers()">
             </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle mb-0 small" id="usersTable">
+        <div class="adm-card-body p-0">
+            <div class="adm-table-wrap">
+                <table class="adm-table align-middle mb-0 small" id="usersTable">
                     <thead>
                         <tr>
                             <th>User</th>
@@ -96,14 +96,14 @@
                             {% with hb=beat|get_item:u.email %}
                             <td>
                                 {% if hb and hb.is_online %}
-                                    <span class="badge bg-success"><i class="fas fa-circle me-1" style="font-size:.55rem;"></i>Online</span>
+                                    <span class="adm-badge is-ok"><i class="fas fa-circle me-1" style="font-size:.55rem;"></i>Online</span>
                                 {% elif hb %}
-                                    <span class="badge bg-secondary">Offline</span>
+                                    <span class="adm-badge is-off">Offline</span>
                                 {% else %}
-                                    <span class="badge bg-dark border border-secondary text-secondary">Never</span>
+                                    <span class="adm-badge is-off border border-secondary text-secondary">Never</span>
                                 {% endif %}
                                 {% if u.block_mode %}
-                                    <span class="badge bg-danger">{{ u.get_block_mode_display }}</span>
+                                    <span class="adm-badge is-danger">{{ u.get_block_mode_display }}</span>
                                 {% endif %}
                             </td>
                             <td><code class="text-break">{{ u.email }}</code></td>
@@ -116,9 +116,9 @@
                             {% endwith %}
                             <td>
                                 {% if u.is_subscribed %}
-                                    <span class="badge bg-success"><i class="fas fa-check me-1"></i>Subscribed</span>
+                                    <span class="adm-badge is-ok"><i class="fas fa-check me-1"></i>Subscribed</span>
                                 {% else %}
-                                    <span class="badge bg-secondary">Free</span>
+                                    <span class="adm-badge is-off">Free</span>
                                 {% endif %}
                             </td>
                             <td><span class="text-white">{{ u.plan|default:'-' }}</span></td>

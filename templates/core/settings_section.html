@@ -2,64 +2,20 @@
 
 {% block admin_content %}
 <style>
-    .set-page { max-width: 1100px; }
-    .set-head { display: flex; align-items: flex-start; gap: .9rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
-    .set-head h1 { font-size: 1.15rem; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.01em; display: flex; align-items: center; gap: .55rem; }
-    .set-head .set-sub { font-size: .74rem; color: rgba(255,255,255,.42); margin-top: .25rem; max-width: 74ch; line-height: 1.5; }
-    .set-head-ico {
-        width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-        border-radius: 9px; background: rgba(99,102,241,.16); color: #a5b4fc; font-size: .8rem;
-    }
-    .set-sec {
+    .set-page { max-width: 1100px; }    .set-sec {
         background: rgba(255,255,255,.022); border: 1px solid rgba(255,255,255,.07);
         border-radius: 14px; padding: 1rem 1.05rem 1.15rem; margin-bottom: .85rem;
         transition: border-color .16s ease, background .16s ease;
     }
-    .set-sec:hover { border-color: rgba(255,255,255,.12); }
-    .set-sec-head { margin-bottom: .9rem; }
-    .set-sec-head h3 { font-size: .74rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a5b4fc; margin: 0 0 .18rem; }
-    .set-sec-head p { font-size: .72rem; color: rgba(255,255,255,.38); margin: 0; max-width: 78ch; line-height: 1.5; }
-    .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .85rem 1.1rem; }
-    .set-field { min-width: 0; }
-    .set-field.full { grid-column: 1 / -1; }
-    .set-label { display: block; font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.72); margin-bottom: .3rem; }
-    .set-field .form-control, .set-field .form-select {
-        background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); color: #fff;
-        border-radius: 9px; font-size: .8rem; transition: border-color .15s ease, box-shadow .15s ease;
-    }
-    .set-field .form-control:focus, .set-field .form-select:focus {
-        border-color: rgba(99,102,241,.65); box-shadow: 0 0 0 3px rgba(99,102,241,.18); background: rgba(255,255,255,.06);
-    }
-    .set-switch { display: flex; align-items: center; gap: .55rem; padding: .2rem 0; }
+    .set-sec:hover { border-color: rgba(255,255,255,.12); }    .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .85rem 1.1rem; }    .set-switch { display: flex; align-items: center; gap: .55rem; padding: .2rem 0; }
     .set-switch .form-check-label { font-size: .76rem; color: rgba(255,255,255,.78); }
     .set-help { display: block; font-size: .66rem; color: rgba(255,255,255,.34); margin-top: .28rem; line-height: 1.45; }
-    .set-err { font-size: .68rem; color: #fca5a5; margin-top: .25rem; }
-    .set-actions {
-        position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: .6rem;
-        justify-content: flex-end; padding: .7rem 0 .2rem; margin-top: .4rem;
-        background: linear-gradient(to top, rgba(11,15,25,.96) 55%, rgba(11,15,25,0));
-    }
-    .set-actions .set-note { margin-right: auto; font-size: .7rem; color: rgba(255,255,255,.35); }
-    .set-actions .is-busy { opacity: .6; pointer-events: none; }
-    .set-actions .pill-btn { display: inline-flex; align-items: center; gap: .4rem; font-size: .76rem; }
-    html[data-theme="light"] .set-head h1 { color: #111; }
-    html[data-theme="light"] .set-head .set-sub,
-    html[data-theme="light"] .set-sec-head p,
-    html[data-theme="light"] .set-help,
-    html[data-theme="light"] .set-actions .set-note { color: rgba(0,0,0,.45); }
-    html[data-theme="light"] .set-sec { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .set-sec-head h3 { color: #4338ca; }
-    html[data-theme="light"] .set-label,
-    html[data-theme="light"] .set-switch .form-check-label { color: rgba(0,0,0,.72); }
-    html[data-theme="light"] .set-field .form-control,
-    html[data-theme="light"] .set-field .form-select { background: #fff; border-color: rgba(0,0,0,.16); color: #111; }
-    html[data-theme="light"] .set-actions { background: linear-gradient(to top, rgba(255,255,255,.97) 55%, rgba(255,255,255,0)); }
-</style>
+    .set-err { font-size: .68rem; color: #fca5a5; margin-top: .25rem; }    html[data-theme="light"] .set-sec { background: rgba(0,0,0,.02); border-color: rgba(0,0,0,.08); }</style>
 
 <div class="px-1 px-md-2 set-page" data-settings-panel data-panel-title="{{ title }}">
-    <div class="set-head">
+    <div class="adm-page-head">
         {% if not settings_wrapper %}
-        <a href="{% url back_url %}" class="pill-btn pill-btn-outline">
+        <a href="{% url back_url %}" class="adm-btn pill-btn-outline">
             <i class="fas fa-arrow-left"></i> {% if back_url == 'admin_dashboard' %}Dashboard{% else %}Back{% endif %}
         </a>
         {% endif %}
@@ -83,7 +39,7 @@
         {% for section in sections %}
         <section class="set-sec">
             {% if section.title %}
-            <header class="set-sec-head">
+            <header class="adm-form-section">
                 <h3>{{ section.title }}</h3>
                 {% if section.hint %}<p>{{ section.hint }}</p>{% endif %}
             </header>
@@ -91,7 +47,7 @@
             <div class="set-grid">
                 {% for field in section.fields %}
                     {% if field.field.widget.input_type == 'checkbox' %}
-                    <div class="set-field" data-field="{{ field.name }}">
+                    <div class="adm-field" data-field="{{ field.name }}">
                         <div class="set-switch form-check form-switch mb-0">
                             {{ field }}
                             <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -101,7 +57,7 @@
                     </div>
                     {% else %}
                     <div class="set-field{% if field.field.widget.input_type == 'textarea' %} full{% endif %}" data-field="{{ field.name }}">
-                        <label for="{{ field.id_for_label }}" class="set-label">{{ field.label }}</label>
+                        <label for="{{ field.id_for_label }}" class="adm-label">{{ field.label }}</label>
                         {{ field }}
                         {% if field.errors %}<div class="set-err">{% for err in field.errors %}<div>{{ err }}</div>{% endfor %}</div>{% endif %}
                         {% if field.help_text %}<small class="set-help">{{ field.help_text }}</small>{% endif %}
@@ -112,12 +68,12 @@
         </section>
         {% endfor %}
 
-        <div class="set-actions">
+        <div class="adm-btn-group">
             <span class="set-note" data-save-note>Changes apply as soon as you save.</span>
             {% if not settings_wrapper %}
-            <a href="{% url back_url %}" class="pill-btn pill-btn-outline"><i class="fas fa-times"></i> Cancel</a>
+            <a href="{% url back_url %}" class="adm-btn pill-btn-outline"><i class="fas fa-times"></i> Cancel</a>
             {% endif %}
-            <button type="submit" class="pill-btn pill-btn-primary">
+            <button type="submit" class="adm-btn pill-btn-primary">
                 <i class="fas fa-save"></i> Save changes
             </button>
         </div>

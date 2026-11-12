@@ -1,107 +1,74 @@
 {% extends 'core/admin_base.html' %}
 
 {% block admin_content %}
-<div class="container-fluid mt-4 mb-5" style="max-width:1400px;">
-    <div class="d-flex align-items-center mb-4">
-        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary me-3"><i class="fas fa-arrow-left"></i></a>
-        <h1 class="mb-0"><i class="fas fa-heartbeat me-3 text-success"></i>Database Dashboard</h1>
+<div class="container-fluid py-3" style="max-width:1500px">
+    <div class="adm-page-head">
+        <div>
+            <h4 class="adm-page-title"><i class="fas fa-heartbeat me-2"></i>Database dashboard</h4>
+            <p class="adm-page-sub">Health, size and table inventory for every configured database.</p>
+        </div>
+        <div class="adm-btn-group">
+            <a class="adm-btn" href="{% url 'admin_dashboard' %}" aria-label="Back to the admin overview" title="Back to the admin overview"><i class="fas fa-arrow-left"></i>Admin dashboard</a>
+        </div>
     </div>
 
-    <!-- Status Summary Row -->
-    <div class="row g-3 mb-4">
+    <!-- Status summary -->
+    <div class="row g-3">
         {% for key, db in dbs.items %}
-        <div class="col-md-6">
-            <div class="card border-0 shadow-lg h-100" style="background:linear-gradient(135deg,{% if key == 'default' %}#1a1a2e,#16213e{% else %}#065f46,#0f172a{% endif %});">
-                <div class="card-header border-0 d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.05);">
-                    <h5 class="text-white mb-0"><i class="fas fa-database me-2" style="color:{% if key == 'default' %}#60a5fa{% else %}#4ade80{% endif %};"></i>{{ db.name }}</h5>
+        <div class="col-lg-6">
+            <div class="adm-card" style="height:100%">
+                <div class="adm-card-head">
+                    <h5 class="adm-card-title"><i class="fas fa-database"></i>{{ db.name }}</h5>
                     {% if db.status == 'healthy' %}
-                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Healthy</span>
+                        <span class="adm-badge is-ok" style="margin-left:auto"><i class="fas fa-check-circle"></i>Healthy</span>
                     {% elif db.status == 'disabled' %}
-                        <span class="badge bg-secondary"><i class="fas fa-ban me-1"></i>Disabled</span>
+                        <span class="adm-badge is-off" style="margin-left:auto"><i class="fas fa-ban"></i>Disabled</span>
                     {% else %}
-                        <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Error</span>
+                        <span class="adm-badge is-danger" style="margin-left:auto"><i class="fas fa-times-circle"></i>Error</span>
                     {% endif %}
                 </div>
-                <div class="card-body">
+                <div class="adm-card-body">
                     {% if db.status == 'healthy' %}
-                    <!-- Health Metrics -->
-                    <div class="row g-3 mb-3">
-                        <div class="col-4 text-center">
-                            <div style="font-size:1.5rem;font-weight:700;color:#38bdf8;">{{ db.latency_ms }}ms</div>
-                            <div class="text-secondary small">Latency</div>
-                        </div>
-                        <div class="col-4 text-center">
-                            <div style="font-size:1.5rem;font-weight:700;color:#4ade80;">{{ db.table_count|default:0 }}</div>
-                            <div class="text-secondary small">Tables</div>
-                        </div>
-                        <div class="col-4 text-center">
-                            <div style="font-size:1.5rem;font-weight:700;color:#fbbf24;">{{ db.total_rows|default:0|floatformat:0 }}</div>
-                            <div class="text-secondary small">Total Rows</div>
-                        </div>
+                    <!-- Health metrics -->
+                    <div class="adm-grid" style="margin-bottom:.85rem">
+                        <div class="adm-stat"><b>{{ db.latency_ms }}ms</b><span>Latency</span></div>
+                        <div class="adm-stat"><b>{{ db.table_count|default:0 }}</b><span>Tables</span></div>
+                        <div class="adm-stat"><b>{{ db.total_rows|default:0|floatformat:0 }}</b><span>Total Rows</span></div>
                     </div>
 
-                    <!-- Size & Info -->
-                    <div class="row g-2 small">
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>DB Size:</span><strong class="text-white">{{ db.db_size|default:'N/A' }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Engine:</span><strong class="text-white">{{ db.engine|default:'N/A' }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Version:</span><strong class="text-white">{{ db.version|default:'N/A' }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Uptime:</span><strong class="text-white">{{ db.uptime|default:'N/A' }}</strong>
-                        </div>
-                        {% if db.host %}
-                        <div class="col-12 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Host:</span><strong class="text-white">{{ db.host }}</strong>
-                        </div>
-                        {% endif %}
+                    <!-- Size & info -->
+                    <div class="adm-facts">
+                        <div><span>DB Size</span><span>{{ db.db_size|default:'N/A' }}</span></div>
+                        <div><span>Engine</span><span>{{ db.engine|default:'N/A' }}</span></div>
+                        <div><span>Version</span><span>{{ db.version|default:'N/A' }}</span></div>
+                        <div><span>Uptime</span><span>{{ db.uptime|default:'N/A' }}</span></div>
+                        {% if db.host %}<div><span>Host</span><span>{{ db.host }}</span></div>{% endif %}
                     </div>
 
                     {% if db.engine == 'mysql' %}
-                    <!-- MySQL Extra Stats -->
-                    <hr style="border-color:rgba(255,255,255,.06);">
-                    <div class="row g-2 small">
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Connections:</span><strong class="text-white">{{ db.connections }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Queries/sec:</span><strong class="text-white">{{ db.queries_per_sec }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Slow Queries:</span><strong class="text-white">{{ db.slow_queries }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Total Queries:</span><strong class="text-white">{{ db.questions|default:0|floatformat:0 }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Sent:</span><strong class="text-white">{{ db.bytes_sent|default:'0 B' }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Received:</span><strong class="text-white">{{ db.bytes_received|default:'0 B' }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Aborted Conn:</span><strong class="text-white">{{ db.aborted_connects|default:0 }}</strong>
-                        </div>
-                        <div class="col-6 d-flex justify-content-between" style="color:#a0a0b0;">
-                            <span>Aborted Client:</span><strong class="text-white">{{ db.aborted_clients|default:0 }}</strong>
-                        </div>
+                    <!-- MySQL extra stats -->
+                    <div class="adm-facts" style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--adm-line)">
+                        <div><span>Connections</span><span>{{ db.connections }}</span></div>
+                        <div><span>Queries/sec</span><span>{{ db.queries_per_sec }}</span></div>
+                        <div><span>Slow Queries</span><span>{{ db.slow_queries }}</span></div>
+                        <div><span>Total Queries</span><span>{{ db.questions|default:0|floatformat:0 }}</span></div>
+                        <div><span>Sent</span><span>{{ db.bytes_sent|default:'0 B' }}</span></div>
+                        <div><span>Received</span><span>{{ db.bytes_received|default:'0 B' }}</span></div>
+                        <div><span>Aborted Conn</span><span>{{ db.aborted_connects|default:0 }}</span></div>
+                        <div><span>Aborted Client</span><span>{{ db.aborted_clients|default:0 }}</span></div>
                     </div>
                     {% endif %}
 
                     {% elif db.status == 'disabled' %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-plug fa-2x text-secondary mb-2" style="opacity:.3;"></i>
-                        <p class="text-secondary mb-1">External DB routing is disabled</p>
-                        <a href="{% url 'db_routing_settings' %}" class="text-success small">Enable routing</a>
+                    <div class="adm-empty">
+                        <i class="fas fa-plug"></i>
+                        <div>External DB routing is disabled</div>
+                        <a class="adm-link" href="{% url 'db_routing_settings' %}">Enable routing</a>
                     </div>
                     {% else %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2" style="opacity:.5;"></i>
-                        <p class="text-danger small mb-0">{{ db.error|default:'Connection failed' }}</p>
+                    <div class="adm-empty">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div class="adm-text-bad">{{ db.error|default:'Connection failed' }}</div>
                     </div>
                     {% endif %}
                 </div>
@@ -110,127 +77,97 @@
         {% endfor %}
     </div>
 
-    <!-- System Resources (if available) -->
+    <!-- System resources (if available) -->
     {% if system_info %}
-    <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,#1e3a5f,#0f172a);">
-        <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
-            <h5 class="text-white mb-0"><i class="fas fa-server me-2 text-cyan"></i>Server Resources</h5>
+    <div class="adm-card" style="margin-top:1rem">
+        <div class="adm-card-head">
+            <h5 class="adm-card-title"><i class="fas fa-server"></i>Server resources</h5>
         </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <!-- CPU -->
-                <div class="col-md-4">
-                    <div class="p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="text-secondary small"><i class="fas fa-microchip me-1"></i>CPU</span>
-                            <span class="text-white fw-semibold">{{ system_info.cpu_percent }}%</span>
-                        </div>
-                        <div class="progress" style="height:8px;background:rgba(255,255,255,.08);">
-                            <div class="progress-bar {% if system_info.cpu_percent > 80 %}bg-danger{% elif system_info.cpu_percent > 50 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ system_info.cpu_percent }}%"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Memory -->
-                <div class="col-md-4">
-                    <div class="p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="text-secondary small"><i class="fas fa-memory me-1"></i>Memory</span>
-                            <span class="text-white fw-semibold">{{ system_info.memory_used }} / {{ system_info.memory_total }}</span>
-                        </div>
-                        <div class="progress" style="height:8px;background:rgba(255,255,255,.08);">
-                            <div class="progress-bar {% if system_info.memory_percent > 80 %}bg-danger{% elif system_info.memory_percent > 50 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ system_info.memory_percent }}%"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Disk -->
-                <div class="col-md-4">
-                    <div class="p-3 rounded" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="text-secondary small"><i class="fas fa-hdd me-1"></i>Disk</span>
-                            <span class="text-white fw-semibold">{{ system_info.disk_used }} / {{ system_info.disk_total }}</span>
-                        </div>
-                        <div class="progress" style="height:8px;background:rgba(255,255,255,.08);">
-                            <div class="progress-bar {% if system_info.disk_percent > 80 %}bg-danger{% elif system_info.disk_percent > 50 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ system_info.disk_percent }}%"></div>
-                        </div>
-                    </div>
-                </div>
+        <div class="adm-gauges">
+            <!-- CPU -->
+            <div>
+                <div class="adm-gauge-head"><span><i class="fas fa-microchip me-1"></i>CPU</span><span class="adm-gauge-val">{{ system_info.cpu_percent }}%</span></div>
+                <div class="adm-meter"><span class="{% if system_info.cpu_percent > 80 %}is-bad{% elif system_info.cpu_percent > 50 %}is-warn{% endif %}" style="width:{{ system_info.cpu_percent }}%"></span></div>
+            </div>
+            <!-- Memory -->
+            <div>
+                <div class="adm-gauge-head"><span><i class="fas fa-memory me-1"></i>Memory</span><span class="adm-gauge-val">{{ system_info.memory_used }} / {{ system_info.memory_total }}</span></div>
+                <div class="adm-meter"><span class="{% if system_info.memory_percent > 80 %}is-bad{% elif system_info.memory_percent > 50 %}is-warn{% endif %}" style="width:{{ system_info.memory_percent }}%"></span></div>
+            </div>
+            <!-- Disk -->
+            <div>
+                <div class="adm-gauge-head"><span><i class="fas fa-hdd me-1"></i>Disk</span><span class="adm-gauge-val">{{ system_info.disk_used }} / {{ system_info.disk_total }}</span></div>
+                <div class="adm-meter"><span class="{% if system_info.disk_percent > 80 %}is-bad{% elif system_info.disk_percent > 50 %}is-warn{% endif %}" style="width:{{ system_info.disk_percent }}%"></span></div>
             </div>
         </div>
     </div>
     {% endif %}
 
-    <!-- Table Details for each DB -->
+    <!-- Table details for each DB -->
     {% for key, db in dbs.items %}
     {% if db.tables %}
-    <div class="card border-0 shadow-lg mb-4" style="background:linear-gradient(135deg,{% if key == 'default' %}#1a1a2e,#16213e{% else %}#065f46,#0f172a{% endif %};">
-        <div class="card-header border-0 d-flex justify-content-between align-items-center" style="background:rgba(255,255,255,.05);">
-            <h5 class="text-white mb-0">
-                <i class="fas fa-table me-2" style="color:{% if key == 'default' %}#60a5fa{% else %}#4ade80{% endif %};"></i>
-                {{ db.name }} — {{ db.table_count|default:db.tables|length }} Tables
+    <div class="adm-card" style="margin-top:1rem">
+        <div class="adm-card-head">
+            <h5 class="adm-card-title">
+                <i class="fas fa-table"></i>
+                {{ db.name }} &mdash; {{ db.table_count|default:db.tables|length }} Tables
             </h5>
-            <span class="text-secondary small">{{ db.total_rows|default:0|floatformat:0 }} total rows</span>
+            <span class="adm-muted" style="margin-left:auto;font-size:.72rem">{{ db.total_rows|default:0|floatformat:0 }} total rows</span>
         </div>
-        <div class="card-body" style="padding:0;">
-            <div class="table-responsive">
-                <table class="table table-dark table-hover mb-0" style="background:transparent;">
-                    <thead>
-                        <tr style="border-bottom:1px solid rgba(255,255,255,.08);">
-                            <th class="text-secondary small fw-semibold">Table Name</th>
-                            <th class="text-secondary small fw-semibold text-end">Rows</th>
-                            {% if key == 'external' %}
-                            <th class="text-secondary small fw-semibold text-end">Size</th>
-                            {% endif %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for table in db.tables %}
-                        <tr style="border-bottom:1px solid rgba(255,255,255,.04);">
-                            <td class="text-white">{{ table.name }}</td>
-                            <td class="text-end">
-                                <span class="badge {% if table.rows > 1000 %}bg-warning text-dark{% elif table.rows > 0 %}bg-success{% else %}bg-secondary{% endif %}" style="font-size:.7rem;">
-                                    {{ table.rows|default:0|floatformat:0 }}
-                                </span>
-                            </td>
-                            {% if key == 'external' %}
-                            <td class="text-end text-secondary small">{{ table.size|default:'' }}</td>
-                            {% endif %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div class="adm-table-wrap">
+            <table class="adm-table">
+                <thead>
+                    <tr>
+                        <th>Table Name</th>
+                        <th class="num">Rows</th>
+                        {% if key == 'external' %}
+                        <th class="num">Size</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for table in db.tables %}
+                    <tr>
+                        <td>{{ table.name }}</td>
+                        <td class="num">
+                            <span class="adm-badge {% if table.rows > 1000 %}is-warn{% elif table.rows > 0 %}is-ok{% else %}is-off{% endif %}">
+                                {{ table.rows|default:0|floatformat:0 }}
+                            </span>
+                        </td>
+                        {% if key == 'external' %}
+                        <td class="num adm-muted">{{ table.size|default:'' }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
     {% endif %}
     {% endfor %}
 
-    <!-- Active Connection Info -->
+    <!-- Active connection info -->
     {% if active_conn %}
-    <div class="card border-0 shadow-lg" style="background:linear-gradient(135deg,#2d1b4e,#0f172a);">
-        <div class="card-header border-0" style="background:rgba(255,255,255,.05);">
-            <h5 class="text-white mb-0"><i class="fas fa-plug me-2 text-purple-300"></i>Active Connection</h5>
+    <div class="adm-card" style="margin-top:1rem">
+        <div class="adm-card-head">
+            <h5 class="adm-card-title"><i class="fas fa-plug"></i>Active connection</h5>
         </div>
-        <div class="card-body">
-            <div class="row g-3 small">
-                <div class="col-md-3"><span class="text-secondary">Name:</span> <strong class="text-white">{{ active_conn.name }}</strong></div>
-                <div class="col-md-3"><span class="text-secondary">Type:</span> <strong class="text-white">{{ active_conn.get_db_type_display }}</strong></div>
-                <div class="col-md-3"><span class="text-secondary">Host:</span> <strong class="text-white">{{ active_conn.host }}:{{ active_conn.port }}</strong></div>
-                <div class="col-md-3"><span class="text-secondary">DB:</span> <strong class="text-white">{{ active_conn.database_name }}</strong></div>
-                <div class="col-md-3"><span class="text-secondary">User:</span> <strong class="text-white">{{ active_conn.username }}</strong></div>
-                <div class="col-md-3"><span class="text-secondary">Status:</span> <strong class="{% if active_conn.last_test_status == 'success' %}text-success{% else %}text-danger{% endif %}">{{ active_conn.last_test_status|title }}</strong></div>
+        <div class="adm-card-body">
+            <div class="adm-facts">
+                <div><span>Name</span><span>{{ active_conn.name }}</span></div>
+                <div><span>Type</span><span>{{ active_conn.get_db_type_display }}</span></div>
+                <div><span>Host</span><span>{{ active_conn.host }}:{{ active_conn.port }}</span></div>
+                <div><span>DB</span><span>{{ active_conn.database_name }}</span></div>
+                <div><span>User</span><span>{{ active_conn.username }}</span></div>
+                <div><span>Status</span><span><span class="adm-badge {% if active_conn.last_test_status == 'success' %}is-ok{% else %}is-danger{% endif %}">{{ active_conn.last_test_status|title }}</span></span></div>
                 {% if active_conn.last_tested_at %}
-                <div class="col-md-3"><span class="text-secondary">Tested:</span> <strong class="text-white">{{ active_conn.last_tested_at|timesince }} ago</strong></div>
+                <div><span>Tested</span><span>{{ active_conn.last_tested_at|timesince }} ago</span></div>
                 {% endif %}
-                <div class="col-md-3"><span class="text-secondary">Routing:</span> <strong class="{% if routing.use_external_db %}text-success{% else %}text-warning{% endif %}">{% if routing.use_external_db %}External{% else %}Local{% endif %}</strong></div>
+                <div><span>Routing</span><span><span class="adm-badge {% if routing.use_external_db %}is-ok{% else %}is-warn{% endif %}">{% if routing.use_external_db %}External{% else %}Local{% endif %}</span></span></div>
             </div>
         </div>
     </div>
     {% endif %}
 </div>
 
-<style>
-    .text-purple-300 { color: #c4b5fd; }
-    .table-dark { --bs-table-bg: transparent; }
-    .table-dark td, .table-dark th { vertical-align: middle; }
-</style>
 {% endblock %}

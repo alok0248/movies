@@ -8,13 +8,13 @@
             <p class="text-secondary mb-0">{{ selected_app.name }} &mdash; All requests from this device</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'android_app_dashboard_detail' selected_app.id %}" class="btn btn-outline-light">&larr; Back to Analytics</a>
+            <a href="{% url 'android_app_dashboard_detail' selected_app.id %}" class="adm-btn">&larr; Back to Analytics</a>
         </div>
     </div>
 
     <!-- Device Info Card -->
-    <div class="card bg-dark border-info shadow-sm mb-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-info shadow-sm mb-4">
+        <div class="adm-card-body">
             <div class="row g-3 small">
                 <div class="col-md-3">
                     <div class="text-secondary">User ID</div>
@@ -41,8 +41,8 @@
     </div>
 
     <!-- Connection Details Summary -->
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mb-4">
+        <div class="adm-card-body">
             <h6 class="text-white mb-3"><i class="fas fa-info-circle me-1 text-warning"></i>Expected Connection</h6>
             <pre class="text-info small mb-0 p-3 rounded" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">curl -X GET "{{ request.scheme }}://{{ request.get_host }}/api/android-apps/{{ selected_app.slug }}/" \
   -u "{{ selected_app.access_username }}:PASSWORD" \
@@ -55,32 +55,32 @@
     </div>
 
     <!-- Request Logs -->
-    <div class="card bg-dark border-secondary shadow-sm">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm">
+        <div class="adm-card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
                     <h5 class="text-white mb-1">All Requests ({{ visit_list|length }})</h5>
                     <div class="text-secondary small">Click a row to expand the full request details</div>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary" onclick="document.querySelectorAll('.log-detail').forEach(function(el){el.style.display='block';});">Expand All</button>
+                <button class="adm-btn is-sm" onclick="document.querySelectorAll('.log-detail').forEach(function(el){el.style.display='block';});">Expand All</button>
             </div>
 
             {% if visit_list %}
             <div class="d-flex flex-column gap-2">
                 {% for item in visit_list %}
                 <div class="border border-secondary rounded log-entry">
-                    <button class="btn w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.querySelector('.icon').textContent=d.style.display==='none'?'▶':'▼';">
+                    <button class="adm-btn w-100 text-start d-flex justify-content-between align-items-center py-2 px-3" style="background:rgba(56,189,248,0.05);border:none;" onclick="var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.querySelector('.icon').textContent=d.style.display==='none'?'▶':'▼';">
                         <span class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                            <span class="adm-badge is-off">{{ forloop.counter }}</span>
                             <span class="text-white fw-semibold">{{ item.visit.visited_at }}</span>
                             <span class="text-info">{{ item.visit.build_identifier|default:"-" }}</span>
                             <span class="text-secondary">{% if item.visit.ip_address %}<span class="ip-text">{{ item.visit.ip_address }}</span>{% ip_geo_chip item.visit.ip_address %}{% else %}-{% endif %}</span>
                             <span class="text-secondary">{{ item.visit.request_identity|default:"" }}</span>
                             <span class="text-secondary">{{ item.visit.device_model|default:"-" }} / {{ item.visit.os_version|default:"-" }}</span>
                             {% if item.full_request %}
-                            <span class="badge bg-success" style="font-size:.6rem;">Has Request Data</span>
+                            <span class="adm-badge is-ok" style="font-size:.6rem;">Has Request Data</span>
                             {% else %}
-                            <span class="badge bg-warning text-dark" style="font-size:.6rem;">No Request Data</span>
+                            <span class="adm-badge is-warn text-dark" style="font-size:.6rem;">No Request Data</span>
                             {% endif %}
                         </span>
                         <span class="icon text-info" style="font-size:0.6rem;">▶</span>
@@ -90,7 +90,7 @@
                         <div class="p-3" style="background:rgba(0,0,0,0.3);">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-secondary small fw-semibold">Full Request Details</span>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="var pre=this.closest('.log-detail').querySelector('pre');navigator.clipboard.writeText(pre.textContent);this.textContent='Copied!';setTimeout(function(){this.textContent='Copy';}.bind(this),1500);">Copy</button>
+                                <button class="adm-btn is-sm" onclick="var pre=this.closest('.log-detail').querySelector('pre');navigator.clipboard.writeText(pre.textContent);this.textContent='Copied!';setTimeout(function(){this.textContent='Copy';}.bind(this),1500);">Copy</button>
                             </div>
                             <pre class="mb-0 text-info small" style="white-space:pre-wrap;word-break:break-all;max-height:500px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px;">{{ item.full_request }}</pre>
                         </div>

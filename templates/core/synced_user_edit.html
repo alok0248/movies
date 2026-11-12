@@ -6,12 +6,12 @@
             <h1 class="text-white mb-1"><i class="fas fa-user-edit me-2 text-warning"></i>Edit User Subscription</h1>
             <p class="text-secondary mb-0">{{ synced_user.display_name|default:synced_user.email }}</p>
         </div>
-        <a href="{% url 'synced_users_list' %}" class="btn btn-outline-light">&larr; Back to Users</a>
+        <a href="{% url 'synced_users_list' %}" class="adm-btn">&larr; Back to Users</a>
     </div>
 
     <!-- User Info Card -->
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mb-4">
+        <div class="adm-card-body">
             <h6 class="text-secondary mb-3">User Info</h6>
             <div class="row g-3 small">
                 <div class="col-md-6">
@@ -43,8 +43,8 @@
     </div>
 
     <!-- Subscription Edit Form -->
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mb-4">
+        <div class="adm-card-body">
             <h6 class="text-white mb-3">Subscription Settings</h6>
             <form method="post">
                 {% csrf_token %}
@@ -55,20 +55,20 @@
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label text-white small">Plan Name</label>
-                    <input type="text" class="form-control bg-dark border-secondary text-white" name="plan" value="{{ synced_user.plan }}" placeholder="e.g. VIP Premium">
+                    <label class="adm-label text-white small">Plan Name</label>
+                    <input type="text" class="adm-input bg-dark border-secondary text-white" name="plan" value="{{ synced_user.plan }}" placeholder="e.g. VIP Premium">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label text-white small">Valid Until</label>
-                    <input type="date" class="form-control bg-dark border-secondary text-white" name="valid_until" value="{{ synced_user.valid_until|date:'Y-m-d'|default:'' }}">
+                    <label class="adm-label text-white small">Valid Until</label>
+                    <input type="date" class="adm-input bg-dark border-secondary text-white" name="valid_until" value="{{ synced_user.valid_until|date:'Y-m-d'|default:'' }}">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label text-white small">Features (one per line)</label>
-                    <textarea class="form-control bg-dark border-secondary text-white" name="features" rows="5" placeholder="Ad-Free Streaming&#10;4K Ultra HD&#10;VIP Live TV Channels&#10;Unlimited Downloads">{{ synced_user.features|join:"\n" }}</textarea>
+                    <label class="adm-label text-white small">Features (one per line)</label>
+                    <textarea class="adm-input bg-dark border-secondary text-white" name="features" rows="5" placeholder="Ad-Free Streaming&#10;4K Ultra HD&#10;VIP Live TV Channels&#10;Unlimited Downloads">{{ synced_user.features|join:"\n" }}</textarea>
                 </div>
                 <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-success">Save Changes</button>
-                    <a href="{% url 'synced_users_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="adm-btn is-ok">Save Changes</button>
+                    <a href="{% url 'synced_users_list' %}" class="adm-btn">Cancel</a>
                 </div>
             </form>
         </div>
@@ -76,11 +76,11 @@
 </div>
 
 {% if subscription_events %}
-<div class="card bg-dark border-secondary shadow-sm mb-4">
-    <div class="card-body">
+<div class="adm-card bg-dark border-secondary shadow-sm mb-4">
+    <div class="adm-card-body">
         <h6 class="text-white mb-3"><i class="fas fa-clock-rotate-left me-2"></i>Subscription history</h6>
-        <div class="table-responsive">
-            <table class="table table-sm table-dark mb-0">
+        <div class="adm-table-wrap">
+            <table class="adm-table mb-0">
                 <thead><tr><th>When</th><th>By</th><th>Change</th><th>Until</th></tr></thead>
                 <tbody>
                     {% for ev in subscription_events %}
@@ -89,9 +89,9 @@
                         <td>{{ ev.actor|default:'—' }}</td>
                         <td>
                             {% if ev.is_subscribed %}
-                                <span class="badge bg-success">{{ ev.new_plan|default:'subscribed' }}</span>
+                                <span class="adm-badge is-ok">{{ ev.new_plan|default:'subscribed' }}</span>
                             {% else %}
-                                <span class="badge bg-secondary">free</span>
+                                <span class="adm-badge is-off">free</span>
                             {% endif %}
                             <span class="text-secondary small">{{ ev.action }}</span>
                             {% if ev.old_plan and ev.old_plan != ev.new_plan %}

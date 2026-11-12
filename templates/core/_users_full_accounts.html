@@ -8,7 +8,7 @@
         <a class="fbtn {% if view == 'free' %}active{% endif %}" href="?tab=accounts&f=free">Free</a>
         <a class="fbtn {% if view == 'never' %}active{% endif %}" href="?tab=accounts&f=never">Never online</a>
     </div>
-    <div class="table-responsive mt-3">
+    <div class="adm-table-wrap mt-3">
         <table class="table table-dark table-hover mb-0">
             <thead>
                 <tr>
@@ -143,10 +143,4 @@
         <div id="blockStatus" class="small"></div>
     </div>
 
-    {% if page_obj.has_other_pages %}
-    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
-        {% if page_obj.has_previous %}<a class="fbtn" href="?tab=accounts&page={{ page_obj.previous_page_number }}&q={{ q|urlencode }}&f={{ view }}">&laquo; Prev</a>{% endif %}
-        <span class="sub">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} users</span>
-        {% if page_obj.has_next %}<a class="fbtn" href="?tab=accounts&page={{ page_obj.next_page_number }}&q={{ q|urlencode }}&f={{ view }}">Next &raquo;</a>{% endif %}
-    </nav>
-    {% endif %}
+    {% include "core/_adm_pager.html" with pg=page_obj %}

@@ -1,260 +1,25 @@
 {% load ip_geo %}
 {# Request Log panel — embedded by core/admin_requests.html (Requests & Users page). #}
-<style>
-    .rl-card {
-        background: var(--card-bg, #1a1a2e);
-        border: 1px solid var(--border, rgba(255,255,255,.06));
-        border-radius: 12px;
-        transition: transform .15s, box-shadow .15s;
-    }
-    .rl-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
-    .rl-badge {
-        display: inline-block;
-        font-size: .65rem;
-        font-weight: 600;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-        padding: 2px 8px;
-        border-radius: 4px;
-        background: rgba(148,163,184,.15);
-        color: #94a3b8;
-    }
-    .rl-method { font-weight: 700; font-variant-numeric: tabular-nums; }
-    .rl-method-get { background: rgba(96,165,250,.15); color: #60a5fa; }
-    .rl-method-post { background: rgba(52,211,153,.15); color: #34d399; }
-    .rl-method-head { background: rgba(167,139,250,.15); color: #a78bfa; }
-    .rl-method-other { background: rgba(251,191,36,.15); color: #fbbf24; }
-    .rl-cat-page { background: rgba(96,165,250,.15); color: #60a5fa; }
-    .rl-cat-api { background: rgba(251,191,36,.15); color: #fbbf24; }
-    .rl-cat-admin { background: rgba(167,139,250,.15); color: #a78bfa; }
-    .rl-status { font-weight: 700; font-variant-numeric: tabular-nums; }
-    .rl-status-s2 { background: rgba(52,211,153,.15); color: #34d399; }
-    .rl-status-s3 { background: rgba(96,165,250,.15); color: #60a5fa; }
-    .rl-status-s4 { background: rgba(251,191,36,.15); color: #fbbf24; }
-    .rl-status-s5 { background: rgba(239,68,68,.15); color: #ef4444; }
-    .rl-path { font-family: monospace; font-size: .82rem; color: var(--text, #e2e8f0); word-break: break-all; }
-    .rl-view { font-family: monospace; font-size: .72rem; color: #a78bfa; }
-    .rl-payload-tag { background: rgba(52,211,153,.15); color: #34d399; }
-    .rl-body {
-        font-family: Consolas, Menlo, monospace;
-        font-size: .72rem;
-        line-height: 1.5;
-        color: var(--text-2, #cbd5e1);
-        background: rgba(0,0,0,.28);
-        border: 1px solid var(--border, rgba(255,255,255,.05));
-        border-radius: 8px;
-        padding: 10px 12px;
-        overflow-x: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 220px;
-        overflow-y: auto;
-        margin: .5rem 0 0;
-    }
-    .rl-meta { font-size: .75rem; color: var(--text-3, #64748b); }
-    .rl-meta i { width: 14px; text-align: center; margin-right: 4px; color: #475569; }
-    .rl-slow { color: #f87171; font-weight: 600; }
-    .rl-empty { text-align: center; padding: 56px 16px; color: #475569; }
-    .rl-empty i { font-size: 2.6rem; margin-bottom: 12px; display: block; color: #334155; }
-    .rl-filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-    .rl-chip {
-        font-size: .75rem;
-        padding: .3rem .7rem;
-        border-radius: 999px;
-        text-decoration: none;
-        border: 1px solid var(--border, rgba(255,255,255,.14));
-        color: var(--text-2, #94a3b8);
-        background: rgba(148,163,184,.05);
-    }
-    .rl-chip:hover { color: var(--text, #e2e8f0); border-color: rgba(148,163,184,.4); }
-    .rl-chip.active { background: rgba(96,165,250,.18); color: #93c5fd; border-color: rgba(96,165,250,.4); }
-
-    /* Spreadsheet / Excel-style table view */
-    .rl-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-    .rl-toolbar input[type="text"] {
-        background: rgba(148,163,184,.1);
-        border: 1px solid var(--border, rgba(148,163,184,.25));
-        border-radius: 6px;
-        color: inherit;
-        font-size: .72rem;
-        padding: .3rem .5rem;
-        min-width: 220px;
-    }
-    /* Excel-style filter row sitting directly under the column headers */
-    .rl-table thead tr:first-child th { top: 0; height: 32px; box-sizing: border-box; }
-    .rl-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
-    .rl-sortable:hover { color: #60a5fa; }
-    .rl-arrow { font-size: .62rem; margin-left: .25rem; color: #34d399; }
-    /* Saved views (filter presets) */
-    .rl-presets {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .4rem;
-        align-items: center;
-        padding: .5rem .6rem;
-        border: 1px dashed var(--border, rgba(148,163,184,.3));
-        border-radius: 10px;
-        background: rgba(148,163,184,.04);
-    }
-    .rl-presets-label { font-size: .72rem; color: var(--text-3, #64748b); margin-right: .25rem; }
-    .rl-preset { display: inline-flex; align-items: center; gap: .1rem; }
-    .rl-preset-del { border: none; background: transparent; color: #f87171; cursor: pointer; font-size: .95rem; line-height: 1; padding: 0 .2rem; }
-    .rl-preset-save { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; }
-    .rl-preset-save input[type="text"] {
-        background: rgba(148,163,184,.1);
-        border: 1px solid var(--border, rgba(148,163,184,.25));
-        border-radius: 6px;
-        color: inherit;
-        font-size: .72rem;
-        padding: .28rem .5rem;
-        min-width: 180px;
-    }
-    .rl-table thead tr.rl-frow th {
-        top: 32px;
-        background: var(--bg-2, #101a2e);
-        padding: .28rem .4rem;
-    }
-    .rl-table thead tr.rl-frow select,
-    .rl-table thead tr.rl-frow input {
-        width: 100%;
-        min-width: 84px;
-        max-width: 220px;
-        background: rgba(148,163,184,.1);
-        border: 1px solid var(--border, rgba(148,163,184,.3));
-        border-radius: 6px;
-        color: inherit;
-        font-size: .68rem;
-        padding: .15rem .3rem;
-    }
-    .rl-table thead tr.rl-frow input[type="number"] { min-width: 74px; }
-    .rl-tablewrap {
-        overflow: auto;
-        max-height: 72vh;
-        border: 1px solid var(--border, rgba(255,255,255,.08));
-        border-radius: 12px;
-        background: var(--card-bg, #1a1a2e);
-    }
-    .rl-table { width: 100%; border-collapse: collapse; font-size: .72rem; white-space: nowrap; }
-    .rl-table th, .rl-table td {
-        padding: .4rem .6rem;
-        border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
-        text-align: left;
-    }
-    .rl-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: var(--surface, #16213e);
-        color: var(--text-2, #cbd5e1);
-        font-weight: 600;
-    }
-    .rl-table tbody tr:hover { background: var(--surface-hover, rgba(148,163,184,.07)); }
-    .rl-mono { font-family: Consolas, Menlo, monospace; }
-    .rl-iplink {
-        display: inline-flex;
-        align-items: center;
-        gap: .3rem;
-        padding: .05rem .4rem;
-        border: 1px solid rgba(56,189,248,.35);
-        border-radius: 999px;
-        background: rgba(56,189,248,.1);
-        color: #38bdf8;
-        text-decoration: none;
-        font-family: Consolas, Menlo, monospace;
-        font-size: .7rem;
-        line-height: 1.5;
-    }
-    .rl-iplink:hover { background: rgba(56,189,248,.22); color: #7dd3fc; border-color: #7dd3fc; }
-    .rl-iplink i { font-size: .6rem; opacity: .8; }
-    /* Per-row Block / Unblock control, right next to the IP */
-    .rl-blockbtn {
-        display: inline-flex;
-        align-items: center;
-        gap: .25rem;
-        margin-left: .3rem;
-        padding: .02rem .45rem;
-        border-radius: 999px;
-        border: 1px solid rgba(248,113,113,.4);
-        background: rgba(239,68,68,.1);
-        color: #f87171;
-        font-size: .66rem;
-        line-height: 1.5;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-    .rl-blockbtn:hover { background: rgba(239,68,68,.24); border-color: #f87171; color: #fca5a5; }
-    .rl-blockbtn.on {
-        border-color: rgba(52,211,153,.45);
-        background: rgba(52,211,153,.14);
-        color: #34d399;
-    }
-    .rl-blockbtn.on:hover { background: rgba(52,211,153,.26); border-color: #34d399; color: #6ee7b7; }
-    .rl-blockbtn i { font-size: .58rem; }
-    .rl-meta .rl-iplink { font-size: .75rem; }
-    .rl-pathlink {
-        display: inline-block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        vertical-align: bottom;
-        color: #7dd3fc;
-        text-decoration: none;
-        border-bottom: 1px dotted rgba(125,211,252,.45);
-    }
-    .rl-pathlink:hover { color: #bae6fd; border-bottom-color: #bae6fd; }
-    .rl-pathlink i { font-size: .58rem; opacity: .7; margin-left: .15rem; }
-    .rl-trunc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
-    .rl-table .rl-empty-row { text-align: center; color: #64748b; padding: 32px 8px; }
-
-    html[data-theme="light"] .rl-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(20,20,45,.05); }
-    html[data-theme="light"] .rl-card:hover { box-shadow: 0 10px 26px rgba(20,20,45,.1); }
-    html[data-theme="light"] .rl-path { color: #0f172a; }
-    html[data-theme="light"] .rl-pathlink { color: #0369a1; border-bottom-color: rgba(3,105,161,.35); }
-    html[data-theme="light"] .rl-pathlink:hover { color: #075985; border-bottom-color: #075985; }
-    html[data-theme="light"] .rl-blockbtn { border-color: rgba(185,28,28,.35); background: rgba(220,38,38,.08); color: #b91c1c; }
-    html[data-theme="light"] .rl-blockbtn:hover { background: rgba(220,38,38,.18); border-color: #b91c1c; color: #991b1b; }
-    html[data-theme="light"] .rl-blockbtn.on { border-color: rgba(5,150,105,.4); background: rgba(5,150,105,.12); color: #047857; }
-    html[data-theme="light"] .rl-blockbtn.on:hover { background: rgba(5,150,105,.22); border-color: #047857; }
-    html[data-theme="light"] .rl-chip { color: #475569; border-color: rgba(0,0,0,.14); background: #f8fafc; }
-    html[data-theme="light"] .rl-chip:hover { color: #0f172a; border-color: rgba(0,0,0,.3); }
-    html[data-theme="light"] .rl-chip.active { background: rgba(37,99,235,.12); color: #1d4ed8; border-color: rgba(37,99,235,.35); }
-    html[data-theme="light"] .rl-method-get { background: rgba(37,99,235,.12); color: #1d4ed8; }
-    html[data-theme="light"] .rl-method-post { background: rgba(5,150,105,.12); color: #047857; }
-    html[data-theme="light"] .rl-method-head { background: rgba(124,58,237,.12); color: #6d28d9; }
-    html[data-theme="light"] .rl-cat-admin { background: rgba(124,58,237,.12); color: #6d28d9; }
-    html[data-theme="light"] .rl-view { color: #6d28d9; }
-    html[data-theme="light"] .rl-body { color: #334155; background: #f1f5f9; border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .rl-payload-tag { background: rgba(5,150,105,.12); color: #047857; }
-    html[data-theme="light"] .rl-status-s2 { background: rgba(5,150,105,.12); color: #047857; }
-    html[data-theme="light"] .rl-status-s4 { background: rgba(180,83,9,.12); color: #b45309; }
-    html[data-theme="light"] .rl-status-s5 { background: rgba(185,28,28,.12); color: #b91c1c; }
-    html[data-theme="light"] .rl-tablewrap { background: #ffffff; border-color: rgba(0,0,0,.1); }
-    html[data-theme="light"] .rl-table thead th { background: #f1f5f9; color: #334155; }
-    html[data-theme="light"] .rl-table th, html[data-theme="light"] .rl-table td { border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .rl-sortable:hover { color: #1d4ed8; }
-    html[data-theme="light"] .rl-table thead tr.rl-frow th { background: #e2e8f0; }
-    html[data-theme="light"] .rl-table thead tr.rl-frow select, html[data-theme="light"] .rl-table thead tr.rl-frow input { border-color: rgba(0,0,0,.18); }
-</style>
+<style>    .rl-slow { color: #f87171; font-weight: 600; }    .rl-arrow { font-size: .62rem; margin-left: .25rem; color: #34d399; }</style>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
-            <span class="badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.8rem;">{{ count }} shown</span>
-            <span class="badge" style="background:rgba(52,211,153,.15);color:#34d399;font-size:.8rem;">{{ total }} stored</span>
+            <span class="adm-badge" style="background:rgba(96,165,250,.15);color:#60a5fa;font-size:.8rem;">{{ count }} shown</span>
+            <span class="adm-badge" style="background:rgba(52,211,153,.15);color:#34d399;font-size:.8rem;">{{ total }} stored</span>
             <span class="ms-2" style="color:#475569;font-size:.72rem;">
                 <i class="fas fa-info-circle me-1"></i>Saved to the database — survives restarts. API/Ajax payloads are kept with secrets (password, token, OTP) masked.
             </span>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <button type="button" onclick="rlSetView('cards')" class="btn btn-sm" style="border-radius:8px;{% if view_mode == 'cards' %}color:#60a5fa;background:rgba(96,165,250,.16);border:1px solid rgba(96,165,250,.4);{% else %}color:#94a3b8;background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.22);{% endif %}"><i class="fas fa-th-large me-1"></i>Cards</button>
-            <button type="button" onclick="rlSetView('table')" class="btn btn-sm" style="border-radius:8px;{% if view_mode == 'table' %}color:#34d399;background:rgba(52,211,153,.16);border:1px solid rgba(52,211,153,.4);{% else %}color:#94a3b8;background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.22);{% endif %}"><i class="fas fa-table me-1"></i>Table / Excel</button>
-            <button type="button" onclick="rlExport('csv')" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</button>
-            <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
-            <button type="button" onclick="rlExport('json')" class="btn btn-sm" style="color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:8px;"><i class="fas fa-code me-1"></i>JSON</button>
+            <button type="button" onclick="rlSetView('cards')" class="adm-btn is-sm {% if view_mode == 'cards' %}is-soft-blue{% else %}is-quiet{% endif %}"><i class="fas fa-th-large me-1"></i>Cards</button>
+            <button type="button" onclick="rlSetView('table')" class="adm-btn is-sm {% if view_mode == 'table' %}is-soft-ok{% else %}is-quiet{% endif %}"><i class="fas fa-table me-1"></i>Table / Excel</button>
+            <button type="button" onclick="rlExport('csv')" class="adm-btn is-sm is-soft-ok"><i class="fas fa-file-excel me-1"></i>Download CSV</button>
+            <a href="{% url 'request_log' %}" class="adm-btn is-sm is-soft-blue"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+            <button type="button" onclick="rlExport('json')" class="adm-btn is-sm is-soft-blue"><i class="fas fa-code me-1"></i>JSON</button>
             <form method="post" action="{% url 'request_log' %}" onsubmit="return confirmTyped(event, {what: 'the whole recorded request log'});" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="clear">
-                <button type="submit" class="btn btn-sm" style="color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;"><i class="fas fa-trash me-1"></i>Clear</button>
+                <button type="submit" class="adm-btn is-sm is-soft-danger"><i class="fas fa-trash me-1"></i>Clear</button>
             </form>
         </div>
         <script>
@@ -288,42 +53,32 @@
         </script>
     </div>
 
-    <div class="rl-presets mb-3">
-        <span class="rl-presets-label"><i class="fas fa-bookmark me-1"></i>Saved views</span>
+    <div class="adm-btn-group mb-3">
+        <span class="adm-sub"><i class="fas fa-bookmark me-1"></i>Saved views</span>
         {% for p in presets %}
-        <span class="rl-preset">
-            <a href="?{{ p.query }}" class="rl-chip">{{ p.name }}</a>
+        <span class="adm-btn-group">
+            <a href="?{{ p.query }}" class="adm-chip">{{ p.name }}</a>
             <form method="post" onsubmit="return confirm('Delete saved view &quot;{{ p.name|escapejs }}&quot;?');" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="delete_preset">
                 <input type="hidden" name="preset_id" value="{{ p.id }}">
-                <button type="submit" class="rl-preset-del" title="Delete this saved view">&times;</button>
+                <button type="submit" class="adm-btn is-sm is-soft-danger" title="Delete this saved view">&times;</button>
             </form>
         </span>
         {% empty %}
         <span style="color:#64748b;font-size:.72rem;">No saved views yet — set your filters, then save them on the right.</span>
         {% endfor %}
-        <form method="post" class="rl-preset-save" style="margin:0;"
+        <form method="post" class="adm-btn-group" style="margin:0"
               onsubmit="this.querySelector('input[name=query]').value = window.location.search.replace(/^\?/, '');">
             {% csrf_token %}
             <input type="hidden" name="action" value="save_preset">
             <input type="hidden" name="query" value="">
             <input type="text" name="preset_name" placeholder="Save current view as…" maxlength="120" required>
-            <button type="submit" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);border-radius:8px;"><i class="fas fa-save me-1"></i>Save view</button>
+            <button type="submit" class="adm-btn is-sm is-soft-ok"><i class="fas fa-save me-1"></i>Save view</button>
         </form>
     </div>
 
-<style>
-    .rl-an {
-        background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16);
-        border-radius: 12px; padding: .85rem 1rem;
-    }
-    .rl-an-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
-    .rl-an-title { font-size: .82rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .4rem; }
-    .rl-an-sub { font-size: .7rem; color: #94a3b8; margin-top: .15rem; }
-    .rl-an-legend { display: flex; gap: .9rem; font-size: .68rem; color: #94a3b8; }
-    .rl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: .3rem; }
-    .rl-spark { display: flex; align-items: flex-end; gap: 3px; height: 74px; margin-top: .6rem; }
+<style>    .rl-spark { display: flex; align-items: flex-end; gap: 3px; height: 74px; margin-top: .6rem; }
     .rl-spark-col { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; gap: 1px; }
     .rl-spark-bar { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: rgba(96,165,250,.55); transition: background .15s ease; }
     .rl-spark-col:hover .rl-spark-bar { background: rgba(96,165,250,.9); }
@@ -341,15 +96,15 @@
 </style>
 
 {% if trend %}
-<div class="rl-an mb-3">
-    <div class="rl-an-head">
+<div class="adm-card mb-3">
+    <div class="adm-card-head">
         <div>
-            <div class="rl-an-title"><i class="fas fa-wave-square" style="color:#60a5fa"></i> Last 24 hours</div>
-            <div class="rl-an-sub">{{ trend_hits }} request{{ trend_hits|pluralize }} &middot; {{ trend_errors }} server error{{ trend_errors|pluralize }} &middot; peak {{ trend_peak }} per hour</div>
+            <div class="adm-card-title"><i class="fas fa-wave-square" style="color:#60a5fa"></i> Last 24 hours</div>
+            <div class="adm-card-sub">{{ trend_hits }} request{{ trend_hits|pluralize }} &middot; {{ trend_errors }} server error{{ trend_errors|pluralize }} &middot; peak {{ trend_peak }} per hour</div>
         </div>
-        <div class="rl-an-legend">
-            <span><i class="rl-dot" style="background:rgba(96,165,250,.75)"></i>Requests</span>
-            <span><i class="rl-dot" style="background:rgba(248,113,113,.85)"></i>5xx</span>
+        <div class="adm-sub">
+            <span><i class="adm-dot" style="background:rgba(96,165,250,.75)"></i>Requests</span>
+            <span><i class="adm-dot" style="background:rgba(248,113,113,.85)"></i>5xx</span>
         </div>
     </div>
 
@@ -369,20 +124,22 @@
 
     {% if slowest %}
     <div class="rl-slow">
-        <div class="rl-an-title" style="font-size:.76rem;margin-bottom:.35rem"><i class="fas fa-gauge-high" style="color:#fbbf24"></i> Slowest endpoints (24 h, by average)</div>
-        <table>
-            <thead><tr><th>Path</th><th>Requests</th><th>Avg</th><th>5xx</th></tr></thead>
-            <tbody>
-                {% for row in slowest %}
-                <tr>
-                    <td><code>{{ row.path|truncatechars:64 }}</code></td>
-                    <td>{{ row.hits }}</td>
-                    <td class="rl-ms {% if row.avg_ms > 1500 %}rl-ms-bad{% elif row.avg_ms > 400 %}rl-ms-slow{% endif %}">{{ row.avg_ms }} ms</td>
-                    <td>{% if row.errors %}<span style="color:#f87171">{{ row.errors }}</span>{% else %}<span style="color:#475569">0</span>{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="adm-card-title" style="font-size:.76rem;margin-bottom:.35rem"><i class="fas fa-gauge-high" style="color:#fbbf24"></i> Slowest endpoints (24 h, by average)</div>
+        <div class="adm-table-wrap">
+            <table>
+                <thead><tr><th>Path</th><th>Requests</th><th>Avg</th><th>5xx</th></tr></thead>
+                <tbody>
+                    {% for row in slowest %}
+                    <tr>
+                        <td><code>{{ row.path|truncatechars:64 }}</code></td>
+                        <td>{{ row.hits }}</td>
+                        <td class="rl-ms {% if row.avg_ms > 1500 %}rl-ms-bad{% elif row.avg_ms > 400 %}rl-ms-slow{% endif %}">{{ row.avg_ms }} ms</td>
+                        <td>{% if row.errors %}<span style="color:#f87171">{{ row.errors }}</span>{% else %}<span style="color:#475569">0</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -393,146 +150,165 @@
         <input type="hidden" name="view" value="table">
         <input type="hidden" name="sort" value="{{ filters.sort }}">
         <input type="hidden" name="dir" value="{{ filters.direction }}">
-        <div class="rl-toolbar mb-2">
-            <input type="text" name="q" value="{{ filters.q }}" placeholder="Search all fields…">
-            <button type="submit" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:8px;"><i class="fas fa-filter me-1"></i>Apply</button>
-            <a href="?view=table" class="btn btn-sm" style="color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;"><i class="fas fa-times me-1"></i>Reset</a>
+        <div class="adm-btn-group mb-2">
+            <label class="adm-label mb-0" for="rl-q-table">Search all fields</label>
+            <input type="text" class="adm-input" id="rl-q-table" name="q" value="{{ filters.q }}" placeholder="Path, IP, user, UA...">
+            <button type="submit" class="adm-btn is-sm is-soft-blue"><i class="fas fa-filter me-1"></i>Apply</button>
+            <a href="?view=table" class="adm-btn is-sm" title="Clear the search box and every filter"><i class="fas fa-eraser me-1"></i>Clear filters</a>
             <span style="color:#64748b;font-size:.72rem;">Pick a value under any column header — it filters immediately. Conditions combine (AND).</span>
         </div>
 
-        <div class="rl-tablewrap">
-            <table class="rl-table">
+        <div class="adm-table-wrap">
+            <table class="adm-table">
                 <thead>
                     <tr>
-                        <th class="rl-sortable" onclick="rlSort('created_at')" title="Sort by Time">Time<span class="rl-arrow">{% if filters.sort == 'created_at' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('method')" title="Sort by Method">Method<span class="rl-arrow">{% if filters.sort == 'method' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('status_code')" title="Sort by Status">Status<span class="rl-arrow">{% if filters.sort == 'status_code' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('category')" title="Sort by Category">Category<span class="rl-arrow">{% if filters.sort == 'category' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('path')" title="Sort by Path">Path<span class="rl-arrow">{% if filters.sort == 'path' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('query')" title="Sort by Query">Query<span class="rl-arrow">{% if filters.sort == 'query' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('client_ip')" title="Sort by Client IP">Client IP<span class="rl-arrow">{% if filters.sort == 'client_ip' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('created_at')" title="Sort by Time">Time<span class="rl-arrow">{% if filters.sort == 'created_at' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('method')" title="Sort by Method">Method<span class="rl-arrow">{% if filters.sort == 'method' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('status_code')" title="Sort by Status">Status<span class="rl-arrow">{% if filters.sort == 'status_code' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('category')" title="Sort by Category">Category<span class="rl-arrow">{% if filters.sort == 'category' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('path')" title="Sort by Path">Path<span class="rl-arrow">{% if filters.sort == 'path' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('query')" title="Sort by Query">Query<span class="rl-arrow">{% if filters.sort == 'query' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('client_ip')" title="Sort by Client IP">Client IP<span class="rl-arrow">{% if filters.sort == 'client_ip' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
                         <th title="Country from ipwho.is — click for the full record" style="min-width:92px;">Country</th>
-                        <th class="rl-sortable" onclick="rlSort('username')" title="Sort by Username">Username<span class="rl-arrow">{% if filters.sort == 'username' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('duration_ms')" title="Sort by Duration">Duration (ms)<span class="rl-arrow">{% if filters.sort == 'duration_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('response_size')" title="Sort by Size">Size (B)<span class="rl-arrow">{% if filters.sort == 'response_size' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('time_on_page_ms')" title="Sort by Time on page">Time on page (ms)<span class="rl-arrow">{% if filters.sort == 'time_on_page_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('click_count')" title="Sort by Clicks">Clicks<span class="rl-arrow">{% if filters.sort == 'click_count' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('view_name')" title="Sort by View name">View name<span class="rl-arrow">{% if filters.sort == 'view_name' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('referer')" title="Sort by Referer">Referer<span class="rl-arrow">{% if filters.sort == 'referer' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('user_agent')" title="Sort by User-Agent">User-Agent<span class="rl-arrow">{% if filters.sort == 'user_agent' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th class="rl-sortable" onclick="rlSort('request_body')" title="Sort by Payload">Payload<span class="rl-arrow">{% if filters.sort == 'request_body' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('username')" title="Sort by Username">Username<span class="rl-arrow">{% if filters.sort == 'username' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('duration_ms')" title="Sort by Duration">Duration (ms)<span class="rl-arrow">{% if filters.sort == 'duration_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('response_size')" title="Sort by Size">Size (B)<span class="rl-arrow">{% if filters.sort == 'response_size' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('time_on_page_ms')" title="Sort by Time on page">Time on page (ms)<span class="rl-arrow">{% if filters.sort == 'time_on_page_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('click_count')" title="Sort by Clicks">Clicks<span class="rl-arrow">{% if filters.sort == 'click_count' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('view_name')" title="Sort by View name">View name<span class="rl-arrow">{% if filters.sort == 'view_name' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('referer')" title="Sort by Referer">Referer<span class="rl-arrow">{% if filters.sort == 'referer' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('user_agent')" title="Sort by User-Agent">User-Agent<span class="rl-arrow">{% if filters.sort == 'user_agent' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th class="adm-sort" onclick="rlSort('request_body')" title="Sort by Payload">Payload<span class="rl-arrow">{% if filters.sort == 'request_body' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
+                        <th style="width:1%;" aria-label="Request details"></th>
                     </tr>
-                    <tr class="rl-frow">
-                        <th><select name="on_date" onchange="this.form.submit()"><option value="">All</option>{% for v in options.on_date %}<option value="{{ v }}" {% if filters.on_date == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
-                        <th><select name="method" onchange="this.form.submit()"><option value="">All</option>{% for v in options.method %}<option value="{{ v }}" {% if filters.method == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
-                        <th><select name="status_code" onchange="this.form.submit()"><option value="">All</option>{% for v in options.status_code %}<option value="{{ v }}" {% if filters.status_code == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
-                        <th><select name="category" onchange="this.form.submit()"><option value="">All</option><option value="page" {% if filters.category == 'page' %}selected{% endif %}>Page</option><option value="api" {% if filters.category == 'api' %}selected{% endif %}>API / Ajax</option><option value="admin" {% if filters.category == 'admin' %}selected{% endif %}>Admin</option></select></th>
-                        <th><select name="path" onchange="this.form.submit()"><option value="">All</option>{% for v in options.path %}<option value="{{ v }}" {% if filters.path == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
-                        <th><select name="query" onchange="this.form.submit()"><option value="">All</option>{% for v in options.query %}<option value="{{ v }}" {% if filters.query == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
-                        <th><select name="client_ip" onchange="this.form.submit()"><option value="">All</option>{% for v in options.client_ip %}<option value="{{ v }}" {% if filters.client_ip == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                    <tr>
+                        <th><select class="adm-select" name="on_date" aria-label="Filter by date" onchange="this.form.submit()"><option value="">All</option>{% for v in options.on_date %}<option value="{{ v }}" {% if filters.on_date == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="method" aria-label="Filter by method" onchange="this.form.submit()"><option value="">All</option>{% for v in options.method %}<option value="{{ v }}" {% if filters.method == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="status_code" aria-label="Filter by status code" onchange="this.form.submit()"><option value="">All</option>{% for v in options.status_code %}<option value="{{ v }}" {% if filters.status_code == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="category" aria-label="Filter by category" onchange="this.form.submit()"><option value="">All</option><option value="page" {% if filters.category == 'page' %}selected{% endif %}>Page</option><option value="api" {% if filters.category == 'api' %}selected{% endif %}>API / Ajax</option><option value="admin" {% if filters.category == 'admin' %}selected{% endif %}>Admin</option></select></th>
+                        <th><select class="adm-select" name="path" aria-label="Filter by path" onchange="this.form.submit()"><option value="">All</option>{% for v in options.path %}<option value="{{ v }}" {% if filters.path == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="query" aria-label="Filter by query string" onchange="this.form.submit()"><option value="">All</option>{% for v in options.query %}<option value="{{ v }}" {% if filters.query == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="client_ip" aria-label="Filter by client IP" onchange="this.form.submit()"><option value="">All</option>{% for v in options.client_ip %}<option value="{{ v }}" {% if filters.client_ip == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
                         <th style="min-width:92px;"></th>
-                        <th><select name="username" onchange="this.form.submit()"><option value="">All</option><option value="__none__" {% if filters.username == '__none__' %}selected{% endif %}>(no user)</option>{% for v in options.username %}<option value="{{ v }}" {% if filters.username == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
-                        <th><input type="number" name="min_duration" value="{{ filters.min_duration }}" placeholder="min"></th>
-                        <th><input type="number" name="min_size" value="{{ filters.min_size }}" placeholder="min"></th>
-                        <th><input type="number" name="min_time" value="{{ filters.min_time }}" placeholder="min"></th>
-                        <th><input type="number" name="min_clicks" value="{{ filters.min_clicks }}" placeholder="min"></th>
-                        <th><select name="view_name" onchange="this.form.submit()"><option value="">All</option>{% for v in options.view_name %}<option value="{{ v }}" {% if filters.view_name == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
-                        <th><select name="referer" onchange="this.form.submit()"><option value="">All</option>{% for v in options.referer %}<option value="{{ v }}" {% if filters.referer == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
-                        <th><select name="user_agent" onchange="this.form.submit()"><option value="">All</option>{% for v in options.user_agent %}<option value="{{ v }}" {% if filters.user_agent == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
-                        <th><select name="request_body" onchange="this.form.submit()"><option value="">All</option>{% for v in options.request_body %}<option value="{{ v }}" {% if filters.request_body == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="username" aria-label="Filter by username" onchange="this.form.submit()"><option value="">All</option><option value="__none__" {% if filters.username == '__none__' %}selected{% endif %}>(no user)</option>{% for v in options.username %}<option value="{{ v }}" {% if filters.username == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><input class="adm-input" type="number" name="min_duration" aria-label="Minimum duration in ms" value="{{ filters.min_duration }}" placeholder="min"></th>
+                        <th><input class="adm-input" type="number" name="min_size" aria-label="Minimum size in bytes" value="{{ filters.min_size }}" placeholder="min"></th>
+                        <th><input class="adm-input" type="number" name="min_time" aria-label="Minimum time on page in ms" value="{{ filters.min_time }}" placeholder="min"></th>
+                        <th><input class="adm-input" type="number" name="min_clicks" aria-label="Minimum clicks" value="{{ filters.min_clicks }}" placeholder="min"></th>
+                        <th><select class="adm-select" name="view_name" aria-label="Filter by view name" onchange="this.form.submit()"><option value="">All</option>{% for v in options.view_name %}<option value="{{ v }}" {% if filters.view_name == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="referer" aria-label="Filter by referer" onchange="this.form.submit()"><option value="">All</option>{% for v in options.referer %}<option value="{{ v }}" {% if filters.referer == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="user_agent" aria-label="Filter by user agent" onchange="this.form.submit()"><option value="">All</option>{% for v in options.user_agent %}<option value="{{ v }}" {% if filters.user_agent == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th><select class="adm-select" name="request_body" aria-label="Filter by payload" onchange="this.form.submit()"><option value="">All</option>{% for v in options.request_body %}<option value="{{ v }}" {% if filters.request_body == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
+                        <th></th>
                     </tr>
                 </thead>
             <tbody>
                 {% for rec in records %}
                 <tr data-drawer="{% url 'request_peek' rec.pk %}" data-drawer-title="Request {{ rec.created_at|date:'Y-m-d H:i' }}" style="cursor:pointer">
-                    <td class="rl-mono">{{ rec.created_at|date:"Y-m-d H:i:s" }}</td>
-                    <td><span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span></td>
-                    <td><span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %}">{{ rec.status_code }}</span></td>
-                    <td><span class="rl-badge rl-cat-{{ rec.category }}">{{ rec.get_category_display }}</span></td>
-                    <td class="rl-mono rl-trunc" title="{{ rec.path }}">{% if rec.path %}<a class="rl-pathlink" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
-                    <td class="rl-mono rl-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
-                    <td class="rl-mono">{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="rl-blockbtn on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="rl-blockbtn" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}</td>
+                    <td class="adm-mono">{{ rec.created_at|date:"Y-m-d H:i:s" }}</td>
+                    <td><span class="adm-badge adm-mono is-{% if rec.method == 'GET' %}primary{% elif rec.method == 'POST' %}ok{% elif rec.method == 'HEAD' %}violet{% else %}warn{% endif %}">{{ rec.method }}</span></td>
+                    <td><span class="adm-badge adm-mono is-{% if rec.status_code >= 500 %}danger{% elif rec.status_code >= 400 %}warn{% elif rec.status_code >= 300 %}primary{% else %}ok{% endif %}">{{ rec.status_code }}</span></td>
+                    <td><span class="adm-badge is-{% if rec.category == 'api' %}warn{% elif rec.category == 'admin' %}violet{% else %}primary{% endif %}">{{ rec.get_category_display }}</span></td>
+                    <td class="adm-mono adm-trunc" title="{{ rec.path }}">{% if rec.path %}<a class="adm-info-link" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
+                    <td class="adm-mono adm-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
+                    <td class="adm-mono">{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="adm-btn is-sm on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="adm-btn is-sm" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}</td>
                     <td>{% if rec.client_ip %}{% ip_geo_chip rec.client_ip %}{% else %}—{% endif %}</td>
                     <td>{{ rec.username|default:"" }}</td>
                     <td class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }}</td>
                     <td>{{ rec.response_size }}</td>
                     <td>{{ rec.time_on_page_ms }}</td>
                     <td>{{ rec.click_count }}</td>
-                    <td class="rl-view">{{ rec.view_name|default:"" }}</td>
-                    <td class="rl-trunc" title="{{ rec.referer }}">{{ rec.referer|default:"" }}</td>
-                    <td class="rl-trunc" title="{{ rec.user_agent }}">{{ rec.user_agent|default:"" }}</td>
-                    <td class="rl-mono rl-trunc" title="{{ rec.request_body }}">{{ rec.request_body|default:"" }}</td>
+                    <td class="adm-mono">{{ rec.view_name|default:"" }}</td>
+                    <td class="adm-trunc" title="{{ rec.referer }}">{{ rec.referer|default:"" }}</td>
+                    <td class="adm-trunc" title="{{ rec.user_agent }}">{{ rec.user_agent|default:"" }}</td>
+                    <td class="adm-mono adm-trunc" title="{{ rec.request_body }}">{{ rec.request_body|default:"" }}</td>
+                    <td><button type="button" class="adm-btn is-sm" data-drawer-open aria-haspopup="dialog" aria-label="Open the details of this request" title="Open request details"><i class="fas fa-eye"></i></button></td>
                 </tr>
                 {% empty %}
-                <tr><td class="rl-empty-row" colspan="17">No requests match these filters.</td></tr>
+                                    <tr><td class="adm-empty" colspan="18">No requests match these filters.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
     </form>
 {% else %}
-    <form method="get" class="rl-filters mb-3">
+    <form method="get" class="adm-card p-3 mb-3">
+        <div class="d-flex flex-wrap align-items-end" style="gap:.6rem 1.15rem;">
+            <div class="adm-field mb-0" role="group" aria-labelledby="rl-category-lbl">
+                <span class="adm-label" id="rl-category-lbl">Category</span>
+                <span class="adm-btn-group">
         <a href="?method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if not category %}active{% endif %}">All</a>
+           class="adm-chip {% if not category %}active{% endif %}">All</a>
         <a href="?category=page&method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if category == 'page' %}active{% endif %}">Pages</a>
+           class="adm-chip {% if category == 'page' %}active{% endif %}">Pages</a>
         <a href="?category=api&method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if category == 'api' %}active{% endif %}">API / Ajax</a>
+           class="adm-chip {% if category == 'api' %}active{% endif %}">API / Ajax</a>
         <a href="?category=admin&method={{ method }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if category == 'admin' %}active{% endif %}">Admin</a>
-
-        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
-
+           class="adm-chip {% if category == 'admin' %}active{% endif %}">Admin</a>
+                </span>
+            </div>
+            <div class="adm-field mb-0" role="group" aria-labelledby="rl-method-lbl">
+                <span class="adm-label" id="rl-method-lbl">Method</span>
+                <span class="adm-btn-group">
         <a href="?category={{ category }}&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if not method %}active{% endif %}">All methods</a>
+           class="adm-chip {% if not method %}active{% endif %}">All methods</a>
         <a href="?category={{ category }}&method=GET&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if method == 'GET' %}active{% endif %}">GET</a>
+           class="adm-chip {% if method == 'GET' %}active{% endif %}">GET</a>
         <a href="?category={{ category }}&method=POST&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if method == 'POST' %}active{% endif %}">POST</a>
+           class="adm-chip {% if method == 'POST' %}active{% endif %}">POST</a>
         <a href="?category={{ category }}&method=HEAD&status={{ status }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if method == 'HEAD' %}active{% endif %}">HEAD</a>
-
-        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
-
+           class="adm-chip {% if method == 'HEAD' %}active{% endif %}">HEAD</a>
+                </span>
+            </div>
+            <div class="adm-field mb-0" role="group" aria-labelledby="rl-status-lbl">
+                <span class="adm-label" id="rl-status-lbl">Status</span>
+                <span class="adm-btn-group">
         <a href="?category={{ category }}&method={{ method }}{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if not status %}active{% endif %}">All statuses</a>
+           class="adm-chip {% if not status %}active{% endif %}">All statuses</a>
         <a href="?category={{ category }}&method={{ method }}&status=2xx{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if status == '2xx' %}active{% endif %}">2xx</a>
+           class="adm-chip {% if status == '2xx' %}active{% endif %}">2xx</a>
         <a href="?category={{ category }}&method={{ method }}&status=3xx{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if status == '3xx' %}active{% endif %}">3xx</a>
+           class="adm-chip {% if status == '3xx' %}active{% endif %}">3xx</a>
         <a href="?category={{ category }}&method={{ method }}&status=4xx{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if status == '4xx' %}active{% endif %}">4xx</a>
+           class="adm-chip {% if status == '4xx' %}active{% endif %}">4xx</a>
         <a href="?category={{ category }}&method={{ method }}&status=5xx{% if q %}&q={{ q|urlencode }}{% endif %}"
-           class="rl-chip {% if status == '5xx' %}active{% endif %}">5xx</a>
-
-        <span style="width:1px;height:20px;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
-
+           class="adm-chip {% if status == '5xx' %}active{% endif %}">5xx</a>
+                </span>
+            </div>
+            <div class="adm-field mb-0">
+                <label class="adm-label" for="rl-q">Search</label>
+                <span class="d-inline-flex align-items-center" style="gap:.4rem;">
+                    <input type="text" class="adm-input" id="rl-q" name="q" value="{{ q }}" placeholder="Path, IP, user, UA..." style="min-width:210px;">
+                    <button type="submit" class="adm-btn is-sm is-soft-blue"><i class="fas fa-search me-1"></i>Search</button>
+                    <a href="?" class="adm-btn is-sm" title="Clear the search box and every filter"><i class="fas fa-eraser me-1"></i>Clear filters</a>
+                </span>
+            </div>
+        </div>
         <input type="hidden" name="category" value="{{ category }}">
         <input type="hidden" name="method" value="{{ method }}">
         <input type="hidden" name="status" value="{{ status }}">
-        <input type="text" name="q" value="{{ q }}" placeholder="Search path, IP, user, UA…"
-               style="background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.25);border-radius:8px;color:inherit;font-size:.75rem;padding:.3rem .6rem;min-width:200px;">
-        <button type="submit" class="rl-chip" style="cursor:pointer;">Search</button>
-        {% if q %}<a href="?" class="rl-chip">Clear search</a>{% endif %}
     </form>
 
     {% for rec in records %}
-    <div class="rl-card p-3 mb-3" data-drawer="{% url 'request_peek' rec.pk %}" data-drawer-title="Request {{ rec.created_at|date:'Y-m-d H:i' }}" style="cursor:pointer">
+    <div class="adm-card p-3 mb-3" data-drawer="{% url 'request_peek' rec.pk %}" data-drawer-title="Request {{ rec.created_at|date:'Y-m-d H:i' }}" style="cursor:pointer">
         <div class="d-flex justify-content-between align-items-start mb-2" style="gap:.75rem;">
             <div style="min-width:0;">
-                <span class="rl-badge rl-method rl-method-{% if rec.method == 'GET' %}get{% elif rec.method == 'POST' %}post{% elif rec.method == 'HEAD' %}head{% else %}other{% endif %}">{{ rec.method }}</span>
-                <span class="rl-badge rl-status rl-status-{% if rec.status_code >= 500 %}s5{% elif rec.status_code >= 400 %}s4{% elif rec.status_code >= 300 %}s3{% else %}s2{% endif %} ms-1">{{ rec.status_code }}</span>
-                <span class="rl-badge rl-cat-{{ rec.category }} ms-1">{{ rec.get_category_display }}</span>
-                {% if rec.view_name %}<span class="rl-view ms-2">{{ rec.view_name }}</span>{% endif %}
-                {% if rec.request_body %}<span class="rl-badge rl-payload-tag ms-2">payload</span>{% endif %}
+                <span class="adm-badge adm-mono is-{% if rec.method == 'GET' %}primary{% elif rec.method == 'POST' %}ok{% elif rec.method == 'HEAD' %}violet{% else %}warn{% endif %}">{{ rec.method }}</span>
+                <span class="adm-badge adm-mono is-{% if rec.status_code >= 500 %}danger{% elif rec.status_code >= 400 %}warn{% elif rec.status_code >= 300 %}primary{% else %}ok{% endif %} ms-1">{{ rec.status_code }}</span>
+                <span class="adm-badge is-{% if rec.category == 'api' %}warn{% elif rec.category == 'admin' %}violet{% else %}primary{% endif %} ms-1">{{ rec.get_category_display }}</span>
+                {% if rec.view_name %}<span class="adm-mono ms-2">{{ rec.view_name }}</span>{% endif %}
+                {% if rec.request_body %}<span class="adm-badge is-ok ms-2">payload</span>{% endif %}
             </div>
-            <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">{{ rec.created_at|date:"Y-m-d H:i:s" }}</div>
+            <div class="text-end flex-shrink-0" style="color:#64748b;font-size:.72rem;">
+                <div>{{ rec.created_at|date:"Y-m-d H:i:s" }}</div>
+                <button type="button" class="adm-btn is-sm mt-1" data-drawer-open aria-haspopup="dialog" aria-label="Open the details of this request" title="Open request details"><i class="fas fa-eye"></i></button>
+            </div>
         </div>
         <div class="mb-2">
-            {% if rec.path %}<a class="rl-path rl-pathlink" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% if rec.query %}<span class="rl-path" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}{% else %}—{% endif %}
+            {% if rec.path %}<a class="adm-mono adm-info-link" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% if rec.query %}<span class="adm-mono" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}{% else %}—{% endif %}
         </div>
-        <div class="rl-meta">
-            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="rl-blockbtn on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="rl-blockbtn" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
+        <div class="adm-sub">
+            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="adm-btn is-sm on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="adm-btn is-sm" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
             {% if rec.client_ip %}<span class="ms-3"><i class="fas fa-location-dot"></i>{% ip_geo_chip rec.client_ip %}</span>{% endif %}
             <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
             {% if rec.response_size %}<span class="ms-3"><i class="fas fa-download"></i>{{ rec.response_size }} B</span>{% endif %}
@@ -541,14 +317,16 @@
             {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
             {% if rec.referer %}<span class="ms-3"><i class="fas fa-link"></i>{{ rec.referer }}</span>{% endif %}
         </div>
-        {% if rec.user_agent %}<div class="rl-meta mt-1"><i class="fas fa-desktop"></i>{{ rec.user_agent }}</div>{% endif %}
-        {% if rec.request_body %}<pre class="rl-body">{{ rec.request_body }}</pre>{% endif %}
+        {% if rec.user_agent %}<div class="adm-sub mt-1"><i class="fas fa-desktop"></i>{{ rec.user_agent }}</div>{% endif %}
+        {% if rec.request_body %}<pre class="adm-code">{{ rec.request_body }}</pre>{% endif %}
     </div>
     {% empty %}
-    <div class="rl-card rl-empty">
+    <div class="adm-card adm-empty">
         <i class="fas fa-network-wired"></i>
         <div style="font-size:.95rem;color:#94a3b8;">No requests captured yet</div>
         <div style="font-size:.82rem;color:#475569;margin-top:4px;">Incoming requests are recorded automatically as traffic hits the site.</div>
     </div>
     {% endfor %}
 {% endif %}
+
+{% include "core/_adm_pager.html" with pg=page_obj %}

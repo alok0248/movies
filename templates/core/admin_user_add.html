@@ -14,44 +14,44 @@
     {% for msg in messages %}
         <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
             {{ msg }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <button aria-label="Close" type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     {% endfor %}
     {% endif %}
 
-    <div class="card bg-dark border-secondary">
-        <div class="card-body">
+    <div class="adm-card">
+        <div class="adm-card-body">
             <form method="POST">
                 {% csrf_token %}
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Username *</label>
-                    <input type="text" name="username" class="form-control bg-dark text-white border-secondary" required>
+                    <label class="adm-label text-white">Username *</label>
+                    <input type="text" name="username" class="adm-input bg-dark text-white border-secondary" required>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Email</label>
-                    <input type="email" name="email" class="form-control bg-dark text-white border-secondary" placeholder="gmail.com or yahoo.com only">
+                    <label class="adm-label text-white">Email</label>
+                    <input type="email" name="email" class="adm-input bg-dark text-white border-secondary" placeholder="gmail.com or yahoo.com only">
                 </div>
 
                 <div class="row mb-3">
                     <div class="col">
-                        <label class="form-label text-white">First Name</label>
-                        <input type="text" name="first_name" class="form-control bg-dark text-white border-secondary">
+                        <label class="adm-label text-white">First Name</label>
+                        <input type="text" name="first_name" class="adm-input bg-dark text-white border-secondary">
                     </div>
                     <div class="col">
-                        <label class="form-label text-white">Last Name</label>
-                        <input type="text" name="last_name" class="form-control bg-dark text-white border-secondary">
+                        <label class="adm-label text-white">Last Name</label>
+                        <input type="text" name="last_name" class="adm-input bg-dark text-white border-secondary">
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Password</label>
-                    <input type="password" name="password" class="form-control bg-dark text-white border-secondary" placeholder="Leave blank for no password">
+                    <label class="adm-label text-white">Password</label>
+                    <input type="password" name="password" class="adm-input bg-dark text-white border-secondary" placeholder="Leave blank for no password">
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label text-white">Role</label>
+                    <label class="adm-label text-white">Role</label>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="is_staff" id="is_staff">
                         <label class="form-check-label text-white" for="is_staff">Staff (can access admin)</label>
@@ -63,14 +63,14 @@
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label text-white">Status</label>
+                    <label class="adm-label text-white">Status</label>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="is_active" id="is_active" checked>
                         <label class="form-check-label text-white" for="is_active">Active</label>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-success w-100">
+                <button type="submit" class="adm-btn is-ok w-100">
                     <i class="fas fa-plus me-1"></i> Create User
                 </button>
             </form>

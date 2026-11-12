@@ -4,7 +4,7 @@
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div class="d-flex align-items-center gap-3">
-            <a href="{% url 'synced_users_list' %}" class="btn btn-outline-light btn-sm">&larr;</a>
+            <a href="{% url 'synced_users_list' %}" class="adm-btn is-sm">&larr;</a>
             {% if user_obj.photo_url %}
                 <img src="{{ user_obj.photo_url }}" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid {% if user_obj.is_subscribed %}#22c55e{% else %}#64748b{% endif %};">
             {% else %}
@@ -16,37 +16,37 @@
             </div>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'synced_user_edit' user_obj.id %}" class="btn btn-warning"><i class="fas fa-edit me-1"></i>Edit</a>
+            <a href="{% url 'synced_user_edit' user_obj.id %}" class="adm-btn is-warn"><i class="fas fa-edit me-1"></i>Edit</a>
             {% if linked_user and not linked_user.is_active %}
             <form method="post" action="{% url 'synced_user_resend_verification' user_obj.id %}" onsubmit="return confirm('Send a fresh verification code to {{ user_obj.email }}?')">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-info"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
+                <button type="submit" class="adm-btn"><i class="fas fa-envelope me-1"></i>Resend Verification</button>
             </form>
             {% endif %}
             <form method="post" action="{% url 'synced_user_delete' user_obj.id %}" onsubmit="return confirmTyped(event, {what: 'the account {{ user_obj.email|escapejs }}', detail: 'The synced profile, its cloud data and its history are removed. This does not touch the web account.'})">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-danger"><i class="fas fa-trash me-1"></i>Delete</button>
+                <button type="submit" class="adm-btn"><i class="fas fa-trash me-1"></i>Delete</button>
             </form>
         </div>
     </div>
 
     {% if messages %}
     {% for message in messages %}
-    <div class="alert alert-{{ message.tags|default:'info' }} border-secondary small mb-4">{{ message }}</div>
+    <div class="alert alert-{{ message.tags|default:'info' }} small mb-4">{{ message }}</div>
     {% endfor %}
     {% endif %}
 
     <!-- Access Control -->
-    <div class="card shadow-sm mb-4 {% if user_obj.block_mode %}border-danger{% else %}border-secondary{% endif %}">
-        <div class="card-header border-secondary text-white fw-semibold d-flex justify-content-between align-items-center">
+    <div class="adm-card mb-4 {% if user_obj.block_mode %}border-danger{% else %}border-secondary{% endif %}">
+        <div class="adm-card-head text-white fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="fas fa-user-shield me-2 {% if user_obj.block_mode %}text-danger{% else %}text-secondary{% endif %}"></i>Access Control</span>
             {% if user_obj.block_mode %}
-            <span class="badge bg-danger fs-6">{{ user_obj.get_block_mode_display }}</span>
+            <span class="adm-badge is-danger fs-6">{{ user_obj.get_block_mode_display }}</span>
             {% else %}
-            <span class="badge bg-success fs-6">Active</span>
+            <span class="adm-badge is-ok fs-6">Active</span>
             {% endif %}
         </div>
-        <div class="card-body">
+        <div class="adm-card-body">
             {% if user_obj.block_mode %}
             <div class="small text-secondary mb-3">
                 Blocked {{ user_obj.blocked_at|timesince }} ago
@@ -57,23 +57,23 @@
                 <form method="post" action="{% url 'synced_user_block' user_obj.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="block_mode" value="full">
-                    <button type="submit" class="btn btn-danger" onclick="return confirm('Stop ALL access for {{ user_obj.email }}? Every API call will be refused.')"><i class="fas fa-ban me-1"></i>Block Access</button>
+                    <button type="submit" class="adm-btn is-danger" onclick="return confirm('Stop ALL access for {{ user_obj.email }}? Every API call will be refused.')"><i class="fas fa-ban me-1"></i>Block Access</button>
                 </form>
                 <form method="post" action="{% url 'synced_user_block' user_obj.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="block_mode" value="play">
-                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Block playback for {{ user_obj.email }}? Movies and series will not play, but browsing stays allowed.')"><i class="fas fa-volume-mute me-1"></i>Play Block</button>
+                    <button type="submit" class="adm-btn" onclick="return confirm('Block playback for {{ user_obj.email }}? Movies and series will not play, but browsing stays allowed.')"><i class="fas fa-volume-mute me-1"></i>Play Block</button>
                 </form>
                 <form method="post" action="{% url 'synced_user_block' user_obj.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="block_mode" value="app">
-                    <button type="submit" class="btn btn-outline-warning" onclick="return confirm('App-block {{ user_obj.email }}? The app will show a connection error and no data will load.')"><i class="fas fa-wifi me-1"></i>App Block</button>
+                    <button type="submit" class="adm-btn" onclick="return confirm('App-block {{ user_obj.email }}? The app will show a connection error and no data will load.')"><i class="fas fa-wifi me-1"></i>App Block</button>
                 </form>
                 {% if user_obj.block_mode %}
                 <form method="post" action="{% url 'synced_user_block' user_obj.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="block_mode" value="">
-                    <button type="submit" class="btn btn-success"><i class="fas fa-check me-1"></i>Restore Access</button>
+                    <button type="submit" class="adm-btn is-ok"><i class="fas fa-check me-1"></i>Restore Access</button>
                 </form>
                 {% endif %}
             </div>
@@ -84,18 +84,18 @@
     </div>
 
     <!-- Live Status (heartbeat) -->
-    <div class="card {% if heartbeat and heartbeat.is_online %}border-success{% else %}border-secondary{% endif %} shadow-sm mb-4">
-        <div class="card-header border-secondary text-white fw-semibold d-flex justify-content-between align-items-center">
+    <div class="adm-card {% if heartbeat and heartbeat.is_online %}border-success{% else %}border-secondary{% endif %} mb-4">
+        <div class="adm-card-head text-white fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="fas fa-satellite-dish me-2 {% if heartbeat and heartbeat.is_online %}text-success{% else %}text-secondary{% endif %}"></i>Live Status</span>
             {% if heartbeat %}
             {% if heartbeat.is_online %}
-            <span class="badge bg-success fs-6"><i class="fas fa-circle me-1" style="font-size:.6rem;"></i>Online</span>
+            <span class="adm-badge is-ok fs-6"><i class="fas fa-circle me-1" style="font-size:.6rem;"></i>Online</span>
             {% else %}
-            <span class="badge bg-secondary fs-6">Offline</span>
+            <span class="adm-badge is-off fs-6">Offline</span>
             {% endif %}
             {% endif %}
         </div>
-        <div class="card-body">
+        <div class="adm-card-body">
             {% if heartbeat %}
             <div class="row g-3">
                 <div class="col-md-3">
@@ -122,7 +122,7 @@
                 </div>
                 <div class="col-md-3">
                     <div class="text-secondary small mb-1">Playing</div>
-                    <div class="text-white">{% if heartbeat.is_playing %}<span class="badge bg-success">Yes</span>{% else %}<span class="text-secondary">No</span>{% endif %}</div>
+                    <div class="text-white">{% if heartbeat.is_playing %}<span class="adm-badge is-ok">Yes</span>{% else %}<span class="text-secondary">No</span>{% endif %}</div>
                 </div>
                 <div class="col-md-3">
                     <div class="text-secondary small mb-1">Now Watching</div>
@@ -138,7 +138,7 @@
                 <div class="text-secondary small mb-1">Recent Actions</div>
                 <div class="d-flex flex-wrap gap-1">
                     {% for a in heartbeat.recent_actions|slice:':12' %}
-                    <span class="badge bg-dark border border-secondary text-light">{{ a }}</span>
+                    <span class="adm-badge is-off border text-light">{{ a }}</span>
                     {% endfor %}
                 </div>
             </div>
@@ -151,8 +151,8 @@
 
     <!-- Subscription Status Banner -->
     {% if user_obj.is_subscribed %}
-    <div class="card border-success shadow-sm mb-4" style="background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(22,163,74,0.06));">
-        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div class="adm-card border-success mb-4" style="background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(22,163,74,0.06));">
+        <div class="adm-card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
                 <div style="width:48px;height:48px;border-radius:12px;background:rgba(34,197,94,0.2);display:flex;align-items:center;justify-content:center;">
                     <i class="fas fa-crown text-success fa-lg"></i>
@@ -164,12 +164,12 @@
                     </div>
                 </div>
             </div>
-            <span class="badge bg-success fs-6 px-3 py-2">Subscribed</span>
+            <span class="adm-badge is-ok fs-6 px-3 py-2">Subscribed</span>
         </div>
     </div>
     {% else %}
-    <div class="card border-secondary shadow-sm mb-4">
-        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div class="adm-card mb-4">
+        <div class="adm-card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
                 <div style="width:48px;height:48px;border-radius:12px;background:rgba(100,116,139,0.2);display:flex;align-items:center;justify-content:center;">
                     <i class="fas fa-user text-secondary fa-lg"></i>
@@ -179,19 +179,19 @@
                     <div class="text-secondary small">No active subscription</div>
                 </div>
             </div>
-            <span class="badge bg-secondary fs-6 px-3 py-2">Free</span>
+            <span class="adm-badge is-off fs-6 px-3 py-2">Free</span>
         </div>
     </div>
     {% endif %}
 
     <!-- Features -->
     {% if user_obj.features %}
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark mb-4">
+        <div class="adm-card-body">
             <h5 class="text-white mb-3"><i class="fas fa-star me-2 text-warning"></i>Plan Features</h5>
             <div class="d-flex flex-wrap gap-2">
                 {% for feature in user_obj.features %}
-                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2"><i class="fas fa-check me-1"></i>{{ feature }}</span>
+                    <span class="adm-badge is-ok bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2"><i class="fas fa-check me-1"></i>{{ feature }}</span>
                 {% endfor %}
             </div>
         </div>
@@ -201,24 +201,27 @@
     <!-- Device & App Info -->
     <div class="row g-4 mb-4">
         <div class="col-md-6">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-mobile-alt me-2 text-info"></i>Device Information</div>
-                <div class="card-body">
-                    <table class="table table-dark table-borderless mb-0 small">
+            <div class="adm-card bg-dark h-100">
+                <div class="adm-card-head text-white fw-semibold"><i class="fas fa-mobile-alt me-2 text-info"></i>Device Information</div>
+                <div class="adm-card-body">
+                    <div class="adm-table-wrap">
+                    <table class="adm-table mb-0 small">
                         <tr><td class="text-secondary" style="width:45%">Device ID</td><td><code class="text-white">{{ user_obj.device_id|default:'-' }}</code></td></tr>
                         <tr><td class="text-secondary">Device Model</td><td class="text-white">{{ user_obj.device_model|default:'-' }}</td></tr>
                         <tr><td class="text-secondary">OS Version</td><td class="text-white">Android {{ user_obj.os_version|default:'-' }}</td></tr>
                         <tr><td class="text-secondary">App Version</td><td class="text-white">{{ user_obj.app_version|default:'-' }}</td></tr>
                         <tr><td class="text-secondary">Build Number</td><td class="text-white">{{ user_obj.build_number|default:'-' }}</td></tr>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-user-circle me-2 text-primary"></i>Account Information</div>
-                <div class="card-body">
-                    <table class="table table-dark table-borderless mb-0 small">
+            <div class="adm-card bg-dark h-100">
+                <div class="adm-card-head text-white fw-semibold"><i class="fas fa-user-circle me-2 text-primary"></i>Account Information</div>
+                <div class="adm-card-body">
+                    <div class="adm-table-wrap">
+                    <table class="adm-table mb-0 small">
                         <tr><td class="text-secondary" style="width:45%">Display Name</td><td class="text-white">{{ user_obj.display_name|default:'-' }}</td></tr>
                         <tr><td class="text-secondary">Email</td><td><code class="text-info">{{ user_obj.email }}</code></td></tr>
                         <tr><td class="text-secondary">Google ID</td><td><code class="text-white">{{ user_obj.google_id|default:'-' }}</code></td></tr>
@@ -230,15 +233,16 @@
                             {% endif %}
                         </td></tr>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Subscription Details -->
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-credit-card me-2 text-success"></i>Subscription Details</div>
-        <div class="card-body">
+    <div class="adm-card bg-dark mb-4">
+        <div class="adm-card-head text-white fw-semibold"><i class="fas fa-credit-card me-2 text-success"></i>Subscription Details</div>
+        <div class="adm-card-body">
             <div class="row g-4">
                 <div class="col-md-3 text-center">
                     <div class="p-3 rounded" style="background:rgba({% if user_obj.is_subscribed %}34,197,94{% else %}100,116,139{% endif %},0.1);">
@@ -270,34 +274,36 @@
 
     <!-- Linked Django User -->
     {% if linked_user %}
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-link me-2 text-primary"></i>Linked Web Account</div>
-        <div class="card-body">
-            <table class="table table-dark table-borderless mb-0 small">
+    <div class="adm-card bg-dark mb-4">
+        <div class="adm-card-head text-white fw-semibold"><i class="fas fa-link me-2 text-primary"></i>Linked Web Account</div>
+        <div class="adm-card-body">
+            <div class="adm-table-wrap">
+            <table class="adm-table mb-0 small">
                 <tr><td class="text-secondary" style="width:35%">Web User ID</td><td class="text-white">#{{ linked_user.id }}</td></tr>
                 <tr><td class="text-secondary">Username</td><td class="text-white">{{ linked_user.username }}</td></tr>
                 <tr><td class="text-secondary">Email</td><td class="text-info">{{ linked_user.email }}</td></tr>
                 <tr><td class="text-secondary">Full Name</td><td class="text-white">{{ linked_user.first_name }} {{ linked_user.last_name }}</td></tr>
-                <tr><td class="text-secondary">Has Password</td><td>{% if linked_user.has_usable_password %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-warning">No (Android-only)</span>{% endif %}</td></tr>
-                <tr><td class="text-secondary">Active</td><td>{% if linked_user.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Inactive</span>{% endif %}</td></tr>
-                <tr><td class="text-secondary">Staff</td><td>{% if linked_user.is_staff %}<span class="badge bg-info">Yes</span>{% else %}No{% endif %}</td></tr>
+                <tr><td class="text-secondary">Has Password</td><td>{% if linked_user.has_usable_password %}<span class="adm-badge is-ok">Yes</span>{% else %}<span class="adm-badge is-warn">No (Android-only)</span>{% endif %}</td></tr>
+                <tr><td class="text-secondary">Active</td><td>{% if linked_user.is_active %}<span class="adm-badge is-ok">Active</span>{% else %}<span class="adm-badge is-danger">Inactive</span>{% endif %}</td></tr>
+                <tr><td class="text-secondary">Staff</td><td>{% if linked_user.is_staff %}<span class="adm-badge is-info">Yes</span>{% else %}No{% endif %}</td></tr>
                 <tr><td class="text-secondary">Date Joined</td><td class="text-white">{{ linked_user.date_joined }}</td></tr>
                 <tr><td class="text-secondary">Last Login</td><td class="text-white">{{ linked_user.last_login|default:'Never' }}</td></tr>
             </table>
+            </div>
         </div>
     </div>
     {% else %}
-    <div class="alert alert-secondary border-secondary small mb-4"><i class="fas fa-unlink me-2"></i>No linked web account (Android-only user).</div>
+    <div class="alert alert-secondary small mb-4"><i class="fas fa-unlink me-2"></i>No linked web account (Android-only user).</div>
     {% endif %}
 
     <!-- Cloud Sync Data -->
     {% if cloud_data %}
-    <div class="card bg-dark border-secondary shadow-sm mb-4">
-        <div class="card-header border-secondary text-white fw-semibold d-flex justify-content-between align-items-center">
+    <div class="adm-card bg-dark mb-4">
+        <div class="adm-card-head text-white fw-semibold d-flex justify-content-between align-items-center">
             <span><i class="fas fa-cloud me-2 text-info"></i>Cloud Sync Data</span>
-            <span class="badge bg-info">v{{ cloud_data.data_version }}</span>
+            <span class="adm-badge is-info">v{{ cloud_data.data_version }}</span>
         </div>
-        <div class="card-body">
+        <div class="adm-card-body">
             <div class="row g-4">
                 <div class="col-md-4 text-center">
                     <button type="button" class="p-3 rounded w-100 cloud-box" data-sync-section="playback" onclick="syncShowSection('playback')" style="background:rgba(56,189,248,0.1);">
@@ -347,32 +353,23 @@
                 .cloud-box:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,0,0,.35); border-color:rgba(148,163,184,.55); }
                 .cloud-box.on { border-color:#38bdf8; box-shadow:inset 0 0 0 1px rgba(56,189,248,.5); }
                 .cloud-hint { font-size:.66rem; text-transform:uppercase; letter-spacing:.06em; color:#64748b; margin-top:.35rem; }
-                .cloud-box:hover .cloud-hint, .cloud-box.on .cloud-hint { color:#38bdf8; }
-                .cloud-panel { background:rgba(2,6,23,.55); border:1px solid rgba(148,163,184,.2); border-radius:12px; padding:.85rem .9rem; }
-                .cloud-panel-head { display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; margin-bottom:.6rem; }
-                .sync-item { display:flex; align-items:center; gap:.7rem; padding:.5rem; border-radius:10px; border:1px solid rgba(148,163,184,.14); background:rgba(15,23,42,.5); }
+                .cloud-box:hover .cloud-hint, .cloud-box.on .cloud-hint { color:#38bdf8; }                .sync-item { display:flex; align-items:center; gap:.7rem; padding:.5rem; border-radius:10px; border:1px solid rgba(148,163,184,.14); background:rgba(15,23,42,.5); }
                 .sync-item + .sync-item { margin-top:.4rem; }
                 .sync-item:hover { border-color:rgba(148,163,184,.4); }
                 .sync-poster { width:44px; height:64px; object-fit:cover; border-radius:6px; flex:0 0 auto; background:rgba(148,163,184,.15); }
                 .sync-poster-none { display:flex; align-items:center; justify-content:center; color:#64748b; font-size:1.1rem; }
-                .sync-main { min-width:0; flex:1 1 auto; }
-                .sync-title { font-weight:600; color:#e2e8f0; font-size:.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-                .sync-title a { color:#e2e8f0; text-decoration:none; border-bottom:1px dotted rgba(226,232,240,.35); }
-                .sync-title a:hover { color:#93c5fd; }
-                .sync-meta { font-size:.72rem; color:#94a3b8; display:flex; flex-wrap:wrap; gap:.15rem .5rem; align-items:center; }
-                .sync-chip { font-size:.62rem; font-weight:700; padding:1px 6px; border-radius:4px; background:rgba(148,163,184,.18); color:#cbd5e1; text-transform:uppercase; letter-spacing:.03em; }
-                .sync-bar { height:5px; border-radius:3px; background:rgba(148,163,184,.2); overflow:hidden; margin-top:.3rem; }
+                .sync-main { min-width:0; flex:1 1 auto; }                .sync-meta { font-size:.72rem; color:#94a3b8; display:flex; flex-wrap:wrap; gap:.15rem .5rem; align-items:center; }                .sync-bar { height:5px; border-radius:3px; background:rgba(148,163,184,.2); overflow:hidden; margin-top:.3rem; }
                 .sync-bar > span { display:block; height:100%; background:linear-gradient(90deg,#38bdf8,#22d3ee); }
                 .sync-actions { display:flex; gap:.35rem; flex:0 0 auto; }
                 .sync-empty { color:#64748b; font-size:.8rem; text-align:center; padding:1.2rem; }
             </style>
 
-            <div id="cloudItems" class="cloud-panel mt-3">
+            <div id="cloudItems" class="adm-card mt-3">
                 {% for s in cloud_sections %}
                 <div class="cloud-section" data-sync-panel="{{ s.key }}" data-sync-count="{{ s.count }}" {% if not forloop.first %}style="display:none;"{% endif %}>
-                    <div class="cloud-panel-head">
+                    <div class="adm-card-head">
                         <div class="text-white fw-semibold"><i class="fas fa-{{ s.icon }} me-2" style="color:{{ s.color }};"></i>{{ s.label }}
-                            <span class="badge ms-1" style="background:{{ s.color }}33;color:{{ s.color }};">{{ s.count }}</span>
+                            <span class="adm-badge ms-1" style="background:{{ s.color }}33;color:{{ s.color }};">{{ s.count }}</span>
                             {% if s.count > s.items|length %}<span class="text-secondary small ms-2">showing the first {{ s.items|length }} of {{ s.count }}</span>{% endif %}
                         </div>
                         <div class="text-secondary small">Click any item to open its details page or play it — both open in a new tab</div>
@@ -381,9 +378,9 @@
                     <div class="sync-item">
                         {% if it.poster_path %}<img class="sync-poster" src="https://image.tmdb.org/t/p/w92{{ it.poster_path }}" alt="" loading="lazy">{% else %}<div class="sync-poster sync-poster-none"><i class="fas {% if it.is_tv %}fa-tv{% else %}fa-film{% endif %}"></i></div>{% endif %}
                         <div class="sync-main">
-                            <div class="sync-title" title="{{ it.key }}">{% if it.detail_url %}<a href="{{ it.detail_url }}" target="_blank" rel="noopener">{{ it.label }}</a>{% else %}{{ it.label }}{% endif %}</div>
+                            <div class="adm-item-title" title="{{ it.key }}">{% if it.detail_url %}<a href="{{ it.detail_url }}" target="_blank" rel="noopener">{{ it.label }}</a>{% else %}{{ it.label }}{% endif %}</div>
                             <div class="sync-meta">
-                                <span class="sync-chip">{% if it.is_tv %}Series{% else %}Movie{% endif %}</span>
+                                <span class="adm-badge">{% if it.is_tv %}Series{% else %}Movie{% endif %}</span>
                                 {# Season/episode only means something for a series; the app leaves 1_1 on movie keys. #}
                                 {% if it.is_tv and it.season %}<span>S{{ it.season }}{% if it.episode %}E{{ it.episode }}{% endif %}</span>{% endif %}
                                 {% if it.tmdb_id %}<span>TMDB #{{ it.tmdb_id }}</span>{% endif %}
@@ -395,8 +392,8 @@
                         </div>
                         <div class="sync-actions">
                             {% if it.detail_url %}
-                            <a class="btn btn-sm btn-outline-info" href="{{ it.detail_url }}" target="_blank" rel="noopener" title="Open the details page"><i class="fas fa-info-circle"></i> Details</a>
-                            <a class="btn btn-sm btn-danger" href="{{ it.play_url }}" target="_blank" rel="noopener" title="Play this title"><i class="fas fa-play"></i> Play</a>
+                            <a class="adm-btn is-sm" href="{{ it.detail_url }}" target="_blank" rel="noopener" title="Open the details page"><i class="fas fa-info-circle"></i> Details</a>
+                            <a class="adm-btn is-sm is-danger" href="{{ it.play_url }}" target="_blank" rel="noopener" title="Play this title"><i class="fas fa-play"></i> Play</a>
                             {% else %}<span class="text-secondary small">no link</span>{% endif %}
                         </div>
                     </div>
@@ -412,8 +409,8 @@
             <h6 class="text-white mb-3"><i class="fas fa-play-circle me-2 text-info"></i>Playback Progress
                 {% if progress_total > progress_preview|length %}<span class="text-secondary small ms-2">showing the most recent {{ progress_preview|length }} of {{ progress_total }}</span>{% endif %}
             </h6>
-            <div class="table-responsive">
-                <table class="table table-dark table-sm small">
+            <div class="adm-table-wrap">
+                <table class="adm-table small">
                     <thead><tr><th>Media Key</th><th>Position</th><th>Duration</th><th>Last Updated</th></tr></thead>
                     <tbody>
                     {% for key, entry in progress_preview %}
@@ -473,9 +470,9 @@
     {% endif %}
 
     <!-- Timestamps -->
-    <div class="card bg-dark border-secondary shadow-sm">
-        <div class="card-header border-secondary text-white fw-semibold"><i class="fas fa-clock me-2 text-secondary"></i>Activity Timestamps</div>
-        <div class="card-body">
+    <div class="adm-card bg-dark shadow-sm">
+        <div class="adm-card-head text-white fw-semibold"><i class="fas fa-clock me-2 text-secondary"></i>Activity Timestamps</div>
+        <div class="adm-card-body">
             <div class="row g-3">
                 <div class="col-md-6">
                     <div class="text-secondary small mb-1">First Created</div>

@@ -1,139 +1,82 @@
 {% extends 'core/admin_base.html' %}
 {% block admin_content %}
-<div class="container mt-5 mb-5">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+<div class="container-fluid py-3" style="max-width:1500px">
+    <div class="adm-page-head">
         <div>
-            <h1 class="text-white mb-1"><i class="fas fa-server me-2 text-pink-400"></i>System Resources</h1>
-            <p class="text-secondary mb-0">Monitor CPU, Memory, Disk, Network, and system information in real-time.</p>
+            <h4 class="adm-page-title"><i class="fas fa-server me-2"></i>System resources</h4>
+            <p class="adm-page-sub">CPU, memory, disk, network and system information, refreshed while the page is open.</p>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light">&larr; Admin Dashboard</a>
-        </div>
-    </div>
-
-    <div class="row g-4 mb-1">
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
-                    <div class="text-secondary small">CPU Usage</div>
-                    <div id="cpu-percent" class="display-6 text-white">{{ cpu_percent }}%</div>
-                    <div class="progress mt-2" style="height: 6px;">
-                        <div id="cpu-progress" class="progress-bar bg-danger" role="progressbar" style="width: {{ cpu_percent }}%;" aria-valuenow="{{ cpu_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <div class="text-secondary small mt-1">
-                        <span id="cpu-cores">{{ cpu_count }} Cores</span> • <span id="cpu-freq">{{ cpu_freq_current|floatformat:0 }} / {{ cpu_freq_max|floatformat:0 }} MHz</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
-                    <div class="text-secondary small">Memory Usage</div>
-                    <div id="memory-percent" class="display-6 text-white">{{ memory_percent }}%</div>
-                    <div class="progress mt-2" style="height: 6px;">
-                        <div id="memory-progress" class="progress-bar bg-warning" role="progressbar" style="width: {{ memory_percent }}%;" aria-valuenow="{{ memory_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <div class="text-secondary small mt-1">
-                        <span id="memory-used">{{ memory_used|filesizeformat }}</span> / <span id="memory-total">{{ memory_total|filesizeformat }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
-                    <div class="text-secondary small">Disk Usage</div>
-                    <div id="disk-percent" class="display-6 text-white">{{ disk_percent }}%</div>
-                    <div class="progress mt-2" style="height: 6px;">
-                        <div id="disk-progress" class="progress-bar bg-primary" role="progressbar" style="width: {{ disk_percent }}%;" aria-valuenow="{{ disk_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <div class="text-secondary small mt-1">
-                        <span id="disk-used">{{ disk_used|filesizeformat }}</span> / <span id="disk-total">{{ disk_total|filesizeformat }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
-                    <div class="text-secondary small">Uptime</div>
-                    <div id="uptime" class="display-6 text-white">{{ uptime_days }}d {{ uptime_hours }}h {{ uptime_minutes }}m</div>
-                    <div class="text-secondary small mt-2">
-                        Booted: <span id="boot-time">{{ boot_time|date:"F j, Y, g:i a" }}</span>
-                    </div>
-                </div>
-            </div>
+        <div class="adm-btn-group">
+            <a class="adm-btn" href="{% url 'admin_dashboard' %}"><i class="fas fa-arrow-left"></i>Admin dashboard</a>
         </div>
     </div>
 
-    <div class="row g-4 mt-4">
+    <div class="adm-grid" style="margin-bottom:1rem">
+        <div class="adm-kpi">
+            <div class="k">CPU usage</div>
+            <div class="v{% if cpu_percent >= 90 %} is-bad{% elif cpu_percent >= 75 %} is-warn{% endif %}"><span id="cpu-percent">{{ cpu_percent }}%</span></div>
+            <div class="adm-meter"><span id="cpu-progress"{% if cpu_percent >= 90 %} class="is-bad"{% elif cpu_percent >= 75 %} class="is-warn"{% endif %} style="width:{{ cpu_percent }}%"></span></div>
+            <div class="adm-gauge-note"><span id="cpu-cores">{{ cpu_count }} cores</span> &middot; <span id="cpu-freq">{{ cpu_freq_current|floatformat:0 }} / {{ cpu_freq_max|floatformat:0 }} MHz</span></div>
+        </div>
+        <div class="adm-kpi">
+            <div class="k">Memory usage</div>
+            <div class="v{% if memory_percent >= 90 %} is-bad{% elif memory_percent >= 75 %} is-warn{% endif %}"><span id="memory-percent">{{ memory_percent }}%</span></div>
+            <div class="adm-meter"><span id="memory-progress"{% if memory_percent >= 90 %} class="is-bad"{% elif memory_percent >= 75 %} class="is-warn"{% endif %} style="width:{{ memory_percent }}%"></span></div>
+            <div class="adm-gauge-note"><span id="memory-used">{{ memory_used|filesizeformat }}</span> / <span id="memory-total">{{ memory_total|filesizeformat }}</span></div>
+        </div>
+        <div class="adm-kpi">
+            <div class="k">Disk usage</div>
+            <div class="v{% if disk_percent >= 90 %} is-bad{% elif disk_percent >= 75 %} is-warn{% endif %}"><span id="disk-percent">{{ disk_percent }}%</span></div>
+            <div class="adm-meter"><span id="disk-progress"{% if disk_percent >= 90 %} class="is-bad"{% elif disk_percent >= 75 %} class="is-warn"{% endif %} style="width:{{ disk_percent }}%"></span></div>
+            <div class="adm-gauge-note"><span id="disk-used">{{ disk_used|filesizeformat }}</span> / <span id="disk-total">{{ disk_total|filesizeformat }}</span></div>
+        </div>
+        <div class="adm-kpi">
+            <div class="k">Uptime</div>
+            <div class="v"><span id="uptime">{{ uptime_days }}d {{ uptime_hours }}h {{ uptime_minutes }}m</span></div>
+            <div class="adm-gauge-note">Booted: <span id="boot-time">{{ boot_time|date:"F j, Y, g:i a" }}</span></div>
+        </div>
+    </div>
+
+    <div class="row g-3">
         <div class="col-lg-6">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
-                    <h5 class="text-white mb-1">CPU & Memory History</h5>
-                    <div class="text-secondary small mb-3">Real-time usage over last 30 seconds.</div>
-                    <div style="height: 300px;"><canvas id="cpuMemoryChart"></canvas></div>
+            <div class="adm-card" style="height:100%">
+                <div class="adm-card-head">
+                    <h5 class="adm-card-title"><i class="fas fa-chart-line"></i>CPU &amp; memory history</h5>
+                </div>
+                <div class="adm-card-body">
+                    <p class="adm-card-sub" style="margin:0 0 .7rem">Real-time usage over the last 30 seconds.</p>
+                    <div style="height:300px"><canvas id="cpuMemoryChart"></canvas></div>
                 </div>
             </div>
         </div>
         <div class="col-lg-6">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
-                    <h5 class="text-white mb-1">Network & Disk I/O</h5>
-                    <div class="text-secondary small mb-3">Data sent/received and disk read/write.</div>
-                    <div style="height: 300px;"><canvas id="ioChart"></canvas></div>
+            <div class="adm-card" style="height:100%">
+                <div class="adm-card-head">
+                    <h5 class="adm-card-title"><i class="fas fa-network-wired"></i>Network &amp; disk I/O</h5>
+                </div>
+                <div class="adm-card-body">
+                    <p class="adm-card-sub" style="margin:0 0 .7rem">Data sent and received, plus disk read and write.</p>
+                    <div style="height:300px"><canvas id="ioChart"></canvas></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-sm mt-4">
-        <div class="card-body">
-            <h5 class="text-white mb-3">System Information</h5>
-            <div class="table-responsive">
-                <table class="table table-dark table-hover mb-0 align-middle small">
-                    <tbody>
-                        <tr>
-                            <td class="text-secondary">Operating System</td>
-                            <td id="os-name">{{ os_name }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">OS Version</td>
-                            <td id="os-version">{{ os_version }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Architecture</td>
-                            <td id="os-arch">{{ os_architecture }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Python Version</td>
-                            <td id="python-version">{{ python_version }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Swap Usage</td>
-                            <td id="swap-usage">
-                                <span id="swap-percent">{{ swap_percent }}%</span> • <span id="swap-used">{{ swap_used|filesizeformat }}</span> / <span id="swap-total">{{ swap_total|filesizeformat }}</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Network Sent</td>
-                            <td id="network-sent">{{ network_sent_bytes|filesizeformat }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Network Received</td>
-                            <td id="network-recv">{{ network_recv_bytes|filesizeformat }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Disk Read</td>
-                            <td id="disk-read">{{ disk_read_bytes|filesizeformat }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-secondary">Disk Written</td>
-                            <td id="disk-write">{{ disk_write_bytes|filesizeformat }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+    <div class="adm-card" style="margin-top:1rem">
+        <div class="adm-card-head">
+            <h5 class="adm-card-title"><i class="fas fa-info-circle"></i>System information</h5>
+        </div>
+        <div class="adm-card-body">
+            <div class="adm-facts">
+                <div><span>Operating system</span><span id="os-name">{{ os_name }}</span></div>
+                <div><span>OS version</span><span id="os-version">{{ os_version }}</span></div>
+                <div><span>Architecture</span><span id="os-arch">{{ os_architecture }}</span></div>
+                <div><span>Python version</span><span id="python-version">{{ python_version }}</span></div>
+                <div><span>Swap usage</span><span id="swap-usage"><span id="swap-percent">{{ swap_percent }}%</span> &middot; <span id="swap-used">{{ swap_used|filesizeformat }}</span> / <span id="swap-total">{{ swap_total|filesizeformat }}</span></span></div>
+                <div><span>Network sent</span><span id="network-sent">{{ network_sent_bytes|filesizeformat }}</span></div>
+                <div><span>Network received</span><span id="network-recv">{{ network_recv_bytes|filesizeformat }}</span></div>
+                <div><span>Disk read</span><span id="disk-read">{{ disk_read_bytes|filesizeformat }}</span></div>
+                <div><span>Disk written</span><span id="disk-write">{{ disk_write_bytes|filesizeformat }}</span></div>
             </div>
         </div>
     </div>
@@ -144,8 +87,27 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 let cpuMemoryChart, ioChart;
-const chartText = '#cbd5e1';
-const gridColor = 'rgba(148, 163, 184, 0.16)';
+
+// Chart chrome follows the theme variables, so the axes stay readable on the
+// white card as well as the dark one, and keeps following them when the theme
+// is switched while the page is open.
+let chartText = '#555570';
+let gridColor = 'rgba(148,163,184,.16)';
+
+function syncChartColours() {
+    const cs = getComputedStyle(document.documentElement);
+    chartText = cs.getPropertyValue('--text-2').trim() || '#555570';
+    gridColor = cs.getPropertyValue('--border').trim() || 'rgba(148,163,184,.16)';
+    [cpuMemoryChart, ioChart].forEach(function (chart) {
+        if (!chart) { return; }
+        chart.options.plugins.legend.labels.color = chartText;
+        chart.options.scales.x.ticks.color = chartText;
+        chart.options.scales.y.ticks.color = chartText;
+        chart.options.scales.x.grid.color = gridColor;
+        chart.options.scales.y.grid.color = gridColor;
+        chart.update('none');
+    });
+}
 const maxDataPoints = 30;
 
 // Initialize data arrays
@@ -352,7 +314,10 @@ function updateDashboard(data) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    syncChartColours();
     initializeCharts();
+    new MutationObserver(syncChartColours)
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     
     // Initialize previous values from initial data
     prevNetworkSent = {{ network_sent_bytes }};

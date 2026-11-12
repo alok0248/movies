@@ -2,110 +2,13 @@
 {% load ip_geo %}
 {% block title %}Blocked IPs - Admin{% endblock %}
 {% block admin_content %}
-<style>
-    .bi-head { display: flex; align-items: center; gap: .8rem; }
-    .bi-icon {
-        width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
-        background: linear-gradient(135deg, #f87171, #fbbf24);
-        display: flex; align-items: center; justify-content: center;
-    }
-    .bi-card {
-        background: var(--card-bg, #1a1a2e);
-        border: 1px solid var(--border, rgba(255,255,255,.08));
-        border-radius: 12px;
-    }
-    .bi-stat { padding: 1rem; }
-    .bi-stat .bi-num { font-size: 1.6rem; font-weight: 700; color: var(--text, #e2e8f0); line-height: 1.1; }
-    .bi-stat .bi-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3, #64748b); }
-    .bi-tablewrap {
-        overflow-x: auto; border: 1px solid var(--border, rgba(255,255,255,.08));
-        border-radius: 12px; background: var(--card-bg, #1a1a2e);
-    }
-    .bi-table { width: 100%; border-collapse: collapse; font-size: .74rem; white-space: nowrap; }
-    .bi-table th, .bi-table td {
-        padding: .5rem .6rem; border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
-        text-align: left; vertical-align: top;
-    }
-    .bi-table thead th { background: var(--surface, #16213e); color: var(--text-2, #cbd5e1); font-weight: 600; position: sticky; top: 0; z-index: 1; }
-    .bi-table tbody tr:hover { background: rgba(148,163,184,.07); }
-    .bi-table tbody tr.bi-off { opacity: .62; }
-    .bi-mono { font-family: Consolas, Menlo, monospace; }
-    .bi-ip { font-family: Consolas, Menlo, monospace; font-weight: 600; font-size: .8rem; color: #fca5a5; }
-    .bi-badge {
-        display: inline-block; font-size: .64rem; font-weight: 700; padding: 2px 8px;
-        border-radius: 4px; text-transform: uppercase; letter-spacing: .03em;
-    }
-    .bi-b-on { background: rgba(239,68,68,.16); color: #f87171; }
-    .bi-b-off { background: rgba(107,114,128,.2); color: #9ca3af; }
-    .bi-b-hot { background: rgba(251,191,36,.16); color: #fbbf24; }
-    .bi-b-perm { background: rgba(236,72,153,.18); color: #f472b6; }
-    .bi-b-bot { background: rgba(167,139,250,.18); color: #c4b5fd; }
-    .bi-b-warn { background: rgba(148,163,184,.18); color: #cbd5e1; }
-    .bi-num-cell { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text, #e2e8f0); }
-    .bi-sub { color: var(--text-3, #64748b); font-size: .68rem; }
-    .bi-zero { color: #475569; }
-    .bi-hot { color: #fbbf24; }
-    .bi-infolink { color: #7dd3fc; text-decoration: none; border-bottom: 1px dotted rgba(125,211,252,.45); }
-    .bi-infolink:hover { color: #bae6fd; }
-    .bi-paths { display: flex; flex-direction: column; gap: .2rem; white-space: normal; max-width: 460px; }
-    .bi-path {
-        display: inline-flex; align-items: baseline; gap: .4rem; max-width: 460px;
-        font-family: Consolas, Menlo, monospace; font-size: .7rem; color: var(--text-2, #cbd5e1);
-        text-decoration: none;
-    }
-    .bi-path:hover { color: #7dd3fc; }
-    .bi-path span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .bi-hit {
-        flex: 0 0 auto; font-size: .62rem; font-weight: 700; padding: 0 .35rem;
-        border-radius: 999px; background: rgba(148,163,184,.18); color: #cbd5e1;
-    }
-    .bi-more { font-size: .68rem; color: #64748b; }
-    .bi-more summary { cursor: pointer; color: #7dd3fc; }
-    .bi-btn {
-        display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .6rem;
-        border-radius: 8px; font-size: .72rem; font-weight: 600; text-decoration: none;
-        cursor: pointer; border: 1px solid transparent; background: transparent;
-    }
-    .bi-btn-unblock { color: #34d399; background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.32); }
-    .bi-btn-unblock:hover { background: rgba(52,211,153,.24); border-color: #34d399; }
-    .bi-btn-block { color: #f87171; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.32); }
-    .bi-btn-block:hover { background: rgba(239,68,68,.24); border-color: #f87171; }
-    .bi-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-end; }
-    .bi-form label { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--text-3, #64748b); }
-    .bi-form input[type="text"] {
-        background: rgba(148,163,184,.1); border: 1px solid var(--border, rgba(148,163,184,.25));
-        border-radius: 6px; color: inherit; font-size: .74rem; padding: .32rem .5rem; min-width: 190px;
-    }
-    .bi-chip {
-        display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .7rem;
-        border-radius: 999px; font-size: .72rem; font-weight: 600; text-decoration: none;
-        border: 1px solid var(--border, rgba(148,163,184,.25)); color: var(--text-2, #cbd5e1);
-    }
-    .bi-chip.on { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.45); color: #93c5fd; }
-    .bi-hdrinput {
-        display: block; width: 100%; margin: .25rem 0 0; padding: .25rem .4rem;
-        background: rgba(148,163,184,.1); border: 1px solid rgba(148,163,184,.25);
-        border-radius: 6px; color: inherit; font-size: .68rem;
-        font-family: Consolas, Menlo, monospace;
-    }
-    .bi-empty { text-align: center; padding: 48px 16px; color: #475569; }
-    .bi-empty i { font-size: 2.4rem; display: block; margin-bottom: 10px; color: #334155; }
-    html[data-theme="light"] .bi-tablewrap { background: #fff; border-color: rgba(0,0,0,.1); }
-    html[data-theme="light"] .bi-table thead th { background: #f1f5f9; color: #334155; }
-    html[data-theme="light"] .bi-table th, html[data-theme="light"] .bi-table td { border-color: rgba(0,0,0,.08); }
-    html[data-theme="light"] .bi-stat .bi-num { color: #0f172a; }
-    html[data-theme="light"] .bi-num-cell { color: #0f172a; }
-    html[data-theme="light"] .bi-ip { color: #b91c1c; }
-    html[data-theme="light"] .bi-path { color: #334155; }
-    html[data-theme="light"] .bi-infolink { color: #0369a1; }
-    html[data-theme="light"] .bi-card { background: #fff; border-color: rgba(0,0,0,.08); }
-</style>
+<style>    .bi-paths { display: flex; flex-direction: column; gap: .2rem; white-space: normal; max-width: 460px; }    .bi-icon { width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto; background: linear-gradient(135deg, #f87171, #fbbf24); display: flex; align-items: center; justify-content: center; }    .bi-hot { color: #fbbf24; }</style>
 
 <div class="container py-4" style="max-width:1600px;">
     <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
             <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Admin Dashboard</a>
-            <div class="bi-head mt-2">
+            <div class="adm-page-head mt-2">
                 <div class="bi-icon"><i class="fas fa-shield-alt text-white" style="font-size:1.1rem;"></i></div>
                 <div>
                     <h3 class="mb-0" style="font-size:1.25rem;">Blocked IPs</h3>
@@ -114,73 +17,73 @@
             </div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'request_log' %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-network-wired me-1"></i>Requests &amp; Users</a>
-            <a href="{% url 'blocked_headers' %}" class="btn btn-sm" style="color:#a5b4fc;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;"><i class="fas fa-heading me-1"></i>Blocked Headers{% if header_rules_total %} ({{ header_rules_total }}){% endif %}</a>
-            <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="btn btn-sm" style="color:#34d399;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:8px;"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
-            <a href="{% url 'blocked_ips' %}{% if show_all %}?show=all{% endif %}" class="btn btn-sm" style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:8px;"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
+            <a href="{% url 'request_log' %}" class="adm-btn is-sm is-soft-blue"><i class="fas fa-network-wired me-1"></i>Requests &amp; Users</a>
+            <a href="{% url 'blocked_headers' %}" class="adm-btn is-sm is-soft-violet"><i class="fas fa-heading me-1"></i>Blocked Headers{% if header_rules_total %} ({{ header_rules_total }}){% endif %}</a>
+            <a href="?{{ request.GET.urlencode }}&amp;format=csv" class="adm-btn is-sm is-soft-ok"><i class="fas fa-file-excel me-1"></i>Download CSV</a>
+            <a href="{% url 'blocked_ips' %}{% if show_all %}?show=all{% endif %}" class="adm-btn is-sm is-soft-blue"><i class="fas fa-sync-alt me-1"></i>Refresh</a>
         </div>
     </div>
 
     <div class="row g-3 mb-3">
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Addresses currently refused">
-                <div class="bi-num" style="color:#f87171;">{{ totals.blocked }}</div>
-                <div class="bi-lbl">Blocked now</div>
+            <div class="adm-card adm-stat" title="Addresses currently refused">
+                <div class="adm-stat-value" style="color:#f87171;">{{ totals.blocked }}</div>
+                <div class="adm-stat-label">Blocked now</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Requests that arrived after the block and were answered 403">
-                <div class="bi-num" style="color:#fbbf24;">{{ totals.after }}</div>
-                <div class="bi-lbl">Requests after block</div>
+            <div class="adm-card adm-stat" title="Requests that arrived after the block and were answered 403">
+                <div class="adm-stat-value" style="color:#fbbf24;">{{ totals.after }}</div>
+                <div class="adm-stat-label">Requests after block</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="How many of those got the 403 response">
-                <div class="bi-num" style="color:#fb7185;">{{ totals.served_403 }}</div>
-                <div class="bi-lbl">403s served</div>
+            <div class="adm-card adm-stat" title="How many of those got the 403 response">
+                <div class="adm-stat-value" style="color:#fb7185;">{{ totals.served_403 }}</div>
+                <div class="adm-stat-label">403s served</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Blocked addresses that are still sending requests">
-                <div class="bi-num" style="color:#f59e0b;">{{ totals.active_after }}</div>
-                <div class="bi-lbl">Still hitting</div>
+            <div class="adm-card adm-stat" title="Blocked addresses that are still sending requests">
+                <div class="adm-stat-value" style="color:#f59e0b;">{{ totals.active_after }}</div>
+                <div class="adm-stat-label">Still hitting</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Requests recorded from these addresses in total">
-                <div class="bi-num">{{ totals.requests }}</div>
-                <div class="bi-lbl">Requests total</div>
+            <div class="adm-card adm-stat" title="Requests recorded from these addresses in total">
+                <div class="adm-stat-value">{{ totals.requests }}</div>
+                <div class="adm-stat-label">Requests total</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Blocks that were lifted again">
-                <div class="bi-num" style="color:#9ca3af;">{{ totals.unblocked }}</div>
-                <div class="bi-lbl">Past blocks</div>
+            <div class="adm-card adm-stat" title="Blocks that were lifted again">
+                <div class="adm-stat-value" style="color:#9ca3af;">{{ totals.unblocked }}</div>
+                <div class="adm-stat-label">Past blocks</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Blocks that signing in or registering can no longer lift">
-                <div class="bi-num" style="color:#f472b6;">{{ totals.permanent }}</div>
-                <div class="bi-lbl">Permanent</div>
+            <div class="adm-card adm-stat" title="Blocks that signing in or registering can no longer lift">
+                <div class="adm-stat-value" style="color:#f472b6;">{{ totals.permanent }}</div>
+                <div class="adm-stat-label">Permanent</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Blocks raised automatically by the request-rate watch">
-                <div class="bi-num" style="color:#c4b5fd;">{{ totals.bots }}</div>
-                <div class="bi-lbl">Auto-bot</div>
+            <div class="adm-card adm-stat" title="Blocks raised automatically by the request-rate watch">
+                <div class="adm-stat-value" style="color:#c4b5fd;">{{ totals.bots }}</div>
+                <div class="adm-stat-label">Auto-bot</div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="bi-card bi-stat" title="Addresses that have been blocked more than once">
-                <div class="bi-num" style="color:#fbbf24;">{{ totals.repeat }}</div>
-                <div class="bi-lbl">Repeat offenders</div>
+            <div class="adm-card adm-stat" title="Addresses that have been blocked more than once">
+                <div class="adm-stat-value" style="color:#fbbf24;">{{ totals.repeat }}</div>
+                <div class="adm-stat-label">Repeat offenders</div>
             </div>
         </div>
     </div>
 
-    <div class="bi-card p-3 mb-3">
-        <div class="bi-form">
-            <form method="post" action="{% url 'ip_block_action' %}" class="bi-form" style="margin:0;">
+    <div class="adm-card p-3 mb-3">
+        <div class="adm-filter-grid">
+            <form method="post" action="{% url 'ip_block_action' %}" class="adm-filter-grid" style="margin:0;">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="block">
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -197,33 +100,33 @@
                     </span>
                 </label>
                 <label>&nbsp;
-                    <button type="submit" class="bi-btn bi-btn-block"><i class="fas fa-ban"></i>Block this IP</button>
+                    <button type="submit" class="adm-btn is-sm is-danger"><i class="fas fa-ban"></i>Block this IP</button>
                 </label>
             </form>
             <span style="width:1px;align-self:stretch;background:rgba(148,163,184,.25);margin:0 .35rem;"></span>
-            <form method="get" class="bi-form" style="margin:0;">
+            <form method="get" class="adm-filter-grid" style="margin:0;">
                 {% if show_all %}<input type="hidden" name="show" value="all">{% endif %}
                 <label>Search
                     <input type="text" name="q" value="{{ q }}" placeholder="part of an IP…">
                 </label>
                 <label>&nbsp;
-                    <button type="submit" class="bi-btn" style="color:#93c5fd;background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.3);"><i class="fas fa-search"></i>Search</button>
+                    <button type="submit" class="adm-btn is-sm is-soft-blue"><i class="fas fa-search"></i>Search</button>
                 </label>
             </form>
-            <a class="bi-chip {% if not show_all %}on{% endif %}" href="{% url 'blocked_ips' %}{% if q %}?q={{ q|urlencode }}{% endif %}"><i class="fas fa-shield-alt"></i> Blocked only</a>
-            <a class="bi-chip {% if show_all %}on{% endif %}" href="{% url 'blocked_ips' %}?show=all{% if q %}&amp;q={{ q|urlencode }}{% endif %}"><i class="fas fa-history"></i> Include unblocked</a>
-            {% if q %}<a class="bi-chip" href="{% url 'blocked_ips' %}{% if show_all %}?show=all{% endif %}"><i class="fas fa-times"></i> Clear search</a>{% endif %}
+            <a class="adm-chip {% if not show_all %}on{% endif %}" href="{% url 'blocked_ips' %}{% if q %}?q={{ q|urlencode }}{% endif %}"><i class="fas fa-shield-alt"></i> Blocked only</a>
+            <a class="adm-chip {% if show_all %}on{% endif %}" href="{% url 'blocked_ips' %}?show=all{% if q %}&amp;q={{ q|urlencode }}{% endif %}"><i class="fas fa-history"></i> Include unblocked</a>
+            {% if q %}<a class="adm-chip" href="{% url 'blocked_ips' %}{% if show_all %}?show=all{% endif %}"><i class="fas fa-times"></i> Clear search</a>{% endif %}
         </div>
-        <div class="bi-sub mt-2">
+        <div class="adm-sub mt-2">
             {% if totals.active_after %}<span class="bi-hot">{{ totals.active_after }}</span> blocked address{{ totals.active_after|pluralize:"es are, is" }} still sending requests.{% endif %}
-            A blocked address sees <span class="bi-mono">only the sign-in and registration page</span> on every public request, but the attempt is still written to the request log — that is what the counts and page lists below are built from. Counts cover the {{ total_stored }} requests currently retained by the log.
-            Signing in or registering lifts a normal block (and arms the warning: scraping again makes it permanent); a <span class="bi-badge bi-b-perm">permanent</span> block stays. <span class="bi-badge bi-b-bot">bot</span> marks a block the request-rate watch raised on its own.
-            An address is one visitor; when the same kind of traffic keeps coming back from new addresses, block its <span class="bi-mono">User-Agent</span> instead — every row below carries the header field it sent, and one click turns it into a rule that answers 403 from anywhere (<a href="{% url 'blocked_headers' %}">Blocked Headers</a>).
+            A blocked address sees <span class="adm-mono">only the sign-in and registration page</span> on every public request, but the attempt is still written to the request log — that is what the counts and page lists below are built from. Counts cover the {{ total_stored }} requests currently retained by the log.
+            Signing in or registering lifts a normal block (and arms the warning: scraping again makes it permanent); a <span class="adm-badge is-danger">permanent</span> block stays. <span class="adm-badge is-violet">bot</span> marks a block the request-rate watch raised on its own.
+            An address is one visitor; when the same kind of traffic keeps coming back from new addresses, block its <span class="adm-mono">User-Agent</span> instead — every row below carries the header field it sent, and one click turns it into a rule that answers 403 from anywhere (<a href="{% url 'blocked_headers' %}">Blocked Headers</a>).
         </div>
     </div>
 
-    <div class="bi-tablewrap">
-        <table class="bi-table">
+    <div class="adm-table-wrap">
+        <table class="adm-table">
             <thead>
                 <tr>
                     <th>IP address</th><th>Country</th>
@@ -241,85 +144,85 @@
             </thead>
             <tbody>
                 {% for r in rows %}
-                <tr class="{% if not r.is_active %}bi-off{% endif %}" data-drawer="{% url 'blocked_ip_peek' r.ip %}" data-drawer-title="Address {{ r.ip }}" style="cursor:pointer">
-                    <td class="bi-ip">
+                <tr class="{% if not r.is_active %}is-off{% endif %}" data-drawer="{% url 'blocked_ip_peek' r.ip %}" data-drawer-title="Address {{ r.ip }}" style="cursor:pointer">
+                    <td class="adm-mono">
                         <span class="ip-text">{{ r.ip }}</span>
-                        {% if r.total %}<div class="bi-sub">{{ r.total }} request{{ r.total|pluralize }} recorded</div>{% endif %}
+                        {% if r.total %}<div class="adm-sub">{{ r.total }} request{{ r.total|pluralize }} recorded</div>{% endif %}
                     </td>
                     <td>{% ip_geo_chip r.ip %}</td>
                     <td>
                         {% if r.is_active %}
-                            <span class="bi-badge bi-b-on">Blocked</span>
-                            {% if r.is_permanent %}<span class="bi-badge bi-b-perm" title="Signing in or registering will not lift this block">permanent</span>{% endif %}
-                            {% if r.is_bot %}<span class="bi-badge bi-b-bot" title="Raised automatically by the request-rate watch">bot</span>{% endif %}
-                            {% if r.after %}<div class="bi-sub"><span class="bi-badge bi-b-hot">still hitting</span></div>{% endif %}
+                            <span class="adm-badge is-danger">Blocked</span>
+                            {% if r.is_permanent %}<span class="adm-badge is-danger" title="Signing in or registering will not lift this block">permanent</span>{% endif %}
+                            {% if r.is_bot %}<span class="adm-badge is-violet" title="Raised automatically by the request-rate watch">bot</span>{% endif %}
+                            {% if r.after %}<div class="adm-sub"><span class="adm-badge is-warn">still hitting</span></div>{% endif %}
                         {% else %}
-                            <span class="bi-badge bi-b-off">Unblocked</span>
-                            {% if r.lifted_by_signup %}<span class="bi-badge bi-b-warn" title="The visitor did what the block page asked; scraping again makes the next block permanent">lifted by signup</span>{% endif %}
+                            <span class="adm-badge is-off">Unblocked</span>
+                            {% if r.lifted_by_signup %}<span class="adm-badge is-off" title="The visitor did what the block page asked; scraping again makes the next block permanent">lifted by signup</span>{% endif %}
                         {% endif %}
-                        {% if r.offense_count > 1 %}<div class="bi-sub">blocked {{ r.offense_count }}×</div>{% endif %}
+                        {% if r.offense_count > 1 %}<div class="adm-sub">blocked {{ r.offense_count }}×</div>{% endif %}
                     </td>
                     <td>
                         <div title="{{ r.blocked_at|date:'Y-m-d H:i:s' }}">{{ r.blocked_at|date:"M d, Y H:i" }}</div>
-                        {% if r.blocked_by %}<div class="bi-sub">by {{ r.blocked_by }}</div>{% endif %}
+                        {% if r.blocked_by %}<div class="adm-sub">by {{ r.blocked_by }}</div>{% endif %}
                         {% if not r.is_active and r.unblocked_at %}
-                            <div class="bi-sub">unblocked {{ r.unblocked_at|date:"M d, H:i" }}{% if r.unblocked_by %} by {{ r.unblocked_by }}{% endif %}</div>
+                            <div class="adm-sub">unblocked {{ r.unblocked_at|date:"M d, H:i" }}{% if r.unblocked_by %} by {{ r.unblocked_by }}{% endif %}</div>
                         {% endif %}
                     </td>
-                    <td style="white-space:normal;max-width:220px;">{% if r.reason %}{{ r.reason }}{% else %}<span class="bi-zero">—</span>{% endif %}</td>
-                    <td class="bi-num-cell">{{ r.total }}</td>
-                    <td class="bi-num-cell">
-                        {% if r.after %}<span style="color:#fbbf24;">{{ r.after }}</span>{% else %}<span class="bi-zero">0</span>{% endif %}
+                    <td style="white-space:normal;max-width:220px;">{% if r.reason %}{{ r.reason }}{% else %}<span class="adm-muted">—</span>{% endif %}</td>
+                    <td class="num">{{ r.total }}</td>
+                    <td class="num">
+                        {% if r.after %}<span style="color:#fbbf24;">{{ r.after }}</span>{% else %}<span class="adm-muted">0</span>{% endif %}
                     </td>
-                    <td class="{% if r.after_403 %}bi-num-cell{% else %}bi-zero{% endif %}" data-403="{{ r.after_403 }}">{{ r.after_403 }}</td>
+                    <td class="{% if r.after_403 %}num{% else %}adm-muted{% endif %}" data-403="{{ r.after_403 }}">{{ r.after_403 }}</td>
                     <td>
                         {% if r.last_after %}
                             <div title="{{ r.last_after|date:'Y-m-d H:i:s' }}">{{ r.last_after|timesince }} ago</div>
-                            <div class="bi-sub">{{ r.last_after|date:"M d, H:i:s" }}</div>
-                        {% else %}<span class="bi-zero">no requests after the block</span>{% endif %}
+                            <div class="adm-sub">{{ r.last_after|date:"M d, H:i:s" }}</div>
+                        {% else %}<span class="adm-muted">no requests after the block</span>{% endif %}
                     </td>
                     <td style="white-space:normal;">
                         {% if r.paths %}
                             <div class="bi-paths">
                                 {% for p in r.paths|slice:":6" %}
-                                <a class="bi-path" href="{{ p.path }}" target="_blank" rel="noopener noreferrer" title="{{ p.path }} — last {{ p.last|date:'Y-m-d H:i:s' }}">
-                                    <span>{{ p.path }}</span><span class="bi-hit">{{ p.count }}</span>
+                                <a class="adm-info-link" href="{{ p.path }}" target="_blank" rel="noopener noreferrer" title="{{ p.path }} — last {{ p.last|date:'Y-m-d H:i:s' }}">
+                                    <span>{{ p.path }}</span><span class="adm-badge is-off">{{ p.count }}</span>
                                 </a>
                                 {% endfor %}
                             </div>
                             {% if r.paths|length > 6 %}
-                            <details class="bi-more">
+                            <details class="adm-sub">
                                 <summary>+{{ r.paths|length|add:"-6" }} more page{{ r.paths|length|add:"-6"|pluralize }} ({{ r.path_total }} distinct)</summary>
                                 <div class="bi-paths mt-1">
                                     {% for p in r.paths|slice:"6:60" %}
-                                    <a class="bi-path" href="{{ p.path }}" target="_blank" rel="noopener noreferrer" title="{{ p.path }} — last {{ p.last|date:'Y-m-d H:i:s' }}">
-                                        <span>{{ p.path }}</span><span class="bi-hit">{{ p.count }}</span>
+                                    <a class="adm-info-link" href="{{ p.path }}" target="_blank" rel="noopener noreferrer" title="{{ p.path }} — last {{ p.last|date:'Y-m-d H:i:s' }}">
+                                        <span>{{ p.path }}</span><span class="adm-badge is-off">{{ p.count }}</span>
                                     </a>
                                     {% endfor %}
                                 </div>
                             </details>
                             {% endif %}
                         {% else %}
-                            <span class="bi-zero">nothing since the block</span>
+                            <span class="adm-muted">nothing since the block</span>
                         {% endif %}
                     </td>
                     <td style="white-space:normal;max-width:260px;">
                         {% for u in r.top_users %}<div>{{ u }}</div>{% endfor %}
                         {% if r.user_agent %}
-                            <div class="bi-sub" title="{{ r.user_agent }}">{{ r.user_agent|truncatechars:56 }}</div>
+                            <div class="adm-sub" title="{{ r.user_agent }}">{{ r.user_agent|truncatechars:56 }}</div>
                             {% if r.header_rule %}
-                                <div class="bi-sub"><span class="bi-badge bi-b-perm" title="Already refused by the header rule “{{ r.header_rule.value }}”, from any address">header blocked</span></div>
+                                <div class="adm-sub"><span class="adm-badge is-danger" title="Already refused by the header rule “{{ r.header_rule.value }}”, from any address">header blocked</span></div>
                             {% else %}
                             <form method="post" action="{% url 'header_block_action' %}" style="margin:.4rem 0 0;" onsubmit="return confirm('Block every request whose User-Agent contains this text, from any address?');">
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="block">
                                 <input type="hidden" name="header_name" value="User-Agent">
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <input class="bi-hdrinput" type="text" name="value" value="{{ r.user_agent }}" maxlength="400" title="As recorded — trim it to a shorter piece (just the crawler name) to block its whole family">
-                                <button type="submit" class="bi-btn bi-btn-block" style="margin-top:.3rem;"><i class="fas fa-heading"></i>Block this header</button>
+                                <input class="adm-input" type="text" name="value" value="{{ r.user_agent }}" maxlength="400" title="As recorded — trim it to a shorter piece (just the crawler name) to block its whole family">
+                                <button type="submit" class="adm-btn is-sm is-danger" style="margin-top:.3rem"><i class="fas fa-heading"></i>Block this header</button>
                             </form>
                             {% endif %}
-                        {% else %}<span class="bi-zero">—</span>{% endif %}
+                        {% else %}<span class="adm-muted">—</span>{% endif %}
                     </td>
                     <td>
                         {% if r.is_active %}
@@ -329,7 +232,7 @@
                                 <input type="hidden" name="action" value="unblock">
                                 <input type="hidden" name="ip" value="{{ r.ip }}">
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button type="submit" class="bi-btn bi-btn-unblock"><i class="fas fa-unlock"></i>Unblock</button>
+                                <button type="submit" class="adm-btn is-sm is-ok"><i class="fas fa-unlock"></i>Unblock</button>
                             </form>
                             {% if r.is_permanent %}
                             <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Allow {{ r.ip|escapejs }} to be unblocked by signing in again?');">
@@ -337,7 +240,7 @@
                                 <input type="hidden" name="action" value="temporary">
                                 <input type="hidden" name="ip" value="{{ r.ip }}">
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button type="submit" class="bi-btn" style="color:#fbbf24;background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.32);"><i class="fas fa-clock"></i>Not permanent</button>
+                                <button type="submit" class="adm-btn is-sm is-soft-warn"><i class="fas fa-clock"></i>Not permanent</button>
                             </form>
                             {% else %}
                             <form method="post" action="{% url 'ip_block_action' %}" style="margin:0;" onsubmit="return confirm('Block {{ r.ip|escapejs }} permanently? Signing in or registering will no longer lift it.');">
@@ -345,7 +248,7 @@
                                 <input type="hidden" name="action" value="permanent">
                                 <input type="hidden" name="ip" value="{{ r.ip }}">
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button type="submit" class="bi-btn bi-btn-block"><i class="fas fa-lock"></i>Make permanent</button>
+                                <button type="submit" class="adm-btn is-sm is-danger"><i class="fas fa-lock"></i>Make permanent</button>
                             </form>
                             {% endif %}
                         </div>
@@ -356,15 +259,16 @@
                             <input type="hidden" name="ip" value="{{ r.ip }}">
                             <input type="hidden" name="reason" value="{{ r.reason }}">
                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button type="submit" class="bi-btn bi-btn-block"><i class="fas fa-ban"></i>Block again</button>
+                            <button type="submit" class="adm-btn is-sm is-danger"><i class="fas fa-ban"></i>Block again</button>
                         </form>
                         {% endif %}
+                        <div style="margin-top:.35rem;"><button type="button" class="adm-btn is-sm" data-drawer-open aria-haspopup="dialog" aria-label="Open the details of {{ r.ip }}" title="Open address details"><i class="fas fa-eye"></i></button></div>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
                     <td colspan="12">
-                        <div class="bi-empty">
+                        <div class="adm-empty">
                             <i class="fas fa-shield-alt"></i>
                             <div style="font-size:.95rem;color:#94a3b8;">{% if q %}No blocked IP matches “{{ q }}”{% elif show_all %}No IP has ever been blocked{% else %}Nothing is blocked right now{% endif %}</div>
                             <div style="font-size:.82rem;margin-top:4px;">Block an address with the field above, or straight from the Requests &amp; Users page.</div>

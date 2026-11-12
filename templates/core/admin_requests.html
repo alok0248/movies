@@ -1,34 +1,7 @@
 {% extends 'core/admin_base.html' %}
 {% block title %}Requests & Users - Admin{% endblock %}
 {% block admin_content %}
-<style>
-    .rq-head { display: flex; align-items: center; gap: .8rem; }
-    .rq-icon {
-        width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
-        background: linear-gradient(135deg, #22d3ee, #6366f1);
-        display: flex; align-items: center; justify-content: center;
-    }
-    .rq-tabs {
-        display: flex; flex-wrap: wrap; gap: .35rem; padding: .35rem;
-        border: 1px solid var(--border, rgba(255,255,255,.08));
-        border-radius: 12px; background: var(--card-bg, #1a1a2e);
-    }
-    .rq-tab {
-        display: inline-flex; align-items: center; gap: .45rem;
-        padding: .45rem .9rem; border-radius: 9px;
-        font-size: .8rem; font-weight: 600; text-decoration: none;
-        color: var(--text-2, #cbd5e1);
-    }
-    .rq-tab:hover { background: rgba(148,163,184,.12); color: var(--text, #e2e8f0); }
-    .rq-tab.on { background: rgba(96,165,250,.18); color: #93c5fd; box-shadow: inset 0 0 0 1px rgba(96,165,250,.45); }
-    .rq-count {
-        font-size: .68rem; font-weight: 700; padding: 1px 7px;
-        border-radius: 999px; background: rgba(148,163,184,.2); color: inherit;
-    }
-    html[data-theme="light"] .rq-tabs { background: #fff; border-color: rgba(0,0,0,.1); }
-    html[data-theme="light"] .rq-tab { color: #475569; }
-    html[data-theme="light"] .rq-tab.on { background: rgba(37,99,235,.12); color: #1d4ed8; box-shadow: inset 0 0 0 1px rgba(37,99,235,.35); }
-</style>
+<style>    .rq-icon { width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto; background: linear-gradient(135deg, #22d3ee, #6366f1); display: flex; align-items: center; justify-content: center; }</style>
 
 <div class="container py-4" style="max-width:1600px;">
     {% if messages %}
@@ -43,7 +16,7 @@
     <div class="mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
             <a href="{% url 'admin_dashboard' %}" class="text-decoration-none" style="color:#60a5fa;font-size:.8rem;"><i class="fas fa-arrow-left me-1"></i> Admin Dashboard</a>
-            <div class="rq-head mt-2">
+            <div class="adm-page-head mt-2">
                 <div class="rq-icon"><i class="fas fa-network-wired text-white" style="font-size:1.1rem;"></i></div>
                 <div>
                     <h3 class="mb-0" style="font-size:1.25rem;">Requests &amp; Users</h3>
@@ -51,28 +24,28 @@
                 </div>
             </div>
         </div>
-        <div class="rq-tabs">
-            <a class="rq-tab {% if panel == 'users' %}on{% endif %}" href="{% url 'request_log' %}?tab=users" title="Who is on the site right now — one row per visitor">
+        <div class="adm-pills">
+            <a class="adm-chip {% if panel == 'users' %}on{% endif %}" href="{% url 'request_log' %}?tab=users" title="Who is on the site right now — one row per visitor">
                 <i class="fas fa-users-viewfinder"></i> Active Users
-                {% if panel == 'users' and total_rows %}<span class="rq-count">{{ total_rows }}</span>{% endif %}
+                {% if panel == 'users' and total_rows %}<span class="adm-badge">{{ total_rows }}</span>{% endif %}
             </a>
-            <a class="rq-tab {% if panel == 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=journeys" title="Each visitor's own history — entry page, every page after it, and the time spent on each">
+            <a class="adm-chip {% if panel == 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=journeys" title="Each visitor's own history — entry page, every page after it, and the time spent on each">
                 <i class="fas fa-route"></i> Journeys
-                {% if panel == 'journeys' and visitor_total %}<span class="rq-count">{{ visitor_total }}</span>{% endif %}
+                {% if panel == 'journeys' and visitor_total %}<span class="adm-badge">{{ visitor_total }}</span>{% endif %}
             </a>
-            <a class="rq-tab {% if panel == 'details' %}on{% endif %}" href="{% url 'request_log' %}?tab=details" title="Per-account profile — devices, watch counts, logins and subscription">
+            <a class="adm-chip {% if panel == 'details' %}on{% endif %}" href="{% url 'request_log' %}?tab=details" title="Per-account profile — devices, watch counts, logins and subscription">
                 <i class="fas fa-id-card"></i> User Details
-                {% if panel == 'details' and summary.total_users %}<span class="rq-count">{{ summary.total_users }}</span>{% endif %}
+                {% if panel == 'details' and summary.total_users %}<span class="adm-badge">{{ summary.total_users }}</span>{% endif %}
             </a>
-            <a class="rq-tab {% if panel != 'users' and panel != 'details' and panel != 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
+            <a class="adm-chip {% if panel != 'users' and panel != 'details' and panel != 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
                 <i class="fas fa-network-wired"></i> Request Log
-                {% if panel != 'users' and panel != 'details' and panel != 'journeys' and count %}<span class="rq-count">{{ count }}</span>{% endif %}
+                {% if panel != 'users' and panel != 'details' and panel != 'journeys' and matched %}<span class="adm-badge">{{ matched }}</span>{% endif %}
             </a>
-            <a class="rq-tab" href="{% url 'blocked_ips' %}" title="Every blocked IP, with the requests it kept making after the block">
+            <a class="adm-chip" href="{% url 'blocked_ips' %}" title="Every blocked IP, with the requests it kept making after the block">
                 <i class="fas fa-shield-alt"></i> Blocked IPs
-                {% if blocked_total %}<span class="rq-count">{{ blocked_total }}</span>{% endif %}
+                {% if blocked_total %}<span class="adm-badge">{{ blocked_total }}</span>{% endif %}
             </a>
-            <a class="rq-tab" href="{% url 'probes' %}" title="Which IP is asking for pages that are not on the website">
+            <a class="adm-chip" href="{% url 'probes' %}" title="Which IP is asking for pages that are not on the website">
                 <i class="fas fa-user-secret"></i> Probes &amp; Bots
             </a>
         </div>

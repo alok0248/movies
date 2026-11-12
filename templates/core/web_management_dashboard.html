@@ -8,38 +8,38 @@
             <p class="text-secondary mb-0">Track public website visitors, bot traffic and security blocks in real-time.</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-light">&larr; Admin Dashboard</a>
+            <a href="{% url 'admin_dashboard' %}" class="adm-btn">&larr; Admin Dashboard</a>
         </div>
     </div>
 
     <div class="row g-4 mb-1">
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Total Visitors</div>
                     <div id="total-visitors" class="display-6 text-white">{{ total_visitors }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Visitors Today</div>
                     <div id="visitors-today" class="display-6 text-white">{{ visitors_today }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Total Pageviews</div>
                     <div id="total-pageviews" class="display-6 text-white">{{ total_pageviews }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Pageviews Today</div>
                     <div id="pageviews-today" class="display-6 text-white">{{ pageviews_today }}</div>
                 </div>
@@ -49,32 +49,32 @@
 
     <div class="row g-4 mt-1">
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Bot Requests</div>
                     <div id="bot-total-visits" class="display-6 text-warning">{{ bot_total_visits }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Bot Requests Today</div>
                     <div id="bot-visits-today" class="display-6 text-warning">{{ bot_visits_today }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Bot Requests Last Hour</div>
                     <div id="bot-visits-last-hour" class="display-6 text-warning">{{ bot_visits_last_hour }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <div class="text-secondary small">Unique Bot IPs</div>
                     <div id="bot-unique-ip-count" class="display-6 text-warning">{{ bot_unique_ip_count }}</div>
                 </div>
@@ -85,8 +85,8 @@
     <div class="row g-4 mt-1">
         <div class="col-md-3">
             <a href="{% url 'blocked_ips' %}" class="text-decoration-none">
-                <div class="card bg-dark border-secondary shadow-sm h-100">
-                    <div class="card-body">
+                <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                    <div class="adm-card-body">
                         <div class="text-secondary small">Active IP Blocks</div>
                         <div id="active-blocks" class="display-6 text-danger">{{ active_blocks }}</div>
                         <div class="text-secondary small">Blocked IPs page &rarr;</div>
@@ -96,8 +96,8 @@
         </div>
         <div class="col-md-3">
             <a href="{% url 'blocked_ips' %}" class="text-decoration-none">
-                <div class="card bg-dark border-secondary shadow-sm h-100">
-                    <div class="card-body">
+                <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                    <div class="adm-card-body">
                         <div class="text-secondary small">Blocked Bots (auto)</div>
                         <div id="bot-blocks" class="display-6 text-danger">{{ bot_blocks }}</div>
                         <div class="text-secondary small">Blocked IPs page &rarr;</div>
@@ -107,8 +107,8 @@
         </div>
         <div class="col-md-3">
             <a href="{% url 'request_log' %}?status_code=403" class="text-decoration-none">
-                <div class="card bg-dark border-secondary shadow-sm h-100">
-                    <div class="card-body">
+                <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                    <div class="adm-card-body">
                         <div class="text-secondary small">Blocked Responses (24h)</div>
                         <div id="blocked-24h" class="display-6 text-warning">{{ blocked_responses_24h }}</div>
                         <div class="text-secondary small">403s in request log &rarr;</div>
@@ -118,8 +118,8 @@
         </div>
         <div class="col-md-3">
             <a href="{% url 'probes' %}" class="text-decoration-none">
-                <div class="card bg-dark border-secondary shadow-sm h-100">
-                    <div class="card-body">
+                <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                    <div class="adm-card-body">
                         <div class="text-secondary small">Probe Requests (24h)</div>
                         <div id="probes-24h" class="display-6 text-warning">{{ probe_requests_24h }}</div>
                         <div class="text-secondary small">Probes &amp; Bots page &rarr;</div>
@@ -129,28 +129,28 @@
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-sm mt-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
+        <div class="adm-card-body">
             <h5 class="text-white mb-1">Daily Unique Visitors</h5>
             <div class="text-secondary small mb-3">Unique website visitors by day.</div>
             <div style="height: 280px;"><canvas id="dailyUniqueVisitorsChart"></canvas></div>
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-sm mt-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
+        <div class="adm-card-body">
             <h5 class="text-white mb-1">Daily Pageviews</h5>
             <div class="text-secondary small mb-3">Total pageviews by day.</div>
             <div style="height: 280px;"><canvas id="dailyPageviewsChart"></canvas></div>
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-sm mt-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
+        <div class="adm-card-body">
             <h5 class="text-white mb-3">Top Public Routes</h5>
             {% if top_routes %}
-            <div class="table-responsive">
-                <table class="table table-dark table-hover mb-0 align-middle small">
+            <div class="adm-table-wrap">
+                <table class="adm-table mb-0 align-middle small">
                     <thead>
                         <tr>
                             <th>Route</th>
@@ -175,13 +175,13 @@
 
     <div class="row g-4 mt-1">
         <div class="col-lg-7">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <h5 class="text-white mb-3">Bot IP Frequency</h5>
                     <div class="text-secondary small mb-2">Bot requests seen in the request log (same signals as the Probes &amp; Bots page).</div>
                     {% if bot_top_ips %}
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover mb-0 align-middle small">
+                    <div class="adm-table-wrap">
+                        <table class="adm-table mb-0 align-middle small">
                             <thead>
                                 <tr>
                                     <th>IP Address</th>
@@ -205,8 +205,8 @@
             </div>
         </div>
         <div class="col-lg-5">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-body">
+            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
+                <div class="adm-card-body">
                     <h5 class="text-white mb-3">Known Bot IPs</h5>
                     <div id="bot-unique-ips" class="small text-light">
                         {% if bot_unique_ips %}
@@ -222,12 +222,12 @@
         </div>
     </div>
 
-    <div class="card bg-dark border-secondary shadow-sm mt-4">
-        <div class="card-body">
+    <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
+        <div class="adm-card-body">
             <h5 class="text-white mb-3">Recent Activity</h5>
             {% if recent_activity %}
-            <div class="table-responsive">
-                <table class="table table-dark table-hover mb-0 align-middle small">
+            <div class="adm-table-wrap">
+                <table class="adm-table mb-0 align-middle small">
                     <thead>
                         <tr>
                             <th>Visitor ID</th>
@@ -245,9 +245,9 @@
                             <td><code class="text-success">{% if activity.ip_address %}<span class="ip-text">{{ activity.ip_address }}</span>{% ip_geo_chip activity.ip_address %}{% else %}N/A{% endif %}</code></td>
                             <td>
                                 {% if activity.is_bot %}
-                                    <span class="badge bg-warning text-dark">Bot</span>
+                                    <span class="adm-badge is-warn text-dark">Bot</span>
                                 {% else %}
-                                    <span class="badge bg-primary">Human</span>
+                                    <span class="adm-badge is-primary">Human</span>
                                 {% endif %}
                             </td>
                             <td data-datetime="{{ activity.visited_at|date:'c' }}">{{ activity.visited_at }}</td>
@@ -412,7 +412,7 @@ function updateDashboard(data) {
                 <td><code class="text-info">${activity.visitor__visitor_id}</code></td>
                 <td><code class="text-white">${activity.path}</code></td>
                 <td><code class="text-success">${activity.ip_address ? ipGeoMarkup(activity.ip_address) : '—'}</code></td>
-                <td>${activity.is_bot ? '<span class="badge bg-warning text-dark">Bot</span>' : '<span class="badge bg-primary">Human</span>'}</td>
+                <td>${activity.is_bot ? '<span class="adm-badge is-warn text-dark">Bot</span>' : '<span class="adm-badge is-primary">Human</span>'}</td>
                 <td data-datetime="${activity.visited_at}">${formatBrowserLocalTime(activity.visited_at)}</td>
             </tr>
         `).join('');

@@ -40,7 +40,7 @@
         <a class="fbtn {% if devices_new == 'month' %}active{% endif %}" href="?tab=uniquedevices&amp;ds={{ devices_view }}&amp;nv=month{% if q %}&amp;q={{ q|urlencode }}{% endif %}" title="Registered in the last 30 days">Last 30 days <span class="sub">{{ new_counts.month }}</span></a>
     </div>
 
-    <div class="table-responsive">
+    <div class="adm-table-wrap">
         <table class="table table-dark table-hover mb-0 align-middle">
             <thead>
                 <tr>
@@ -164,10 +164,4 @@
         </table>
     </div>
 
-    {% if unique_page.has_other_pages %}
-    <nav class="d-flex justify-content-center align-items-center gap-2 flex-wrap py-3">
-        {% if unique_page.has_previous %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}{% if devices_new %}&amp;nv={{ devices_new }}{% endif %}&amp;upage={{ unique_page.previous_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>{% endif %}
-        <span class="sub">Devices {{ unique_page.number }} of {{ unique_page.paginator.num_pages }} &middot; {{ unique_page.paginator.count }} shown</span>
-        {% if unique_page.has_next %}<a class="fbtn" href="?tab=uniquedevices&amp;ds={{ devices_view }}{% if devices_new %}&amp;nv={{ devices_new }}{% endif %}&amp;upage={{ unique_page.next_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Next &raquo;</a>{% endif %}
-    </nav>
-    {% endif %}
+    {% include "core/_adm_pager.html" with pg=unique_page page_param="upage" %}
