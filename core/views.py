@@ -1,8 +1,11 @@
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.conf import settings
-from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, StreamingHttpResponse, Http404
+from django.http import (JsonResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound,
+                         HttpResponseRedirect, StreamingHttpResponse, Http404)
 from django.http.request import UnreadablePostError
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -15410,6 +15413,7 @@ def bulk_send_email(request):
         sent = 0
         failed = 0
         from core.models import EmailAddress
+        from django.core.mail import EmailMessage as DjangoEmailMessage
         smtp_addr = EmailAddress.objects.filter(is_active=True).first()
         for u in users:
             try:

@@ -336,8 +336,10 @@ def api_title(request, vod_id):
             'vod_serial': '1',
         },
         'error': 'oracle unreachable — title info unavailable (embed players still work)',
-    })@require_GET
+    })
 
+
+@require_GET
 def api_browse(request):
     """Browse titles by category via the cinevault gateway, with speedracelight fallback.
 
