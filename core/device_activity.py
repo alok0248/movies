@@ -30,17 +30,40 @@ DAY_SECONDS = 24 * 3600
 #  Recording
 # ----------------------------------------------------------------------
 
-def record_device_heartbeat(email, device_id, when=None):
+TV_MODEL_HINTS = ('tv', 'box', 'bravia', 'shield', 'fire', 'chromecast',
+                  'nexus player', 'mi box', 'mi tv', 'android tv', 'googletv')
+
+
+def classify_device(raw_type, model=''):
+    """Return 'tv', 'phone' or '' (older builds send no type at all).
+
+    The app sends an explicit type from PackageManager/UiModeManager; the model
+    name is only a fallback for heartbeats recorded before that field existed.
+    """
+    value = (raw_type or '').strip().lower()
+    if value in ('tv', 'phone'):
+        return value
+    text = (model or '').lower()
+    if any(hint in text for hint in TV_MODEL_HINTS):
+        return 'tv'
+    if text:
+        return 'phone'
+    return ''
+
+
+def record_device_heartbeat(email, device_id, when=None, device_type='', device_model=''):
     """Add the time since this device's previous heartbeat to today's total."""
     if not device_id or device_id in ('unknown', 'device_unknown'):
         return
     now = when or timezone.now()
     device_id = device_id[:100]
+    kind = classify_device(device_type, device_model)
 
     state = DeviceOnlineState.objects.filter(device_id=device_id).first()
     if state is None:
         state = DeviceOnlineState.objects.create(
-            device_id=device_id, email=(email or '')[:254], last_seen_at=now)
+            device_id=device_id, email=(email or '')[:254], last_seen_at=now,
+            device_type=kind, device_model=(device_model or '')[:100])
         counted = 0
     else:
         gap = (now - state.last_seen_at).total_seconds()
@@ -50,16 +73,22 @@ def record_device_heartbeat(email, device_id, when=None):
         state.last_seen_at = now
         if email:
             state.email = email[:254]
-        state.save(update_fields=['last_seen_at', 'email'])
+        if kind:
+            state.device_type = kind
+        if device_model:
+            state.device_model = device_model[:100]
+        state.save(update_fields=['last_seen_at', 'email', 'device_type', 'device_model'])
 
     bucket, _created = DeviceOnlineDaily.objects.get_or_create(
         device_id=device_id, day=now.date(),
-        defaults={'email': (email or '')[:254]})
+        defaults={'email': (email or '')[:254], 'device_type': kind})
     bucket.online_seconds = min(DAY_SECONDS, bucket.online_seconds + counted)
     bucket.heartbeat_count += 1
     if email:
         bucket.email = email[:254]
-    bucket.save(update_fields=['online_seconds', 'heartbeat_count', 'email'])
+    if kind:
+        bucket.device_type = kind
+    bucket.save(update_fields=['online_seconds', 'heartbeat_count', 'email', 'device_type'])
 
 
 def _offline_seconds(day, online_seconds):
@@ -193,9 +222,14 @@ def _scale(series):
 def device_activity(request):
     """Every unique device with its actual online time, and who is online now."""
     search = (request.GET.get('q') or '').strip()
+    type_filter = (request.GET.get('type') or 'all').lower()
+    if type_filter not in ('all', 'tv', 'phone'):
+        type_filter = 'all'
     states = DeviceOnlineState.objects.all().order_by('-last_seen_at')
     if search:
         states = states.filter(email__icontains=search) | states.filter(device_id__icontains=search)
+    if type_filter != 'all':
+        states = states.filter(device_type=type_filter)
 
     today = timezone.localdate()
     today_rows = {row.device_id: row for row in
@@ -221,9 +255,15 @@ def device_activity(request):
         online_today = today_row.online_seconds if today_row else 0
         heartbeat = live.get(state.device_id)
         age = (now - state.last_seen_at).total_seconds() if state.last_seen_at else 99999
+        kind = state.device_type or classify_device(
+            heartbeat.device_type if heartbeat else '',
+            state.device_model or (heartbeat.device_model if heartbeat else ''))
         devices.append({
             'device_id': state.device_id,
             'email': state.email,
+            'device_type': kind,
+            'device_type_label': {'tv': 'TV', 'phone': 'Phone'}.get(kind, 'Unknown'),
+            'device_model': state.device_model or (heartbeat.device_model if heartbeat else ''),
             'last_seen_at': state.last_seen_at,
             'is_online': age <= ONLINE_WINDOW,
             'online_today': online_today,
@@ -236,12 +276,21 @@ def device_activity(request):
 
     devices.sort(key=lambda item: (not item['is_online'], -item['online_today']))
     totals = DeviceOnlineDaily.objects.filter(day=today).aggregate(total=Sum('online_seconds'))
+    tv_today = sum(item['online_today'] for item in devices if item['device_type'] == 'tv')
+    phone_today = sum(item['online_today'] for item in devices if item['device_type'] == 'phone')
     return render(request, 'core/admin_device_activity.html', {
         'devices': devices,
         'search': search,
+        'type_filter': type_filter,
         'device_count': len(devices),
+        'tv_count': sum(1 for item in devices if item['device_type'] == 'tv'),
+        'phone_count': sum(1 for item in devices if item['device_type'] == 'phone'),
         'online_now': sum(1 for item in devices if item['is_online']),
+        'tv_online_now': sum(1 for item in devices if item['is_online'] and item['device_type'] == 'tv'),
+        'phone_online_now': sum(1 for item in devices if item['is_online'] and item['device_type'] == 'phone'),
         'online_today_text': _fmt_duration(totals.get('total') or 0),
+        'tv_today_text': _fmt_duration(tv_today),
+        'phone_today_text': _fmt_duration(phone_today),
     })
 
 
@@ -270,8 +319,12 @@ def device_activity_detail(request, device_id):
                              row.heartbeat_count])
         return response
 
+    kind = state.device_type or classify_device(
+        heartbeat.device_type if heartbeat else '', state.device_model)
     return render(request, 'core/admin_device_activity_detail.html', {
         'state': state,
+        'device_type': kind,
+        'device_type_label': {'tv': 'Android TV', 'phone': 'Phone / tablet'}.get(kind, 'Unknown'),
         'daily': daily, 'daily_scale': _scale(daily),
         'weekly': weekly, 'weekly_scale': _scale(weekly),
         'monthly': monthly, 'monthly_scale': _scale(monthly),

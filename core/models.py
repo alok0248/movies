@@ -1601,6 +1601,8 @@ class UserHeartbeat(models.Model):
     # Device metadata
     device_id = models.CharField(max_length=100, blank=True, default='')
     device_model = models.CharField(max_length=100, blank=True, default='')
+    # 'tv' or 'phone'; older builds send nothing, so it can stay blank.
+    device_type = models.CharField(max_length=10, blank=True, default='')
     os_version = models.CharField(max_length=50, blank=True, default='')
     app_version = models.CharField(max_length=50, blank=True, default='')
     # Real-time activity (flattened from the app's activity object)
@@ -1707,6 +1709,8 @@ class DeviceOnlineState(models.Model):
     """
     device_id = models.CharField(max_length=100, unique=True)
     email = models.EmailField(blank=True, default='', db_index=True)
+    device_type = models.CharField(max_length=10, blank=True, default='', db_index=True)
+    device_model = models.CharField(max_length=100, blank=True, default='')
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(db_index=True)
 
@@ -1728,6 +1732,7 @@ class DeviceOnlineDaily(models.Model):
     """
     device_id = models.CharField(max_length=100, db_index=True)
     email = models.EmailField(blank=True, default='', db_index=True)
+    device_type = models.CharField(max_length=10, blank=True, default='', db_index=True)
     day = models.DateField(db_index=True)
     online_seconds = models.PositiveIntegerField(default=0)
     heartbeat_count = models.PositiveIntegerField(default=0)

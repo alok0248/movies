@@ -11295,6 +11295,7 @@ def api_user_heartbeat(request):
             'is_email_verified': verified,
             'device_id': str(body.get('deviceId') or ''),
             'device_model': str(body.get('deviceModel') or ''),
+            'device_type': str(body.get('deviceType') or '')[:10].lower(),
             'os_version': str(body.get('osVersion') or ''),
             'app_version': str(body.get('appVersion') or ''),
             'current_screen': str(activity.get('currentScreen') or ''),
@@ -11318,7 +11319,8 @@ def api_user_heartbeat(request):
 
     # Accumulate per-device online time for the device activity report.
     from .device_activity import record_device_heartbeat
-    record_device_heartbeat(email, hb.device_id)
+    record_device_heartbeat(email, hb.device_id, device_type=hb.device_type,
+                            device_model=hb.device_model)
 
     prof = _get_synced_profile(email)
     return JsonResponse({

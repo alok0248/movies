@@ -21,6 +21,14 @@
     .da-btn { font-size: .72rem; padding: .2rem .55rem; border-radius: 7px; text-decoration: none;
         border: 1px solid rgba(56,189,248,.45); color: #38bdf8; }
     .da-btn:hover { background: rgba(56,189,248,.12); color: #7dd3fc; }
+    .da-tab { font-size: .74rem; padding: .24rem .65rem; border-radius: 8px; text-decoration: none;
+        border: 1px solid rgba(148,163,184,.35); color: #cbd5e1; background: rgba(15,23,42,.7); }
+    .da-tab:hover { background: rgba(30,41,59,.95); color: #fff; }
+    .da-tab.active { background: #38bdf8; border-color: #38bdf8; color: #082f49; font-weight: 600; }
+    .da-type { font-size: .66rem; font-weight: 600; padding: .12rem .45rem; border-radius: 6px; }
+    .da-type-tv { background: rgba(168,85,247,.18); color: #c084fc; }
+    .da-type-phone { background: rgba(56,189,248,.16); color: #7dd3fc; }
+    .da-type-unknown { background: rgba(148,163,184,.16); color: #94a3b8; }
 </style>
 
 <div class="da-card mb-3">
@@ -37,9 +45,21 @@
     </div>
 
     <div class="da-grid">
-        <div class="da-stat"><b>{{ device_count }}</b><span>devices tracked</span></div>
+        <div class="da-stat"><b>{{ device_count }}</b><span>devices shown</span></div>
         <div class="da-stat"><b>{{ online_now }}</b><span>online now</span></div>
         <div class="da-stat"><b>{{ online_today_text }}</b><span>total online today</span></div>
+        <div class="da-stat"><b>{{ tv_count }}</b><span>TVs tracked</span></div>
+        <div class="da-stat"><b>{{ tv_today_text }}</b><span>TV online today</span></div>
+        <div class="da-stat"><b>{{ phone_today_text }}</b><span>phone online today</span></div>
+    </div>
+
+    <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+        <a class="da-tab {% if type_filter == 'all' %}active{% endif %}"
+           href="?type=all{% if search %}&q={{ search|urlencode }}{% endif %}">All devices</a>
+        <a class="da-tab {% if type_filter == 'tv' %}active{% endif %}"
+           href="?type=tv{% if search %}&q={{ search|urlencode }}{% endif %}"><i class="fas fa-tv me-1"></i>TVs only &middot; {{ tv_online_now }} online</a>
+        <a class="da-tab {% if type_filter == 'phone' %}active{% endif %}"
+           href="?type=phone{% if search %}&q={{ search|urlencode }}{% endif %}"><i class="fas fa-mobile-screen me-1"></i>Phones only &middot; {{ phone_online_now }} online</a>
     </div>
 
     {% if devices %}
@@ -47,7 +67,7 @@
         <table class="da-table">
             <thead>
                 <tr>
-                    <th>Status</th><th>Device</th><th>Account</th><th>Now</th>
+                    <th>Status</th><th>Type</th><th>Device</th><th>Account</th><th>Now</th>
                     <th>Online today</th><th>Offline today</th><th>7 days</th><th>30 days</th><th>Last seen</th><th></th>
                 </tr>
             </thead>
@@ -58,7 +78,15 @@
                         <span class="da-dot {% if device.is_online %}da-on{% else %}da-off{% endif %}"></span>
                         {% if device.is_online %}Online{% else %}Offline{% endif %}
                     </td>
-                    <td><code style="font-size:.7rem;color:#94a3b8">{{ device.device_id|truncatechars:18 }}</code></td>
+                    <td>
+                        <span class="da-type {% if device.device_type == 'tv' %}da-type-tv{% elif device.device_type == 'phone' %}da-type-phone{% else %}da-type-unknown{% endif %}">
+                            {% if device.device_type == 'tv' %}<i class="fas fa-tv me-1"></i>{% elif device.device_type == 'phone' %}<i class="fas fa-mobile-screen me-1"></i>{% endif %}{{ device.device_type_label }}
+                        </span>
+                    </td>
+                    <td>
+                        <code style="font-size:.7rem;color:#94a3b8">{{ device.device_id|truncatechars:18 }}</code>
+                        {% if device.device_model %}<div class="da-sub">{{ device.device_model|truncatechars:22 }}</div>{% endif %}
+                    </td>
                     <td>{{ device.email|default:"guest" }}</td>
                     <td class="da-now">
                         {% if device.activity %}
