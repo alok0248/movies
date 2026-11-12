@@ -3,6 +3,8 @@ from django.views.generic import TemplateView
 from . import views
 from . import local_player
 from . import mbtv_views
+from . import notifications as notification_views
+from . import guest_access as guest_views
 from cineplayer import views as cineplayer_views
 
 handler404 = 'core.views.page_not_found_view'
@@ -123,6 +125,18 @@ urlpatterns = [
     # Public APK download — records the download, then serves the file.
     path('apps/download/<int:app_id>/', views.apk_download, name='apk_download'),
     path('admin-dashboard/android-apps/user-sync-reference/', views.android_user_sync_reference, name='android_user_sync_reference'),
+    path('admin-dashboard/notifications/', notification_views.notifications_admin, name='notifications_admin'),
+    path('admin-dashboard/notifications/<int:notification_id>/', notification_views.notification_detail, name='notification_detail'),
+    # App inbox: messages + links for one user.
+    path('api/notifications/', notification_views.api_notifications, name='api_notifications'),
+    path('api/notifications', notification_views.api_notifications),
+    path('api/notifications/read/', notification_views.api_notifications_read, name='api_notifications_read'),
+    path('api/notifications/read', notification_views.api_notifications_read),
+    # Guest playback quota (10 free titles per device, then registration).
+    path('api/guest/quota/', guest_views.api_guest_quota, name='api_guest_quota'),
+    path('api/guest/quota', guest_views.api_guest_quota),
+    path('api/guest/play/', guest_views.api_guest_play, name='api_guest_play'),
+    path('api/guest/play', guest_views.api_guest_play),
     path('admin-dashboard/api-docs/', views.api_documentation_view, name='api_documentation'),
     # Android API endpoints — with and without trailing slash for app compat
     path('api/user/sync/', views.api_user_sync, name='api_user_sync'),

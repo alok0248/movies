@@ -599,6 +599,9 @@
             <a href="{% url 'admin_audit_log' %}" class="sb-item {% if 'admin-dashboard/audit-log' in request.path %}active{% endif %}">
                 <i class="fas fa-clipboard-list"></i> Audit Log
             </a>
+            <a href="{% url 'notifications_admin' %}" class="sb-item {% if 'admin-dashboard/notifications' in request.path %}active{% endif %}">
+                <i class="fas fa-bell"></i> Notifications
+            </a>
             <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
                 <i class="fas fa-bell"></i> Health &amp; Alerts
                 {% if admin_badges.alerts %}<span class="sb-badge danger" title="{{ admin_badges.alerts }} health check{{ admin_badges.alerts|pluralize }} failing">{{ admin_badges.alerts }}</span>{% endif %}

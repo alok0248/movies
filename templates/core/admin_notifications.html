@@ -1,0 +1,129 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Notifications - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    .nt-card { background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; padding: 1rem 1.1rem; }
+    .nt-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .8rem; }
+    .nt-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; margin: 0; }
+    .nt-sub { font-size: .74rem; color: #94a3b8; }
+    .nt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .7rem; }
+    .nt-stat { background: rgba(15,23,42,.6); border: 1px solid rgba(148,163,184,.16); border-radius: 10px; padding: .6rem .7rem; }
+    .nt-stat b { display: block; font-size: 1.15rem; color: #e2e8f0; }
+    .nt-stat span { font-size: .68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+    .nt-field { margin-bottom: .6rem; }
+    .nt-field label { display: block; font-size: .74rem; color: #94a3b8; margin-bottom: .22rem; }
+    .nt-field input[type=text], .nt-field textarea, .nt-field select {
+        width: 100%; padding: .42rem .55rem; border-radius: 8px; font-size: .82rem;
+        border: 1px solid rgba(148,163,184,.3); background: rgba(15,23,42,.7); color: #e2e8f0;
+    }
+    .nt-field textarea { min-height: 96px; resize: vertical; }
+    .nt-btn { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; font-weight: 600;
+        padding: .42rem .85rem; border-radius: 8px; border: 1px solid rgba(34,197,94,.5);
+        background: rgba(34,197,94,.9); color: #052e16; cursor: pointer; }
+    .nt-btn:hover { background: #22c55e; }
+    .nt-table { width: 100%; font-size: .78rem; }
+    .nt-table th { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8;
+        border-bottom: 1px solid rgba(148,163,184,.2); padding: .4rem .5rem; text-align: left; }
+    .nt-table td { padding: .45rem .5rem; border-bottom: 1px solid rgba(148,163,184,.1); color: #cbd5e1; }
+    .nt-pill { font-size: .66rem; padding: .12rem .45rem; border-radius: 6px; background: rgba(148,163,184,.16); }
+    .nt-off { opacity: .55; }
+</style>
+
+<div class="nt-card mb-3">
+    <div class="nt-head">
+        <div>
+            <h2 class="nt-title"><i class="fas fa-bell text-warning me-2"></i>App notifications</h2>
+            <div class="nt-sub">Messages and links for the app. Opening the app fetches them; the app marks one read when the user opens it.</div>
+        </div>
+    </div>
+    <div class="nt-grid">
+        <div class="nt-stat"><b>{{ stats.total_users }}</b><span>users</span></div>
+        <div class="nt-stat"><b>{{ stats.subscribed }}</b><span>subscribed</span></div>
+        <div class="nt-stat"><b>{{ stats.unsubscribed }}</b><span>unsubscribed</span></div>
+        <div class="nt-stat"><b>{{ stats.sent }}</b><span>sent</span></div>
+        <div class="nt-stat"><b>{{ stats.delivered }}</b><span>delivered</span></div>
+        <div class="nt-stat"><b>{{ stats.read }}</b><span>read</span></div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="nt-card">
+            <h2 class="nt-title mb-3">Send a notification</h2>
+            <form method="post" action="{% url 'notifications_admin' %}">
+                {% csrf_token %}
+                <div class="nt-field">
+                    <label for="nt-title">Title</label>
+                    <input id="nt-title" type="text" name="title" maxlength="200" required placeholder="New episode is live">
+                </div>
+                <div class="nt-field">
+                    <label for="nt-body">Message</label>
+                    <textarea id="nt-body" name="body" placeholder="Short message the user sees in the app"></textarea>
+                </div>
+                <div class="nt-field">
+                    <label for="nt-link">Link (optional)</label>
+                    <input id="nt-link" type="text" name="link_url" maxlength="500" placeholder="https://newmovies.linkpc.net/...">
+                </div>
+                <div class="nt-field">
+                    <label for="nt-aud">Audience</label>
+                    <select id="nt-aud" name="audience">
+                        {% for value, label in audiences %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="nt-field">
+                    <label for="nt-emails">Selected users (emails, comma or newline separated)</label>
+                    <textarea id="nt-emails" name="selected_emails" placeholder="Only used with the &quot;Selected users&quot; audience"></textarea>
+                </div>
+                <div class="nt-field">
+                    <label for="nt-app">App (optional)</label>
+                    <select id="nt-app" name="app">
+                        <option value="">All apps</option>
+                        {% for app in apps %}
+                        <option value="{{ app.id }}">{{ app.name|default:app.id }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="nt-btn" type="submit"><i class="fas fa-paper-plane"></i> Send</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="nt-card">
+            <h2 class="nt-title mb-2">Sent</h2>
+            {% if notes %}
+            <div class="table-responsive">
+                <table class="nt-table">
+                    <thead>
+                        <tr>
+                            <th>Sent</th><th>Title</th><th>Audience</th>
+                            <th>Recipients</th><th>Delivered</th><th>Read</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for note in notes %}
+                        <tr class="{% if not note.is_active %}nt-off{% endif %}">
+                            <td>{{ note.sent_at|date:"d M H:i"|default:"-" }}</td>
+                            <td>
+                                <a href="{% url 'notification_detail' note.id %}" class="text-decoration-none">{{ note.title }}</a>
+                                {% if note.link_url %}<i class="fas fa-link ms-1" style="font-size:.62rem;color:#64748b"></i>{% endif %}
+                                {% if not note.is_active %}<span class="nt-pill">off</span>{% endif %}
+                            </td>
+                            <td><span class="nt-pill">{{ note.get_audience_display }}</span></td>
+                            <td>{{ note.recipients_total }}</td>
+                            <td>{{ note.delivered_count }}</td>
+                            <td>{{ note.read_count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="nt-sub">Nothing sent yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

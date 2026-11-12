@@ -3590,3 +3590,102 @@ class HealthCheckAck(models.Model):
 
     def __str__(self):
         return f'{self.slug} until {self.acknowledged_at:%Y-%m-%d %H:%M}'
+
+
+class AppNotification(models.Model):
+    """A message (with an optional link) sent to app users.
+
+    The audience is expanded when the message is sent and one
+    ``AppNotificationRecipient`` row is written per user, so the admin page can
+    report delivered/read counts per person afterwards. A notification stays
+    readable in the app until it is switched off here.
+    """
+    AUDIENCE_ALL = 'all'
+    AUDIENCE_SUBSCRIBED = 'subscribed'
+    AUDIENCE_UNSUBSCRIBED = 'unsubscribed'
+    AUDIENCE_SELECTED = 'selected'
+    AUDIENCE_CHOICES = [
+        (AUDIENCE_ALL, 'All users'),
+        (AUDIENCE_SUBSCRIBED, 'Subscribed users'),
+        (AUDIENCE_UNSUBSCRIBED, 'Unsubscribed users'),
+        (AUDIENCE_SELECTED, 'Selected users'),
+    ]
+
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True, default='')
+    link_url = models.CharField(max_length=500, blank=True, default='')
+    audience = models.CharField(max_length=20, choices=AUDIENCE_CHOICES,
+                                default=AUDIENCE_ALL)
+    app = models.ForeignKey('AndroidApp', null=True, blank=True,
+                            on_delete=models.SET_NULL, related_name='notifications')
+    is_active = models.BooleanField(default=True)
+    created_by = models.CharField(max_length=150, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    recipients_total = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'App notification'
+        verbose_name_plural = 'App notifications'
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def delivered_count(self):
+        return self.recipients.exclude(delivered_at=None).count()
+
+    @property
+    def read_count(self):
+        return self.recipients.exclude(read_at=None).count()
+
+
+class AppNotificationRecipient(models.Model):
+    """One user's copy of a notification, with its delivery and read state."""
+    notification = models.ForeignKey(AppNotification, on_delete=models.CASCADE,
+                                     related_name='recipients')
+    email = models.EmailField(db_index=True)
+    device_id = models.CharField(max_length=100, blank=True, default='')
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    read_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['email']
+        unique_together = ('notification', 'email')
+        verbose_name = 'Notification recipient'
+        verbose_name_plural = 'Notification recipients'
+        indexes = [models.Index(fields=['notification', 'read_at'])]
+
+    def __str__(self):
+        return '%s -> %s' % (self.notification_id, self.email)
+
+
+class GuestPlayQuota(models.Model):
+    """How many titles one unregistered device has played.
+
+    Guests get ``limit`` free titles (10 by default) per device id. The app asks
+    before playback and shows the countdown; once the limit is reached the app
+    asks the user to register, and playback is refused until an account with a
+    verified email is passed to the play endpoint.
+    """
+    device_id = models.CharField(max_length=100, unique=True)
+    plays_used = models.PositiveIntegerField(default=0)
+    limit = models.PositiveIntegerField(default=10)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_play_at = models.DateTimeField(null=True, blank=True)
+    last_email = models.EmailField(blank=True, default='')
+    last_title = models.CharField(max_length=100, blank=True, default='')
+
+    class Meta:
+        ordering = ['-last_play_at']
+        verbose_name = 'Guest play quota'
+        verbose_name_plural = 'Guest play quotas'
+
+    @property
+    def remaining(self):
+        return max(0, self.limit - self.plays_used)
+
+    def __str__(self):
+        return '%s %d/%d' % (self.device_id, self.plays_used, self.limit)

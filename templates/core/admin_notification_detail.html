@@ -1,0 +1,100 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}{{ note.title }} - Notification{% endblock %}
+{% block admin_content %}
+<style>
+    .nd-card { background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; padding: 1rem 1.1rem; }
+    .nd-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; margin: 0; }
+    .nd-sub { font-size: .74rem; color: #94a3b8; }
+    .nd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7rem; margin: .8rem 0; }
+    .nd-stat { background: rgba(15,23,42,.6); border: 1px solid rgba(148,163,184,.16); border-radius: 10px; padding: .55rem .7rem; }
+    .nd-stat b { display: block; font-size: 1.1rem; color: #e2e8f0; }
+    .nd-stat span { font-size: .68rem; color: #94a3b8; text-transform: uppercase; }
+    .nd-tabs { display: flex; gap: .4rem; flex-wrap: wrap; margin: .6rem 0; }
+    .nd-tab { font-size: .74rem; padding: .22rem .6rem; border-radius: 8px; text-decoration: none;
+        border: 1px solid rgba(148,163,184,.35); color: #cbd5e1; background: rgba(15,23,42,.7); }
+    .nd-tab:hover { color: #fff; background: rgba(30,41,59,.95); }
+    .nd-tab.active { background: #22c55e; border-color: #22c55e; color: #052e16; font-weight: 600; }
+    .nd-table { width: 100%; font-size: .78rem; }
+    .nd-table th { font-size: .66rem; text-transform: uppercase; color: #94a3b8; text-align: left;
+        border-bottom: 1px solid rgba(148,163,184,.2); padding: .4rem .5rem; }
+    .nd-table td { padding: .42rem .5rem; border-bottom: 1px solid rgba(148,163,184,.1); color: #cbd5e1; }
+    .nd-yes { color: #22c55e; } .nd-no { color: #64748b; }
+    .nd-body { background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16); border-radius: 10px;
+        padding: .65rem .8rem; font-size: .82rem; color: #e2e8f0; white-space: pre-wrap; margin-top: .5rem; }
+</style>
+
+<a href="{% url 'notifications_admin' %}" class="text-decoration-none nd-sub"><i class="fas fa-arrow-left me-1"></i>Back to notifications</a>
+
+<div class="nd-card mt-2">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2 class="nd-title">{{ note.title }}</h2>
+            <div class="nd-sub">
+                {{ note.get_audience_display }} &middot;
+                sent {{ note.sent_at|date:"d M Y H:i"|default:"not sent" }}
+                {% if note.created_by %} &middot; by {{ note.created_by }}{% endif %}
+                {% if not note.is_active %} &middot; switched off{% endif %}
+            </div>
+        </div>
+        <a class="nd-tab" href="?state={{ state }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}&amp;export=csv"><i class="fas fa-file-csv me-1"></i>CSV</a>
+    </div>
+
+    {% if note.body %}<div class="nd-body">{{ note.body }}</div>{% endif %}
+    {% if note.link_url %}
+    <div class="nd-sub mt-2"><i class="fas fa-link me-1"></i>{{ note.link_url }}</div>
+    {% endif %}
+
+    <div class="nd-grid">
+        <div class="nd-stat"><b>{{ sent_total }}</b><span>recipients</span></div>
+        <div class="nd-stat"><b>{{ delivered_total }}</b><span>delivered</span></div>
+        <div class="nd-stat"><b>{{ read_total }}</b><span>read</span></div>
+        <div class="nd-stat"><b>{% if sent_total %}{% widthratio read_total sent_total 100 %}{% else %}0{% endif %}%</b><span>read rate</span></div>
+    </div>
+
+    <div class="nd-tabs">
+        <a class="nd-tab {% if state == 'all' %}active{% endif %}" href="?state=all">All</a>
+        <a class="nd-tab {% if state == 'delivered' %}active{% endif %}" href="?state=delivered">Delivered</a>
+        <a class="nd-tab {% if state == 'undelivered' %}active{% endif %}" href="?state=undelivered">Not delivered</a>
+        <a class="nd-tab {% if state == 'read' %}active{% endif %}" href="?state=read">Read</a>
+        <a class="nd-tab {% if state == 'unread' %}active{% endif %}" href="?state=unread">Unread</a>
+    </div>
+
+    <form method="get" class="mb-2 d-flex gap-2" style="max-width:420px">
+        <input type="hidden" name="state" value="{{ state }}">
+        <input type="text" name="q" value="{{ q }}" placeholder="Filter by email"
+               style="flex:1;padding:.35rem .55rem;border-radius:8px;border:1px solid rgba(148,163,184,.3);background:rgba(15,23,42,.7);color:#e2e8f0;font-size:.8rem">
+        <button class="nd-tab" type="submit">Filter</button>
+    </form>
+
+    {% if page.object_list %}
+    <div class="table-responsive">
+        <table class="nd-table">
+            <thead><tr><th>User</th><th>Device</th><th>Delivered</th><th>Read</th><th>Opens</th></tr></thead>
+            <tbody>
+                {% for row in page.object_list %}
+                <tr>
+                    <td>{{ row.email }}</td>
+                    <td>{% if row.device_id %}<code style="font-size:.7rem;color:#94a3b8">{{ row.device_id|truncatechars:16 }}</code>{% else %}<span class="nd-no">-</span>{% endif %}</td>
+                    <td>{% if row.delivered_at %}<span class="nd-yes">{{ row.delivered_at|date:"d M H:i" }}</span>{% else %}<span class="nd-no">no</span>{% endif %}</td>
+                    <td>{% if row.read_at %}<span class="nd-yes">{{ row.read_at|date:"d M H:i" }}</span>{% else %}<span class="nd-no">no</span>{% endif %}</td>
+                    <td>{{ row.read_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-2">
+        {% if page.has_previous %}
+        <a class="nd-tab" href="?state={{ state }}&amp;page={{ page.previous_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">&laquo; Prev</a>
+        {% endif %}
+        <span class="nd-sub align-self-center">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}
+        <a class="nd-tab" href="?state={{ state }}&amp;page={{ page.next_page_number }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="nd-sub">No recipients match this filter.</div>
+    {% endif %}
+</div>
+{% endblock %}
