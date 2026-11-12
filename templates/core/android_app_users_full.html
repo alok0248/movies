@@ -29,6 +29,25 @@
     }
     .fbtn:hover { background: rgba(30,41,59,.95); color: #fff; }
     .fbtn.active { background: #22c55e; border-color: #22c55e; color: #052e16; font-weight: 600; }
+    /* Counts inside a chip must follow the chip's own state: the bare .sub gray
+       (#94a3b8) is unreadable on the green .active chip and clashes with the
+       white hover text. Lighten dark-on-hover, darken on the green chip. */
+    .fbtn:hover .sub { color: #f1f5f9; }
+    .fbtn.active .sub { color: #052e16; opacity: .82; }
+    .fbtn.active:hover .sub { color: #052e16; }
+    /* Tab counts. These used .pill.bg-dark + border-secondary, and Bootstrap's
+       background utilities are !important, so the number inside the active green
+       tab was dark-on-dark (#052e16 on #212529) — invisible. The counts now use
+       their own class so each chip state owns the pill's colours. */
+    .chip-count {
+        background: rgba(15,23,42,.85); border: 1px solid rgba(148,163,184,.35);
+        color: #e2e8f0;
+    }
+    .fbtn:hover .chip-count { color: #f8fafc; }
+    .fbtn.active .chip-count {
+        background: #052e16; border-color: #052e16; color: #dcfce7;
+    }
+    .fbtn.active:hover .chip-count { background: #052e16; color: #dcfce7; }
     .full-users-wrap .table { --bs-table-bg: transparent; font-size: .78rem; }
     .full-users-wrap .table th {
         /* NOTE: .table-responsive is a scroll container, so a positive top here
@@ -80,10 +99,10 @@
              big tables, and switching between them is a fragment fetch (no
              reload, the other lists simply disappear). -->
         <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
-            <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill bg-dark border border-secondary ms-1">{{ counts.total }}</span></a>
-            <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill bg-dark border border-secondary ms-1">{{ counts.unique_devices }}</span></a>
-            <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill bg-dark border border-secondary ms-1">{{ counts.signed_out }}</span></a>
-            <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill bg-dark border border-secondary ms-1">{{ counts.visits }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill chip-count ms-1">{{ counts.total }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill chip-count ms-1">{{ counts.signed_out }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill chip-count ms-1">{{ counts.visits }}</span></a>
         </div>
 
         <!-- Kept outside the swappable panel: the row actions need both. -->

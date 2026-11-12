@@ -1,5 +1,7 @@
-{# Which list is on screen. The view renders (and sends) exactly one of these —
-   the page stays small and switching tabs is a fragment fetch, not a reload. #}
+{% comment %}
+   Which list is on screen. The view renders (and sends) exactly one of these —
+   the page stays small and switching tabs is a fragment fetch, not a reload.
+{% endcomment %}
 {% if active_tab == 'uniquedevices' %}
 {% include 'core/_users_full_uniquedevices.html' %}
 {% elif active_tab == 'signedout' %}
