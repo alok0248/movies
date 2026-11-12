@@ -69,20 +69,20 @@
         border-radius: 2px; box-shadow: 0 0 0 1px rgba(148,163,184,.25);
         flex: none;
     }
-    /* A known country is a two-line label: country, then its state/region. The
-       flag image was too heavy for a dense table, so the text carries it; the
-       city and the full record stay a click away. */
-    .ipgeo.has-flag {
-        flex-direction: column; align-items: flex-start;
-        padding: .3rem .42rem; line-height: 1.2;
-        white-space: normal; text-align: left; vertical-align: middle;
+    /* A known country reads as "Country - State" on one line. The flag image was
+       too heavy for a dense table, so the text carries it; the city and the
+       full record stay a click away. */
+    .ipgeo.has-flag { padding: .1rem .42rem; line-height: 1.45; }
+    .ipgeo-text {
+        display: inline-flex; flex-direction: row; align-items: baseline;
+        gap: .25rem; min-width: 0;
     }
-    .ipgeo-text { display: flex; flex-direction: column; gap: .28rem; min-width: 0; }
     .ipgeo-country, .ipgeo-region {
         max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .ipgeo-country { font-size: .6rem; font-weight: 650; letter-spacing: .01em; line-height: 1.25; }
-    .ipgeo-region { font-size: .55rem; line-height: 1.25; opacity: .7; }
+    .ipgeo-country { font-size: .62rem; font-weight: 650; letter-spacing: .01em; line-height: 1.25; }
+    .ipgeo-region { font-size: .58rem; line-height: 1.25; opacity: .75; }
+    .ipgeo-sep { font-size: .58rem; line-height: 1; opacity: .45; }
     html[data-theme="light"] .ipgeo.is-known { background: rgba(5,150,105,.1); border-color: rgba(5,150,105,.3); color: #065f46; }
     html[data-theme="light"] .ipgeo-region { opacity: .85; }
     .ipgeo-flag-code { font-size: .58rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4; }
@@ -1432,7 +1432,8 @@ function ipGeoPaint(ip, data) {
             var state = data.region || data.city || '';
             btn.innerHTML = '<span class="ipgeo-text"><span class="ipgeo-country">' +
                 ipGeoEscape(data.country) + '</span>' +
-                (state ? '<span class="ipgeo-region">' + ipGeoEscape(state) + '</span>' : '') + '</span>';
+                (state ? '<span class="ipgeo-sep">&ndash;</span><span class="ipgeo-region">' +
+                    ipGeoEscape(state) + '</span>' : '') + '</span>';
             btn.title = data.country + (data.city || data.region ? ' - ' + [data.city, data.region].filter(Boolean).join(', ') : '') +
                 ' (click for the full ipwho.is record)';
             btn.setAttribute('aria-label', (data.country || ip) + ' - open the ipwho.is record for ' + ip);
