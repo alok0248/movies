@@ -179,6 +179,25 @@ Gaps worth closing (in order):
 | P2 | App: `collectAsStateWithLifecycle`, OkHttp cache, pagination | Medium (needs device testing) | Perceived speed on TV boxes |
 | P2 | Prefetch admin links, reduced-motion guard, ETag on catalogue | Low | Polish |
 
-I can take any row of that table as a self-contained change. The P0 items are the ones
-that touch only markup and can be verified page-by-page in the local server without
-touching the API or database.
+## 7. Implemented on 12 Nov 2026
+
+- **Sidebar restructured** (`admin_base.html`): seven labelled groups
+  (Dashboard, Traffic & Security, Content, Users, Analytics, Android & API, Settings),
+  no duplicate labels, all 35 destinations preserved with their badges and active
+  states, plus a sticky filter box that hides non-matching items and empty sections.
+- **Sidebar hover prefetch** so opening a page the pointer already touched is instant.
+- **`prefers-reduced-motion` guard** for the sidebar/slide and hover transitions.
+- **Request Log analytics panel**: last-24-hours request histogram with 5xx overlay,
+  per-hour tooltips, a "slowest endpoints by average" table colour-coded at 400 ms and
+  1,500 ms, and a summary of total requests / server errors / hourly peak.
+  Two grouped queries, no extra round-trips.
+
+Verified by rendering 16 admin URLs through Django's test client (all 200; settings
+redirects to its overview as before), and by asserting the sidebar count (35 links),
+the filter/prefetch hooks, and the analytics markup.
+
+Still open from the table above: image `width`/`height`/`lazy` sweep on the public
+templates, extracting the 4,900-line `base.html` CSS, migrating the remaining pages to
+shared header/stat/table partials, request-log rollups (needs a retention change that
+deletes rows, so it deserves its own test), and the app-side Compose/OkHttp work
+(needs a device to measure).

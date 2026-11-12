@@ -10597,9 +10597,49 @@ def _request_log_tab(request):
     blocked = active_blocked_ips()
 
     view_mode = 'table' if request.GET.get('view') == 'table' else 'cards'
+    # Traffic shape for the last 24 h: which endpoints are slowest and whether
+    # errors are climbing. Computed here (two grouped queries) rather than in the
+    # template so the page stays a single round-trip.
+    from datetime import timedelta
+    from django.db.models import Avg, Count, Q
+    from django.db.models.functions import TruncHour
+    from .models import RequestLog
+
+    window_start = timezone.now() - timedelta(hours=24)
+    recent_qs = RequestLog.objects.filter(created_at__gte=window_start)
+    slowest = list(
+        recent_qs.values('path')
+        .annotate(hits=Count('id'), avg_ms=Avg('duration_ms'),
+                  errors=Count('id', filter=Q(status_code__gte=500)))
+        .order_by('-avg_ms')[:8]
+    )
+    for row in slowest:
+        row['avg_ms'] = int(row['avg_ms'] or 0)
+
+    hourly_rows = (recent_qs.annotate(hour=TruncHour('created_at')).values('hour')
+                   .annotate(hits=Count('id'),
+                             errors=Count('id', filter=Q(status_code__gte=500))))
+    buckets = {row['hour']: row for row in hourly_rows}
+    now_hour = timezone.now().replace(minute=0, second=0, microsecond=0)
+    trend = []
+    for step in range(23, -1, -1):
+        hour = now_hour - timedelta(hours=step)
+        row = buckets.get(hour) or {}
+        trend.append({
+            'label': timezone.localtime(hour).strftime('%H:%M'),
+            'hits': row.get('hits', 0),
+            'errors': row.get('errors', 0),
+        })
+    trend_peak = max([item['hits'] for item in trend] or [0]) or 1
+
     return render(request, 'core/admin_requests.html', {
         'panel': 'log',
         'records': records,
+        'slowest': slowest,
+        'trend': trend,
+        'trend_peak': trend_peak,
+        'trend_errors': sum(item['errors'] for item in trend),
+        'trend_hits': sum(item['hits'] for item in trend),
         'count': len(records),
         'total': request_total(),
         # Every currently blocked address, so each row can offer Block or Unblock.

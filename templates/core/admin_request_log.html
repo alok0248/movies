@@ -312,6 +312,81 @@
         </form>
     </div>
 
+<style>
+    .rl-an {
+        background: rgba(15,23,42,.55); border: 1px solid rgba(148,163,184,.16);
+        border-radius: 12px; padding: .85rem 1rem;
+    }
+    .rl-an-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+    .rl-an-title { font-size: .82rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .4rem; }
+    .rl-an-sub { font-size: .7rem; color: #94a3b8; margin-top: .15rem; }
+    .rl-an-legend { display: flex; gap: .9rem; font-size: .68rem; color: #94a3b8; }
+    .rl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: .3rem; }
+    .rl-spark { display: flex; align-items: flex-end; gap: 3px; height: 74px; margin-top: .6rem; }
+    .rl-spark-col { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; gap: 1px; }
+    .rl-spark-bar { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: rgba(96,165,250,.55); transition: background .15s ease; }
+    .rl-spark-col:hover .rl-spark-bar { background: rgba(96,165,250,.9); }
+    .rl-spark-err { flex: 0 0 3px; min-height: 2px; border-radius: 2px 2px 0 0; background: rgba(248,113,113,.85); }
+    .rl-spark-x { position: absolute; bottom: -15px; left: 0; font-size: .56rem; color: #64748b; white-space: nowrap; }
+    .rl-slow { margin-top: 1.4rem; }
+    .rl-slow table { width: 100%; font-size: .74rem; border-collapse: collapse; }
+    .rl-slow th { text-align: left; font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; padding: .3rem .4rem; border-bottom: 1px solid rgba(148,163,184,.18); font-weight: 600; }
+    .rl-slow td { padding: .34rem .4rem; border-bottom: 1px solid rgba(148,163,184,.08); color: #cbd5e1; }
+    .rl-slow code { font-size: .7rem; color: #93c5fd; }
+    .rl-ms { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .rl-ms-slow { color: #fbbf24; }
+    .rl-ms-bad { color: #f87171; }
+    @media (prefers-reduced-motion: reduce) { .rl-spark-bar { transition: none; } }
+</style>
+
+{% if trend %}
+<div class="rl-an mb-3">
+    <div class="rl-an-head">
+        <div>
+            <div class="rl-an-title"><i class="fas fa-wave-square" style="color:#60a5fa"></i> Last 24 hours</div>
+            <div class="rl-an-sub">{{ trend_hits }} request{{ trend_hits|pluralize }} &middot; {{ trend_errors }} server error{{ trend_errors|pluralize }} &middot; peak {{ trend_peak }} per hour</div>
+        </div>
+        <div class="rl-an-legend">
+            <span><i class="rl-dot" style="background:rgba(96,165,250,.75)"></i>Requests</span>
+            <span><i class="rl-dot" style="background:rgba(248,113,113,.85)"></i>5xx</span>
+        </div>
+    </div>
+
+    <div class="rl-spark" role="img" aria-label="Requests per hour over the last 24 hours">
+        {% for point in trend %}
+        <div class="rl-spark-col" title="{{ point.label }} - {{ point.hits }} request{{ point.hits|pluralize }}{% if point.errors %}, {{ point.errors }} error{{ point.errors|pluralize }}{% endif %}">
+            <div class="rl-spark-bar" style="height:{% widthratio point.hits trend_peak 100 %}%"></div>
+            {% if point.errors %}<div class="rl-spark-err" style="height:{% widthratio point.errors trend_peak 100 %}%"></div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <div style="position:relative;height:14px;">
+        {% for point in trend %}{% if forloop.counter0|divisibleby:4 %}
+        <span class="rl-spark-x" style="left:{% widthratio forloop.counter0 24 100 %}%">{{ point.label }}</span>
+        {% endif %}{% endfor %}
+    </div>
+
+    {% if slowest %}
+    <div class="rl-slow">
+        <div class="rl-an-title" style="font-size:.76rem;margin-bottom:.35rem"><i class="fas fa-gauge-high" style="color:#fbbf24"></i> Slowest endpoints (24 h, by average)</div>
+        <table>
+            <thead><tr><th>Path</th><th>Requests</th><th>Avg</th><th>5xx</th></tr></thead>
+            <tbody>
+                {% for row in slowest %}
+                <tr>
+                    <td><code>{{ row.path|truncatechars:64 }}</code></td>
+                    <td>{{ row.hits }}</td>
+                    <td class="rl-ms {% if row.avg_ms > 1500 %}rl-ms-bad{% elif row.avg_ms > 400 %}rl-ms-slow{% endif %}">{{ row.avg_ms }} ms</td>
+                    <td>{% if row.errors %}<span style="color:#f87171">{{ row.errors }}</span>{% else %}<span style="color:#475569">0</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if view_mode == 'table' %}
     <form method="get" class="rl-tableform mb-2">
         <input type="hidden" name="view" value="table">

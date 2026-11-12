@@ -17,6 +17,28 @@
     }
     .admin-sidebar::-webkit-scrollbar { width: 4px; }
     .admin-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+    .sb-search {
+        position: sticky; top: 0; z-index: 2; display: flex; align-items: center;
+        gap: .45rem; padding: .55rem .8rem;
+        background: rgba(13,13,20,.96);
+        border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .sb-search i { font-size: .72rem; color: #64748b; }
+    .sb-search input {
+        flex: 1; min-width: 0; padding: .34rem .55rem;
+        background: rgba(148,163,184,.1);
+        border: 1px solid rgba(148,163,184,.18); border-radius: 8px;
+        color: #e2e8f0; font-size: .76rem; outline: none;
+        transition: border-color .15s ease, background .15s ease;
+    }
+    .sb-search input::placeholder { color: #64748b; }
+    .sb-search input:focus { border-color: rgba(96,165,250,.55); background: rgba(148,163,184,.16); }
+    .sb-empty { padding: .9rem .8rem; font-size: .75rem; color: #64748b; }
+    html[data-theme="light"] .sb-search { background: rgba(255,255,255,.96); }
+    html[data-theme="light"] .sb-search input { color: #1e293b; background: rgba(15,23,42,.06); }
+    @media (prefers-reduced-motion: reduce) {
+        .admin-sidebar, .admin-sidebar.open, .sb-item, .sb-search input { transition: none !important; }
+    }
     .admin-main {
         flex: 1; margin-left: 260px; padding: 1.5rem 2rem 3rem;
         height: calc(100vh - 56px); min-height: 0;
@@ -559,10 +581,20 @@
 <div class="admin-layout">
     <!-- Sidebar -->
         <nav class="admin-sidebar" id="adminSidebar">
+        <div class="sb-search">
+            <i class="fas fa-filter" aria-hidden="true"></i>
+            <input id="sbSearch" type="search" placeholder="Filter menu" autocomplete="off"
+                   aria-label="Filter menu" oninput="filterSidebar(this.value)">
+        </div>
+        <div class="sb-empty" id="sbEmpty" hidden>No menu item matches.</div>
+
         <div class="sb-section">
-            <div class="sb-section-title">Overview</div>
+            <div class="sb-section-title">Dashboard</div>
             <a href="{% url 'admin_dashboard' %}" class="sb-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                 <i class="fas fa-home"></i> Overview
+            </a>
+            <a href="{% url 'system_resource_dashboard' %}" class="sb-item {% if 'system-resources' in request.path %}active{% endif %}">
+                <i class="fas fa-server"></i> System
             </a>
             <a href="{% url 'db_dashboard' %}" class="sb-item {% if 'db-dashboard' in request.path %}active{% endif %}">
                 <i class="fas fa-heartbeat"></i> DB Dashboard
@@ -571,50 +603,32 @@
                 <i class="fas fa-heart-pulse"></i> Data Health
                 {% if health_alerts %}<span data-dh-badge role="button" tabindex="0" aria-haspopup="true" aria-label="{{ health_alerts }} data-health check{{ health_alerts|pluralize }} need attention" title="{{ health_alerts }} data-health check{{ health_alerts|pluralize }} need attention" onclick="event.preventDefault();event.stopPropagation();dhToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();dhToggle(this)}" style="width:8px;height:8px;border-radius:50%;background:#fbbf24;margin-left:auto;flex:none;cursor:pointer;box-shadow:0 0 0 2px rgba(251,191,36,.18)"></span>{% endif %}
             </a>
-            <a href="{% url 'admin_analytics' %}" class="sb-item {% if 'admin-dashboard/analytics' in request.path and 'engagement' not in request.path %}active{% endif %}">
-                <i class="fas fa-chart-line"></i> User Analytics
-            </a>
-            <a href="{% url 'admin_engagement_analytics' %}" class="sb-item {% if 'engagement' in request.path %}active{% endif %}">
-                <i class="fas fa-fire"></i> Engagement
-            </a>
-            <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
-                <i class="fas fa-chart-bar"></i> Web Analytics
-            </a>
-            <a href="{% url 'system_resource_dashboard' %}" class="sb-item {% if 'system-resources' in request.path %}active{% endif %}">
-                <i class="fas fa-server"></i> System
+            <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
+                <i class="fas fa-bell"></i> Health &amp; Alerts
+                {% if admin_badges.alerts %}<span class="sb-badge danger" title="{{ admin_badges.alerts }} health check{{ admin_badges.alerts|pluralize }} failing">{{ admin_badges.alerts }}</span>{% endif %}
             </a>
         </div>
 
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">Security &amp; Health</div>
-            <a href="{% url 'traffic_control' %}" class="sb-item {% if 'admin-dashboard/traffic-control' in request.path %}active{% endif %}">
-                <i class="fas fa-shield-halved"></i> Traffic Control
-                {% if admin_badges.blocked %}<span class="sb-badge" title="{{ admin_badges.blocked }} address{{ admin_badges.blocked|pluralize }} blocked">{{ admin_badges.blocked }}</span>{% endif %}
-            </a>
+            <div class="sb-section-title">Traffic &amp; Security</div>
             <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
                 <i class="fas fa-network-wired"></i> Requests &amp; Users
             </a>
             <a href="{% url 'device_activity' %}" class="sb-item {% if 'admin-dashboard/device-activity' in request.path %}active{% endif %}">
                 <i class="fas fa-mobile-screen-button"></i> Device Activity
             </a>
-            <a href="{% url 'admin_audit_log' %}" class="sb-item {% if 'admin-dashboard/audit-log' in request.path %}active{% endif %}">
-                <i class="fas fa-clipboard-list"></i> Audit Log
-            </a>
-            <a href="{% url 'notifications_admin' %}" class="sb-item {% if 'admin-dashboard/notifications' in request.path %}active{% endif %}">
-                <i class="fas fa-bell"></i> Notifications
-            </a>
-            <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
-                <i class="fas fa-bell"></i> Health &amp; Alerts
-                {% if admin_badges.alerts %}<span class="sb-badge danger" title="{{ admin_badges.alerts }} health check{{ admin_badges.alerts|pluralize }} failing">{{ admin_badges.alerts }}</span>{% endif %}
-            </a>
-            <a href="{% url 'admin_data_volume' %}" class="sb-item {% if 'data-volume' in request.path %}active{% endif %}">
-                <i class="fas fa-database"></i> Data &amp; Retention
+            <a href="{% url 'traffic_control' %}" class="sb-item {% if 'admin-dashboard/traffic-control' in request.path %}active{% endif %}">
+                <i class="fas fa-shield-halved"></i> Traffic Control
+                {% if admin_badges.blocked %}<span class="sb-badge" title="{{ admin_badges.blocked }} address{{ admin_badges.blocked|pluralize }} blocked">{{ admin_badges.blocked }}</span>{% endif %}
             </a>
             <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
                 <i class="fas fa-bug"></i> API Errors
                 {% if admin_badges.api_errors %}<span class="sb-badge info" title="{{ admin_badges.api_errors }} new error{{ admin_badges.api_errors|pluralize }} since you last looked">{{ admin_badges.api_errors }}</span>{% endif %}
+            </a>
+            <a href="{% url 'admin_audit_log' %}" class="sb-item {% if 'admin-dashboard/audit-log' in request.path %}active{% endif %}">
+                <i class="fas fa-clipboard-list"></i> Audit Log
             </a>
         </div>
 
@@ -645,7 +659,7 @@
         <div class="sb-divider"></div>
 
         <div class="sb-section">
-            <div class="sb-section-title">Users &amp; Access</div>
+            <div class="sb-section-title">Users</div>
             <a href="{% url 'admin_user_list' %}" class="sb-item {% if 'users' in request.path %}active{% endif %}">
                 <i class="fas fa-user-shield"></i> Users
             </a>
@@ -653,8 +667,26 @@
                 <i class="fas fa-users"></i> Synced Users
                 {% if admin_badges.blocked_today %}<span class="sb-badge" title="{{ admin_badges.blocked_today }} account{{ admin_badges.blocked_today|pluralize }} blocked today">{{ admin_badges.blocked_today }}</span>{% endif %}
             </a>
+            <a href="{% url 'notifications_admin' %}" class="sb-item {% if 'admin-dashboard/notifications' in request.path %}active{% endif %}">
+                <i class="fas fa-bell"></i> Notifications
+            </a>
             <a href="{% url 'admin_history_calendar' %}" class="sb-item {% if 'history-calendar' in request.path %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> History Calendar
+            </a>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-section">
+            <div class="sb-section-title">Analytics</div>
+            <a href="{% url 'admin_analytics' %}" class="sb-item {% if 'admin-dashboard/analytics' in request.path and 'engagement' not in request.path %}active{% endif %}">
+                <i class="fas fa-chart-line"></i> User Analytics
+            </a>
+            <a href="{% url 'admin_engagement_analytics' %}" class="sb-item {% if 'engagement' in request.path %}active{% endif %}">
+                <i class="fas fa-fire"></i> Engagement
+            </a>
+            <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
+                <i class="fas fa-chart-bar"></i> Web Analytics
             </a>
         </div>
 
@@ -687,7 +719,7 @@
         <div class="sb-section">
             <div class="sb-section-title">Settings</div>
             <a href="{% url 'settings_root' %}" class="sb-item {% if '/settings/overview' in request.path or request.path == '/admin-dashboard/settings/' %}active{% endif %}">
-                <i class="fas fa-gauge-high"></i> Overview
+                <i class="fas fa-gauge-high"></i> Settings Home
             </a>
             <a href="{% url 'settings_hub' 'site' %}" class="sb-item {% if '/settings/site' in request.path %}active{% endif %}">
                 <i class="fas fa-palette"></i> Site
@@ -700,6 +732,9 @@
             </a>
             <a href="{% url 'settings_hub' 'security' %}" class="sb-item {% if '/settings/security' in request.path %}active{% endif %}">
                 <i class="fas fa-shield-halved"></i> Security
+            </a>
+            <a href="{% url 'admin_data_volume' %}" class="sb-item {% if 'data-volume' in request.path %}active{% endif %}">
+                <i class="fas fa-boxes-stacked"></i> Data &amp; Retention
             </a>
         </div>
     </nav>
@@ -719,6 +754,46 @@ function toggleSidebar() {
     var sb = document.getElementById('adminSidebar');
     sb.classList.toggle('open');
 }
+
+// Sidebar filter: hides items that do not match, and the section headings that
+// end up empty. Purely visual -- every link keeps working when the box is cleared.
+function filterSidebar(query) {
+    var q = (query || '').trim().toLowerCase();
+    var sections = document.querySelectorAll('#adminSidebar .sb-section');
+    var shown = 0;
+    sections.forEach(function (section) {
+        var visible = 0;
+        section.querySelectorAll('.sb-item').forEach(function (item) {
+            var match = !q || item.textContent.toLowerCase().indexOf(q) !== -1;
+            item.style.display = match ? '' : 'none';
+            if (match) { visible++; shown++; }
+        });
+        section.style.display = visible ? '' : 'none';
+        var divider = section.nextElementSibling;
+        if (divider && divider.classList.contains('sb-divider')) {
+            divider.style.display = visible ? '' : 'none';
+        }
+    });
+    var empty = document.getElementById('sbEmpty');
+    if (empty) { empty.hidden = shown !== 0; }
+}
+
+// Prefetch an admin page the moment the pointer reaches its link, so switching
+// tabs feels instant. Skipped for external links and repeated hovers.
+(function () {
+    var seen = {};
+    document.querySelectorAll('#adminSidebar .sb-item').forEach(function (link) {
+        link.addEventListener('pointerenter', function () {
+            var href = link.getAttribute('href');
+            if (!href || seen[href] || href.indexOf('http') === 0) { return; }
+            seen[href] = true;
+            var pre = document.createElement('link');
+            pre.rel = 'prefetch';
+            pre.href = href;
+            document.head.appendChild(pre);
+        }, { once: true });
+    });
+})();
 
 // Toast system
 function showToast(message, type) {
