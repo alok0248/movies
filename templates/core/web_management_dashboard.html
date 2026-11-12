@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block admin_content %}
 <div class="container mt-5 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -190,7 +191,7 @@
                             <tbody id="bot-top-ips-tbody">
                                 {% for bot_ip in bot_top_ips %}
                                 <tr>
-                                    <td><code class="text-warning"><span class="ip-text">{{ bot_ip.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=bot_ip.ip_address %}</code></td>
+                                    <td><code class="text-warning"><span class="ip-text">{{ bot_ip.ip_address }}</span>{% ip_geo_chip bot_ip.ip_address %}</code></td>
                                     <td>{{ bot_ip.request_count }}</td>
                                 </tr>
                                 {% endfor %}
@@ -210,7 +211,7 @@
                     <div id="bot-unique-ips" class="small text-light">
                         {% if bot_unique_ips %}
                             {% for ip in bot_unique_ips %}
-                                <div><code class="text-warning"><span class="ip-text">{{ ip }}</span>{% include 'core/_ip_geo.html' with ip=ip %}</code></div>
+                                <div><code class="text-warning"><span class="ip-text">{{ ip }}</span>{% ip_geo_chip ip %}</code></div>
                             {% endfor %}
                         {% else %}
                             <div class="text-secondary">No bot IPs recorded yet.</div>
@@ -241,7 +242,7 @@
                         <tr>
                             <td><code class="text-info">{{ activity.visitor.visitor_id }}</code></td>
                             <td><code class="text-white">{{ activity.path }}</code></td>
-                            <td><code class="text-success">{% if activity.ip_address %}<span class="ip-text">{{ activity.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=activity.ip_address %}{% else %}N/A{% endif %}</code></td>
+                            <td><code class="text-success">{% if activity.ip_address %}<span class="ip-text">{{ activity.ip_address }}</span>{% ip_geo_chip activity.ip_address %}{% else %}N/A{% endif %}</code></td>
                             <td>
                                 {% if activity.is_bot %}
                                     <span class="badge bg-warning text-dark">Bot</span>

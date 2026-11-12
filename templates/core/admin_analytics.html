@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block admin_content %}
 
 <style>
@@ -292,7 +293,7 @@
                                     {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
                                 </span>
                             </td>
-                            <td class="text-secondary" style="font-size:.78rem;">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=s.ip_address %}{% else %}—{% endif %}</td>
+                            <td class="text-secondary" style="font-size:.78rem;">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% ip_geo_chip s.ip_address %}{% else %}—{% endif %}</td>
                             <td><span class="session-dot {% if s.is_active %}active{% else %}inactive{% endif %}"></span></td>
                         </tr>
                         {% empty %}

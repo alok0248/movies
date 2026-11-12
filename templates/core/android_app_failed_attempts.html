@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block admin_content %}
 <div class="container mt-5 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -32,7 +33,7 @@
                             <td>
                                 <span class="badge bg-danger">{{ attempt.get_failure_reason_display }}</span>
                             </td>
-                            <td class="">{% if attempt.ip_address %}<span class="ip-text">{{ attempt.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=attempt.ip_address %}{% else %}-{% endif %}</td>
+                            <td class="">{% if attempt.ip_address %}<span class="ip-text">{{ attempt.ip_address }}</span>{% ip_geo_chip attempt.ip_address %}{% else %}-{% endif %}</td>
                             <td>{{ attempt.request_identity|default:'-' }}</td>
                             <td>{{ attempt.build_identifier|default:'-' }}</td>
                         </tr>

@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block title %}Blocked Headers - Admin{% endblock %}
 {% block admin_content %}
 <style>
@@ -268,7 +269,7 @@
                         {% else %}<span class="bh-zero">nothing yet</span>{% endif %}
                     </td>
                     <td>
-                        {% if r.ip_total %}<div class="bh-num-cell">{{ r.ip_total }}</div><div class="bh-sub bh-mono">{% for ip in r.top_ips %}<span class="ip-text">{{ ip }}</span>{% include 'core/_ip_geo.html' with ip=ip %}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% else %}<span class="bh-zero">—</span>{% endif %}
+                        {% if r.ip_total %}<div class="bh-num-cell">{{ r.ip_total }}</div><div class="bh-sub bh-mono">{% for ip in r.top_ips %}<span class="ip-text">{{ ip }}</span>{% ip_geo_chip ip %}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% else %}<span class="bh-zero">—</span>{% endif %}
                     </td>
                     <td style="white-space:normal;max-width:320px;">
                         {% if r.top_paths %}

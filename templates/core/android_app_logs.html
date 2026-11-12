@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block admin_content %}
 <div class="container mt-5 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -89,7 +90,7 @@
                     <div style="display:none;background:rgba(0,0,0,0.3);" class="px-3 pb-3 pt-2">
                         <div class="row g-3 small mb-2">
                             <div class="col-md-2"><span class="text-secondary">Time:</span> <span class="text-white">{{ log.timestamp }}</span></div>
-                            <div class="col-md-2"><span class="text-secondary">IP:</span> <span class="text-white">{% if log.ip_address %}<span class="ip-text">{{ log.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=log.ip_address %}{% else %}-{% endif %}</span></div>
+                            <div class="col-md-2"><span class="text-secondary">IP:</span> <span class="text-white">{% if log.ip_address %}<span class="ip-text">{{ log.ip_address }}</span>{% ip_geo_chip log.ip_address %}{% else %}-{% endif %}</span></div>
                             <div class="col-md-2"><span class="text-secondary">Build:</span> <span class="text-info">{{ log.build_identifier|default:"-" }}</span></div>
                             <div class="col-md-2"><span class="text-secondary">Device:</span> <span class="text-white">{{ log.device_model|default:"-" }}</span></div>
                             <div class="col-md-2"><span class="text-secondary">OS:</span> <span class="text-white">{{ log.os_version|default:"-" }}</span></div>

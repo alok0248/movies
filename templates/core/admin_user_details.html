@@ -1,3 +1,4 @@
+{% load ip_geo %}
 {# User Details panel — embedded by core/admin_requests.html (Requests & Users page). #}
 <style>
     .ud-card { background: var(--card-bg, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; }
@@ -236,7 +237,7 @@
                 <td class="ud-sub" title="{{ r.last_seen|date:'Y-m-d H:i:s' }}">{% if r.last_seen %}{{ r.last_seen|timesince }} ago{% else %}—{% endif %}</td>
                 <td>{{ r.views }}{% if r.total_time %}<div class="ud-sub">{{ r.total_time }}s</div>{% endif %}</td>
                 <td>
-                    {% if r.ip %}<span class="ip-text">{{ r.ip }}</span> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}—{% endif %}
+                    {% if r.ip %}<span class="ip-text">{{ r.ip }}</span> {% ip_geo_chip r.ip %}{% else %}—{% endif %}
                     {% if r.ip in blocked_ips %}<button type="button" class="ud-blockbtn on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')"><i class="fas fa-lock"></i>Blocked</button>{% elif r.ip %}<button type="button" class="ud-blockbtn" onclick="rqBlockIP('{{ r.ip|escapejs }}')"><i class="fas fa-ban"></i>Block</button>{% endif %}
                     <div class="ud-sub">{{ r.ip_count }} IP{{ r.ip_count|pluralize }} · {{ r.device_count }} device{{ r.device_count|pluralize }}</div>
                 </td>

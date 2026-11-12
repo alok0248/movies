@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block admin_content %}
 <div class="container mt-5 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -73,7 +74,7 @@
                             <span class="badge bg-secondary">{{ forloop.counter }}</span>
                             <span class="text-white fw-semibold">{{ item.visit.visited_at }}</span>
                             <span class="text-info">{{ item.visit.build_identifier|default:"-" }}</span>
-                            <span class="text-secondary">{% if item.visit.ip_address %}<span class="ip-text">{{ item.visit.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=item.visit.ip_address %}{% else %}-{% endif %}</span>
+                            <span class="text-secondary">{% if item.visit.ip_address %}<span class="ip-text">{{ item.visit.ip_address }}</span>{% ip_geo_chip item.visit.ip_address %}{% else %}-{% endif %}</span>
                             <span class="text-secondary">{{ item.visit.request_identity|default:"" }}</span>
                             <span class="text-secondary">{{ item.visit.device_model|default:"-" }} / {{ item.visit.os_version|default:"-" }}</span>
                             {% if item.full_request %}

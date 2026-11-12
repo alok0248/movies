@@ -1,3 +1,4 @@
+{% load ip_geo %}
 {# Active / Inactive Users panel — embedded by core/admin_requests.html (Requests & Users page). #}
 <style>
     .au-card {
@@ -253,7 +254,7 @@
                         {% if r.ip %}<span class="ip-text">{{ r.ip }}</span>{% if r.ip in blocked_ips %}<button type="button" class="au-blockbtn on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="au-blockbtn" onclick="rqBlockIP('{{ r.ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
                         {% if r.ips|length > 1 %}<div class="au-sub" title="{{ r.ips|join:', ' }}">+{{ r.ips|length|add:"-1" }} more IPs</div>{% endif %}
                     </td>
-                    <td>{% include 'core/_ip_geo.html' with ip=r.ip country=r.geo_country flag=r.geo_flag %}</td>
+                    <td>{% ip_geo_chip r.ip %}</td>
                     <td>
                         {% if r.device_model %}<div class="au-trunc" style="max-width:170px;" title="{{ r.device_model }}">{{ r.device_model }}</div>{% endif %}
                         <div class="au-sub">{% if r.os_version %}OS {{ r.os_version }}{% endif %}{% if r.app_version %}{% if r.os_version %} · {% endif %}v{{ r.app_version }}{% endif %}{% if not r.device_model and not r.os_version %}—{% endif %}</div>

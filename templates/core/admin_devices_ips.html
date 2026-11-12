@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block title %}Devices &amp; IPs - Admin{% endblock %}
 {% block admin_content %}
 <style>
@@ -169,7 +170,7 @@
                         </td>
                         <td><span class="ad-tag web">{{ row.platform|default:'web' }}</span></td>
                         <td class="ad-mono">{{ row.ip }}</td>
-                        <td>{% include 'core/_ip_geo.html' with ip=row.ip country=row.geo_country flag=row.geo_flag %}</td>
+                        <td>{% ip_geo_chip row.ip %}</td>
                         <td class="ad-num">{{ row.hits }}</td>
                         <td class="ad-muted">{{ row.first_seen|date:'Y-m-d H:i' }}</td>
                         <td class="ad-muted">{{ row.last_seen|date:'Y-m-d H:i' }}</td>

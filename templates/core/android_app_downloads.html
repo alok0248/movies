@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block title %}APK Downloads - Admin{% endblock %}
 {% block admin_content %}
 <style>
@@ -165,7 +166,7 @@
                 <tr>
                     <td class="adl-mono">{{ r.downloaded_at|date:"Y-m-d H:i:s" }}</td>
                     <td>{{ r.android_app.name|default:r.app_slug }}</td>
-                    <td class="adl-mono">{% if r.ip_address %}<span class="ip-text">{{ r.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=r.ip_address %}{% else %}—{% endif %}</td>
+                    <td class="adl-mono">{% if r.ip_address %}<span class="ip-text">{{ r.ip_address }}</span>{% ip_geo_chip r.ip_address %}{% else %}—{% endif %}</td>
                     <td class="adl-mono adl-trunc" title="{{ r.file_name }}">{{ r.file_name|default:"" }}</td>
                     <td>{% if r.opened_app %}<span class="adl-badge adl-yes">opened</span>{% else %}<span class="adl-badge adl-no">no</span>{% endif %}</td>
                     <td class="adl-mono">{% if r.opened_at %}{{ r.opened_at|date:"Y-m-d H:i:s" }}{% endif %}</td>

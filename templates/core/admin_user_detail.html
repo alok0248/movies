@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% load static %}
 
 {% block title %}{{ detail_user.username }} - User Detail{% endblock %}
@@ -478,7 +479,7 @@
                                             <span class="badge bg-secondary">{{ s.source }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-secondary">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=s.ip_address %}{% else %}—{% endif %}</td>
+                                    <td class="text-secondary">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% ip_geo_chip s.ip_address %}{% else %}—{% endif %}</td>
                                     <td class="text-white">{{ s.device_model|default:s.user_agent|truncatechars:40|default:"—" }}</td>
                                     <td class="text-secondary">{{ s.logged_in_at|date:"M d, Y H:i" }}</td>
                                     <td>

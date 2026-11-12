@@ -1,3 +1,4 @@
+{% load ip_geo %}
 {% load custom_filters %}
     <!-- ========================= RECENT VISITS ========================= -->
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
@@ -28,7 +29,7 @@
                     <td>{{ v.device_model|default:'-' }}</td>
                     <td class="sub">{{ v.os_version|default:'-' }}</td>
                     <td class="sub">{{ v.build_identifier|default:'—' }}</td>
-                    <td class="mono sub">{% if v.ip_address %}<span class="ip-text">{{ v.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=v.ip_address %}{% else %}—{% endif %}</td>
+                    <td class="mono sub">{% if v.ip_address %}<span class="ip-text">{{ v.ip_address }}</span>{% ip_geo_chip v.ip_address %}{% else %}—{% endif %}</td>
                     <td>
                         {% if v.full_request %}
                         <details>

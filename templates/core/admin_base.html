@@ -95,6 +95,67 @@
     }
     .ipgeo-btn:hover { background: rgba(148,163,184,.18); }
     @media (prefers-reduced-motion: reduce) { .ipgeo { transition: none; } }
+
+    /* ===== COMPACT CONTROLS =====
+       Stock Bootstrap buttons are 1rem labels with 12px/6px padding, which reads
+       as bulky on a dense admin screen. Every button in the admin shell takes its
+       size from these tokens instead, and the tokens scale with the viewport --
+       tighter on small screens, a touch larger on wide ones. */
+    :root {
+        --adm-btn-font: .75rem;
+        --adm-btn-pad-y: .28rem;
+        --adm-btn-pad-x: .62rem;
+        --adm-btn-radius: 8px;
+    }
+    @media (max-width: 767.98px) {
+        :root { --adm-btn-font: .72rem; --adm-btn-pad-y: .24rem; --adm-btn-pad-x: .5rem; }
+    }
+    @media (min-width: 1600px) {
+        :root { --adm-btn-font: .8rem; --adm-btn-pad-y: .32rem; --adm-btn-pad-x: .72rem; }
+    }
+    .admin-main .btn,
+    .admin-main .btn:not(.btn-sm):not(.btn-lg),
+    .admin-sidebar .btn,
+    .admin-main .modal .btn {
+        --bs-btn-font-size: var(--adm-btn-font);
+        --bs-btn-padding-y: var(--adm-btn-pad-y);
+        --bs-btn-padding-x: var(--adm-btn-pad-x);
+        --bs-btn-border-radius: var(--adm-btn-radius);
+        font-size: var(--adm-btn-font);
+        padding: var(--adm-btn-pad-y) var(--adm-btn-pad-x);
+        line-height: 1.3;
+        font-weight: 600;
+    }
+    .admin-main .btn-sm,
+    .admin-main .modal .btn-sm {
+        --bs-btn-font-size: calc(var(--adm-btn-font) - .03rem);
+        --bs-btn-padding-y: calc(var(--adm-btn-pad-y) - .06rem);
+        --bs-btn-padding-x: calc(var(--adm-btn-pad-x) + .04rem);
+        font-size: calc(var(--adm-btn-font) - .03rem);
+        padding: calc(var(--adm-btn-pad-y) - .06rem) calc(var(--adm-btn-pad-x) + .04rem);
+    }
+    .admin-main .btn-lg,
+    .admin-main .modal .btn-lg {
+        --bs-btn-font-size: calc(var(--adm-btn-font) + .07rem);
+        --bs-btn-padding-y: calc(var(--adm-btn-pad-y) + .1rem);
+        --bs-btn-padding-x: calc(var(--adm-btn-pad-x) + .18rem);
+        font-size: calc(var(--adm-btn-font) + .07rem);
+        padding: calc(var(--adm-btn-pad-y) + .1rem) calc(var(--adm-btn-pad-x) + .18rem);
+    }
+    /* An icon should never be what makes a button tall. */
+    .admin-main .btn > i,
+    .admin-main .btn > .fa-solid,
+    .admin-main .btn > .fas { font-size: .85em; }
+    .admin-main .btn-group > .btn { border-radius: 0; }
+    .admin-main .btn-group > .btn:first-child {
+        border-top-left-radius: var(--adm-btn-radius);
+        border-bottom-left-radius: var(--adm-btn-radius);
+    }
+    .admin-main .btn-group > .btn:last-child {
+        border-top-right-radius: var(--adm-btn-radius);
+        border-bottom-right-radius: var(--adm-btn-radius);
+    }
+    .admin-main .input-group .btn { border-radius: 0 var(--adm-btn-radius) var(--adm-btn-radius) 0; }
     @media (prefers-reduced-motion: reduce) {
         .admin-sidebar, .admin-sidebar.open, .sb-item, .sb-search input { transition: none !important; }
     }

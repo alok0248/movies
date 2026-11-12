@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% load custom_filters %}
 {% block title %}Audit Log - Admin{% endblock %}
 {% block admin_content %}
@@ -81,7 +82,7 @@
                     <td class="al-mono">{{ row.target|default:'—' }}</td>
                     <td class="al-sub">{{ row.detail|default:'—'|truncatechars:110 }}</td>
                     <td class="al-mono al-sub">{% if row.ip_address %}<span class="ip-text">{{ row.ip_address }}</span>{% else %}—{% endif %}</td>
-                    <td>{% if row.ip_address %}{% include 'core/_ip_geo.html' with ip=row.ip_address country=row.geo_country flag=row.geo_flag %}{% else %}—{% endif %}</td>
+                    <td>{% if row.ip_address %}{% ip_geo_chip row.ip_address %}{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
                 </tbody>

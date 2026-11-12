@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% load static %}
 
 {% block title %}User Management - Admin{% endblock %}
@@ -237,7 +238,7 @@
                                             <span class="text-secondary small">{{ info.time|date:"M d, Y H:i" }}</span>
                                             {% if info.ip|default:"" %}
                                                 <span class="text-muted mx-1">•</span>
-                                                <span class="text-muted small" style="font-family:monospace;"><span class="ip-text">{{ info.ip }}</span>{% include 'core/_ip_geo.html' with ip=info.ip %}</span>
+                                                <span class="text-muted small" style="font-family:monospace;"><span class="ip-text">{{ info.ip }}</span>{% ip_geo_chip info.ip %}</span>
                                             {% endif %}
                                             {% if info.app_version|default:"" %}
                                                 <span class="text-muted mx-1">•</span>

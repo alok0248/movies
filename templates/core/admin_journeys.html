@@ -1,3 +1,4 @@
+{% load ip_geo %}
 {# Visitor journeys — each visitor's own page history, start to last. #}
 <style>
     .jn-card { background: var(--card-bg, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,.08)); border-radius: 12px; }
@@ -68,7 +69,7 @@
         <span class="jn-pill {% if j.active %}jn-live{% else %}jn-off{% endif %}">{% if j.active %}On site{% else %}Left{% endif %}</span>
         <span class="jn-mono" title="{% if group == 'ip' %}IP address{% else %}Visitor id{% endif %}">{{ j.key|truncatechars:26 }}</span>
         {% for d in j.devices %}<span class="jn-pill jn-dev">{{ d }}</span>{% endfor %}
-        {% for ip in j.ips %}<span class="jn-pill jn-ip"><span class="ip-text">{{ ip }}</span>{% include 'core/_ip_geo.html' with ip=ip %}</span>{% endfor %}
+        {% for ip in j.ips %}<span class="jn-pill jn-ip"><span class="ip-text">{{ ip }}</span>{% ip_geo_chip ip %}</span>{% endfor %}
         <span class="jn-sub">{{ j.views }} page{{ j.views|pluralize }} · {{ j.time }}s · started {{ j.first_seen|date:"M d H:i:s" }} · last {{ j.last_seen|timesince }} ago</span>
         <span class="jn-sub ms-auto">entry: <span class="jn-mono">{{ j.path|truncatechars:40 }}</span></span>
     </summary>

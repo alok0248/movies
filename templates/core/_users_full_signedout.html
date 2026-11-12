@@ -1,3 +1,4 @@
+{% load ip_geo %}
 {% load custom_filters %}
     <!-- Accounts still using the app as a guest (heartbeat says is_logged_in=false).
          Every column here is read from that account's newest heartbeat, which the
@@ -49,7 +50,7 @@
                             <span class="pill bg-secondary">Offline</span>
                         {% endif %}
                         <div class="sub mt-1">
-                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono"><span class="ip-text">{{ r.ip }}</span></code> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}IP not reported{% endif %}
+                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono"><span class="ip-text">{{ r.ip }}</span></code> {% ip_geo_chip r.ip %}{% else %}IP not reported{% endif %}
                         </div>
                     </td>
                     <td>

@@ -1,4 +1,5 @@
 {% extends 'core/admin_base.html' %}
+{% load ip_geo %}
 {% block title %}Error Log - Admin{% endblock %}
 {% block admin_content %}
 <style>
@@ -167,7 +168,7 @@
         {% if rec.message %}<div class="ae-msg mb-2">{{ rec.message }}</div>{% endif %}
         <div class="ae-meta mb-2">
             <span class="me-3"><i class="fas fa-network-wired"></i>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% else %}—{% endif %}</span>
-            <span class="me-3"><i class="fas fa-globe"></i>{% if rec.client_ip %}{% include 'core/_ip_geo.html' with ip=rec.client_ip country=rec.geo_country flag=rec.geo_flag %}{% else %}—{% endif %}</span>
+            <span class="me-3"><i class="fas fa-globe"></i>{% if rec.client_ip %}{% ip_geo_chip rec.client_ip %}{% else %}—{% endif %}</span>
             {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
             {% if rec.query %}<span class="ms-3"><i class="fas fa-search"></i>?{{ rec.query }}</span>{% endif %}
         </div>
