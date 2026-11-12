@@ -61,14 +61,19 @@
     .ipgeo.is-known { background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.28); color: #6ee7b7; }
     .ipgeo.is-loading { opacity: .6; cursor: progress; }
     .ipgeo.is-failed { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.3); color: #fca5a5; }
-    .ipgeo-flag { font-size: .85rem; line-height: 1; }
+    .ipgeo-flag { font-size: .8rem; line-height: 1; }
     /* Flag image instead of the emoji: Windows renders flag emoji as two letters
        ("KE"), which read like a duplicated country code. */
     .ipgeo-flag-img {
-        width: 15px; height: 11px; object-fit: cover;
+        width: 16px; height: 12px; object-fit: cover;
         border-radius: 2px; box-shadow: 0 0 0 1px rgba(148,163,184,.25);
         flex: none;
     }
+    /* A known country is just the flag: the name lives in the tooltip and the
+       full record opens on click, so the chip stays narrow in a table cell. */
+    .ipgeo.has-flag { padding: .08rem .2rem; gap: 0; line-height: 0; }
+    .ipgeo.has-flag .ipgeo-flag-img { width: 17px; height: 12px; }
+    .ipgeo-flag-code { font-size: .58rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4; }
     .ipgeo-modal {
         position: fixed; inset: 0; z-index: 3000; display: flex;
         align-items: center; justify-content: center; padding: 1.5rem;
@@ -991,13 +996,15 @@ function ipGeoPaint(ip, data) {
     document.querySelectorAll('.ipgeo[data-ip="' + ip + '"]').forEach(function (btn) {
         btn.classList.remove('is-loading', 'is-failed');
         if (data && data.ok) {
-            btn.classList.add('is-known');
+            btn.classList.add('is-known', 'has-flag');
             var flag = data.flag_img
                 ? '<img class="ipgeo-flag-img" src="' + ipGeoEscape(data.flag_img) + '" alt="" referrerpolicy="no-referrer">'
-                : (data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '');
-            btn.innerHTML = flag + ipGeoEscape(data.country || 'Unknown');
-            btn.title = ip + ' - ' + [data.city, data.region, data.country].filter(Boolean).join(', ') +
+                : (data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>'
+                    : '<span class="ipgeo-flag-code">' + ipGeoEscape(String(data.country || '?').slice(0, 2).toUpperCase()) + '</span>');
+            btn.innerHTML = flag;
+            btn.title = data.country + (data.city || data.region ? ' - ' + [data.city, data.region].filter(Boolean).join(', ') : '') +
                 ' (click for the full ipwho.is record)';
+            btn.setAttribute('aria-label', (data.country || ip) + ' - open the ipwho.is record for ' + ip);
         } else {
             btn.classList.add('is-failed');
             btn.textContent = 'Lookup failed';
@@ -1117,7 +1124,8 @@ function ipGeoMarkup(ip) {
 
     function paint(ip, info) {
         if (!info || !info.country) { return; }
-        ipGeoPaint(ip, { ok: true, country: info.country, flag: info.flag, city: info.city, region: info.region });
+        ipGeoPaint(ip, { ok: true, country: info.country, flag: info.flag, flag_img: info.flag_img,
+                         city: info.city, region: info.region });
     }
 
     function unknownIps() {
@@ -1164,7 +1172,8 @@ function ipGeoMarkup(ip) {
                     return ipGeoFetch(ip, false).then(function (fresh) {
                         delete pending[ip];
                         if (fresh && fresh.ok) {
-                            cache[ip] = { country: fresh.country, flag: fresh.flag, city: fresh.city, region: fresh.region };
+                            cache[ip] = { country: fresh.country, flag: fresh.flag, flag_img: fresh.flag_img,
+                                          city: fresh.city, region: fresh.region };
                             saveCache();
                             paint(ip, cache[ip]);
                         }
