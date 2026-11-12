@@ -69,21 +69,20 @@
         border-radius: 2px; box-shadow: 0 0 0 1px rgba(148,163,184,.25);
         flex: none;
     }
-    /* A known country shows a small flag with the country and its state/region
-       beneath it; the city and the full record stay a click away. */
+    /* A known country is a two-line label: country, then its state/region. The
+       flag image was too heavy for a dense table, so the text carries it; the
+       city and the full record stay a click away. */
     .ipgeo.has-flag {
-        flex-direction: column; align-items: flex-start; gap: .1rem;
-        padding: .18rem .34rem; line-height: 1.15;
+        flex-direction: column; align-items: flex-start;
+        padding: .3rem .42rem; line-height: 1.2;
         white-space: normal; text-align: left; vertical-align: middle;
     }
-    .ipgeo.has-flag .ipgeo-flag-img { width: 14px; height: 10px; border-radius: 2px; }
-    .ipgeo.has-flag .ipgeo-flag { font-size: .68rem; }
-    .ipgeo-text { display: flex; flex-direction: column; gap: .02rem; min-width: 0; }
+    .ipgeo-text { display: flex; flex-direction: column; gap: .28rem; min-width: 0; }
     .ipgeo-country, .ipgeo-region {
         max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .ipgeo-country { font-size: .6rem; font-weight: 650; letter-spacing: .01em; line-height: 1.25; }
-    .ipgeo-region { font-size: .55rem; line-height: 1.25; opacity: .75; }
+    .ipgeo-region { font-size: .55rem; line-height: 1.25; opacity: .7; }
     html[data-theme="light"] .ipgeo.is-known { background: rgba(5,150,105,.1); border-color: rgba(5,150,105,.3); color: #065f46; }
     html[data-theme="light"] .ipgeo-region { opacity: .85; }
     .ipgeo-flag-code { font-size: .58rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4; }
@@ -1431,8 +1430,8 @@ function ipGeoPaint(ip, data) {
                 : (data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>'
                     : '<span class="ipgeo-flag-code">' + ipGeoEscape(String(data.country || '?').slice(0, 2).toUpperCase()) + '</span>');
             var state = data.region || data.city || '';
-            btn.innerHTML = '<span class="ipgeo-flagwrap">' + flag + '</span>' +
-                '<span class="ipgeo-text"><span class="ipgeo-country">' + ipGeoEscape(data.country) + '</span>' +
+            btn.innerHTML = '<span class="ipgeo-text"><span class="ipgeo-country">' +
+                ipGeoEscape(data.country) + '</span>' +
                 (state ? '<span class="ipgeo-region">' + ipGeoEscape(state) + '</span>' : '') + '</span>';
             btn.title = data.country + (data.city || data.region ? ' - ' + [data.city, data.region].filter(Boolean).join(', ') : '') +
                 ' (click for the full ipwho.is record)';
