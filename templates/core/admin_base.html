@@ -953,6 +953,118 @@ document.addEventListener('keydown', function (event) {
     if (modal) { modal.remove(); }
 });
 
+// Markup for an address plus its country chip, for rows that are built in JS.
+function ipGeoMarkup(ip) {
+    if (!ip) { return ''; }
+    return '<span class="ip-text">' + ipGeoEscape(ip) + '</span> ' +
+        '<button type="button" class="ipgeo" data-ip="' + ipGeoEscape(ip) + '" ' +
+        'onclick="event.stopPropagation();ipGeo(this)" ' +
+        'title="Country from ipwho.is - click for the full record">Lookup</button>';
+}
+
+// Fill in the country for every chip on the page. Order of preference: already
+// painted, the browser cache, the server cache (one request for the whole page),
+// and only then one ipwho.is request per still-unknown address, capped so a page
+// full of fresh visitors cannot hammer the API.
+(function () {
+    var CACHE_KEY = 'ipGeoCache.v1';
+    var MAX_LIVE_LOOKUPS = 8;
+    var cache = {};
+    var pending = {};
+    var timer = null;
+
+    try { cache = JSON.parse(window.localStorage.getItem(CACHE_KEY) || '{}') || {}; } catch (e) { cache = {}; }
+
+    function saveCache() {
+        try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (e) { /* private mode */ }
+    }
+
+    function paint(ip, info) {
+        if (!info || !info.country) { return; }
+        ipGeoPaint(ip, { ok: true, country: info.country, flag: info.flag, city: info.city, region: info.region });
+    }
+
+    function unknownIps() {
+        var seen = {};
+        var out = [];
+        document.querySelectorAll('.ipgeo[data-ip]').forEach(function (btn) {
+            var ip = btn.getAttribute('data-ip');
+            if (!ip || seen[ip] || btn.classList.contains('is-known') || pending[ip]) { return; }
+            seen[ip] = true;
+            out.push(ip);
+        });
+        return out;
+    }
+
+    function fill() {
+        var ips = unknownIps();
+        if (!ips.length) { return; }
+
+        var stillMissing = [];
+        ips.forEach(function (ip) {
+            if (cache[ip]) { paint(ip, cache[ip]); } else { stillMissing.push(ip); }
+        });
+        if (!stillMissing.length) { return; }
+
+        stillMissing.forEach(function (ip) { pending[ip] = true; });
+        fetch('/admin-dashboard/ip-geo/?ips=' + encodeURIComponent(stillMissing.join(',')), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (response) { return response.json(); }).then(function (data) {
+            var results = (data && data.results) || {};
+            var rest = [];
+            stillMissing.forEach(function (ip) {
+                delete pending[ip];
+                if (results[ip]) {
+                    cache[ip] = results[ip];
+                    paint(ip, results[ip]);
+                } else {
+                    rest.push(ip);
+                }
+            });
+            saveCache();
+            rest.slice(0, MAX_LIVE_LOOKUPS).reduce(function (chain, ip) {
+                return chain.then(function () {
+                    pending[ip] = true;
+                    return ipGeoFetch(ip, false).then(function (fresh) {
+                        delete pending[ip];
+                        if (fresh && fresh.ok) {
+                            cache[ip] = { country: fresh.country, flag: fresh.flag, city: fresh.city, region: fresh.region };
+                            saveCache();
+                            paint(ip, cache[ip]);
+                        }
+                    }).catch(function () { delete pending[ip]; });
+                });
+            }, Promise.resolve());
+        }).catch(function () {
+            stillMissing.forEach(function (ip) { delete pending[ip]; });
+        });
+    }
+
+    window.ipGeoScan = function () {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(fill, 250);
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fill);
+    } else {
+        fill();
+    }
+
+    // Tables on the analytics pages are filled after an API call, so watch for
+    // new chips instead of hard-coding a scan into every render function.
+    try {
+        new MutationObserver(function (mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                if (mutations[i].addedNodes && mutations[i].addedNodes.length) {
+                    window.ipGeoScan();
+                    return;
+                }
+            }
+        }).observe(document.body, { childList: true, subtree: true });
+    } catch (e) { /* old browser, chips stay on click-to-lookup */ }
+})();
+
 // Toast system
 function showToast(message, type) {
     type = type || 'info';

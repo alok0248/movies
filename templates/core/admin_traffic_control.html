@@ -230,7 +230,7 @@
         <div class="d-flex flex-wrap gap-1 mb-2">
             {% for ip in trusted_ips %}
             <span class="tc-chip on">
-                <span class="tc-mono"><a href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ ip }}" style="color:inherit;text-decoration:none;">{{ ip }} <i class="fas fa-external-link-alt"></i></a></span>
+                <span class="tc-mono"><span class="ip-text">{{ ip }}</span>{% include 'core/_ip_geo.html' with ip=ip %}</span>
                 <form method="post" action="{% url 'trusted_ip_action' %}" style="margin:0;display:inline;">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="remove">
@@ -272,7 +272,7 @@
                 <tbody>
                 {% for row in ip_rows %}
                 <tr>
-                    <td class="tc-mono {% if row.is_permanent %}text-danger{% endif %}"><a href="https://iplocation.io/ip/{{ row.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ row.ip }}" style="color:inherit;text-decoration:none;">{{ row.ip }} <i class="fas fa-external-link-alt"></i></a></td>
+                    <td class="tc-mono {% if row.is_permanent %}text-danger{% endif %}"><span class="ip-text">{{ row.ip }}</span>{% include 'core/_ip_geo.html' with ip=row.ip %}</td>
                     <td class="tc-sub">{{ row.reason|default:'—'|truncatechars:60 }}</td>
                     <td class="tc-sub">{{ row.blocked_at|date:'d M H:i' }}</td>
                     <td class="tc-sub">{{ row.blocked_by|default:'—' }}</td>
@@ -310,7 +310,7 @@
                 <tbody>
                 {% for row in probe_rows %}
                 <tr>
-                    <td class="tc-mono"><a href="https://iplocation.io/ip/{{ row.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ row.ip }}" style="color:inherit;text-decoration:none;">{{ row.ip }} <i class="fas fa-external-link-alt"></i></a></td>
+                    <td class="tc-mono"><span class="ip-text">{{ row.ip }}</span>{% include 'core/_ip_geo.html' with ip=row.ip %}</td>
                     <td><span class="tc-chip">{{ row.not_found }}</span></td>
                     <td class="tc-sub">{{ row.requests }}</td>
                     <td class="tc-sub">{{ row.last_seen|date:'d M H:i' }}</td>

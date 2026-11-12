@@ -292,7 +292,7 @@
                                     {% if s.source == 'web' %}🌐 Web{% elif s.source == 'android' %}🤖 Android{% else %}📱 {{ s.source }}{% endif %}
                                 </span>
                             </td>
-                            <td class="text-secondary" style="font-size:.78rem;">{% if s.ip_address %}<a href="https://iplocation.io/ip/{{ s.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ s.ip_address }}" style="color:inherit;text-decoration:none;">{{ s.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
+                            <td class="text-secondary" style="font-size:.78rem;">{% if s.ip_address %}<span class="ip-text">{{ s.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=s.ip_address %}{% else %}—{% endif %}</td>
                             <td><span class="session-dot {% if s.is_active %}active{% else %}inactive{% endif %}"></span></td>
                         </tr>
                         {% empty %}

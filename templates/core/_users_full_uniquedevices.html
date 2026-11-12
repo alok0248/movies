@@ -87,7 +87,7 @@
                         {% if r.screen %}<div class="sub mt-1">{{ r.screen|truncatechars:20 }}</div>{% endif %}
                     </td>
                     <td class="mono sub">
-                        {% if r.ip %}<a href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}" style="color:inherit;text-decoration:none;">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}-{% endif %}
+                        {% if r.ip %}<span class="ip-text">{{ r.ip }}</span> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}-{% endif %}
                     </td>
                     <td>
                         {% if r.profile_pk %}

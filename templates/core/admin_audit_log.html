@@ -80,7 +80,7 @@
                     <td><span class="al-action">{{ row|audit_label }}</span></td>
                     <td class="al-mono">{{ row.target|default:'—' }}</td>
                     <td class="al-sub">{{ row.detail|default:'—'|truncatechars:110 }}</td>
-                    <td class="al-mono al-sub">{% if row.ip_address %}<a href="https://iplocation.io/ip/{{ row.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ row.ip_address }}" style="color:inherit;text-decoration:none;">{{ row.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
+                    <td class="al-mono al-sub">{% if row.ip_address %}<span class="ip-text">{{ row.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=row.ip_address %}{% else %}—{% endif %}</td>
                 </tr>
                 {% endfor %}
                 </tbody>

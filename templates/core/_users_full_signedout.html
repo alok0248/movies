@@ -49,7 +49,7 @@
                             <span class="pill bg-secondary">Offline</span>
                         {% endif %}
                         <div class="sub mt-1">
-                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono"><a href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}" style="color:inherit;text-decoration:none;">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a></code> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}IP not reported{% endif %}
+                            {% if r.ip %}<i class="fas fa-network-wired me-1"></i><code class="mono"><span class="ip-text">{{ r.ip }}</span></code> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}IP not reported{% endif %}
                         </div>
                     </td>
                     <td>

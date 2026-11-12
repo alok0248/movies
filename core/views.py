@@ -17244,6 +17244,31 @@ def _admin_int(value, default=0, low=0, high=1000000):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def admin_ip_geo_batch(request):
+    """Cached countries for every address on the page, in one query.
+
+    The admin pages call this on load and only fall back to a live ipwho.is
+    lookup for addresses that are not cached yet.
+    """
+    from . import geoip
+
+    raw = request.GET.get('ips', '')
+    ips = [ip.strip() for ip in raw.split(',') if ip.strip()][:80]
+    results = {}
+    for ip, row in geoip.cached_rows(ips).items():
+        info = geoip.row_summary(row)
+        if info and info.get('ok'):
+            results[ip] = {
+                'country': info.get('country', ''),
+                'flag': info.get('flag', ''),
+                'city': info.get('city', ''),
+                'region': info.get('region', ''),
+            }
+    return JsonResponse({'results': results})
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_ip_geo(request, ip):
     """Cached ipwho.is lookup for one address; powers the Location column."""
     from . import geoip

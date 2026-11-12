@@ -268,7 +268,7 @@
                         {% else %}<span class="bh-zero">nothing yet</span>{% endif %}
                     </td>
                     <td>
-                        {% if r.ip_total %}<div class="bh-num-cell">{{ r.ip_total }}</div><div class="bh-sub bh-mono">{% for ip in r.top_ips %}<a href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ ip }}" style="color:inherit;text-decoration:none;">{{ ip }} <i class="fas fa-external-link-alt"></i></a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% else %}<span class="bh-zero">—</span>{% endif %}
+                        {% if r.ip_total %}<div class="bh-num-cell">{{ r.ip_total }}</div><div class="bh-sub bh-mono">{% for ip in r.top_ips %}<span class="ip-text">{{ ip }}</span>{% include 'core/_ip_geo.html' with ip=ip %}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% else %}<span class="bh-zero">—</span>{% endif %}
                     </td>
                     <td style="white-space:normal;max-width:320px;">
                         {% if r.top_paths %}

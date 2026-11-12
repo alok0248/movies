@@ -1,0 +1,1 @@
+{% if ip %}<button type="button" class="ipgeo{% if country %} is-known{% endif %}" data-ip="{{ ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">{% if country %}{% if flag %}<span class="ipgeo-flag">{{ flag }}</span>{% endif %}{{ country }}{% else %}Lookup{% endif %}</button>{% endif %}

@@ -45,6 +45,7 @@ urlpatterns = [
     path('admin-dashboard/requests/', views.admin_requests, name='request_log'),
     # Block/unblock one IP (POST) — used by the Requests & Users and Blocked IPs pages.
     path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
+    path('admin-dashboard/ip-geo/', views.admin_ip_geo_batch, name='admin_ip_geo_batch'),
     path('admin-dashboard/ip-geo/<str:ip>/', views.admin_ip_geo, name='admin_ip_geo'),
     # Trust / untrust one IP (POST) — the never-block allow-list on Traffic Control.
     path('admin-dashboard/traffic-control/trusted-ip/', views.trusted_ip_action, name='trusted_ip_action'),

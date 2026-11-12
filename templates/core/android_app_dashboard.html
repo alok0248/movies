@@ -352,7 +352,7 @@
                                     <td>
                                         <span class="badge bg-danger">{{ attempt.get_failure_reason_display }}</span>
                                     </td>
-                                    <td class="">{% if attempt.ip_address %}<a href="https://iplocation.io/ip/{{ attempt.ip_address|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ attempt.ip_address }}" style="color:inherit;text-decoration:none;">{{ attempt.ip_address }} <i class="fas fa-external-link-alt"></i></a>{% else %}-{% endif %}</td>
+                                    <td class="">{% if attempt.ip_address %}<span class="ip-text">{{ attempt.ip_address }}</span>{% include 'core/_ip_geo.html' with ip=attempt.ip_address %}{% else %}-{% endif %}</td>
                                     <td>{{ attempt.request_identity|default:'-' }}</td>
                                     <td>{{ attempt.build_identifier|default:'-' }}</td>
                                 </tr>
@@ -685,7 +685,7 @@ function updateDashboard(data) {
             <tr>
                 <td data-datetime="${attempt.attempted_at}">${formatDateTimeForDisplay(attempt.attempted_at)}</td>
                 <td><span class="badge bg-danger">${attempt.failure_reason_display}</span></td>
-                <td>${attempt.ip_address ? '<a href="https://iplocation.io/ip/' + encodeURIComponent(attempt.ip_address) + '" target="_blank" rel="noopener noreferrer">' + attempt.ip_address + ' <i class="fas fa-external-link-alt"></i></a>' : '—'}</td>
+                <td>${attempt.ip_address ? ipGeoMarkup(attempt.ip_address) : '—'}</td>
                 <td>${attempt.request_identity || '-'}</td>
                 <td>${attempt.build_identifier || '-'}</td>
             </tr>

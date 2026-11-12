@@ -236,7 +236,7 @@
                 <td class="ud-sub" title="{{ r.last_seen|date:'Y-m-d H:i:s' }}">{% if r.last_seen %}{{ r.last_seen|timesince }} ago{% else %}—{% endif %}</td>
                 <td>{{ r.views }}{% if r.total_time %}<div class="ud-sub">{{ r.total_time }}s</div>{% endif %}</td>
                 <td>
-                    {% if r.ip %}<a class="ud-infolink ud-mono" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}—{% endif %}
+                    {% if r.ip %}<span class="ip-text">{{ r.ip }}</span> <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}—{% endif %}
                     {% if r.ip in blocked_ips %}<button type="button" class="ud-blockbtn on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')"><i class="fas fa-lock"></i>Blocked</button>{% elif r.ip %}<button type="button" class="ud-blockbtn" onclick="rqBlockIP('{{ r.ip|escapejs }}')"><i class="fas fa-ban"></i>Block</button>{% endif %}
                     <div class="ud-sub">{{ r.ip_count }} IP{{ r.ip_count|pluralize }} · {{ r.device_count }} device{{ r.device_count|pluralize }}</div>
                 </td>
@@ -265,7 +265,7 @@
                         <div class="col-md-4">
                             <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:.3rem;">IPs ({{ r.ip_count }})</div>
                             {% for ip in r.ips %}
-                                <span class="ud-pill"><a class="ud-infolink ud-mono" href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer">{{ ip }}</a>{% if ip in blocked_ips %} <i class="fas fa-lock" style="color:#34d399;"></i>{% endif %}</span>
+                                <span class="ud-pill"><span class="ip-text">{{ ip }}</span>{% if ip in blocked_ips %} <i class="fas fa-lock" style="color:#34d399;"></i>{% endif %}</span>
                             {% empty %}<span class="ud-sub">No IPs on record.</span>{% endfor %}
                             <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:.6rem 0 .3rem;">Device signatures ({{ r.device_sigs|length }})</div>
                             {% for d in r.device_sigs %}<span class="ud-pill">{{ d }}</span>
@@ -308,7 +308,7 @@
                             <div class="ud-devbox">
                                 <div class="ud-mono" style="font-size:.7rem;">{{ d.device_id }}</div>
                                 <div class="ud-sub">{{ d.device_model|default:"Unknown model" }}{% if d.os_version %} · OS {{ d.os_version }}{% endif %} · {{ d.visits }} visit{{ d.visits|pluralize }}</div>
-                                <div class="ud-sub">First {{ d.first_seen|date:"Y-m-d"|default:"—" }} · Last {{ d.last_seen|date:"Y-m-d"|default:"—" }}{% if d.ip %} · <a href="https://iplocation.io/ip/{{ d.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ d.ip }}" style="color:inherit;text-decoration:none;">{{ d.ip }} <i class="fas fa-external-link-alt"></i></a>{% endif %}</div>
+                                <div class="ud-sub">First {{ d.first_seen|date:"Y-m-d"|default:"—" }} · Last {{ d.last_seen|date:"Y-m-d"|default:"—" }}{% if d.ip %} · <span class="ip-text">{{ d.ip }}</span>{% endif %}</div>
                             </div>
                             {% endfor %}
                             {% endif %}

@@ -1,7 +1,7 @@
 <div class="adw-section">
     <div class="adw-section-title">Address</div>
     <dl class="adw-kv">
-        <dt>IP</dt><dd class="adw-mono"><a href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ ip }}" style="color:inherit;text-decoration:none;">{{ ip }} <i class="fas fa-external-link-alt"></i></a></dd>
+        <dt>IP</dt><dd class="adw-mono"><span class="ip-text">{{ ip }}</span>{% include 'core/_ip_geo.html' with ip=ip %}</dd>
         <dt>Status</dt><dd>{% if row.is_active %}<span class="adw-chip on">Blocked</span>{% else %}<span class="adw-chip">Unblocked</span>{% endif %}{% if row.is_permanent %} <span class="adw-chip on">permanent</span>{% endif %}</dd>
         <dt>Blocked at</dt><dd>{{ row.blocked_at|date:"Y-m-d H:i:s" }}</dd>
         <dt>Blocked by</dt><dd>{{ row.blocked_by|default:"—" }}</dd>
@@ -35,6 +35,6 @@
         <input type="hidden" name="next" value="{% url 'blocked_ips' %}">
         <button type="submit" class="adw-btn {% if row.is_active %}primary{% else %}danger{% endif %}">{% if row.is_active %}Lift block{% else %}Block again{% endif %}</button>
     </form>
-    <a class="adw-btn" href="https://iplocation.io/ip/{{ ip|urlencode }}" target="_blank" rel="noopener">Look up</a>
+    {% include 'core/_ip_geo.html' with ip=ip %}
     <a class="adw-btn" href="{% url 'blocked_ips' %}?q={{ ip|urlencode }}">Back to list</a>
 </div>

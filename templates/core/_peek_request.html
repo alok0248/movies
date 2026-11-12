@@ -7,7 +7,7 @@
         <dt>Category</dt><dd>{{ rec.get_category_display }}</dd>
         <dt>Path</dt><dd class="adw-mono">{{ rec.path }}</dd>
         {% if rec.query %}<dt>Query</dt><dd class="adw-mono">{{ rec.query }}</dd>{% endif %}
-        <dt>Client</dt><dd>{% if rec.client_ip %}<a href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }}" style="color:inherit;text-decoration:none;">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a> <button type="button" class="ipgeo" data-ip="{{ rec.client_ip }}" onclick="ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}—{% endif %}</dd>
+        <dt>Client</dt><dd>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span> <button type="button" class="ipgeo" data-ip="{{ rec.client_ip }}" onclick="ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}—{% endif %}</dd>
         {% if rec.username %}<dt>User</dt><dd>{{ rec.username }}</dd>{% endif %}
         <dt>View</dt><dd class="adw-mono">{{ rec.view_name|default:"—" }}</dd>
         <dt>Duration</dt><dd>{{ rec.duration_ms }} ms</dd>

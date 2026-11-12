@@ -242,7 +242,7 @@
                 {% for r in rows %}
                 <tr class="{% if not r.is_active %}bi-off{% endif %}" data-drawer="{% url 'blocked_ip_peek' r.ip %}" data-drawer-title="Address {{ r.ip }}" style="cursor:pointer">
                     <td class="bi-ip">
-                        <a class="bi-infolink" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>
+                        <span class="ip-text">{{ r.ip }}</span>
                         <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>
                         {% if r.total %}<div class="bi-sub">{{ r.total }} request{{ r.total|pluralize }} recorded</div>{% endif %}
                     </td>
