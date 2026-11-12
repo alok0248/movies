@@ -1,3 +1,4 @@
+{% load ip_geo %}
 {# Request Log panel — embedded by core/admin_requests.html (Requests & Users page). #}
 <style>
     .rl-card {
@@ -410,7 +411,7 @@
                         <th class="rl-sortable" onclick="rlSort('path')" title="Sort by Path">Path<span class="rl-arrow">{% if filters.sort == 'path' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
                         <th class="rl-sortable" onclick="rlSort('query')" title="Sort by Query">Query<span class="rl-arrow">{% if filters.sort == 'query' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
                         <th class="rl-sortable" onclick="rlSort('client_ip')" title="Sort by Client IP">Client IP<span class="rl-arrow">{% if filters.sort == 'client_ip' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
-                        <th title="Country from ipwho.is — click for the full record">Country</th>
+                        <th title="Country from ipwho.is — click for the full record" style="min-width:92px;">Country</th>
                         <th class="rl-sortable" onclick="rlSort('username')" title="Sort by Username">Username<span class="rl-arrow">{% if filters.sort == 'username' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
                         <th class="rl-sortable" onclick="rlSort('duration_ms')" title="Sort by Duration">Duration (ms)<span class="rl-arrow">{% if filters.sort == 'duration_ms' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
                         <th class="rl-sortable" onclick="rlSort('response_size')" title="Sort by Size">Size (B)<span class="rl-arrow">{% if filters.sort == 'response_size' %}{% if filters.direction == 'desc' %}▼{% else %}▲{% endif %}{% endif %}</span></th>
@@ -429,7 +430,7 @@
                         <th><select name="path" onchange="this.form.submit()"><option value="">All</option>{% for v in options.path %}<option value="{{ v }}" {% if filters.path == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
                         <th><select name="query" onchange="this.form.submit()"><option value="">All</option>{% for v in options.query %}<option value="{{ v }}" {% if filters.query == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
                         <th><select name="client_ip" onchange="this.form.submit()"><option value="">All</option>{% for v in options.client_ip %}<option value="{{ v }}" {% if filters.client_ip == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></th>
-                        <th></th>
+                        <th style="min-width:92px;"></th>
                         <th><select name="username" onchange="this.form.submit()"><option value="">All</option><option value="__none__" {% if filters.username == '__none__' %}selected{% endif %}>(no user)</option>{% for v in options.username %}<option value="{{ v }}" {% if filters.username == v %}selected{% endif %}>{{ v|truncatechars:70 }}</option>{% endfor %}</select></th>
                         <th><input type="number" name="min_duration" value="{{ filters.min_duration }}" placeholder="min"></th>
                         <th><input type="number" name="min_size" value="{{ filters.min_size }}" placeholder="min"></th>
@@ -451,7 +452,7 @@
                     <td class="rl-mono rl-trunc" title="{{ rec.path }}">{% if rec.path %}<a class="rl-pathlink" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td class="rl-mono rl-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
                     <td class="rl-mono">{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="rl-blockbtn on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="rl-blockbtn" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}</td>
-                    <td>{% if rec.client_ip %}<button type="button" class="ipgeo{% if rec.geo_country %} is-known{% endif %}" data-ip="{{ rec.client_ip }}" onclick="ipGeo(this)" title="{% if rec.geo_country %}{{ rec.client_ip }} — click for the full ipwho.is record{% else %}Look up {{ rec.client_ip }} on ipwho.is{% endif %}">{% if rec.geo_country %}{% if rec.geo_flag %}<span class="ipgeo-flag">{{ rec.geo_flag }}</span>{% endif %}{{ rec.geo_country }}{% else %}Lookup{% endif %}</button>{% else %}—{% endif %}</td>
+                    <td>{% if rec.client_ip %}{% ip_geo_chip rec.client_ip %}{% else %}—{% endif %}</td>
                     <td>{{ rec.username|default:"" }}</td>
                     <td class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }}</td>
                     <td>{{ rec.response_size }}</td>
@@ -532,7 +533,7 @@
         </div>
         <div class="rl-meta">
             <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="rl-blockbtn on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="rl-blockbtn" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
-            {% if rec.client_ip %}<span class="ms-3"><i class="fas fa-location-dot"></i><button type="button" class="ipgeo{% if rec.geo_country %} is-known{% endif %}" data-ip="{{ rec.client_ip }}" onclick="ipGeo(this)" title="{% if rec.geo_country %}{{ rec.client_ip }} — click for the full ipwho.is record{% else %}Look up {{ rec.client_ip }} on ipwho.is{% endif %}">{% if rec.geo_country %}{% if rec.geo_flag %}<span class="ipgeo-flag">{{ rec.geo_flag }}</span>{% endif %}{{ rec.geo_country }}{% else %}Lookup{% endif %}</button></span>{% endif %}
+            {% if rec.client_ip %}<span class="ms-3"><i class="fas fa-location-dot"></i>{% ip_geo_chip rec.client_ip %}</span>{% endif %}
             <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
             {% if rec.response_size %}<span class="ms-3"><i class="fas fa-download"></i>{{ rec.response_size }} B</span>{% endif %}
             {% if rec.time_on_page_ms %}<span class="ms-3"><i class="fas fa-hourglass-half"></i>{{ rec.time_on_page_ms }} ms on page</span>{% endif %}

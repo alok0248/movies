@@ -62,6 +62,13 @@
     .ipgeo.is-loading { opacity: .6; cursor: progress; }
     .ipgeo.is-failed { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.3); color: #fca5a5; }
     .ipgeo-flag { font-size: .85rem; line-height: 1; }
+    /* Flag image instead of the emoji: Windows renders flag emoji as two letters
+       ("KE"), which read like a duplicated country code. */
+    .ipgeo-flag-img {
+        width: 15px; height: 11px; object-fit: cover;
+        border-radius: 2px; box-shadow: 0 0 0 1px rgba(148,163,184,.25);
+        flex: none;
+    }
     .ipgeo-modal {
         position: fixed; inset: 0; z-index: 3000; display: flex;
         align-items: center; justify-content: center; padding: 1.5rem;
@@ -985,8 +992,10 @@ function ipGeoPaint(ip, data) {
         btn.classList.remove('is-loading', 'is-failed');
         if (data && data.ok) {
             btn.classList.add('is-known');
-            btn.innerHTML = (data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '') +
-                ipGeoEscape(data.country || 'Unknown');
+            var flag = data.flag_img
+                ? '<img class="ipgeo-flag-img" src="' + ipGeoEscape(data.flag_img) + '" alt="" referrerpolicy="no-referrer">'
+                : (data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '');
+            btn.innerHTML = flag + ipGeoEscape(data.country || 'Unknown');
             btn.title = ip + ' - ' + [data.city, data.region, data.country].filter(Boolean).join(', ') +
                 ' (click for the full ipwho.is record)';
         } else {

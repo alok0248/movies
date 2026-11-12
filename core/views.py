@@ -17346,6 +17346,7 @@ def admin_ip_geo_batch(request):
             results[ip] = {
                 'country': info.get('country', ''),
                 'flag': info.get('flag', ''),
+                'flag_img': info.get('flag_img', ''),
                 'city': info.get('city', ''),
                 'region': info.get('region', ''),
             }

@@ -34,6 +34,7 @@ def summarize(data):
         'country': _text(data.get('country')),
         'country_code': _text(data.get('country_code')),
         'flag': _text(flag.get('emoji')),
+        'flag_img': _text(flag.get('img')),
         'continent': _text(data.get('continent')),
         'region': _text(data.get('region')),
         'city': _text(data.get('city')),

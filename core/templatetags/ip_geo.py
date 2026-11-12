@@ -29,21 +29,24 @@ def _memo():
 
 
 def _flag_from(payload):
+    """(emoji, image url) for the flag block of a stored ipwho.is payload."""
     if not payload:
-        return ''
+        return '', ''
     try:
         data = json.loads(payload)
     except (TypeError, ValueError):
-        return ''
+        return '', ''
     flag = data.get('flag')
-    return (flag.get('emoji') or '') if isinstance(flag, dict) else ''
+    if not isinstance(flag, dict):
+        return '', ''
+    return flag.get('emoji') or '', flag.get('img') or ''
 
 
 @register.inclusion_tag('core/_ip_geo.html')
 def ip_geo_chip(ip):
     ip = (ip or '').strip()
     if not ip:
-        return {'ip': '', 'country': '', 'flag': ''}
+        return {'ip': '', 'country': '', 'flag': '', 'flag_img': ''}
 
     store = _memo()
     entry = store.get(ip)
@@ -51,10 +54,13 @@ def ip_geo_chip(ip):
         from ..models import IPLocation
 
         row = IPLocation.objects.filter(ip=ip).values('success', 'country', 'payload').first()
+        emoji, image = _flag_from(row['payload']) if row else ('', '')
         entry = {
             'country': (row['country'] or '') if row and row['success'] else '',
-            'flag': _flag_from(row['payload']) if row else '',
+            'flag': emoji,
+            'flag_img': image,
         }
         store[ip] = entry
 
-    return {'ip': ip, 'country': entry['country'], 'flag': entry['flag']}
+    return {'ip': ip, 'country': entry['country'], 'flag': entry['flag'],
+            'flag_img': entry['flag_img']}
