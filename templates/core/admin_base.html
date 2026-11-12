@@ -596,6 +596,9 @@
             <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
                 <i class="fas fa-network-wired"></i> Requests &amp; Users
             </a>
+            <a href="{% url 'device_activity' %}" class="sb-item {% if 'admin-dashboard/device-activity' in request.path %}active{% endif %}">
+                <i class="fas fa-mobile-screen-button"></i> Device Activity
+            </a>
             <a href="{% url 'admin_audit_log' %}" class="sb-item {% if 'admin-dashboard/audit-log' in request.path %}active{% endif %}">
                 <i class="fas fa-clipboard-list"></i> Audit Log
             </a>

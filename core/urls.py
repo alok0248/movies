@@ -5,6 +5,7 @@ from . import local_player
 from . import mbtv_views
 from . import notifications as notification_views
 from . import guest_access as guest_views
+from . import device_activity as activity_views
 from cineplayer import views as cineplayer_views
 
 handler404 = 'core.views.page_not_found_view'
@@ -127,6 +128,9 @@ urlpatterns = [
     path('admin-dashboard/android-apps/user-sync-reference/', views.android_user_sync_reference, name='android_user_sync_reference'),
     path('admin-dashboard/notifications/', notification_views.notifications_admin, name='notifications_admin'),
     path('admin-dashboard/notifications/<int:notification_id>/', notification_views.notification_detail, name='notification_detail'),
+    # Per-device online time: actual online/offline hours with graphs.
+    path('admin-dashboard/device-activity/', activity_views.device_activity, name='device_activity'),
+    path('admin-dashboard/device-activity/<str:device_id>/', activity_views.device_activity_detail, name='device_activity_detail'),
     # App inbox: messages + links for one user.
     path('api/notifications/', notification_views.api_notifications, name='api_notifications'),
     path('api/notifications', notification_views.api_notifications),

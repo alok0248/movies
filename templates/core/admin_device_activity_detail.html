@@ -1,0 +1,129 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Device {{ state.device_id }} - Activity{% endblock %}
+{% block admin_content %}
+<style>
+    .dd-card { background: var(--card-bg, #1a1a2e); border: 1px solid rgba(148,163,184,.18); border-radius: 12px; padding: 1rem 1.1rem; }
+    .dd-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; margin: 0; }
+    .dd-sub { font-size: .74rem; color: #94a3b8; }
+    .dd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .7rem; margin: .8rem 0; }
+    .dd-stat { background: rgba(15,23,42,.6); border: 1px solid rgba(148,163,184,.16); border-radius: 10px; padding: .55rem .7rem; }
+    .dd-stat b { display: block; font-size: 1.1rem; color: #e2e8f0; }
+    .dd-stat span { font-size: .68rem; color: #94a3b8; text-transform: uppercase; }
+    .dd-chart { display: flex; align-items: flex-end; gap: 4px; height: 170px; padding: .5rem 0 0; overflow-x: auto; }
+    .dd-col { flex: 1 0 14px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+    .dd-bars { display: flex; align-items: flex-end; gap: 2px; height: 140px; }
+    .dd-bar { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; }
+    .dd-on { background: linear-gradient(180deg,#34d399,#059669); }
+    .dd-off { background: rgba(148,163,184,.28); }
+    .dd-x { font-size: .58rem; color: #64748b; text-align: center; margin-top: 3px; white-space: nowrap; }
+    .dd-legend { display: flex; gap: 1rem; font-size: .7rem; color: #94a3b8; margin-top: .3rem; }
+    .dd-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: .3rem; }
+    .dd-table { width: 100%; font-size: .78rem; }
+    .dd-table th { font-size: .66rem; text-transform: uppercase; color: #94a3b8; text-align: left; padding: .4rem .5rem; border-bottom: 1px solid rgba(148,163,184,.2); }
+    .dd-table td { padding: .42rem .5rem; border-bottom: 1px solid rgba(148,163,184,.1); color: #cbd5e1; }
+    .dd-btn { font-size: .72rem; padding: .22rem .6rem; border-radius: 7px; text-decoration: none;
+        border: 1px solid rgba(148,163,184,.35); color: #cbd5e1; }
+    .dd-btn:hover { background: rgba(30,41,59,.95); color: #fff; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <a href="{% url 'device_activity' %}" class="dd-sub text-decoration-none"><i class="fas fa-arrow-left me-1"></i>All devices</a>
+    <a class="dd-btn" href="?export=csv"><i class="fas fa-file-csv me-1"></i>Download CSV</a>
+</div>
+
+<div class="dd-card">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2 class="dd-title">{{ state.device_id }}</h2>
+            <div class="dd-sub">
+                {{ state.email|default:"guest device" }} &middot;
+                {% if is_online %}<span style="color:#22c55e">online now</span>{% else %}last seen {{ state.last_seen_at|date:"d M Y H:i" }}{% endif %}
+                &middot; first seen {{ state.first_seen_at|date:"d M Y" }}
+            </div>
+        </div>
+    </div>
+
+    <div class="dd-grid">
+        <div class="dd-stat"><b>{{ today_total }}</b><span>online today</span></div>
+        <div class="dd-stat"><b>{{ today_offline }}</b><span>offline today</span></div>
+        <div class="dd-stat"><b>{{ weekly|length }}</b><span>weeks tracked</span></div>
+        <div class="dd-stat"><b>{% if heartbeat %}{{ heartbeat.app_version|default:"-" }}{% else %}-{% endif %}</b><span>app version</span></div>
+    </div>
+
+    {% if heartbeat %}
+    <div class="dd-sub mb-2">
+        Now:
+        {% if heartbeat.is_playing %}
+            <b style="color:#e2e8f0">{{ heartbeat.media_title|default:"Playing" }}</b>
+            {% if heartbeat.media_is_tv and heartbeat.season %} &middot; S{{ heartbeat.season }}E{{ heartbeat.episode }}{% endif %}
+            &middot; {{ heartbeat.player_engine|default:"player" }}
+        {% else %}
+            {{ heartbeat.current_screen|default:"idle" }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <h3 class="dd-title mt-3 mb-1" style="font-size:.86rem">Daily &mdash; last 30 days</h3>
+    <div class="dd-chart">
+        {% for item in daily %}
+        <div class="dd-col" title="{{ item.label }}: online {{ item.online_text }}, offline {{ item.offline_text }}">
+            <div class="dd-bars">
+                <div class="dd-bar dd-on" style="height:{% widthratio item.online daily_scale 100 %}%"></div>
+                <div class="dd-bar dd-off" style="height:{% widthratio item.offline daily_scale 100 %}%"></div>
+            </div>
+            <div class="dd-x">{{ item.label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="dd-legend"><span><i class="dd-key" style="background:#059669"></i>Online</span><span><i class="dd-key" style="background:rgba(148,163,184,.4)"></i>Offline</span></div>
+
+    <h3 class="dd-title mt-4 mb-1" style="font-size:.86rem">Weekly &mdash; last 12 weeks</h3>
+    <div class="dd-chart">
+        {% for item in weekly %}
+        <div class="dd-col" title="Week of {{ item.label }}: online {{ item.online_text }}, offline {{ item.offline_text }}">
+            <div class="dd-bars">
+                <div class="dd-bar dd-on" style="height:{% widthratio item.online weekly_scale 100 %}%"></div>
+                <div class="dd-bar dd-off" style="height:{% widthratio item.offline weekly_scale 100 %}%"></div>
+            </div>
+            <div class="dd-x">{{ item.label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3 class="dd-title mt-4 mb-1" style="font-size:.86rem">Monthly &mdash; last 12 months</h3>
+    <div class="dd-chart">
+        {% for item in monthly %}
+        <div class="dd-col" title="{{ item.label }}: online {{ item.online_text }}, offline {{ item.offline_text }}">
+            <div class="dd-bars">
+                <div class="dd-bar dd-on" style="height:{% widthratio item.online monthly_scale 100 %}%"></div>
+                <div class="dd-bar dd-off" style="height:{% widthratio item.offline monthly_scale 100 %}%"></div>
+            </div>
+            <div class="dd-x">{{ item.label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="dd-card mt-3">
+    <h3 class="dd-title mb-2" style="font-size:.86rem">Recent activity</h3>
+    {% if recent_activity %}
+    <div class="table-responsive">
+        <table class="dd-table">
+            <thead><tr><th>When</th><th>Screen</th><th>Title</th><th>Playing</th></tr></thead>
+            <tbody>
+                {% for row in recent_activity %}
+                <tr>
+                    <td>{{ row.created_at|date:"d M H:i" }}</td>
+                    <td>{{ row.screen }}</td>
+                    <td>{{ row.media_title|default:"-" }}{% if row.is_tv and row.season %} S{{ row.season }}E{{ row.episode }}{% endif %}</td>
+                    <td>{% if row.is_playing %}<span style="color:#22c55e">yes</span>{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="dd-sub">No activity recorded yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

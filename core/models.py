@@ -1698,6 +1698,51 @@ class HeartbeatActivity(models.Model):
         return f"{self.email}: {self.media_title or self.screen}"
 
 
+class DeviceOnlineState(models.Model):
+    """Last heartbeat of one device, used to measure how long it was online.
+
+    ``UserHeartbeat`` is one row per account, so two phones on one account merge
+    their presence there. This keeps a row per device instead, which is what the
+    online/offline report and its graphs are built from.
+    """
+    device_id = models.CharField(max_length=100, unique=True)
+    email = models.EmailField(blank=True, default='', db_index=True)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ['-last_seen_at']
+        verbose_name = 'Device online state'
+        verbose_name_plural = 'Device online states'
+
+    def __str__(self):
+        return self.device_id
+
+
+class DeviceOnlineDaily(models.Model):
+    """Online seconds per device per day, accumulated from heartbeats.
+
+    A heartbeat every 60 s adds the gap since the previous one (capped, so a
+    phone that was off for hours does not count as online). Offline time for the
+    day is the rest of the day, computed when the report is rendered.
+    """
+    device_id = models.CharField(max_length=100, db_index=True)
+    email = models.EmailField(blank=True, default='', db_index=True)
+    day = models.DateField(db_index=True)
+    online_seconds = models.PositiveIntegerField(default=0)
+    heartbeat_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-day']
+        unique_together = ('device_id', 'day')
+        verbose_name = 'Device daily online time'
+        verbose_name_plural = 'Device daily online time'
+        indexes = [models.Index(fields=['day', 'device_id'])]
+
+    def __str__(self):
+        return f"{self.device_id} {self.day} {self.online_seconds}s"
+
+
 class EmailVerification(models.Model):
     """Email verification token + 6-digit OTP for registration.
 

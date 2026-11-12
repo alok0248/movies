@@ -11316,6 +11316,10 @@ def api_user_heartbeat(request):
     _link_installs_for_heartbeat(hb)
     _remember_account_device(hb)
 
+    # Accumulate per-device online time for the device activity report.
+    from .device_activity import record_device_heartbeat
+    record_device_heartbeat(email, hb.device_id)
+
     prof = _get_synced_profile(email)
     return JsonResponse({
         'status': 'success',
