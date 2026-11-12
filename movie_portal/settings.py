@@ -20,8 +20,13 @@ from db_config import get_db_config
 # Environment (default to 'dev' if not set)
 ENV = os.environ.get('DJANGO_ENV', 'dev')
 
-# Load credentials from JSON file or environment variables
-creds_path = BASE_DIR / 'cred' / 'credentials.json'
+# Load credentials from JSON file or environment variables.
+# The shared cred\ folder lives next to the project (../cred/website/); the
+# in-project copy is kept as a fallback for a standalone checkout.
+CRED_DIR = BASE_DIR.parent / 'cred'
+creds_path = CRED_DIR / 'website' / 'credentials.json'
+if not creds_path.exists():
+    creds_path = BASE_DIR / 'cred' / 'credentials.json'
 TMDB_API_KEY = os.environ.get('TMDB_API_KEY', None)
 CODESPECTERS_API_KEY = os.environ.get('CODESPECTERS_API_KEY', 'YOUR_CODESPECTERS_API_KEY_HERE')
 if creds_path.exists():
