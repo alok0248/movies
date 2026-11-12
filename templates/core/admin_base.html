@@ -90,6 +90,15 @@
     }
     .ipgeo-card-title { font-size: .9rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .5rem; }
     .ipgeo-card-body { overflow: auto; padding: .9rem 1rem 1.1rem; }
+    /* ipwho.is gives an approximate point, so the map opens zoomed out enough to
+       read the city rather than claiming an address. */
+    .ipgeo-map { margin-bottom: .9rem; border: 1px solid rgba(148,163,184,.2); border-radius: 10px; overflow: hidden; background: rgba(2,6,23,.6); }
+    .ipgeo-map-canvas { height: 190px; width: 100%; background: #0b1220; }
+    .ipgeo-map-note { display: flex; justify-content: space-between; gap: .6rem; padding: .3rem .55rem; font-size: .64rem; color: #94a3b8; }
+    .ipgeo-map-note a { color: #93c5fd; text-decoration: none; }
+    .ipgeo-map-note a:hover { text-decoration: underline; }
+    .ipgeo-map .leaflet-container { background: #0b1220; font: inherit; }
+    .ipgeo-map .leaflet-control-attribution { font-size: .58rem; }
     .ipgeo-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; margin-bottom: .9rem; }
     .ipgeo-fact { background: rgba(148,163,184,.07); border: 1px solid rgba(148,163,184,.12); border-radius: 8px; padding: .4rem .55rem; }
     .ipgeo-fact span { display: block; font-size: .6rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
@@ -1061,6 +1070,19 @@ function ipGeoOpen(ip, data) {
     var saved = (data && data.fetched_at) ? '<span style="font-size:.68rem;color:#64748b">saved ' +
         ipGeoEscape(data.fetched_at) + (data.cached ? ' (cached)' : '') + '</span>' : '';
 
+    // OpenStreetMap (via Leaflet) pinned on the coordinates ipwho.is reported.
+    var lat = parseFloat(data && data.latitude);
+    var lon = parseFloat(data && data.longitude);
+    var hasPoint = !isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    var map = '';
+    if (hasPoint) {
+        map = '<div class="ipgeo-map"><div class="ipgeo-map-canvas" id="ipGeoMap"></div>' +
+            '<div class="ipgeo-map-note"><span>' + lat.toFixed(4) + ', ' + lon.toFixed(4) +
+            ' &middot; approximate</span><a href="https://www.openstreetmap.org/?mlat=' + lat.toFixed(4) +
+            '&mlon=' + lon.toFixed(4) + '#map=12/' + lat.toFixed(4) + '/' + lon.toFixed(4) +
+            '" target="_blank" rel="noopener">Open on OpenStreetMap</a></div></div>';
+    }
+
     var wrap = document.createElement('div');
     wrap.id = 'ipGeoModal';
     wrap.className = 'ipgeo-modal';
@@ -1069,7 +1091,7 @@ function ipGeoOpen(ip, data) {
         (data && data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '') +
         ipGeoEscape(ip) + (data && data.country ? ' &middot; ' + ipGeoEscape(data.country) : '') +
         '</div><button type="button" class="ipgeo-btn" data-ipgeo-close="1">Close</button></div>' +
-        '<div class="ipgeo-card-body">' + note +
+        '<div class="ipgeo-card-body">' + map + note +
         '<div class="ipgeo-facts">' + facts + '</div>' +
         '<div style="font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:.3rem">ipwho.is response</div>' +
         '<pre class="ipgeo-json"></pre>' +
@@ -1088,6 +1110,54 @@ function ipGeoOpen(ip, data) {
         }).catch(function () { wrap.remove(); });
     });
     document.body.appendChild(wrap);
+
+    if (hasPoint) {
+        ipGeoPlot(lat, lon, wrap.querySelector('#ipGeoMap'));
+    }
+}
+
+// Leaflet is served from static/vendor and loaded the first time an admin opens
+// an address, so pages that never show a map do not pay for it.
+var _leafletLoading = null;
+function ipGeoLoadLeaflet() {
+    if (window.L) { return Promise.resolve(); }
+    if (_leafletLoading) { return _leafletLoading; }
+    _leafletLoading = new Promise(function (resolve, reject) {
+        var css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = "{% static 'vendor/leaflet/leaflet.css' %}";
+        document.head.appendChild(css);
+        var script = document.createElement('script');
+        script.src = "{% static 'vendor/leaflet/leaflet.js' %}";
+        script.onload = function () { resolve(); };
+        script.onerror = function () { _leafletLoading = null; reject(new Error('leaflet')); };
+        document.head.appendChild(script);
+    });
+    return _leafletLoading;
+}
+
+function ipGeoPlot(lat, lon, el) {
+    ipGeoLoadLeaflet().then(function () {
+        if (!el || !el.isConnected || !window.L) { return; }
+        if (window._ipGeoMap) {
+            try { window._ipGeoMap.remove(); } catch (e) { /* already gone */ }
+            window._ipGeoMap = null;
+        }
+        var map = window._ipGeoMap = L.map(el, { scrollWheelZoom: false, worldCopyJump: true }).setView([lat, lon], 11);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        L.circleMarker([lat, lon], {
+            radius: 7, color: '#34d399', weight: 2, fillColor: '#34d399', fillOpacity: .45
+        }).addTo(map).bindPopup(ipGeoEscape([lat.toFixed(4), lon.toFixed(4)].join(', ')));
+        window.setTimeout(function () { map.invalidateSize(); }, 60);
+    }).catch(function () {
+        if (el) {
+            el.innerHTML = '<div style="padding:1.2rem;text-align:center;font-size:.72rem;color:#94a3b8">' +
+                'Map unavailable right now \u2014 the coordinates are shown below.</div>';
+        }
+    });
 }
 
 document.addEventListener('keydown', function (event) {
