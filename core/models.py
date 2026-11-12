@@ -3761,3 +3761,33 @@ class IPLocation(models.Model):
 
     def __str__(self):
         return '%s (%s)' % (self.ip, self.country or 'unknown')
+
+
+class DeviceIPHistory(models.Model):
+    """One row per (device, IP) pair seen in traffic.
+
+    A device that changes network keeps a row for each address, so the admin can
+    see every address a browser or phone has used and every device and address an
+    account has used. The country is joined from IPLocation, which is warmed by
+    core/ip_tracking.py as the traffic arrives.
+    """
+
+    device_id = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    ip = models.CharField(max_length=64, db_index=True)
+    user = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='device_ips')
+    username = models.CharField(max_length=150, blank=True, default='', db_index=True)
+    platform = models.CharField(max_length=12, blank=True, default='')
+    user_agent = models.CharField(max_length=400, blank=True, default='')
+    first_seen = models.DateTimeField(default=timezone.now, db_index=True)
+    last_seen = models.DateTimeField(default=timezone.now, db_index=True)
+    hits = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-last_seen']
+        unique_together = ('device_id', 'ip')
+        verbose_name = 'Device IP history'
+        verbose_name_plural = 'Device IP history'
+
+    def __str__(self):
+        return '%s @ %s' % (self.device_id or 'unknown device', self.ip)

@@ -530,10 +530,15 @@ class RequestLogMiddleware:
         start = time.monotonic()
         response = self.get_response(request)
         try:
-            from .request_log import record_request
+            from .request_log import record_request, should_record
             duration_ms = int((time.monotonic() - start) * 1000)
             record_request(request, getattr(response, 'status_code', 0), duration_ms,
                            response=response)
+            # Device <-> IP history, with the country lookup queued as traffic
+            # arrives so the admin pages never wait on ipwho.is.
+            if should_record(request):
+                from .ip_tracking import record as record_device_ip
+                record_device_ip(request, user=getattr(request, 'user', None))
         except Exception:
             pass
         return response

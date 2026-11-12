@@ -131,6 +131,7 @@ urlpatterns = [
     path('admin-dashboard/notifications/', notification_views.notifications_admin, name='notifications_admin'),
     path('admin-dashboard/notifications/<int:notification_id>/', notification_views.notification_detail, name='notification_detail'),
     # Per-device online time: actual online/offline hours with graphs.
+    path('admin-dashboard/devices/', views.devices_ips, name='devices_ips'),
     path('admin-dashboard/device-activity/', activity_views.device_activity, name='device_activity'),
     path('admin-dashboard/device-activity/<str:device_id>/', activity_views.device_activity_detail, name='device_activity_detail'),
     # App inbox: messages + links for one user.

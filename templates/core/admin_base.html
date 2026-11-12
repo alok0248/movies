@@ -34,6 +34,18 @@
     .sb-search input::placeholder { color: #64748b; }
     .sb-search input:focus { border-color: rgba(96,165,250,.55); background: rgba(148,163,184,.16); }
     .sb-empty { padding: .9rem .8rem; font-size: .75rem; color: #64748b; }
+    /* Collapsible groups keep the sidebar short: only the group you are in
+       (plus whatever you opened) shows its items. */
+    .sb-section-title {
+        display: flex; align-items: center; justify-content: space-between;
+        cursor: pointer; user-select: none;
+    }
+    .sb-section-title:hover { color: #cbd5e1; }
+    .sb-caret { font-size: .58rem; opacity: .55; transition: transform .18s ease; }
+    .sb-section.is-collapsed .sb-caret { transform: rotate(-90deg); }
+    .sb-section.is-collapsed .sb-item { display: none; }
+    .sb-section.is-collapsed { padding-bottom: .1rem; }
+    @media (prefers-reduced-motion: reduce) { .sb-caret { transition: none; } }
     html[data-theme="light"] .sb-search { background: rgba(255,255,255,.96); }
     html[data-theme="light"] .sb-search input { color: #1e293b; background: rgba(15,23,42,.06); }
     /* IP location (ipwho.is), shown beside every address in the admin tables. */
@@ -666,6 +678,9 @@
             <a href="{% url 'device_activity' %}" class="sb-item {% if 'admin-dashboard/device-activity' in request.path %}active{% endif %}">
                 <i class="fas fa-mobile-screen-button"></i> Device Activity
             </a>
+            <a href="{% url 'devices_ips' %}" class="sb-item {% if 'admin-dashboard/devices' in request.path %}active{% endif %}">
+                <i class="fas fa-phone-flip"></i> Devices &amp; IPs
+            </a>
             <a href="{% url 'traffic_control' %}" class="sb-item {% if 'admin-dashboard/traffic-control' in request.path %}active{% endif %}">
                 <i class="fas fa-shield-halved"></i> Traffic Control
                 {% if admin_badges.blocked %}<span class="sb-badge" title="{{ admin_badges.blocked }} address{{ admin_badges.blocked|pluralize }} blocked">{{ admin_badges.blocked }}</span>{% endif %}
@@ -824,6 +839,57 @@ function filterSidebar(query) {
     var empty = document.getElementById('sbEmpty');
     if (empty) { empty.hidden = shown !== 0; }
 }
+
+// Collapsible sidebar groups. The group holding the current page stays open and
+// every other group can be folded away, so the sidebar is a short, scannable
+// list instead of 35 links. Choices persist in localStorage.
+(function () {
+    var KEY = 'adminSidebarGroups.v1';
+    var saved = {};
+    try { saved = JSON.parse(window.localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+
+    function persist() {
+        try { window.localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) { /* private mode */ }
+    }
+
+    var sections = document.querySelectorAll('#adminSidebar .sb-section');
+    sections.forEach(function (section) {
+        var title = section.querySelector('.sb-section-title');
+        if (!title) { return; }
+        var name = (title.textContent || '').trim();
+        var caret = document.createElement('i');
+        caret.className = 'fas fa-chevron-down sb-caret';
+        title.appendChild(caret);
+
+        var hasActive = !!section.querySelector('.sb-item.active');
+        var collapsed = hasActive ? false : saved[name] === true;
+        section.classList.toggle('is-collapsed', collapsed);
+
+        title.addEventListener('click', function () {
+            var nowCollapsed = !section.classList.contains('is-collapsed');
+            section.classList.toggle('is-collapsed', nowCollapsed);
+            saved[name] = nowCollapsed;
+            persist();
+        });
+    });
+
+    // A filter match must be visible even if its group was folded.
+    var originalFilter = window.filterSidebar;
+    window.filterSidebar = function (query) {
+        var q = (query || '').trim();
+        if (q) {
+            sections.forEach(function (section) { section.classList.remove('is-collapsed'); });
+        }
+        originalFilter(query);
+        if (q) {
+            sections.forEach(function (section) {
+                if (!section.querySelector('.sb-item:not([style*="display: none"])')) {
+                    section.classList.add('is-collapsed');
+                }
+            });
+        }
+    };
+})();
 
 // Prefetch an admin page the moment the pointer reaches its link, so switching
 // tabs feels instant. Skipped for external links and repeated hovers.

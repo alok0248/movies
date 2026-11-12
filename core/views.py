@@ -17257,6 +17257,78 @@ def _admin_int(value, default=0, low=0, high=1000000):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def devices_ips(request):
+    """Devices and addresses: which account used which IP, from where.
+
+    One row per (device, IP) pair, so a phone that moves between networks keeps
+    every address it used, and an account with several phones and browsers shows
+    all of them together.
+    """
+    from . import geoip
+    from .models import DeviceIPHistory
+
+    search = (request.GET.get('q') or '').strip()
+    rows_qs = DeviceIPHistory.objects.all()
+    if search:
+        rows_qs = rows_qs.filter(
+            Q(ip__icontains=search) | Q(username__icontains=search) |
+            Q(device_id__icontains=search)
+        )
+    rows = list(rows_qs[:600])
+
+    geo = geoip.cached_rows({row.ip for row in rows})
+    for row in rows:
+        info = geoip.row_summary(geo.get(row.ip)) or {}
+        row.geo_country = info.get('country') or ''
+        row.geo_flag = info.get('flag') or ''
+
+    accounts = {}
+    for row in rows:
+        key = row.username or '(anonymous)'
+        item = accounts.get(key)
+        if item is None:
+            item = accounts[key] = {
+                'username': key, 'devices': set(), 'ips': set(), 'countries': set(),
+                'last_seen': row.last_seen, 'hits': 0, 'platforms': set(),
+            }
+        if row.device_id:
+            item['devices'].add(row.device_id)
+        item['ips'].add(row.ip)
+        if row.geo_country:
+            item['countries'].add(row.geo_country)
+        if row.platform:
+            item['platforms'].add(row.platform)
+        item['hits'] += row.hits
+        if row.last_seen > item['last_seen']:
+            item['last_seen'] = row.last_seen
+
+    account_rows = sorted(accounts.values(), key=lambda item: item['last_seen'], reverse=True)
+    for item in account_rows:
+        item['device_count'] = len(item['devices'])
+        item['ip_count'] = len(item['ips'])
+        item['country_list'] = ', '.join(sorted(item['countries'])) or '\u2014'
+        item['platform_list'] = ', '.join(sorted(item['platforms'])) or '\u2014'
+
+    summary = {
+        'devices': len({row.device_id for row in rows if row.device_id}),
+        'ips': len({row.ip for row in rows}),
+        'accounts': len(account_rows),
+        'multi_device': sum(1 for item in account_rows if item['device_count'] > 1),
+        'multi_ip': sum(1 for item in account_rows if item['ip_count'] > 1),
+        'unknown_country': len({row.ip for row in rows if not row.geo_country}),
+        'hits': sum(row.hits for row in rows),
+    }
+
+    return render(request, 'core/admin_devices_ips.html', {
+        'rows': rows,
+        'account_rows': account_rows,
+        'summary': summary,
+        'q': search,
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_ip_geo_batch(request):
     """Cached countries for every address on the page, in one query.
 
