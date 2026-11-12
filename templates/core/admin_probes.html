@@ -208,6 +208,7 @@
                 <tr>
                     <td class="pb-ip">
                         <a class="pb-infolink" href="https://iplocation.io/ip/{{ r.ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ r.ip }}">{{ r.ip }} <i class="fas fa-external-link-alt"></i></a>
+                        <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>
                         <div class="pb-sub"><a class="pb-infolink" href="{% url 'request_log' %}?view=table&amp;client_ip={{ r.ip|urlencode }}" title="Every request logged from this IP">all requests <i class="fas fa-external-link-alt"></i></a></div>
                     </td>
                     <td>

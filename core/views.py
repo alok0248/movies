@@ -10555,6 +10555,22 @@ def _request_log_tab(request):
 
     records = recent_requests(limit=500, **filters)
 
+    # Country codes for the addresses already looked up, in one query. Anything
+    # unknown stays a "Lookup" button, so a 500-row page never fans out to
+    # ipwho.is on its own.
+    from . import geoip
+    page_ips = {rec.client_ip for rec in records if rec.client_ip}
+    geo_map = {}
+    if page_ips:
+        for ip, row in geoip.cached_rows(page_ips).items():
+            info = geoip.row_summary(row)
+            if info and info.get('ok'):
+                geo_map[ip] = info
+    for rec in records:
+        info = geo_map.get(rec.client_ip) or {}
+        rec.geo_country = info.get('country') or ''
+        rec.geo_flag = info.get('flag') or ''
+
     # For the spreadsheet view, populate each column's filter dropdown with the
     # distinct values actually present in the log (from the unfiltered set, so
     # choosing one value never blanks out the other columns).
@@ -17224,6 +17240,16 @@ def _admin_int(value, default=0, low=0, high=1000000):
     except (TypeError, ValueError):
         return default
     return max(low, min(high, number))
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_ip_geo(request, ip):
+    """Cached ipwho.is lookup for one address; powers the Location column."""
+    from . import geoip
+
+    data = geoip.lookup(ip, force=request.GET.get('refresh') == '1')
+    return JsonResponse(data)
 
 
 @login_required

@@ -36,6 +36,53 @@
     .sb-empty { padding: .9rem .8rem; font-size: .75rem; color: #64748b; }
     html[data-theme="light"] .sb-search { background: rgba(255,255,255,.96); }
     html[data-theme="light"] .sb-search input { color: #1e293b; background: rgba(15,23,42,.06); }
+    /* IP location (ipwho.is), shown beside every address in the admin tables. */
+    .ipgeo {
+        display: inline-flex; align-items: center; gap: .3rem;
+        padding: .05rem .4rem; border-radius: 6px; cursor: pointer;
+        font-size: .68rem; line-height: 1.6;
+        background: rgba(96,165,250,.12); border: 1px solid rgba(96,165,250,.28);
+        color: #93c5fd; white-space: nowrap;
+        transition: background .15s ease, border-color .15s ease;
+    }
+    .ipgeo:hover { background: rgba(96,165,250,.22); }
+    .ipgeo.is-known { background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.28); color: #6ee7b7; }
+    .ipgeo.is-loading { opacity: .6; cursor: progress; }
+    .ipgeo.is-failed { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.3); color: #fca5a5; }
+    .ipgeo-flag { font-size: .85rem; line-height: 1; }
+    .ipgeo-modal {
+        position: fixed; inset: 0; z-index: 3000; display: flex;
+        align-items: center; justify-content: center; padding: 1.5rem;
+        background: rgba(2,6,23,.72); backdrop-filter: blur(3px);
+    }
+    .ipgeo-card {
+        width: min(660px, 100%); max-height: 86vh; display: flex; flex-direction: column;
+        background: #0f172a; border: 1px solid rgba(148,163,184,.2); border-radius: 14px;
+        box-shadow: 0 24px 70px rgba(0,0,0,.6);
+    }
+    .ipgeo-card-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        padding: .85rem 1rem; border-bottom: 1px solid rgba(148,163,184,.15);
+    }
+    .ipgeo-card-title { font-size: .9rem; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: .5rem; }
+    .ipgeo-card-body { overflow: auto; padding: .9rem 1rem 1.1rem; }
+    .ipgeo-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; margin-bottom: .9rem; }
+    .ipgeo-fact { background: rgba(148,163,184,.07); border: 1px solid rgba(148,163,184,.12); border-radius: 8px; padding: .4rem .55rem; }
+    .ipgeo-fact span { display: block; font-size: .6rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+    .ipgeo-fact strong { font-size: .78rem; color: #e2e8f0; font-weight: 600; word-break: break-word; }
+    .ipgeo-json {
+        margin: 0; padding: .7rem; border-radius: 10px;
+        background: rgba(2,6,23,.7); border: 1px solid rgba(148,163,184,.14);
+        color: #a5b4fc; font-size: .7rem; line-height: 1.5; max-height: 300px; overflow: auto;
+        white-space: pre-wrap; word-break: break-word;
+    }
+    .ipgeo-actions { display: flex; gap: .5rem; margin-top: .8rem; align-items: center; }
+    .ipgeo-btn {
+        border-radius: 8px; padding: .3rem .7rem; font-size: .72rem; cursor: pointer;
+        border: 1px solid rgba(148,163,184,.28); background: rgba(148,163,184,.1); color: #cbd5e1;
+    }
+    .ipgeo-btn:hover { background: rgba(148,163,184,.18); }
+    @media (prefers-reduced-motion: reduce) { .ipgeo { transition: none; } }
     @media (prefers-reduced-motion: reduce) {
         .admin-sidebar, .admin-sidebar.open, .sb-item, .sb-search input { transition: none !important; }
     }
@@ -791,9 +838,120 @@ function filterSidebar(query) {
             pre.rel = 'prefetch';
             pre.href = href;
             document.head.appendChild(pre);
-        }, { once: true });
+                    }, { once: true });
     });
 })();
+
+// IP location: ipwho.is behind a server-side cache. The column button shows the
+// country (or "Lookup"), and clicking opens the full record the API returned.
+function ipGeoUrl(ip) {
+    return '/admin-dashboard/ip-geo/' + encodeURIComponent(ip) + '/';
+}
+
+function ipGeoEscape(text) {
+    return String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function ipGeoPaint(ip, data) {
+    document.querySelectorAll('.ipgeo[data-ip="' + ip + '"]').forEach(function (btn) {
+        btn.classList.remove('is-loading', 'is-failed');
+        if (data && data.ok) {
+            btn.classList.add('is-known');
+            btn.innerHTML = (data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '') +
+                ipGeoEscape(data.country || 'Unknown');
+            btn.title = ip + ' - ' + [data.city, data.region, data.country].filter(Boolean).join(', ') +
+                ' (click for the full ipwho.is record)';
+        } else {
+            btn.classList.add('is-failed');
+            btn.textContent = 'Lookup failed';
+        }
+    });
+}
+
+function ipGeoFetch(ip, force) {
+    return fetch(ipGeoUrl(ip) + (force ? '?refresh=1' : ''), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function (response) { return response.json(); });
+}
+
+function ipGeo(el) {
+    var ip = el.getAttribute('data-ip') || '';
+    if (!ip) { return; }
+    el.classList.add('is-loading');
+    ipGeoFetch(ip, false).then(function (data) {
+        ipGeoPaint(ip, data);
+        ipGeoOpen(ip, data);
+    }).catch(function () {
+        el.classList.remove('is-loading');
+        el.classList.add('is-failed');
+        el.textContent = 'Lookup failed';
+    });
+}
+
+function ipGeoOpen(ip, data) {
+    var old = document.getElementById('ipGeoModal');
+    if (old) { old.remove(); }
+
+    var facts = '';
+    var fields = [
+        ['Country', data && data.country], ['Country code', data && data.country_code],
+        ['Continent', data && data.continent], ['Region', data && data.region],
+        ['City', data && data.city], ['Postal', data && data.postal],
+        ['Calling code', data && data.calling_code], ['Capital', data && data.capital],
+        ['Borders', data && data.borders], ['ISP', data && data.isp],
+        ['Organisation', data && data.org], ['ASN', data && data.asn],
+        ['Domain', data && data.domain], ['Timezone', data && data.timezone],
+        ['UTC offset', data && data.utc],
+        ['Coordinates', (data && data.latitude != null && data.latitude !== '') ? data.latitude + ', ' + data.longitude : '']
+    ];
+    fields.forEach(function (pair) {
+        if (pair[1] === '' || pair[1] == null) { return; }
+        facts += '<div class="ipgeo-fact"><span>' + pair[0] + '</span><strong>' +
+            ipGeoEscape(pair[1]) + '</strong></div>';
+    });
+
+    var raw = (data && data.payload) ? JSON.stringify(data.payload, null, 2)
+        : (data && data.error ? data.error : 'No data');
+    var note = data && data.error ? '<div style="color:#fca5a5;font-size:.75rem;margin-bottom:.6rem">' +
+        ipGeoEscape(data.error) + '</div>' : '';
+    var saved = (data && data.fetched_at) ? '<span style="font-size:.68rem;color:#64748b">saved ' +
+        ipGeoEscape(data.fetched_at) + (data.cached ? ' (cached)' : '') + '</span>' : '';
+
+    var wrap = document.createElement('div');
+    wrap.id = 'ipGeoModal';
+    wrap.className = 'ipgeo-modal';
+    wrap.innerHTML = '<div class="ipgeo-card" role="dialog" aria-modal="true" aria-label="IP details">' +
+        '<div class="ipgeo-card-head"><div class="ipgeo-card-title">' +
+        (data && data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '') +
+        ipGeoEscape(ip) + (data && data.country ? ' &middot; ' + ipGeoEscape(data.country) : '') +
+        '</div><button type="button" class="ipgeo-btn" data-ipgeo-close="1">Close</button></div>' +
+        '<div class="ipgeo-card-body">' + note +
+        '<div class="ipgeo-facts">' + facts + '</div>' +
+        '<div style="font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:.3rem">ipwho.is response</div>' +
+        '<pre class="ipgeo-json"></pre>' +
+        '<div class="ipgeo-actions"><button type="button" class="ipgeo-btn" data-ipgeo-refresh="1">Re-fetch from ipwho.is</button>' +
+        saved + '</div></div></div>';
+    wrap.querySelector('.ipgeo-json').textContent = raw;
+    wrap.addEventListener('click', function (event) { if (event.target === wrap) { wrap.remove(); } });
+    wrap.querySelector('[data-ipgeo-close]').addEventListener('click', function () { wrap.remove(); });
+    wrap.querySelector('[data-ipgeo-refresh]').addEventListener('click', function () {
+        this.disabled = true;
+        this.textContent = 'Fetching...';
+        ipGeoFetch(ip, true).then(function (fresh) {
+            ipGeoPaint(ip, fresh);
+            wrap.remove();
+            ipGeoOpen(ip, fresh);
+        }).catch(function () { wrap.remove(); });
+    });
+    document.body.appendChild(wrap);
+}
+
+document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') { return; }
+    var modal = document.getElementById('ipGeoModal');
+    if (modal) { modal.remove(); }
+});
 
 // Toast system
 function showToast(message, type) {

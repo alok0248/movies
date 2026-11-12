@@ -3739,3 +3739,25 @@ class GuestPlayQuota(models.Model):
 
     def __str__(self):
         return '%s %d/%d' % (self.device_id, self.plays_used, self.limit)
+
+
+class IPLocation(models.Model):
+    """Cached ipwho.is answer for one address (see core/geoip.py)."""
+
+    ip = models.CharField(max_length=64, unique=True)
+    success = models.BooleanField(default=False)
+    country = models.CharField(max_length=120, blank=True, default='')
+    country_code = models.CharField(max_length=8, blank=True, default='')
+    region = models.CharField(max_length=160, blank=True, default='')
+    city = models.CharField(max_length=160, blank=True, default='')
+    isp = models.CharField(max_length=200, blank=True, default='')
+    payload = models.TextField(blank=True, default='')
+    fetched_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fetched_at']
+        verbose_name = 'IP location'
+        verbose_name_plural = 'IP locations'
+
+    def __str__(self):
+        return '%s (%s)' % (self.ip, self.country or 'unknown')

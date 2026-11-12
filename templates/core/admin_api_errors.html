@@ -166,7 +166,7 @@
         </div>
         {% if rec.message %}<div class="ae-msg mb-2">{{ rec.message }}</div>{% endif %}
         <div class="ae-meta mb-2">
-            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<a href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }}" style="color:inherit;text-decoration:none;">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}
+            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<a href="https://iplocation.io/ip/{{ rec.client_ip|urlencode }}" target="_blank" rel="noopener noreferrer" title="Look up {{ rec.client_ip }}" style="color:inherit;text-decoration:none;">{{ rec.client_ip }} <i class="fas fa-external-link-alt"></i></a> <button type="button" class="ipgeo" data-ip="{{ rec.client_ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>{% else %}—{% endif %}
             {% if rec.username %}<span class="ms-3"><i class="fas fa-user"></i>{{ rec.username }}</span>{% endif %}
             {% if rec.query %}<span class="ms-3"><i class="fas fa-search"></i>?{{ rec.query }}</span>{% endif %}
         </div>

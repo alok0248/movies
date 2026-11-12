@@ -46,6 +46,8 @@ SKIP_PREFIXES = (
     '/media/',
     '/admin-dashboard/health/',
     '/admin-dashboard/requests',
+    # IP geolocation lookups are admin chrome, not site traffic.
+    '/admin-dashboard/ip-geo/',
     # The engagement beacon fires on every page leave — recording it would
     # double the log and bury the page row it updates.
     '/ajax/page-activity',
