@@ -63,6 +63,34 @@ def cached_rows(ips):
     return {row.ip: row for row in IPLocation.objects.filter(ip__in=wanted)}
 
 
+def attach(records, ip_key='ip'):
+    """Add geo_country/geo_flag to each record from the cache, no network.
+
+    List pages call this before rendering so the country is in the first HTML
+    the browser gets; the browser-side fill only ever handles cache misses.
+    Works on dicts (report rows) and model instances alike.
+    """
+    rows = list(records)
+
+    def record_ip(rec):
+        if isinstance(rec, dict):
+            return rec.get(ip_key) or ''
+        return getattr(rec, ip_key, '') or ''
+
+    known = cached_rows({record_ip(rec) for rec in rows})
+    for rec in rows:
+        info = row_summary(known.get(record_ip(rec))) or {}
+        country = info.get('country') or ''
+        flag = info.get('flag') or ''
+        if isinstance(rec, dict):
+            rec['geo_country'] = country
+            rec['geo_flag'] = flag
+        else:
+            rec.geo_country = country
+            rec.geo_flag = flag
+    return rows
+
+
 def row_summary(row):
     """Summarize a stored row without touching the network."""
     if row is None:

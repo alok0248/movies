@@ -225,7 +225,7 @@
         <table class="bi-table">
             <thead>
                 <tr>
-                    <th>IP address</th>
+                    <th>IP address</th><th>Country</th>
                     <th>Status</th>
                     <th>Blocked</th>
                     <th>Reason</th>
@@ -243,9 +243,9 @@
                 <tr class="{% if not r.is_active %}bi-off{% endif %}" data-drawer="{% url 'blocked_ip_peek' r.ip %}" data-drawer-title="Address {{ r.ip }}" style="cursor:pointer">
                     <td class="bi-ip">
                         <span class="ip-text">{{ r.ip }}</span>
-                        <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>
                         {% if r.total %}<div class="bi-sub">{{ r.total }} request{{ r.total|pluralize }} recorded</div>{% endif %}
                     </td>
+                    <td>{% include 'core/_ip_geo.html' with ip=r.ip country=r.geo_country flag=r.geo_flag %}</td>
                     <td>
                         {% if r.is_active %}
                             <span class="bi-badge bi-b-on">Blocked</span>
@@ -362,7 +362,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="11">
+                    <td colspan="12">
                         <div class="bi-empty">
                             <i class="fas fa-shield-alt"></i>
                             <div style="font-size:.95rem;color:#94a3b8;">{% if q %}No blocked IP matches “{{ q }}”{% elif show_all %}No IP has ever been blocked{% else %}Nothing is blocked right now{% endif %}</div>

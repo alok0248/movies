@@ -9902,6 +9902,8 @@ def api_error_log(request):
         status = ''
 
     records = recent_errors(limit=300, kind=kind, status=status, q=q)
+    from . import geoip
+    geoip.attach(records, 'client_ip')
     if request.GET.get('format') == 'json':
         return JsonResponse({
             'status': 'success',
@@ -14458,7 +14460,12 @@ def admin_active_users(request):
         return response
 
     from .ip_block import active_blocked_ips
+    from . import geoip
     blocked = active_blocked_ips()
+
+    # Countries are resolved from the ipwho.is cache before rendering, so the
+    # column is filled in the first paint instead of after a round trip.
+    geoip.attach(displayed, 'ip')
 
     return render(request, 'core/admin_requests.html', {
         'panel': 'users',
@@ -14694,6 +14701,9 @@ def admin_blocked_ips(request):
     for row in rows:
         row['header_rule'] = rule_for_value(row['user_agent'])
 
+    from . import geoip
+    geoip.attach(rows, 'ip')
+
     return render(request, 'core/admin_blocked_ips.html', {
         'rows': rows,
         'totals': totals,
@@ -14919,6 +14929,9 @@ def admin_probes(request):
                 ' | '.join(f"{p['path']} x{p['count']}" for p in r['paths']),
             ])
         return response
+
+    from . import geoip
+    geoip.attach(rows, 'ip')
 
     return render(request, 'core/admin_probes.html', {
         'rows': rows,
@@ -17364,6 +17377,8 @@ def admin_audit_log(request):
     username = (request.GET.get('user') or '').strip()
     search = (request.GET.get('q') or '').strip()
     rows = audit_report(action=action, username=username, search=search)
+    from . import geoip
+    geoip.attach(rows, 'ip_address')
     page = Paginator(rows, 100).get_page(request.GET.get('page') or 1)
     return render(request, 'core/admin_audit_log.html', {
         'page_obj': page,

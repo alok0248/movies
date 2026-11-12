@@ -188,7 +188,7 @@
         <table class="pb-table">
             <thead>
                 <tr>
-                    <th>IP address</th>
+                    <th>IP address</th><th>Country</th>
                     <th>Status</th>
                     <th title="Missing pages + scanner paths hit in the window">Unknown hits</th>
                     <th>Distinct</th>
@@ -208,9 +208,9 @@
                 <tr>
                     <td class="pb-ip">
                         <span class="ip-text">{{ r.ip }}</span>
-                        <button type="button" class="ipgeo" data-ip="{{ r.ip }}" onclick="event.stopPropagation();ipGeo(this)" title="Country from ipwho.is — click for the full record">Location</button>
                         <div class="pb-sub"><a class="pb-infolink" href="{% url 'request_log' %}?view=table&amp;client_ip={{ r.ip|urlencode }}" title="Every request logged from this IP">all requests <i class="fas fa-external-link-alt"></i></a></div>
                     </td>
+                    <td>{% include 'core/_ip_geo.html' with ip=r.ip country=r.geo_country flag=r.geo_flag %}</td>
                     <td>
                         {% if r.blocked %}<span class="pb-badge pb-b-on">Blocked</span>
                         {% else %}<span class="pb-badge pb-b-open">Open</span>{% endif %}
@@ -264,7 +264,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="13">
+                    <td colspan="14">
                         <div class="pb-empty">
                             <i class="fas fa-user-secret"></i>
                             <div style="font-size:.95rem;color:#94a3b8;">Nobody asked for a missing page in this window</div>
