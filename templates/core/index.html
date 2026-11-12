@@ -3,14 +3,19 @@
 {% block content %}
 <style>
 /* ===== Modern Home Page ===== */
-.home-row { margin-bottom: 2rem; position: relative; }
+.home-row { margin-bottom: 3.25rem; position: relative; }
 .home-row-header {
     display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: .6rem; padding: 0 3.5rem;
+    margin-bottom: 1.05rem; padding: 0 3.5rem;
 }
 .home-row-title {
-    font-size: 1.15rem; font-weight: 700; color: var(--text, #f0f0f5);
-    margin: 0; letter-spacing: -.01em;
+    font-size: 1.34rem; font-weight: 700; color: var(--text, #f0f0f5);
+    margin: 0; letter-spacing: -.026em;
+    display: flex; align-items: center; gap: .7rem;
+}
+.home-row-title::before {
+    content: ""; width: 2px; height: 1.05em; border-radius: 99px; flex: 0 0 auto;
+    background: linear-gradient(180deg, var(--brand, #e50914), transparent);
 }
 .home-row-see-all {
     font-size: .75rem; color: var(--text-3, #606070);
@@ -26,23 +31,29 @@
 /* Poster cards */
 .home-card {
     flex: 0 0 165px; text-decoration: none;
-    transition: transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+    transition: transform .7s cubic-bezier(.32,.72,0,1);
     border-radius: var(--radius, 12px);
     min-width: 165px;
 }
-.home-card:hover { transform: translateY(-8px) scale(1.04); z-index: 5; }
+.home-card:hover { transform: translateY(-6px); z-index: 5; }
 .home-card-img-wrap {
     width: 165px; height: 248px;
     border-radius: var(--radius, 12px); overflow: hidden;
     background: var(--bg-3, #1e1e2a);
-    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 18px 40px -26px rgba(0,0,0,.9);
+    transition: box-shadow .7s cubic-bezier(.32,.72,0,1);
     position: relative;
 }
-.home-card-img-wrap img {
-    width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .4s, transform .4s;
+html[data-theme="light"] .home-card-img-wrap {
+    box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 16px 34px -26px rgba(16,24,40,.45);
 }
-.home-card:hover .home-card-img-wrap img { transform: scale(1.06); }
-.home-card:hover .home-card-img-wrap { box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.home-card-img-wrap img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: opacity .6s cubic-bezier(.22,1,.36,1), transform .9s cubic-bezier(.32,.72,0,1);
+}
+.home-card:hover .home-card-img-wrap img { transform: scale(1.05); }
+.home-card:hover .home-card-img-wrap { box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 30px 64px -30px rgba(0,0,0,.95); }
+html[data-theme="light"] .home-card:hover .home-card-img-wrap { box-shadow: 0 1px 0 rgba(255,255,255,.95) inset, 0 28px 56px -30px rgba(16,24,40,.5); }
 .home-card-rating {
     position: absolute; top: 6px; left: 6px;
     background: rgba(0,0,0,.78); color: #ffc107;
@@ -61,17 +72,23 @@
 /* Top rated — same size as regular cards */
 .top-card {
     flex: 0 0 165px; text-decoration: none;
-    transition: transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+    transition: transform .7s cubic-bezier(.32,.72,0,1);
     min-width: 165px;
 }
-.top-card:hover { transform: translateY(-8px) scale(1.04); z-index: 5; }
+.top-card:hover { transform: translateY(-6px); z-index: 5; }
 .top-card-img {
     width: 165px; height: 248px; border-radius: var(--radius, 12px);
     object-fit: cover; display: block;
-    box-shadow: 0 4px 16px rgba(0,0,0,.35);
-    transition: transform .4s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+    box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 18px 40px -26px rgba(0,0,0,.9);
+    transition: transform .9s cubic-bezier(.32,.72,0,1), box-shadow .7s cubic-bezier(.32,.72,0,1);
 }
-.top-card:hover .top-card-img { transform: scale(1.06); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+html[data-theme="light"] .top-card-img {
+    box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 16px 34px -26px rgba(16,24,40,.45);
+}
+.top-card:hover .top-card-img {
+    transform: scale(1.04);
+    box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 30px 64px -30px rgba(0,0,0,.95);
+}
 .top-card-title {
     font-size: .73rem; color: var(--text, #f0f0f5);
     margin-top: .4rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis;

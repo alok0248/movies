@@ -808,11 +808,11 @@ def home_initial_data(request):
     try:
         row_ids = list(ContentRow.objects.filter(is_active=True).order_by('order').values_list('id', flat=True))
         stats_html = (
-            '<div class="reveal-on-scroll" style="display:flex;justify-content:center;gap:3rem;padding:2rem 2rem 1rem;margin:0 auto;max-width:800px;">'
-            '<div style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:#00c896;">1000+</div><div style="font-size:0.75rem;color:#6a6a7a;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.2rem;">Movies</div></div>'
-            '<div style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:#00c896;">500+</div><div style="font-size:0.75rem;color:#6a6a7a;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.2rem;">TV Series</div></div>'
-            '<div style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:#00c896;">24/7</div><div style="font-size:0.75rem;color:#6a6a7a;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.2rem;">Streaming</div></div>'
-            '<div style="text-align:center;"><div style="font-size:1.8rem;font-weight:800;color:#00c896;">HD</div><div style="font-size:0.75rem;color:#6a6a7a;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.2rem;">Quality</div></div>'
+            '<div class="reveal-on-scroll home-stats">'
+            '<div class="home-stat"><div class="home-stat-v">1000+</div><div class="home-stat-k">Movies</div></div>'
+            '<div class="home-stat"><div class="home-stat-v">500+</div><div class="home-stat-k">TV Series</div></div>'
+            '<div class="home-stat"><div class="home-stat-v">24/7</div><div class="home-stat-k">Streaming</div></div>'
+            '<div class="home-stat"><div class="home-stat-v">HD</div><div class="home-stat-k">Quality</div></div>'
             '</div>'
         )
         result = {'html': stats_html, 'row_ids': row_ids, 'has_top': True}
@@ -9312,6 +9312,7 @@ def unsubscribe_page(request):
 
 
 @login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_subscribers(request):
     """Admin page to view subscribers, send emails.
 
@@ -9319,9 +9320,6 @@ def admin_subscribers(request):
     Subscriber table so every user who ever signed up or logged in
     from the Android app is visible here and can be emailed.
     """
-    if not request.user.is_staff:
-        return HttpResponseForbidden('Staff only')
-
     # --- Auto-sync: create Subscriber rows for any User/SyncedUser email not yet present ---
     from .models import SyncedUser
     existing_emails = set(Subscriber.objects.values_list('email', flat=True))
@@ -10028,8 +10026,14 @@ def _guard_android_api_errors(view_func):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def api_error_log(request):
-    """Admin page: every captured error — Android API and ordinary pages."""
-    from .api_errors import recent_errors, clear_errors, error_total, error_to_dict
+    """Admin page: every captured error — Android API and ordinary pages.
+
+    Paginated server-side (``?page=``): each response carries one page of
+    records instead of every traceback at once. The JSON export still returns
+    the newest rows in one go.
+    """
+    from .api_errors import (recent_errors, clear_errors, error_total,
+                             error_to_dict, error_queryset)
 
     if request.method == 'POST':
         if request.POST.get('action') == 'clear':
@@ -10044,10 +10048,19 @@ def api_error_log(request):
     if status not in ('4xx', '5xx'):
         status = ''
 
-    records = recent_errors(limit=300, kind=kind, status=status, q=q)
+    wants_json = request.GET.get('format') == 'json'
+    page_obj = None
+    if wants_json:
+        records = recent_errors(limit=300, kind=kind, status=status, q=q)
+    else:
+        from django.core.paginator import Paginator
+        page_obj = Paginator(error_queryset(kind=kind, status=status, q=q),
+                             50).get_page(request.GET.get('page') or 1)
+        records = list(page_obj.object_list)
+
     from . import geoip
     geoip.attach(records, 'client_ip')
-    if request.GET.get('format') == 'json':
+    if wants_json:
         return JsonResponse({
             'status': 'success',
             'count': len(records),
@@ -10063,6 +10076,7 @@ def api_error_log(request):
 
     return render(request, 'core/admin_api_errors.html', {
         'records': records,
+        'page_obj': page_obj,
         'count': len(records),
         'total': error_total(),
         'kind': kind,
@@ -10634,13 +10648,13 @@ def _request_log_tab(request):
 
     Renders as cards or as a spreadsheet-style table (``?view=table``) with a
     filter condition on every column, and exports JSON or CSV with the same
-    filters applied.
+    filters applied. Either view is paginated server-side (``?page=``).
     """
     import csv
     from django.http import HttpResponse
-    from .request_log import (recent_requests, clear_requests, request_total,
-                              request_to_dict, FIELD_FILTERS, SORTABLE_FIELDS,
-                              clean_preset_query)
+    from .request_log import (recent_requests, filter_requests, clear_requests,
+                              request_total, request_to_dict, FIELD_FILTERS,
+                              SORTABLE_FIELDS, clean_preset_query)
     from .models import RequestLogPreset
 
     if request.method == 'POST':
@@ -10698,10 +10712,28 @@ def _request_log_tab(request):
     for field in FIELD_FILTERS:
         filters[field] = clean(field)
 
-    records = recent_requests(limit=500, **filters)
+    # The log pages through the filtered queryset, so one response stays small
+    # (the whole log used to arrive as a single ~1.6 MB page). The JSON and CSV
+    # exports below still take the newest rows in one go, same filters applied.
+    from django.core.paginator import Paginator
+
+    page_obj = None
+    if request.GET.get('format') in ('json', 'csv'):
+        records = recent_requests(limit=500, **filters)
+    else:
+        # The pager needs one stable order: the sorted column (newest first by
+        # default), with the row id breaking ties so a page boundary can never
+        # repeat or skip a row.
+        if filters['sort']:
+            order = ('-' if filters['direction'] == 'desc' else '') + filters['sort']
+        else:
+            order = '-created_at'
+        page_obj = Paginator(filter_requests(**filters).order_by(order, '-id'),
+                             100).get_page(request.GET.get('page') or 1)
+        records = list(page_obj.object_list)
 
     # Country codes for the addresses already looked up, in one query. Anything
-    # unknown stays a "Lookup" button, so a 500-row page never fans out to
+    # unknown stays a "Lookup" button, so a page of rows never fans out to
     # ipwho.is on its own.
     from . import geoip
     page_ips = {rec.client_ip for rec in records if rec.client_ip}
@@ -10802,6 +10834,10 @@ def _request_log_tab(request):
         'trend_errors': sum(item['errors'] for item in trend),
         'trend_hits': sum(item['hits'] for item in trend),
         'count': len(records),
+        # Rows matching the filters (what the pager pages through), and the page
+        # slice itself; 'total' stays every row stored.
+        'matched': page_obj.paginator.count if page_obj else len(records),
+        'page_obj': page_obj,
         'total': request_total(),
         # Every currently blocked address, so each row can offer Block or Unblock.
         'blocked_ips': blocked,

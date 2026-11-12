@@ -5,6 +5,18 @@
  * list keeps its filters, its page and its scroll position. The fragment
  * is ordinary server-rendered HTML, and every drawer offers a link to the
  * full page for anything the summary cannot do.
+ *
+ * The panel is a modal dialog, the same shape as the IP-geo card: a
+ * role="dialog" named by its visible title, dismissed by Escape, by the
+ * backdrop or by its Close button. On top of that it takes focus when it
+ * opens, keeps Tab inside it, and hands focus back to the row that opened
+ * it, so the whole interaction works from the keyboard.
+ *
+ * A row that holds links or buttons of its own is never turned into a control
+ * itself: no role="button" around controls nested in a button, and no tab stop
+ * spent on every one of hundreds of rows. Such a row carries a real button of
+ * its own (data-drawer-open) that opens the same panel, and focus comes back to
+ * that button when the panel closes.
  * ============================================================ */
 (function () {
     if (window.openAdminDrawer) { return; }
@@ -40,6 +52,8 @@
         '.adw-list li{padding:.4rem 0;border-bottom:1px solid rgba(148,163,184,.12);font-size:.8rem}',
         '.adw-list li:last-child{border-bottom:0}',
         '.adw-empty{color:#94a3b8;font-size:.8rem}',
+        '.adw-x:focus-visible,.adw-btn:focus-visible,.adw-panel:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}',
+        'html[data-theme="light"] .adw-x:focus-visible,html[data-theme="light"] .adw-btn:focus-visible,html[data-theme="light"] .adw-panel:focus-visible{outline-color:#1d4ed8}',
         '@keyframes adwIn{from{transform:translateX(24px);opacity:.4}to{transform:translateX(0);opacity:1}}',
         '@keyframes adwFade{from{opacity:0}to{opacity:1}}',
         'html[data-theme="light"] .adw-panel{background:#fff;border-left-color:#e2e8f0}',
@@ -51,6 +65,74 @@
     ].join('');
 
     var escHandler = null;
+    var opener = null; /* the row that opened the drawer, so focus can go back */
+
+    /* aria-modal is a promise that the rest of the page is out of reach, and a
+       focus trap alone does not keep that promise: a screen reader reads the
+       list behind the panel and its virtual cursor walks there. While a dialog
+       is up, every body child other than that dialog is inert and hidden from
+       assistive tech, and put back untouched when it closes.
+
+       Two dialogs can stack: the IP-geo card opens from a row inside the
+       drawer. Only the topmost one stays live, and the marks are recomputed
+       from the open list, so closing it hands the page back to the drawer
+       rather than to the list underneath. */
+    var openDialogs = [];   /* dialogs currently up, last one on top */
+    var inertMarks = [];    /* {el, aria}: the aria-hidden each element had before */
+
+    function markInert(el) {
+        for (var i = 0; i < inertMarks.length; i++) {
+            if (inertMarks[i].el === el) { return; }
+        }
+        inertMarks.push({ el: el, aria: el.getAttribute('aria-hidden') });
+        el.setAttribute('inert', '');
+        el.setAttribute('aria-hidden', 'true');
+    }
+
+    function unmarkInert(el) {
+        for (var i = inertMarks.length - 1; i >= 0; i--) {
+            if (inertMarks[i].el !== el) { continue; }
+            if (inertMarks[i].aria === null) { el.removeAttribute('aria-hidden'); }
+            else { el.setAttribute('aria-hidden', inertMarks[i].aria); }
+            el.removeAttribute('inert');
+            inertMarks.splice(i, 1);
+        }
+    }
+
+    function syncInert() {
+        /* A dialog can be torn down without telling us; it is not a live one. */
+        for (var i = 0; i < openDialogs.length;) {
+            if (document.documentElement.contains(openDialogs[i])) { i++; }
+            else { openDialogs.splice(i, 1); }
+        }
+        var top = openDialogs.length ? openDialogs[openDialogs.length - 1] : null;
+        var kids = document.body.children;
+        for (var k = 0; k < kids.length; k++) {
+            var el = kids[k];
+            var tag = el.tagName;
+            if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK') { continue; }
+            if (!top) { unmarkInert(el); }                    /* nothing open: page is live */
+            else if (el === top || el.contains(top)) { unmarkInert(el); }
+            else { markInert(el); }
+        }
+    }
+
+    var pageInert = {
+        claim: function (node) {
+            if (!node || openDialogs.indexOf(node) !== -1) { return; }
+            openDialogs.push(node);
+            syncInert();
+        },
+        release: function (node) {
+            var i = openDialogs.indexOf(node);
+            if (i !== -1) { openDialogs.splice(i, 1); }
+            syncInert();
+        },
+        isTop: function (node) {
+            return !openDialogs.length || openDialogs[openDialogs.length - 1] === node;
+        }
+    };
+    window.adminModalInert = pageInert;
 
     function injectStyles() {
         if (document.getElementById('adwStyles')) { return; }
@@ -62,38 +144,94 @@
 
     function close() {
         var wrap = document.getElementById('adwWrap');
-        if (wrap && wrap.parentNode) { wrap.parentNode.removeChild(wrap); }
+        if (wrap && wrap.parentNode) {
+            wrap.parentNode.removeChild(wrap);
+            pageInert.release(wrap);
+        }
         if (escHandler) {
             document.removeEventListener('keydown', escHandler);
             escHandler = null;
         }
+        var back = opener;
+        opener = null;
+        if (back && document.contains(back) && typeof back.focus === 'function') {
+            back.focus();
+        }
     }
 
-    function open(url, title) {
+    /* Everything Tab may land on inside the panel, skipping hidden controls. */
+    function panelFocusables(panel) {
+        var nodes = panel.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+            'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        var out = [];
+        for (var i = 0; i < nodes.length; i++) {
+            if (nodes[i].offsetWidth || nodes[i].offsetHeight || nodes[i].getClientRects().length) {
+                out.push(nodes[i]);
+            }
+        }
+        return out;
+    }
+
+    /* aria-modal promises the rest of the page is inert, so Tab wraps here. */
+    function trapTab(event, panel) {
+        var items = panelFocusables(panel);
+        if (!items.length) {
+            event.preventDefault();
+            panel.focus();
+            return;
+        }
+        var first = items[0];
+        var last = items[items.length - 1];
+        var active = document.activeElement;
+        var inside = panel.contains(active);
+        if (event.shiftKey) {
+            if (!inside || active === first || active === panel) {
+                event.preventDefault();
+                last.focus();
+            }
+        } else if (!inside || active === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    function open(url, title, trigger) {
         if (!url) { return; }
+        var restoreTo = trigger || document.activeElement;
         injectStyles();
         close();
+        opener = restoreTo;
 
         var wrap = document.createElement('div');
         wrap.className = 'adw-wrap';
         wrap.id = 'adwWrap';
         wrap.innerHTML =
             '<div class="adw-backdrop" data-adw-close></div>' +
-            '<aside class="adw-panel" role="dialog" aria-modal="true" aria-label="' + (title || 'Detail') + '">' +
+            '<aside class="adw-panel" role="dialog" aria-modal="true" aria-labelledby="adwTitle" tabindex="-1">' +
                 '<header class="adw-head">' +
-                    '<div class="adw-title">' + (title || 'Detail') + '</div>' +
+                    '<div class="adw-title" id="adwTitle">' + (title || 'Detail') + '</div>' +
                     '<button type="button" class="adw-x" data-adw-close aria-label="Close">&times;</button>' +
                 '</header>' +
-                '<div class="adw-body"><div class="adw-loading">Loading…</div></div>' +
+                '<div class="adw-body"><div class="adw-loading">Loading...</div></div>' +
             '</aside>';
         document.body.appendChild(wrap);
+        pageInert.claim(wrap);
 
+        var panel = wrap.querySelector('.adw-panel');
         var body = wrap.querySelector('.adw-body');
-        escHandler = function (e) { if (e.key === 'Escape') { close(); } };
+        escHandler = function (e) {
+            /* With the IP-geo card open on top, Escape and Tab belong to it: it
+               claims the key, and it is not "top" any more once it is closed. */
+            if (e.defaultPrevented || !pageInert.isTop(wrap)) { return; }
+            if (e.key === 'Escape') { close(); return; }
+            if (e.key === 'Tab') { trapTab(e, panel); }
+        };
         document.addEventListener('keydown', escHandler);
         wrap.addEventListener('click', function (e) {
             if (e.target.closest('[data-adw-close]')) { close(); }
         });
+        wrap.querySelector('.adw-x').focus();
 
         fetch(url, {
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
@@ -119,6 +257,56 @@
         if (e.target.closest('a,button,input,select,textarea,label,form,[data-no-drawer]')) { return; }
         if (e.ctrlKey || e.metaKey || e.shiftKey) { return; }
         e.preventDefault();
-        open(row.getAttribute('data-drawer'), row.getAttribute('data-drawer-title') || 'Detail');
+        open(row.getAttribute('data-drawer'), row.getAttribute('data-drawer-title') || 'Detail', row);
+    });
+
+    /* The keyboard path into a row that carries controls of its own: a real
+       button inside the row, marked data-drawer-open. Being a button, Enter and
+       Space need no special handling, and it is what focus returns to. */
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-drawer-open]');
+        if (!btn) { return; }
+        var row = btn.closest('[data-drawer]');
+        if (!row) { return; }
+        e.preventDefault();
+        open(row.getAttribute('data-drawer'), row.getAttribute('data-drawer-title') || 'Detail', btn);
+    });
+
+    /* The controls a row may hold in its own right. If any of these is inside a
+       row, the row stays a plain container: no role on a box that contains
+       buttons, and no tab stop on each row of a long list. */
+    var OWN_CONTROLS =
+        'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), ' +
+        'select:not([disabled]), textarea:not([disabled]), summary, label, form, ' +
+        '[contenteditable="true"], [tabindex]:not([tabindex="-1"]), [data-no-drawer]';
+
+    /* A row is a mouse target by nature. When nothing inside it is a control,
+       the row itself can be one: a tab stop, Enter or Space opening the same
+       dialog, and the dialog announced. A row that does hold its own links or
+       buttons is left as it is, and opens from the real button inside it
+       (data-drawer-open). */
+    function prepareTriggers() {
+        var rows = document.querySelectorAll('[data-drawer]');
+        for (var i = 0; i < rows.length; i++) {
+            var el = rows[i];
+            if (el.querySelector(OWN_CONTROLS)) { continue; }
+            if (!el.hasAttribute('tabindex')) { el.setAttribute('tabindex', '0'); }
+            if (el.tagName !== 'TR' && !el.hasAttribute('role')) { el.setAttribute('role', 'button'); }
+            el.setAttribute('aria-haspopup', 'dialog');
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', prepareTriggers);
+    } else {
+        prepareTriggers();
+    }
+
+    /* Enter or Space on a focused row that is its own control. */
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') { return; }
+        var el = e.target;
+        if (!el || !el.hasAttribute || !el.hasAttribute('data-drawer')) { return; }
+        e.preventDefault();
+        open(el.getAttribute('data-drawer'), el.getAttribute('data-drawer-title') || 'Detail', el);
     });
 })();

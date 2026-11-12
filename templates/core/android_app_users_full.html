@@ -89,7 +89,7 @@
                 <input type="hidden" name="tab" value="{{ active_tab }}">
                 <input class="form-control form-control-sm" style="width:230px;background:rgba(15,23,42,.8);border-color:rgba(148,163,184,.3);color:#e2e8f0;"
                        type="search" name="q" value="{{ q }}" placeholder="Search email, name, device, plan…">
-                <button class="btn btn-sm btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
+                <button aria-label="Search" class="btn btn-sm btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
                 {% if q or view != 'all' %}<a class="btn btn-sm btn-outline-secondary" href="?tab={{ active_tab }}">Reset</a>{% endif %}
             </form>
         </div>

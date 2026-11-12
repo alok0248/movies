@@ -3,152 +3,259 @@
 {% load custom_filters %}
 {% block admin_content %}
 <div class="container mt-5 mb-5">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <style>
+        /* Android analytics — a calmer, roomier workspace on top of the admin kit. */
+        .aad-eyebrow {
+            font-size: .63rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+            color: var(--text-3); margin-bottom: .4rem;
+        }
+        .aad-shell {
+            display: grid; grid-template-columns: 268px minmax(0, 1fr);
+            gap: var(--adm-gap); align-items: start;
+        }
+        @media (max-width: 991.98px) { .aad-shell { grid-template-columns: minmax(0, 1fr); } }
+        .aad-rail { position: sticky; top: 1rem; }
+        @media (max-width: 991.98px) { .aad-rail { position: static; } }
+        .aad-eps { padding: .35rem; display: flex; flex-direction: column; gap: .15rem; }
+        .aad-ep {
+            display: flex; align-items: center; gap: .45rem; padding: .42rem .5rem;
+            border-radius: var(--adm-r-sm); position: relative;
+            transition: background-color .3s var(--adm-ease);
+        }
+        .aad-ep:hover { background: var(--surface-hover); }
+        .aad-ep.is-active {
+            background: color-mix(in srgb, var(--brand) 9%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 24%, transparent);
+        }
+        .aad-ep-main {
+            flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .06rem;
+            text-decoration: none; color: inherit;
+        }
+        .aad-ep-name {
+            font-size: .78rem; font-weight: 650; color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .aad-ep-slug { font-size: .67rem; color: var(--text-3); font-family: Consolas, Menlo, monospace; }
+        .aad-ep-del {
+            flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+            width: 24px; height: 24px; border-radius: 7px; color: var(--text-3);
+            opacity: 0; transition: opacity .25s var(--adm-ease), background-color .25s var(--adm-ease), color .25s var(--adm-ease);
+        }
+        .aad-ep:hover .aad-ep-del, .aad-ep.is-active .aad-ep-del, .aad-ep-del:focus-visible { opacity: 1; }
+        .aad-ep-del:hover { background: rgba(185,28,28,.14); color: #fca5a5; }
+        html[data-theme="light"] .aad-ep-del:hover { color: #b91c1c; }
+        .aad-stack { display: flex; flex-direction: column; gap: var(--adm-gap); }
+        .aad-tabs { margin-bottom: var(--adm-gap); }
+        .aad-kpis { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+        .aad-kpis .adm-kpi { background: var(--bg-2); box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+        html[data-theme="dark"] .aad-kpis .adm-kpi { box-shadow: none; }
+        .aad-kpis .adm-kpi .v { font-size: 1.42rem; letter-spacing: -.01em; }
+        /* avatar with a graceful fallback when the provider photo 404s */
+        .aad-av { position: relative; width: 30px; height: 30px; flex: 0 0 auto; }
+        .aad-av > span {
+            position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; color: #fff; font-size: .72rem; font-weight: 650;
+        }
+        .aad-av > img {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            border-radius: 50%; object-fit: cover;
+        }
+        .aad-blockbtns { gap: .3rem; }
+        .aad-blockbtns .adm-btn { min-height: 24px; }
+        .aad-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--adm-gap); }
+        @media (max-width: 767.98px) { .aad-split { grid-template-columns: minmax(0, 1fr); } }
+        .aad-chart { height: 264px; }
+        .aad-chart.is-tall { height: 300px; }
+        .aad-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .75rem 1rem; }
+        .aad-facts .adm-code { display: block; }
+        .aad-fact-label {
+            font-size: .64rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+            color: var(--text-3); margin-bottom: .3rem;
+        }
+        .aad-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+            background: var(--surface-hover); color: var(--text);
+        }
+        .aad-icon.is-warn { background: rgba(251,191,36,.14); color: #fbbf24; }
+        .aad-icon.is-info { background: rgba(56,189,248,.14); color: #38bdf8; }
+        html[data-theme="light"] .aad-icon.is-warn { background: rgba(180,83,9,.1); color: #b45309; }
+        html[data-theme="light"] .aad-icon.is-info { background: rgba(14,116,144,.1); color: #0e7490; }
+        .aad-head-titles { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+        .aad-note { font-size: .71rem; color: var(--text-2); line-height: 1.55; }
+        .aad-table-scroll { max-height: 460px; overflow: auto; }
+        .aad-stack .adm-empty { padding: 1.7rem 1rem; }
+        .aad-stack .adm-empty i { font-size: 1.5rem; opacity: .45; margin-bottom: .45rem; }
+        .aad-stack .adm-empty { font-size: .78rem; }
+    </style>
+
+    <header class="adm-page-head">
         <div>
-            <h1 class="text-white mb-1"><i class="fas fa-chart-line me-2 text-info"></i>Android Endpoint Analytics</h1>
-            <p class="text-secondary mb-0">Daily and build-wise connection reporting for saved Android app endpoints.</p>
+            <div class="aad-eyebrow">Android &amp; API</div>
+            <h1 class="adm-page-title">Endpoint analytics</h1>
+            <p class="adm-page-sub">Daily, build-wise and device-level reporting for every saved Android endpoint.</p>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <a href="{% url 'android_app_list' %}" class="adm-btn">&larr; Android Apps</a>
-            <a href="{% url 'synced_users_list' %}" class="adm-btn"><i class="fas fa-users me-1"></i> Synced Users</a>
-            <a href="{% url 'android_app_create' %}" class="adm-btn is-ok">+ Create Android App</a>
+        <div class="adm-btn-group">
+            <a href="{% url 'android_app_list' %}" class="adm-btn">&larr; Android apps</a>
+            <a href="{% url 'synced_users_list' %}" class="adm-btn"><i class="fas fa-users"></i> Synced users</a>
+            <a href="{% url 'android_app_create' %}" class="adm-btn is-ok"><i class="fas fa-plus"></i> New endpoint</a>
         </div>
-    </div>
+    </header>
 
-    <!-- One-page control center: jump between Users, Android analytics and Logs -->
-    <ul class="nav nav-pills gap-2 flex-wrap mb-4 p-2 rounded border border-secondary" id="dashNav" style="background:rgba(15,23,42,.6);">
-        <li class="nav-item"><a class="nav-link py-1 px-3 active" href="#overview"><i class="fas fa-chart-line me-1"></i>Android</a></li>
-        <li class="nav-item"><a class="nav-link py-1 px-3" href="#users-block"><i class="fas fa-user-shield me-1"></i>Users &amp; Blocking</a></li>
-        <li class="nav-item"><a class="nav-link py-1 px-3" href="#app-logs"><i class="fas fa-scroll me-1"></i>App Logs</a></li>
-        <li class="nav-item ms-auto"><a class="nav-link py-1 px-3" href="{% url 'synced_users_list' %}"><i class="fas fa-users me-1"></i>All Synced Users</a></li>
-        <li class="nav-item"><a class="nav-link py-1 px-3" href="{% if selected_app %}{% url 'android_app_logs_page' selected_app.id %}{% endif %}"><i class="fas fa-filter me-1"></i>Log Filters</a></li>
-    </ul>
-
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <div class="adm-card bg-dark border-secondary shadow-sm h-100">
-                <div class="adm-card-head border-secondary text-white fw-semibold">Saved Endpoints</div>
-                <div class="list-group list-group-flush rounded-bottom">
+    <div class="aad-shell">
+        <aside class="aad-rail">
+            <div class="adm-card">
+                <div class="adm-card-head">
+                    <span class="adm-card-title">Endpoints</span>
+                    <span class="adm-badge is-off">{{ apps|length }}</span>
+                </div>
+                <div class="aad-eps">
                     {% for app in apps %}
-                    <a href="{% url 'android_app_dashboard_detail' app.id %}" class="list-group-item list-group-item-action bg-dark text-white border-secondary d-flex justify-content-between align-items-start {% if selected_app and selected_app.id == app.id %}active{% endif %}" style="gap:8px;">
-                        <div class="flex-grow-1 min-width-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="fw-semibold">{{ app.name }}</div>
-                                {% if app.is_active %}<span class="adm-badge is-ok" style="font-size:.65rem;">Active</span>{% else %}<span class="adm-badge is-off" style="font-size:.65rem;">Disabled</span>{% endif %}
-                            </div>
-                            <div class="small opacity-75">{{ app.slug }}</div>
-                        </div>
-                        <a href="{% url 'android_app_delete' app.id %}" class="adm-btn is-sm flex-shrink-0 mt-1" title="Delete endpoint" aria-label="Delete this endpoint" onclick="event.stopPropagation(); return confirmTyped(event, {what: 'the endpoint {{ app.name|escapejs }}', detail: 'Its credentials, build gate, analytics and logs are deleted with it.'})" style="font-size:.7rem;padding:2px 6px;"><i class="fas fa-trash"></i></a>
-                    </a>
+                    <div class="aad-ep {% if selected_app and selected_app.id == app.id %}is-active{% endif %}">
+                        <a class="aad-ep-main" href="{% url 'android_app_dashboard_detail' app.id %}" title="{{ app.name }}">
+                            <span class="aad-ep-name">{{ app.name|default:app.slug }}</span>
+                            <span class="aad-ep-slug">{{ app.slug }}</span>
+                        </a>
+                        {% if app.is_active %}<span class="adm-badge is-ok">Live</span>{% else %}<span class="adm-badge is-off">Off</span>{% endif %}
+                        <a href="{% url 'android_app_delete' app.id %}" class="aad-ep-del" title="Delete endpoint" aria-label="Delete endpoint {{ app.name }}" onclick="return confirmTyped(event, {what: 'the endpoint {{ app.name|escapejs }}', detail: 'Its credentials, build gate, analytics and logs are deleted with it.'})"><i class="fas fa-trash"></i></a>
+                    </div>
                     {% empty %}
-                    <div class="list-group-item bg-dark text-secondary border-secondary">No apps saved.</div>
+                    <div class="adm-empty"><i class="fas fa-mobile-alt"></i>No endpoints yet.</div>
                     {% endfor %}
                 </div>
+                <div class="adm-card-foot">
+                    <a href="{% url 'android_app_list' %}" class="adm-btn is-quiet is-sm is-block">Manage endpoints</a>
+                </div>
             </div>
-        </div>
+        </aside>
 
-        <div class="col-lg-9">
+        <main>
             {% if selected_app %}
-            <div class="row g-4 mb-1" id="overview">
-                <div class="col-md-4">
-                    <div class="adm-card bg-dark border-secondary shadow-sm h-100"><div class="adm-card-body"><div class="text-secondary small">Total Connections</div><div class="display-6 text-white">{{ selected_app.total_connections }}</div></div></div>
-                </div>
-                <div class="col-md-4">
-                    <div class="adm-card bg-dark border-secondary shadow-sm h-100"><div class="adm-card-body"><div class="text-secondary small">Total Unique Visitors</div><div class="display-6 text-white">{{ total_unique_visitors }}</div></div></div>
-                </div>
-                <div class="col-md-4">
-                    <div class="adm-card bg-dark border-secondary shadow-sm h-100"><div class="adm-card-body"><div class="text-secondary small">Builds Seen</div><div class="display-6 text-white">{{ build_summary|length }}</div></div></div>
-                </div>
-            </div>
+            <nav class="adm-pills aad-tabs">
+                <a href="#overview" class="active"><i class="fas fa-chart-line"></i> Overview</a>
+                <a href="#users-block"><i class="fas fa-user-shield"></i> Users &amp; blocking {% if synced_total %}<span class="adm-badge is-off">{{ synced_total }}</span>{% endif %}</a>
+                <a href="#app-logs"><i class="fas fa-scroll"></i> App logs</a>
+                <a href="{% url 'android_app_logs_page' selected_app.id %}"><i class="fas fa-filter"></i> Log filters</a>
+            </nav>
 
-            <div class="row g-4 mt-1">
-                <div class="col-lg-6">
-                    <div class="adm-card bg-dark border-warning shadow-sm h-100">
-                        <div class="adm-card-body p-0">
-                            <div class="p-3" style="background:rgba(251,191,36,0.06);border-bottom:1px solid rgba(251,191,36,0.15);">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fas fa-database text-warning"></i>
-                                    <h5 class="text-white mb-0">Data Retention</h5>
-                                </div>
-                                <div class="text-secondary small">Automatically delete analytics data older than the configured number of days.</div>
-                            </div>
-                            <div class="p-3">
-                                <form id="retentionForm" class="d-flex align-items-center gap-3 flex-wrap">
-                                    {% csrf_token %}
-                                    <div class="d-flex align-items-center gap-2">
-                                        <label class="text-white small fw-semibold">Keep last</label>
-                                        <input type="number" id="retentionDays" class="adm-input bg-dark text-white border-secondary" style="width:90px" min="1" max="3650" value="{{ selected_app.data_retention_days }}">
-                                        <label class="text-white small fw-semibold">days</label>
+            <div class="aad-stack">
+                <section id="overview" class="aad-stack">
+                    <div class="adm-grid aad-kpis">
+                        <div class="adm-kpi">
+                            <div class="k">Connections</div>
+                            <div class="v" id="kpiConnections">{{ selected_app.total_connections }}</div>
+                            <div class="n">Requests seen on this endpoint</div>
+                        </div>
+                        <div class="adm-kpi">
+                            <div class="k">Unique visitors</div>
+                            <div class="v" id="kpiVisitors">{{ total_unique_visitors }}</div>
+                            <div class="n">Distinct devices</div>
+                        </div>
+                        <div class="adm-kpi">
+                            <div class="k">Builds seen</div>
+                            <div class="v">{{ build_summary|length }}</div>
+                            <div class="n">Distinct build IDs</div>
+                        </div>
+                        <div class="adm-kpi">
+                            <div class="k">Synced users</div>
+                            <div class="v">{{ synced_total }}</div>
+                            <div class="n">{{ synced_subscribed }} subscribed &middot; {{ synced_free }} free</div>
+                        </div>
+                    </div>
+
+                    <div class="aad-split">
+                        <div class="adm-card">
+                            <div class="adm-card-head">
+                                <div class="aad-head-titles">
+                                    <span class="aad-icon is-warn"><i class="fas fa-database"></i></span>
+                                    <div>
+                                        <div class="adm-card-title">Data retention</div>
+                                        <p class="adm-card-sub">Automatically delete analytics older than the configured age.</p>
                                     </div>
-                                    <button type="button" class="adm-btn is-sm is-warn" onclick="updateRetention()"><i class="fas fa-save me-1"></i>Save & Clean</button>
+                                </div>
+                            </div>
+                            <div class="adm-card-body">
+                                <form id="retentionForm" class="d-flex align-items-end gap-2 flex-wrap">
+                                    {% csrf_token %}
+                                    <div class="adm-field" style="max-width:110px;">
+                                        <label for="retentionDays">Keep last</label>
+                                        <input type="number" id="retentionDays" class="adm-input" min="1" max="3650" value="{{ selected_app.data_retention_days }}" inputmode="numeric">
+                                    </div>
+                                    <span class="aad-note" style="padding-bottom:.55rem;">days</span>
+                                    <button type="button" class="adm-btn is-warn" onclick="updateRetention()"><i class="fas fa-save"></i> Save &amp; clean</button>
                                     <div id="retentionStatus" class="small"></div>
                                 </form>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="adm-card bg-dark border-info shadow-sm h-100">
-                        <div class="adm-card-body p-0">
-                            <div class="p-3" style="background:rgba(56,189,248,0.06);border-bottom:1px solid rgba(56,189,248,0.15);">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fas fa-scroll text-info"></i>
-                                    <h5 class="text-white mb-0">Log Settings</h5>
-                                </div>
-                                <div class="text-secondary small">Control log collection and automatic log cleanup for this app.</div>
+                            <div class="adm-card-foot">
+                                <span class="aad-note">Clears devices, daily visitors, access logs and failed attempts older than the window. The endpoint keeps serving.</span>
                             </div>
-                            <div class="p-3">
+                        </div>
+
+                        <div class="adm-card">
+                            <div class="adm-card-head">
+                                <div class="aad-head-titles">
+                                    <span class="aad-icon is-info"><i class="fas fa-scroll"></i></span>
+                                    <div>
+                                        <div class="adm-card-title">Log settings</div>
+                                        <p class="adm-card-sub">Collection switch and automatic log cleanup.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="adm-card-body">
                                 <form id="logSettingsForm" class="d-flex flex-column gap-3">
                                     {% csrf_token %}
-                                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <div class="form-check form-switch">
+                                    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                        <div class="form-check form-switch mb-0">
                                             <input type="checkbox" id="logCollectionEnabled" class="form-check-input" {% if selected_app.log_collection_enabled %}checked{% endif %}>
-                                            <label class="form-check-label text-white small fw-semibold" for="logCollectionEnabled">Log Collection Enabled</label>
+                                            <label class="form-check-label" for="logCollectionEnabled">Collect app logs</label>
                                         </div>
-                                        <span id="logCollectionBadge" class="badge {% if selected_app.log_collection_enabled %}bg-success{% else %}bg-secondary{% endif %}" style="font-size:.65rem;">
+                                        <span id="logCollectionBadge" class="adm-badge {% if selected_app.log_collection_enabled %}is-ok{% else %}is-off{% endif %}">
                                             {% if selected_app.log_collection_enabled %}ON{% else %}OFF{% endif %}
                                         </span>
                                     </div>
-                                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <label class="text-white small fw-semibold">Delete logs after</label>
-                                            <input type="number" id="logRetentionDays" class="adm-input bg-dark text-white border-secondary" style="width:90px" min="1" max="3650" value="{{ selected_app.log_retention_days }}">
-                                            <label class="text-white small fw-semibold">days</label>
+                                    <div class="d-flex align-items-end gap-2 flex-wrap">
+                                        <div class="adm-field" style="max-width:110px;">
+                                            <label for="logRetentionDays">Delete after</label>
+                                            <input type="number" id="logRetentionDays" class="adm-input" min="1" max="3650" value="{{ selected_app.log_retention_days }}" inputmode="numeric">
                                         </div>
-                                        <button type="button" class="adm-btn is-sm is-info" onclick="updateLogSettings()"><i class="fas fa-save me-1"></i>Save</button>
+                                        <span class="aad-note" style="padding-bottom:.55rem;">days</span>
+                                        <button type="button" class="adm-btn is-info" onclick="updateLogSettings()"><i class="fas fa-save"></i> Save</button>
                                         <div id="logSettingsStatus" class="small"></div>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Users & Blocking — same page as the Android analytics & logs -->
-                <div class="col-12" id="users-block">
-                    <div class="adm-card bg-dark border-danger shadow-sm">
-                        <div class="adm-card-head border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <span class="text-white fw-semibold"><i class="fas fa-user-shield me-2 text-danger"></i>Users &amp; Blocking</span>
-                            <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <!-- Users & Blocking -->
+                    <div class="adm-card" id="users-block">
+                        <div class="adm-card-head">
+                            <div class="aad-head-titles">
+                                <span class="aad-icon"><i class="fas fa-user-shield"></i></span>
+                                <div>
+                                    <div class="adm-card-title">Users &amp; blocking</div>
+                                    <p class="adm-card-sub">Access changes land on the next heartbeat (&le;60s).</p>
+                                </div>
+                            </div>
+                            <div class="adm-btn-group">
                                 <span class="adm-badge is-ok">Total {{ synced_total }}</span>
                                 <span class="adm-badge is-info">Subscribed {{ synced_subscribed }}</span>
-                                <span class="adm-badge is-warn text-dark">Free {{ synced_free }}</span>
-                                <a href="{% url 'android_app_users_full' selected_app.id %}" class="adm-btn is-sm is-danger"><i class="fas fa-expand me-1"></i>Open Full List</a>
-                                <a href="{% url 'synced_users_list' %}" class="adm-btn is-sm"><i class="fas fa-users me-1"></i>Full List</a>
-                                <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-scroll me-1"></i>All Logs</a>
+                                <span class="adm-badge is-warn">Free {{ synced_free }}</span>
+                                <a href="{% url 'android_app_users_full' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-expand"></i> Full list</a>
+                                <a href="{% url 'synced_users_list' %}" class="adm-btn is-sm"><i class="fas fa-users"></i> All users</a>
                             </div>
                         </div>
-                        <div class="adm-card-body p-0">
-                            <div class="adm-table-wrap">
-                                <table class="adm-table align-middle mb-0 small" id="blockTable">
+                        <div class="adm-card-body flush">
+                            <div class="adm-table-wrap aad-table-scroll">
+                                <table class="adm-table align-middle mb-0" id="blockTable">
                                     <thead>
                                         <tr>
                                             <th>User</th>
                                             <th>Status</th>
-                                            <th>App / Device</th>
+                                            <th>App / device</th>
                                             <th>Plan</th>
                                             <th>Access</th>
-                                            <th style="min-width:270px;">Block Controls</th>
+                                            <th style="min-width:214px;">Block controls</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -157,285 +264,286 @@
                                         <tr id="block-row-{{ u.id }}" data-email="{{ u.email }}">
                                             <td onclick="window.location='{% url 'synced_user_detail' u.id %}'" style="cursor:pointer;">
                                                 <div class="d-flex align-items-center gap-2">
-                                                    {% if u.photo_url %}
-                                                        <img src="{{ u.photo_url }}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
-                                                    {% else %}
-                                                        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,{% if u.is_subscribed %}#22c55e,#16a34a{% else %}#64748b,#475569{% endif %});display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:600;">{{ u.display_name|first|upper }}</div>
-                                                    {% endif %}
+                                                    <span class="aad-av">
+                                                        <span style="background:linear-gradient(135deg,{% if u.is_subscribed %}#22c55e,#16a34a{% else %}#64748b,#475569{% endif %});">{{ u.display_name|first|upper }}</span>
+                                                        {% if u.photo_url %}<img src="{{ u.photo_url }}" alt="" onerror="this.remove()">{% endif %}
+                                                    </span>
                                                     <div>
-                                                        <div class="fw-semibold text-white">{{ u.display_name|default:u.email }}</div>
-                                                        <div class="text-secondary" style="font-size:.7rem;"><code>{{ u.email }}</code></div>
+                                                        <div class="fw-semibold">{{ u.display_name|default:u.email }}</div>
+                                                        <div class="adm-muted" style="font-size:.7rem;">{{ u.email }}</div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td class="status-cell">
                                                 {% if hb and hb.is_online %}
-                                                    <span class="adm-badge is-ok"><i class="fas fa-circle me-1" style="font-size:.55rem;"></i>Online</span>
+                                                    <span class="adm-badge is-ok">Online</span>
                                                 {% elif hb %}
                                                     <span class="adm-badge is-off">Offline</span>
-                                                    {% if hb.last_seen_at %}<div class="text-secondary" style="font-size:.7rem;">{{ hb.last_seen_at|timesince }} ago</div>{% endif %}
+                                                    {% if hb.last_seen_at %}<div class="adm-muted" style="font-size:.7rem;">{{ hb.last_seen_at|timesince }} ago</div>{% endif %}
                                                 {% else %}
-                                                    <span class="adm-badge is-off border border-secondary text-secondary">Never</span>
+                                                    <span class="adm-badge is-off">Never</span>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                <div class="text-white">{% if hb %}<i class="fab fa-android text-success me-1"></i>{{ hb.device_model }}{% else %}{{ u.device_model|default:'-' }}{% endif %}</div>
-                                                <div class="text-secondary" style="font-size:.7rem;">{% if hb %}v{{ hb.app_version|default:'-' }} · {{ hb.os_version }}{% else %}v{{ u.app_version|default:'-' }}{% endif %}</div>
+                                                <div>{% if hb %}<i class="fab fa-android me-1" style="color:#34d399;"></i>{{ hb.device_model }}{% else %}{{ u.device_model|default:'-' }}{% endif %}</div>
+                                                <div class="adm-muted" style="font-size:.7rem;">{% if hb %}v{{ hb.app_version|default:'-' }} &middot; {{ hb.os_version }}{% else %}v{{ u.app_version|default:'-' }}{% endif %}</div>
                                             </td>
                                             <td>
-                                                {% if u.is_subscribed %}<span class="adm-badge is-ok"><i class="fas fa-check me-1"></i>{{ u.plan|default:'VIP' }}</span>{% else %}<span class="adm-badge is-off">Free</span>{% endif %}
+                                                {% if u.is_subscribed %}<span class="adm-badge is-ok"><i class="fas fa-check"></i>{{ u.plan|default:'VIP' }}</span>{% else %}<span class="adm-badge is-off">Free</span>{% endif %}
                                             </td>
                                             <td class="access-cell">
                                                 {% if u.block_mode %}
                                                     <span class="adm-badge is-danger">{{ u.get_block_mode_display }}</span>
-                                                    {% if u.blocked_at %}<div class="text-secondary" style="font-size:.7rem;">{{ u.blocked_at|timesince }} ago</div>{% endif %}
+                                                    {% if u.blocked_at %}<div class="adm-muted" style="font-size:.7rem;">{{ u.blocked_at|timesince }} ago</div>{% endif %}
                                                 {% else %}
                                                     <span class="adm-badge is-ok">Active</span>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                <div class="d-flex gap-1 flex-wrap">
-                                                    <button type="button" class="adm-btn is-sm" title="Playback blocked — brows" onclick="blockUser({{ u.id }}, 'play', this)"><i class="fas fa-volume-mute me-1"></i>Play</button>
-                                                    <button type="button" class="adm-btn is-sm" title="App blocked — no data, app shows Server is Down" onclick="blockUser({{ u.id }}, 'app', this)"><i class="fas fa-wifi me-1"></i>App</button>
-                                                    <button type="button" class="adm-btn is-sm is-danger" title="Stop all access — every API call refused" onclick="blockUser({{ u.id }}, 'full', this)"><i class="fas fa-ban me-1"></i>Full</button>
-                                                    <button type="button" class="adm-btn is-sm is-ok" title="Restore normal access" onclick="blockUser({{ u.id }}, '', this)"><i class="fas fa-check me-1"></i>Restore</button>
-                                                    <button type="button" class="adm-btn is-sm border-danger" title="Delete this user's history and cloud data (asks first)" onclick="wipeUserData({{ u.id }}, this)"><i class="fas fa-trash-alt me-1"></i>Data</button>
+                                                <div class="adm-btn-group aad-blockbtns">
+                                                    <button type="button" class="adm-btn is-sm" title="Playback blocked — titles won't play" onclick="blockUser({{ u.id }}, 'play', this)"><i class="fas fa-volume-mute"></i>Play</button>
+                                                    <button type="button" class="adm-btn is-sm" title="App blocked — no data, app shows Server is Down" onclick="blockUser({{ u.id }}, 'app', this)"><i class="fas fa-wifi"></i>App</button>
+                                                    <button type="button" class="adm-btn is-sm is-danger" title="Stop all access — every API call refused" onclick="blockUser({{ u.id }}, 'full', this)"><i class="fas fa-ban"></i>Full</button>
+                                                    <button type="button" class="adm-btn is-sm is-ok" title="Restore normal access" onclick="blockUser({{ u.id }}, '', this)"><i class="fas fa-check"></i>Restore</button>
+                                                    <button type="button" class="adm-btn is-sm is-quiet" title="Delete this user's history and cloud data (asks first)" onclick="wipeUserData({{ u.id }}, this)"><i class="fas fa-trash-alt"></i>Data</button>
                                                 </div>
                                             </td>
                                         </tr>
                                         {% endwith %}
                                         {% empty %}
-                                        <tr><td colspan="6" class="text-center text-secondary py-4"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>No synced users yet. They appear here the first time the app syncs.</td></tr>
+                                        <tr><td colspan="6"><div class="adm-empty"><i class="fas fa-inbox"></i>No synced users yet — they appear the first time the app syncs.</div></td></tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap p-3 border-secondary">
-                                <div class="text-secondary small">
-                                    <i class="fas fa-info-circle me-1"></i><strong class="text-danger">Full</strong> = every API call refused (403) &middot; <strong class="text-warning">Play</strong> = titles won't play (403) &middot; <strong class="text-warning">App</strong> = no data, app shows "Server is Down" (503) &middot; takes effect on the next heartbeat (&le;60s).
+                            <div class="adm-card-foot" style="justify-content:space-between;">
+                                <div class="aad-note">
+                                    <strong>Full</strong> refuses every call (403) &middot; <strong>Play</strong> stops playback (403) &middot; <strong>App</strong> returns 503 so the app shows &ldquo;Server is Down&rdquo;.
                                 </div>
                                 <div id="blockStatus" class="small"></div>
                             </div>
                             <div class="csrf-holder" hidden>{% csrf_token %}</div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-                <div class="adm-card-body">
-                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-                        <div>
-                            <h5 class="text-white mb-1">{{ selected_app.name }}</h5>
-                            <div class="text-secondary small">Daily endpoint connections</div>
+                    <!-- Traffic -->
+                    <div class="adm-card">
+                        <div class="adm-card-head">
+                            <div>
+                                <div class="adm-card-title">Daily connections</div>
+                                <p class="adm-card-sub">Every request this endpoint answered, per day.</p>
+                            </div>
+                            <div class="adm-btn-group">
+                                <a href="{% url 'android_app_settings' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-sliders"></i> Settings</a>
+                                <a href="{% url 'android_app_edit' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-pen"></i> Edit</a>
+                            </div>
                         </div>
-                        <a href="{% url 'android_app_settings' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-sliders me-1"></i>Settings</a>
-                        <a href="{% url 'android_app_edit' selected_app.id %}" class="adm-btn is-sm">Edit App</a>
-                        <a href="{% url 'android_app_delete' selected_app.id %}" class="adm-btn is-sm" onclick="return confirmTyped(event, {what: 'the endpoint {{ selected_app.name|escapejs }}', detail: 'Its credentials, build gate, analytics and logs are deleted with it.'})"><i class="fas fa-trash me-1"></i>Delete Endpoint</a>
-                    </div>
-                    <div style="height: 300px;"><canvas id="dailyConnectionsChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-                <div class="adm-card-body">
-                    <h5 class="text-white mb-1">Daily Unique Visitors</h5>
-                    <div class="text-secondary small mb-3">Number of unique Android devices visiting each day.</div>
-                    <div style="height: 280px;"><canvas id="dailyUniqueVisitorsChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-                <div class="adm-card-body">
-                    <h5 class="text-white mb-1">Connections by Build</h5>
-                    <div class="text-secondary small mb-3">Build identity is supplied through the <code>X-Android-Build</code> request header.</div>
-                    <div style="height: 280px;"><canvas id="buildConnectionsChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-                <div class="adm-card-body">
-                    <h5 class="text-white mb-1">Build health (last 7 days)</h5>
-                    <div class="text-secondary small mb-3">Which builds are actually in use, how much of the traffic each carries, and how often the version gate refused them.</div>
-
-                    {% if oldest_build %}
-                    <div class="d-flex flex-wrap gap-4 mb-3 small">
-                        <div><span class="text-secondary">Oldest build in use</span> <strong class="text-white">#{{ oldest_build }}</strong></div>
-                        <div><span class="text-secondary">Accounts still on it</span> <strong class="{% if oldest_share >= 25 %}text-warning{% else %}text-white{% endif %}">{{ oldest_share }}%</strong></div>
-                        <div><span class="text-secondary">Gate allows</span> <code class="text-info">{{ selected_app.allowed_build_id|default:'every build' }}</code></div>
-                    </div>
-                    {% endif %}
-
-                    {% if build_health %}
-                    <div class="adm-table-wrap">
-                        <table class="adm-table align-middle mb-0" style="font-size:.82rem;">
-                            <thead>
-                                <tr>
-                                    <th style="width:34%;">Build</th>
-                                    <th class="text-end">Requests</th>
-                                    <th style="width:32%;">Share</th>
-                                    <th class="text-end" title="Requests refused as an invalid endpoint identity — the version gate">Rejected</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for b in build_health %}
-                                <tr>
-                                    <td class="text-white">{% if b.build == '(unknown)' %}<span class="text-secondary">unknown build</span>{% else %}#{{ b.build }}{% endif %}</td>
-                                    <td class="text-end">{{ b.requests }}</td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div style="flex:1;height:6px;border-radius:99px;background:rgba(148,163,184,.18);overflow:hidden;">
-                                                <div style="width:{{ b.share }}%;height:100%;background:linear-gradient(90deg,#6366f1,#22d3ee);"></div>
-                                            </div>
-                                            <span class="text-secondary" style="min-width:42px;">{{ b.share }}%</span>
-                                        </div>
-                                    </td>
-                                    <td class="text-end {% if b.rejected %}text-danger fw-semibold{% else %}text-secondary{% endif %}">{{ b.rejected }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="text-secondary small">No build traffic recorded in the last 7 days.</div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-                <div class="adm-card-body">
-                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-                        <h5 class="text-white mb-0">Endpoint Configuration</h5>
-                        <div class="d-flex gap-2">
-                            <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-scroll me-1"></i>Logs</a>
-                            <button class="adm-btn is-sm" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code me-1"></i>Connection Helper</button>
-                            <a href="{% url 'android_app_clear_data' selected_app.id 'all_analytics' %}" class="adm-btn is-sm" onclick="return confirmTyped(event, {what: 'all analytics data for this app', detail: 'Logs, failed attempts, devices, visits, access logs, build logs and daily visitors are deleted. The endpoint and its credentials are kept.'});"><i class="fas fa-skull-crossbones me-1"></i>Nuke All</a>
+                        <div class="adm-card-body">
+                            <div class="aad-chart is-tall"><canvas id="dailyConnectionsChart"></canvas></div>
                         </div>
                     </div>
-                    <div class="row g-3 small">
-                        <div class="col-md-6"><div class="text-secondary">API URL</div><code class="text-info text-break">{{ app_endpoint }}</code></div>
-                        <div class="col-md-6"><div class="text-secondary">Allowed app/build identity</div><code class="text-white text-break">{{ selected_app.allowed_endpoint|default:'Not configured' }}</code></div>
-                        <div class="col-md-6"><div class="text-secondary">Allowed build ID</div><code class="text-white text-break">{{ selected_app.allowed_build_id|default:'Not configured' }}</code></div>
-                        <div class="col-md-6"><div class="text-secondary">Username</div><code class="text-white">{{ selected_app.access_username }}</code></div>
-                        <div class="col-md-6"><div class="text-secondary">Last accessed</div><span class="text-white">{{ selected_app.last_accessed_at|default:'Never' }}</span></div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-                <div class="adm-card-body">
-                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-                        <div>
-                            <h5 class="text-white mb-1">Failed Connection Attempts</h5>
-                            <div class="text-secondary small">Recent failed attempts to connect to this endpoint (last 5).</div>
+                    <div class="aad-split">
+                        <div class="adm-card">
+                            <div class="adm-card-head">
+                                <div>
+                                    <div class="adm-card-title">Daily unique visitors</div>
+                                    <p class="adm-card-sub">Distinct devices per day.</p>
+                                </div>
+                            </div>
+                            <div class="adm-card-body"><div class="aad-chart"><canvas id="dailyUniqueVisitorsChart"></canvas></div></div>
                         </div>
-                        <div class="d-flex gap-2">
-                            <a href="{% url 'android_app_clear_data' selected_app.id 'failed_attempts' %}" class="adm-btn is-sm" onclick="return confirmTyped(event, {what: 'all failed attempt records for this app'});"><i class="fas fa-trash me-1"></i>Clear</a>
-                            <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="adm-btn is-sm">View All</a>
-                        </div>
-                    </div>
-                    {% if failed_attempts %}
-                    <div class="adm-table-wrap">
-                        <table class="adm-table mb-0 align-middle small">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Reason</th>
-                                    <th>IP Address</th>
-                                    <th>Request Identity</th>
-                                    <th>Build ID</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for attempt in failed_attempts %}
-                                <tr>
-                                    <td>{{ attempt.attempted_at }}</td>
-                                    <td>
-                                        <span class="adm-badge is-danger">{{ attempt.get_failure_reason_display }}</span>
-                                    </td>
-                                    <td class="">{% if attempt.ip_address %}<span class="ip-text">{{ attempt.ip_address }}</span>{% ip_geo_chip attempt.ip_address %}{% else %}-{% endif %}</td>
-                                    <td>{{ attempt.request_identity|default:'-' }}</td>
-                                    <td>{{ attempt.build_identifier|default:'-' }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-4 text-secondary">No failed attempts recorded yet.</div>
-                    {% endif %}
-                </div>
-            </div>
-            
-            <div class="adm-card bg-dark border-secondary shadow-sm mt-4" id="app-logs">
-                <div class="adm-card-body">
-                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-                        <div>
-                            <h5 class="text-white mb-1"><i class="fas fa-scroll me-2 text-warning"></i>Recent App Logs</h5>
-                            <div class="text-secondary small">Last 20 log entries from this app &middot; kept {{ selected_app.log_retention_days }} days</div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-filter me-1"></i>All Logs &amp; Filters</a>
-                            <a href="{% url 'android_app_logs_clear' selected_app.id %}" class="adm-btn is-sm" onclick="return confirmTyped(event, {what: 'every app log for this app'});"><i class="fas fa-trash me-1"></i>Clear</a>
+                        <div class="adm-card">
+                            <div class="adm-card-head">
+                                <div>
+                                    <div class="adm-card-title">Connections by build</div>
+                                    <p class="adm-card-sub">Build identity from the <code>X-Android-Build</code> header.</p>
+                                </div>
+                            </div>
+                            <div class="adm-card-body"><div class="aad-chart"><canvas id="buildConnectionsChart"></canvas></div></div>
                         </div>
                     </div>
-                    {% if recent_logs %}
-                    <div class="adm-table-wrap">
-                        <table class="adm-table mb-0 align-middle small">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Level</th>
-                                    <th>Tag</th>
-                                    <th>User ID</th>
-                                    <th>Message</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for log in recent_logs %}
-                                <tr>
-                                    <td class="text-secondary">{{ log.timestamp }}</td>
-                                    <td>
-                                        <span class="badge {% if log.level == 'error' or log.level == 'fatal' %}bg-danger{% elif log.level == 'warn' %}bg-warning text-dark{% elif log.level == 'debug' %}bg-secondary{% else %}bg-info{% endif %}">{{ log.get_level_display }}</span>
-                                    </td>
-                                    <td><code class="text-info">{{ log.tag|default:'-' }}</code></td>
-                                    <td><code>{{ log.user_id|default:'-' }}</code></td>
-                                    <td class="text-white" style="max-width:420px;">{{ log.message|truncatechars:160|linebreaksbr }}</td>
-                                    <td>{% if log.device %}<a href="{% url 'android_device_logs' selected_app.id log.device.user_id %}" class="adm-btn is-sm" title="All requests for this device"><i class="fas fa-terminal me-1"></i>Device</a>{% endif %}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-4 text-secondary">No logs captured yet.</div>
-                    {% endif %}
-                </div>
-            </div>
 
+                    <div class="adm-card">
+                        <div class="adm-card-head">
+                            <div>
+                                <div class="adm-card-title">Build health</div>
+                                <p class="adm-card-sub">Last 7 days &middot; which builds are live and how often the gate refused them.</p>
+                            </div>
+                            {% if oldest_build %}
+                            <div class="adm-btn-group">
+                                <span class="adm-chip">Oldest build <strong>#{{ oldest_build }}</strong></span>
+                                <span class="adm-chip{% if oldest_share >= 25 %} is-warn{% endif %}">{{ oldest_share }}% of accounts</span>
+                                <span class="adm-chip">Gate allows {{ selected_app.allowed_build_id|default:'every build' }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="adm-card-body flush">
+                            {% if build_health %}
+                            <div class="adm-table-wrap">
+                                <table class="adm-table align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:28%;">Build</th>
+                                            <th class="num">Requests</th>
+                                            <th style="width:34%;">Share</th>
+                                            <th class="num" title="Requests refused as an invalid endpoint identity — the version gate">Rejected</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for b in build_health %}
+                                        <tr>
+                                            <td>{% if b.build == '(unknown)' %}<span class="adm-muted">unknown build</span>{% else %}<span class="adm-mono">#{{ b.build }}</span>{% endif %}</td>
+                                            <td class="num">{{ b.requests }}</td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="adm-meter" style="flex:1;margin-top:0;"><span style="width:{{ b.share }}%;"></span></div>
+                                                    <span class="adm-muted" style="min-width:40px;text-align:right;">{{ b.share }}%</span>
+                                                </div>
+                                            </td>
+                                            <td class="num {% if b.rejected %}adm-text-bad{% else %}adm-muted{% endif %}">{{ b.rejected }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="adm-empty"><i class="fas fa-chart-bar"></i>No build traffic recorded in the last 7 days.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="adm-card">
+                        <div class="adm-card-head">
+                            <div>
+                                <div class="adm-card-title">Endpoint configuration</div>
+                                <p class="adm-card-sub">What the app must present to be accepted.</p>
+                            </div>
+                            <div class="adm-btn-group">
+                                <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-scroll"></i> Logs</a>
+                                <button class="adm-btn is-sm" data-bs-toggle="modal" data-bs-target="#connectionHelperModal"><i class="fas fa-code"></i> Connection helper</button>
+                                <a href="{% url 'android_app_clear_data' selected_app.id 'all_analytics' %}" class="adm-btn is-sm is-quiet" onclick="return confirmTyped(event, {what: 'all analytics data for this app', detail: 'Logs, failed attempts, devices, visits, access logs, build logs and daily visitors are deleted. The endpoint and its credentials are kept.'});"><i class="fas fa-skull-crossbones"></i> Nuke all</a>
+                            </div>
+                        </div>
+                        <div class="adm-card-body">
+                            <div class="aad-facts">
+                                <div><div class="aad-fact-label">API URL</div><code class="adm-code">{{ app_endpoint }}</code></div>
+                                <div><div class="aad-fact-label">Allowed app identity</div><code class="adm-code">{{ selected_app.allowed_endpoint|default:'Not configured' }}</code></div>
+                                <div><div class="aad-fact-label">Allowed build ID</div><code class="adm-code">{{ selected_app.allowed_build_id|default:'Not configured' }}</code></div>
+                                <div><div class="aad-fact-label">Username</div><code class="adm-code">{{ selected_app.access_username }}</code></div>
+                                <div><div class="aad-fact-label">Last accessed</div><code class="adm-code">{{ selected_app.last_accessed_at|default:'Never' }}</code></div>
+                                <div><div class="aad-fact-label">Auth</div><code class="adm-code">Basic auth over HTTPS</code></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="adm-card">
+                        <div class="adm-card-head">
+                            <div>
+                                <div class="adm-card-title">Failed connection attempts</div>
+                                <p class="adm-card-sub">Most recent refusals &mdash; last 5.</p>
+                            </div>
+                            <div class="adm-btn-group">
+                                <a href="{% url 'android_app_failed_attempts' selected_app.id %}" class="adm-btn is-sm">View all</a>
+                                <a href="{% url 'android_app_clear_data' selected_app.id 'failed_attempts' %}" class="adm-btn is-sm is-quiet" onclick="return confirmTyped(event, {what: 'all failed attempt records for this app'});"><i class="fas fa-trash"></i> Clear</a>
+                            </div>
+                        </div>
+                        <div class="adm-card-body flush">
+                            {% if failed_attempts %}
+                            <div class="adm-table-wrap">
+                                <table class="adm-table mb-0">
+                                    <thead>
+                                        <tr><th>Time</th><th>Reason</th><th>IP address</th><th>Request identity</th><th>Build ID</th></tr>
+                                    </thead>
+                                    <tbody id="failedTbody">
+                                        {% for attempt in failed_attempts %}
+                                        <tr>
+                                            <td class="adm-muted">{{ attempt.attempted_at }}</td>
+                                            <td><span class="adm-badge is-danger">{{ attempt.get_failure_reason_display }}</span></td>
+                                            <td>{% if attempt.ip_address %}<span class="ip-text adm-mono">{{ attempt.ip_address }}</span>{% ip_geo_chip attempt.ip_address %}{% else %}<span class="adm-muted">&mdash;</span>{% endif %}</td>
+                                            <td class="adm-mono">{{ attempt.request_identity|default:'-' }}</td>
+                                            <td class="adm-mono">{{ attempt.build_identifier|default:'-' }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="adm-empty"><i class="fas fa-shield-alt"></i>No failed attempts recorded — every request so far was accepted.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="adm-card" id="app-logs">
+                        <div class="adm-card-head">
+                            <div>
+                                <div class="adm-card-title">Recent app logs</div>
+                                <p class="adm-card-sub">Last 20 entries &middot; kept {{ selected_app.log_retention_days }} days.</p>
+                            </div>
+                            <div class="adm-btn-group">
+                                <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-filter"></i> All logs &amp; filters</a>
+                                <a href="{% url 'android_app_logs_clear' selected_app.id %}" class="adm-btn is-sm is-quiet" onclick="return confirmTyped(event, {what: 'every app log for this app'});"><i class="fas fa-trash"></i> Clear</a>
+                            </div>
+                        </div>
+                        <div class="adm-card-body flush">
+                            {% if recent_logs %}
+                            <div class="adm-table-wrap">
+                                <table class="adm-table mb-0">
+                                    <thead>
+                                        <tr><th>Time</th><th>Level</th><th>Tag</th><th>User ID</th><th>Message</th><th></th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for log in recent_logs %}
+                                        <tr>
+                                            <td class="adm-muted" style="white-space:nowrap;">{{ log.timestamp }}</td>
+                                            <td>
+                                                <span class="adm-badge {% if log.level == 'error' or log.level == 'fatal' %}is-danger{% elif log.level == 'warn' %}is-warn{% elif log.level == 'debug' %}is-off{% else %}is-info{% endif %}">{{ log.get_level_display }}</span>
+                                            </td>
+                                            <td class="adm-mono">{{ log.tag|default:'-' }}</td>
+                                            <td class="adm-mono adm-muted">{{ log.user_id|default:'-' }}</td>
+                                            <td style="max-width:430px;">{{ log.message|truncatechars:160|linebreaksbr }}</td>
+                                            <td>{% if log.device %}<a href="{% url 'android_device_logs' selected_app.id log.device.user_id %}" class="adm-btn is-sm" title="All requests for this device"><i class="fas fa-terminal"></i> Device</a>{% endif %}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="adm-empty"><i class="fas fa-scroll"></i>No logs captured yet.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </section>
+            </div>
             {% else %}
-            <div class="adm-card bg-dark border-secondary shadow-sm"><div class="adm-card-body text-center py-5 text-secondary">Create an Android app to start tracking its endpoint usage.</div></div>
+            <div class="adm-card"><div class="adm-empty"><i class="fas fa-mobile-alt"></i>Create an Android endpoint to start tracking its usage.</div></div>
             {% endif %}
-        </div>
+        </main>
     </div>
 
-    <div class="adm-card bg-dark border-secondary shadow-sm mt-4">
-        <div class="adm-card-body">
-            <h5 class="text-white mb-3">All Endpoint Totals</h5>
+    <div class="adm-card" style="margin-top:var(--adm-gap);">
+        <div class="adm-card-head">
+            <div>
+                <div class="adm-card-title">All endpoint totals</div>
+                <p class="adm-card-sub">Traffic across every saved Android endpoint.</p>
+            </div>
+        </div>
+        <div class="adm-card-body flush">
             <div class="adm-table-wrap">
-                <table class="adm-table mb-0 align-middle">
-                    <thead><tr><th>App</th><th>Status</th><th>Total Connections</th><th>Last Accessed</th><th></th></tr></thead>
+                <table class="adm-table mb-0">
+                    <thead><tr><th style="width:38%;">Endpoint</th><th style="width:12%;">Status</th><th class="num" style="width:14%;">Connections</th><th style="width:26%;">Last accessed</th><th></th></tr></thead>
                     <tbody>
                         {% for row in summary_rows %}
                         <tr>
-                            <td><div class="fw-semibold">{{ row.app.name }}</div><div class="text-secondary small">{{ row.app.slug }}</div></td>
-                            <td>{% if row.app.is_active %}<span class="adm-badge is-ok">Active</span>{% else %}<span class="adm-badge is-off">Disabled</span>{% endif %}</td>
-                            <td>{{ row.total_connections }}</td>
-                            <td>{{ row.last_accessed_at|default:'Never' }}</td>
-                            <td><a class="adm-btn is-sm" href="{% url 'android_app_dashboard_detail' row.app.id %}">View</a></td>
+                            <td><div class="fw-semibold">{{ row.app.name }}</div><div class="adm-mono adm-muted">{{ row.app.slug }}</div></td>
+                            <td>{% if row.app.is_active %}<span class="adm-badge is-ok">Live</span>{% else %}<span class="adm-badge is-off">Off</span>{% endif %}</td>
+                            <td class="num">{{ row.total_connections }}</td>
+                            <td class="adm-muted">{{ row.last_accessed_at|default:'Never' }}</td>
+                            <td><a class="adm-btn is-sm" href="{% url 'android_app_dashboard_detail' row.app.id %}">Open</a></td>
                         </tr>
-                        {% empty %}<tr><td colspan="5" class="text-secondary text-center py-4">No endpoint activity yet.</td></tr>{% endfor %}
+                        {% empty %}
+                        <tr><td colspan="5"><div class="adm-empty"><i class="fas fa-chart-pie"></i>No endpoint activity yet.</div></td></tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -651,13 +759,11 @@ function initializeCharts() {
 
 function updateDashboard(data) {
     // Update the big numbers
-    const totalConnectionsEl = document.querySelector('.card.bg-dark.border-secondary.h-100 .display-6.text-white');
+    const totalConnectionsEl = document.getElementById('kpiConnections');
     if (totalConnectionsEl) {
         totalConnectionsEl.textContent = data.total_connections;
     }
-    const uniqueVisitorsEl = Array.from(document.querySelectorAll('.card.bg-dark.border-secondary.h-100 .display-6.text-white')).find(el => 
-        el.parentElement.textContent.includes('Total Unique Visitors')
-    );
+    const uniqueVisitorsEl = document.getElementById('kpiVisitors');
     if (uniqueVisitorsEl) {
         uniqueVisitorsEl.textContent = data.total_unique_visitors;
     }
@@ -680,7 +786,7 @@ function updateDashboard(data) {
     }
 
     // Update failed attempts table
-    const failedTbody = document.querySelectorAll('.card.bg-dark.border-secondary.shadow-sm.mt-4 tbody')[0];
+    const failedTbody = document.getElementById('failedTbody');
     if (failedTbody && data.failed_attempts.length) {
         failedTbody.innerHTML = data.failed_attempts.map(attempt => `
             <tr>
@@ -770,24 +876,24 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- Connection Helper Modal -->
 <div class="modal fade" id="connectionHelperModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content bg-dark border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title text-white"><i class="fas fa-code me-2 text-info"></i>Connection Helper</h5>
+        <div class="modal-content" style="background:var(--bg-2);border:1px solid var(--adm-line);border-radius:var(--adm-r);">
+            <div class="modal-header" style="border-color:var(--adm-line);">
+                <h5 class="modal-title"><i class="fas fa-code me-2"></i>Connection helper</h5>
                 <button aria-label="Close" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-secondary small mb-3">Copy these examples to test the connection to this endpoint from a device or server.</p>
+                <p class="adm-muted small mb-3">Copy these examples to test the connection to this endpoint from a device or server.</p>
                 
                 <!-- cURL Tab -->
-                <ul class="nav nav-tabs mb-3" id="connHelperTabs">
-                    <li class="nav-item"><button class="nav-link active text-white" style="background:rgba(56,189,248,0.1);border-color:rgba(56,189,248,0.3);" data-bs-toggle="tab" data-bs-target="#tab-curl">cURL</button></li>
-                    <li class="nav-item"><button class="nav-link text-white" style="background:rgba(56,189,248,0.05);border-color:transparent;" data-bs-toggle="tab" data-bs-target="#tab-python">Python (requests)</button></li>
-                </ul>
+                <div class="adm-pills mb-3" id="connHelperTabs">
+                    <a href="#tab-curl" class="active" data-bs-toggle="tab" data-bs-target="#tab-curl">cURL</a>
+                    <a href="#tab-python" data-bs-toggle="tab" data-bs-target="#tab-python">Python (requests)</a>
+                </div>
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="tab-curl">
                         <div class="position-relative">
                             <button class="adm-btn is-sm position-absolute top-0 end-0 m-2" onclick="copyCode('curlCode')"><i class="fas fa-copy me-1"></i>Copy</button>
-                            <pre class="text-info small mb-0 p-3 rounded" id="curlCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">curl -X GET "{{ app_endpoint }}" \
+                            <pre class="adm-code" id="curlCode">curl -X GET "{{ app_endpoint }}" \
   -u "{{ selected_app.access_username }}:{{ selected_app.access_password }}" \
   -H "X-Android-App: {{ selected_app.allowed_endpoint|default:'com.example.app' }}" \
   -H "X-Android-Build: {{ selected_app.allowed_build_id|default:'1' }}" \
@@ -795,12 +901,12 @@ document.addEventListener('DOMContentLoaded', () => {
   -H "X-Android-Device: Pixel 7 Pro" \
   -H "X-Android-OS-Version: 14"</pre>
                         </div>
-                        <div class="text-secondary small mt-2"><i class="fas fa-info-circle me-1"></i>This is a GET request. The endpoint returns the JSON payload with player servers and ads config.</div>
+                        <div class="adm-muted small mt-2"><i class="fas fa-info-circle me-1"></i>This is a GET request. The endpoint returns the JSON payload with player servers and ads config.</div>
                     </div>
                     <div class="tab-pane fade" id="tab-python">
                         <div class="position-relative">
                             <button class="adm-btn is-sm position-absolute top-0 end-0 m-2" onclick="copyCode('pythonCode')"><i class="fas fa-copy me-1"></i>Copy</button>
-                            <pre class="text-info small mb-0 p-3 rounded" id="pythonCode" style="background:rgba(0,0,0,0.4);white-space:pre-wrap;word-break:break-all;">import requests
+                            <pre class="adm-code" id="pythonCode">import requests
 
 url = "{{ app_endpoint }}"
 headers = {
@@ -820,39 +926,39 @@ response = requests.get(
 print(f"Status: {response.status_code}")
 print(response.json())</pre>
                         </div>
-                        <div class="text-secondary small mt-2"><i class="fas fa-info-circle me-1"></i>Install with: <code>pip install requests</code>. Replace the placeholder values with actual device info.</div>
+                        <div class="adm-muted small mt-2"><i class="fas fa-info-circle me-1"></i>Install with: <code>pip install requests</code>. Replace the placeholder values with actual device info.</div>
                     </div>
                 </div>
 
                 <!-- Required Headers Reference -->
                 <div class="mt-4">
-                    <h6 class="text-white mb-2"><i class="fas fa-list me-1 text-warning"></i>Required Headers Reference</h6>
+                    <h6 class="adm-card-title mb-2"><i class="fas fa-list me-1"></i>Required headers reference</h6>
                     <div class="adm-table-wrap">
                         <table class="adm-table mb-0 align-middle small">
                             <thead><tr><th>Header</th><th>Description</th><th>Example</th></tr></thead>
                             <tbody>
-                                <tr><td><code class="text-info">Authorization</code></td><td class="text-secondary">Basic auth (Base64 encoded <code>user:pass</code>)</td><td><code class="text-white">Basic {{ selected_app.access_username }}:****</code></td></tr>
-                                <tr><td><code class="text-info">X-Android-App</code></td><td class="text-secondary">Package name / app identity (or <code>X-Android-Package</code>)</td><td><code class="text-white">{{ selected_app.allowed_endpoint|default:'com.example.app' }}</code></td></tr>
-                                <tr><td><code class="text-info">X-Android-Build</code></td><td class="text-secondary">Build version identifier (or <code>?build=</code> param)</td><td><code class="text-white">{{ selected_app.allowed_build_id|default:'1' }}</code></td></tr>
-                                <tr><td><code class="text-info">X-Android-User-ID</code></td><td class="text-secondary">Unique device ID (Android ID or UUID)</td><td><code class="text-white">a1b2c3d4...</code></td></tr>
-                                <tr><td><code class="text-info">X-Android-Device</code></td><td class="text-secondary">Device model name</td><td><code class="text-white">Pixel 7 Pro</code></td></tr>
-                                <tr><td><code class="text-info">X-Android-OS-Version</code></td><td class="text-secondary">Android OS version</td><td><code class="text-white">14</code></td></tr>
+                                <tr><td><code class="adm-mono">Authorization</code></td><td class="adm-muted">Basic auth (Base64 encoded <code>user:pass</code>)</td><td><code class="adm-mono">Basic {{ selected_app.access_username }}:****</code></td></tr>
+                                <tr><td><code class="adm-mono">X-Android-App</code></td><td class="adm-muted">Package name / app identity (or <code>X-Android-Package</code>)</td><td><code class="adm-mono">{{ selected_app.allowed_endpoint|default:'com.example.app' }}</code></td></tr>
+                                <tr><td><code class="adm-mono">X-Android-Build</code></td><td class="adm-muted">Build version identifier (or <code>?build=</code> param)</td><td><code class="adm-mono">{{ selected_app.allowed_build_id|default:'1' }}</code></td></tr>
+                                <tr><td><code class="adm-mono">X-Android-User-ID</code></td><td class="adm-muted">Unique device ID (Android ID or UUID)</td><td><code class="adm-mono">a1b2c3d4...</code></td></tr>
+                                <tr><td><code class="adm-mono">X-Android-Device</code></td><td class="adm-muted">Device model name</td><td><code class="adm-mono">Pixel 7 Pro</code></td></tr>
+                                <tr><td><code class="adm-mono">X-Android-OS-Version</code></td><td class="adm-muted">Android OS version</td><td><code class="adm-mono">14</code></td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-n                <!-- Possible Responses -->
+                <!-- Possible Responses -->
                 <div class="mt-4">
-                    <h6 class="text-white mb-2"><i class="fas fa-exchange-alt me-1 text-warning"></i>Possible Responses</h6>
+                    <h6 class="adm-card-title mb-2"><i class="fas fa-exchange-alt me-1"></i>Possible responses</h6>
                     <div class="adm-table-wrap">
                         <table class="adm-table mb-0 align-middle small">
                             <thead><tr><th>Status</th><th>Meaning</th><th>Action</th></tr></thead>
                             <tbody>
-                                <tr><td><span class="adm-badge is-ok">200</span></td><td>Success</td><td class="text-secondary">Parse JSON payload</td></tr>
-                                <tr><td><span class="adm-badge is-danger">403</span></td><td>Authentication / identity error</td><td class="text-secondary">Check credentials, headers, and allowed endpoint</td></tr>
-                                <tr><td><span class="adm-badge is-warn text-dark">426</span></td><td>Update required</td><td class="text-secondary">App build is outdated; download new APK</td></tr>
-                                <tr><td><span class="adm-badge is-off">404</span></td><td>App not found</td><td class="text-secondary">Check the slug in the URL</td></tr>
+                                <tr><td><span class="adm-badge is-ok">200</span></td><td>Success</td><td class="adm-muted">Parse JSON payload</td></tr>
+                                <tr><td><span class="adm-badge is-danger">403</span></td><td>Authentication / identity error</td><td class="adm-muted">Check credentials, headers, and allowed endpoint</td></tr>
+                                <tr><td><span class="adm-badge is-warn">426</span></td><td>Update required</td><td class="adm-muted">App build is outdated; download new APK</td></tr>
+                                <tr><td><span class="adm-badge is-off">404</span></td><td>App not found</td><td class="adm-muted">Check the slug in the URL</td></tr>
                             </tbody>
                         </table>
                     </div>

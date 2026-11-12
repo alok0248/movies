@@ -343,8 +343,15 @@ class IPBlockMiddleware:
             return self.get_response(request)
         # A signed-in visitor already followed the block page's way out, so a
         # hand-made block does not stop them — but a bot block, or a permanent
-        # one, is not something holding a session gets to bypass.
-        if signed_in and not (row.is_permanent or is_bot_block(row)):
+        # one, is not something holding a session gets to bypass. The operator
+        # is the exception: the automatic watchers fire on unsigned work from
+        # their own machine (a curl, a smoke test, a script), and that must
+        # never lock staff out of the site they are checking. A hand-made
+        # block still applies to everyone, so an address can still be blocked
+        # on purpose; the trusted list (SiteSettings.allowed_ips) remains the
+        # way to keep an operator address out of the watchers entirely.
+        auto_block = is_bot_block(row)
+        if signed_in and ((operator and auto_block) or not (row.is_permanent or auto_block)):
             return self.get_response(request)
         return blocked_response(request, client_ip, row)
 

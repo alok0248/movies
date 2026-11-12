@@ -1,5 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
+<style>
+    /* Written for the dark frame: these tokens keep the page readable when the
+       site is in light theme too. */
+    .ph-card { background: var(--bg-2); border: 1px solid var(--border) !important; }
+    .ph-title { color: var(--text) !important; }
+    .ph-sub { color: var(--text-2) !important; }
+</style>
 <div class="container mt-5 mb-5">
     {% if admin_viewing_user %}
     <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);color:#93c5fd;">
@@ -17,8 +24,8 @@
     {% endif %}
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
-            <h1 class="text-white mb-1"><i class="fas fa-history me-2 text-info"></i>Play History</h1>
-            <p class="text-secondary mb-0">Continue watching where you left off.</p>
+            <h1 class="ph-title mb-1"><i class="fas fa-history me-2 text-info"></i>Play History</h1>
+            <p class="ph-sub mb-0">Continue watching where you left off.</p>
         </div>
         <div class="d-flex gap-2">
             {% if request.user.is_staff or request.user.is_superuser %}
@@ -34,7 +41,7 @@
     <div class="row g-3">
         {% for item in continue_items %}
         <div class="col-6 col-md-4 col-lg-3 col-xl-2">
-            <div class="card bg-dark border-secondary shadow-sm h-100" style="overflow:hidden;transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div class="card ph-card shadow-sm h-100" style="overflow:hidden;transition:transform .7s cubic-bezier(.32,.72,0,1),box-shadow .7s cubic-bezier(.32,.72,0,1);" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
                 {% with ph_id=item.tmdb_id %}
                 {% if ph_id and ph_id > 0 %}<a href="{% if item.media_type == 'tv' or item.season_number %}{% url 'series_detail_by_id' ph_id %}{% else %}{% url 'movie_detail_by_id' ph_id %}{% endif %}" class="text-decoration-none" style="display:block;" title="{{ item.title }}">{% endif %}
                     <div style="position:relative;padding-top:150%;overflow:hidden;background:#1a1a2e;">
@@ -73,13 +80,13 @@
                 {% if ph_id and ph_id > 0 %}</a>{% endif %}
                 {% endwith %}
                 <div class="card-body p-2">
-                    <div class="text-white small fw-semibold text-truncate" style="font-size:.8rem;">{{ item.title }}</div>
+                    <div class="ph-title small fw-semibold text-truncate" style="font-size:.8rem;">{{ item.title }}</div>
                     {% if item.season_number and item.episode_number %}
-                    <div class="text-secondary" style="font-size:.7rem;">S{{ item.season_number }}E{{ item.episode_number }}{% if item.episode_title %} &middot; {{ item.episode_title }}{% endif %}</div>
+                    <div class="ph-sub" style="font-size:.7rem;">S{{ item.season_number }}E{{ item.episode_number }}{% if item.episode_title %} &middot; {{ item.episode_title }}{% endif %}</div>
                     {% endif %}
                     <div class="d-flex justify-content-between align-items-center mt-1">
-                        <span class="text-secondary" style="font-size:.65rem;">{{ item.formatted_duration }} watched</span>
-                        <span class="text-secondary" style="font-size:.65rem;">{{ item.last_played_at|timesince }} ago</span>
+                        <span class="ph-sub" style="font-size:.65rem;">{{ item.formatted_duration }} watched</span>
+                        <span class="ph-sub" style="font-size:.65rem;">{{ item.last_played_at|timesince }} ago</span>
                     </div>
                 </div>
             </div>
@@ -87,11 +94,11 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="card bg-dark border-secondary shadow-sm">
+    <div class="card ph-card shadow-sm">
         <div class="card-body text-center py-5">
-            <i class="fas fa-play-circle fa-3x text-secondary mb-3"></i>
-            <h5 class="text-white mb-2">No Play History Yet</h5>
-            <p class="text-secondary mb-3">Start watching movies and TV shows to build your play history.</p>
+            <i class="fas fa-play-circle fa-3x ph-sub mb-3"></i>
+            <h5 class="ph-title mb-2">No Play History Yet</h5>
+            <p class="ph-sub mb-3">Start watching movies and TV shows to build your play history.</p>
             <a href="{% url 'index' %}" class="btn btn-primary">Browse Content</a>
         </div>
     </div>

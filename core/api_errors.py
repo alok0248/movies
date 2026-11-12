@@ -141,9 +141,13 @@ def prune():
         logger.debug('ErrorLog: prune failed', exc_info=True)
 
 
-def recent_errors(limit=300, kind=None, status=None, q=None):
-    """Newest errors first, optionally filtered by kind ('api'/'server'),
-    status class ('4xx'/'5xx') and a free-text query."""
+def error_queryset(kind=None, status=None, q=None):
+    """The filtered ErrorLog queryset, newest first.
+
+    Shared by ``recent_errors`` (the JSON export) and the admin page's pager,
+    which walks it a page at a time so one response never carries every
+    traceback at once.
+    """
     from django.db.models import Q
     from .models import ErrorLog
 
@@ -159,7 +163,15 @@ def recent_errors(limit=300, kind=None, status=None, q=None):
             Q(path__icontains=q) | Q(message__icontains=q)
             | Q(error_type__icontains=q) | Q(view_name__icontains=q)
         )
-    return list(qs[:limit])
+    # The id breaks ties between rows written in the same second, so a page
+    # boundary can never show one twice or skip it.
+    return qs.order_by('-created_at', '-id')
+
+
+def recent_errors(limit=300, kind=None, status=None, q=None):
+    """Newest errors first, optionally filtered by kind ('api'/'server'),
+    status class ('4xx'/'5xx') and a free-text query."""
+    return list(error_queryset(kind=kind, status=status, q=q)[:limit])
 
 
 def error_total():
