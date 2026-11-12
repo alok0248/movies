@@ -1128,7 +1128,150 @@ def admin_dashboard(request):
     except Exception:
         logger.debug('dashboard: could not build the traffic charts', exc_info=True)
 
+    # ------------------------------------------------- Android endpoint health
+    # The app talks to its own API, so "is the app healthy" is a different
+    # question from "is the website healthy": it is answered by the connections
+    # the app logged, the identities the gate turned away, and the API errors
+    # recorded for those paths.
+    now = timezone.now()
+    android = {
+        'apps': [], 'total_apps': 0, 'active_apps': 0,
+        'conn_today': 0, 'conn_week': 0, 'fail_day': 0, 'fail_week': 0,
+        'api_errors_day': 0, 'api_5xx_day': 0, 'top_reasons': [],
+        'top_paths': [], 'last_seen': None, 'builds_active': 0,
+    }
+    try:
+        from datetime import timedelta as _td3
+        from django.db.models import Count, Max, Sum
+        from .models import (AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog,
+                             AndroidAppFailedAttempt, ErrorLog)
+        start_week = today - _td3(days=6)
+        day_ago = now - _td3(hours=24)
+
+        def _by_app(qs, agg):
+            return {r['android_app']: r['n']
+                    for r in qs.values('android_app').annotate(n=agg)}
+
+        conn_today = _by_app(
+            AndroidAppAccessLog.objects.filter(access_date=today),
+            Sum('connection_count'))
+        conn_week = _by_app(
+            AndroidAppAccessLog.objects.filter(access_date__gte=start_week),
+            Sum('connection_count'))
+        fails_day = _by_app(
+            AndroidAppFailedAttempt.objects.filter(attempted_at__gte=day_ago),
+            Count('id'))
+        last_seen_by_app = {
+            r['android_app']: r['m'] for r in
+            AndroidAppAccessLog.objects.values('android_app').annotate(m=Max('last_accessed_at'))}
+        latest_build = {}
+        for r in (AndroidAppBuildLog.objects.filter(access_date__gte=start_week)
+                  .values('android_app', 'build_identifier')
+                  .annotate(m=Max('last_accessed_at'))
+                  .order_by('-m')):
+            latest_build.setdefault(r['android_app'], r['build_identifier'])
+
+        for app in AndroidApp.objects.all().order_by('name'):
+            android['apps'].append({
+                'name': app.name,
+                'slug': app.slug,
+                'is_active': app.is_active,
+                'today': int(conn_today.get(app.id) or 0),
+                'week': int(conn_week.get(app.id) or 0),
+                'fails': int(fails_day.get(app.id) or 0),
+                'last_seen': last_seen_by_app.get(app.id),
+                'build': latest_build.get(app.id, ''),
+            })
+
+        android['total_apps'] = len(android['apps'])
+        android['active_apps'] = sum(1 for a in android['apps'] if a['is_active'])
+        android['builds_active'] = len({a['build'] for a in android['apps'] if a['build']})
+        android['conn_today'] = sum(a['today'] for a in android['apps'])
+        android['conn_week'] = sum(a['week'] for a in android['apps'])
+        android['fail_day'] = AndroidAppFailedAttempt.objects.filter(
+            attempted_at__gte=day_ago).count()
+        android['fail_week'] = AndroidAppFailedAttempt.objects.filter(
+            attempted_at__gte=day_ago - _td3(days=6)).count()
+        android['last_seen'] = max(
+            (a['last_seen'] for a in android['apps'] if a['last_seen']), default=None)
+
+        reasons = dict(AndroidAppFailedAttempt.FAILURE_REASON_CHOICES)
+        for row in (AndroidAppFailedAttempt.objects.filter(attempted_at__gte=day_ago)
+                    .values('failure_reason').annotate(n=Count('id')).order_by('-n')[:4]):
+            android['top_reasons'].append({
+                'label': reasons.get(row['failure_reason'], row['failure_reason']),
+                'n': row['n']})
+
+        api_qs = ErrorLog.objects.filter(kind=ErrorLog.KIND_API, created_at__gte=day_ago)
+        android['api_errors_day'] = api_qs.count()
+        android['api_5xx_day'] = api_qs.filter(status_code__gte=500).count()
+        for row in (api_qs.values('path', 'status_code').annotate(n=Count('id'))
+                    .order_by('-n')[:4]):
+            android['top_paths'].append({
+                'path': row['path'] or '(unknown path)',
+                'status': row['status_code'], 'n': row['n']})
+    except Exception:
+        logger.debug('dashboard: could not read the Android API health', exc_info=True)
+
+    # ------------------------------------------------------ devices and addresses
+    devices = {
+        'devices': 0, 'ips': 0, 'accounts': 0, 'multi_device': 0,
+        'multi_ip': 0, 'unknown_country': 0, 'new_day': 0, 'last_seen': None,
+    }
+    try:
+        from datetime import timedelta as _td4
+        from django.db.models import Count, Max
+        from .models import DeviceIPHistory, IPLocation
+        devices['devices'] = (DeviceIPHistory.objects.exclude(device_id='')
+                              .values('device_id').distinct().count())
+        devices['ips'] = DeviceIPHistory.objects.values('ip').distinct().count()
+        devices['accounts'] = (DeviceIPHistory.objects.exclude(username='')
+                               .values('username').distinct().count())
+        per_account = (DeviceIPHistory.objects.exclude(username='')
+                       .values('username')
+                       .annotate(d=Count('device_id', distinct=True),
+                                 i=Count('ip', distinct=True)))
+        devices['multi_device'] = sum(1 for r in per_account if r['d'] > 1)
+        devices['multi_ip'] = sum(1 for r in per_account if r['i'] > 1)
+        known = set(IPLocation.objects.exclude(country='')
+                    .values_list('ip', flat=True))
+        all_ips = list(DeviceIPHistory.objects.values_list('ip', flat=True).distinct()[:5000])
+        devices['unknown_country'] = sum(1 for ip in all_ips if ip not in known)
+        devices['new_day'] = DeviceIPHistory.objects.filter(
+            first_seen__gte=now - _td4(hours=24)).count()
+        devices['last_seen'] = DeviceIPHistory.objects.aggregate(m=Max('last_seen'))['m']
+    except Exception:
+        logger.debug('dashboard: could not summarise devices', exc_info=True)
+
+    # ------------------------------------------------------------ server load
+    resources = {'cpu': None, 'cpu_count': 0, 'mem_pct': None, 'mem_used': 0,
+                 'mem_total': 0, 'disk_pct': None, 'disk_used': 0,
+                 'disk_total': 0, 'load': None, 'uptime_days': None, 'db_size': db_size}
+    try:
+        import psutil
+        import time as _time
+        resources['cpu'] = round(psutil.cpu_percent(interval=None), 1)
+        resources['cpu_count'] = psutil.cpu_count(logical=True) or 0
+        mem = psutil.virtual_memory()
+        resources['mem_pct'] = round(mem.percent, 1)
+        resources['mem_used'] = mem.used
+        resources['mem_total'] = mem.total
+        disk = psutil.disk_usage(str(settings.BASE_DIR))
+        resources['disk_pct'] = round(disk.percent, 1)
+        resources['disk_used'] = disk.used
+        resources['disk_total'] = disk.total
+        resources['uptime_days'] = round((_time.time() - psutil.boot_time()) / 86400.0, 1)
+        try:
+            resources['load'] = [round(v, 2) for v in os.getloadavg()]
+        except (AttributeError, OSError):
+            resources['load'] = None
+    except Exception:
+        logger.debug('dashboard: could not read server resources', exc_info=True)
+
     return render(request, 'core/admin_dashboard.html', {
+        'android': android,
+        'devices': devices,
+        'resources': resources,
         'traffic': traffic,
         'traffic_totals': traffic_totals,
         'site_settings': site_settings,
