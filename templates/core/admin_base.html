@@ -111,10 +111,38 @@
     .ipgeo-map-note a:hover { text-decoration: underline; }
     .ipgeo-map .leaflet-container { background: #0b1220; font: inherit; }
     .ipgeo-map .leaflet-control-attribution { font-size: .58rem; }
-    .ipgeo-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; margin-bottom: .9rem; }
-    .ipgeo-fact { background: rgba(148,163,184,.07); border: 1px solid rgba(148,163,184,.12); border-radius: 8px; padding: .4rem .55rem; }
-    .ipgeo-fact span { display: block; font-size: .6rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-    .ipgeo-fact strong { font-size: .78rem; color: #e2e8f0; font-weight: 600; word-break: break-word; }
+    .ipgeo-card-sub { margin-top: .15rem; font-size: .67rem; color: #94a3b8; font-family: Consolas, Menlo, monospace; }
+    .ipgeo-card-dash { margin: 0 .32rem; opacity: .5; font-weight: 400; }
+    /* The record reads as labelled rows, grouped the way ipwho.is returns it. */
+    .ipgeo-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 1.1rem; }
+    .ipgeo-sec-title {
+        margin: .55rem 0 .2rem; font-size: .59rem; font-weight: 700; letter-spacing: .1em;
+        text-transform: uppercase; color: #94a3b8;
+    }
+    .ipgeo-row {
+        display: flex; align-items: baseline; justify-content: space-between; gap: .9rem;
+        padding: .27rem 0; border-bottom: 1px solid rgba(148,163,184,.12); font-size: .74rem;
+    }
+    .ipgeo-row > span { color: #94a3b8; white-space: nowrap; }
+    .ipgeo-row > strong { color: #e2e8f0; font-weight: 600; text-align: right; word-break: break-word; }
+    .ipgeo-raw {
+        margin-top: .9rem; border: 1px solid rgba(148,163,184,.16);
+        border-radius: 10px; background: rgba(2,6,23,.45);
+    }
+    .ipgeo-raw > summary {
+        display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+        padding: .5rem .7rem; font-size: .74rem; color: #cbd5e1; cursor: pointer; list-style: none;
+    }
+    .ipgeo-raw > summary::-webkit-details-marker { display: none; }
+    .ipgeo-raw > summary em { font-style: normal; font-size: .57rem; letter-spacing: .09em; text-transform: uppercase; color: #94a3b8; }
+    .ipgeo-raw[open] > summary { border-bottom: 1px solid rgba(148,163,184,.14); }
+    .ipgeo-raw-bar { display: flex; justify-content: flex-end; padding: .4rem .55rem 0; }
+    .ipgeo-raw .ipgeo-json { border: 0; border-radius: 0; background: transparent; }
+    .ipgeo-json .j-key { color: #93c5fd; }
+    .ipgeo-json .j-str { color: #86efac; }
+    .ipgeo-json .j-num { color: #fbbf24; }
+    .ipgeo-json .j-bool { color: #f0abfc; }
+    .ipgeo-json .j-null { color: #94a3b8; }
     .ipgeo-json {
         margin: 0; padding: .7rem; border-radius: 10px;
         background: rgba(2,6,23,.7); border: 1px solid rgba(148,163,184,.14);
@@ -1474,27 +1502,59 @@ function ipGeoDismiss(node) {
     if (window.adminModalInert) { window.adminModalInert.release(node); }
 }
 
+function ipGeoJsonValue(rest) {
+    if (/^&quot;/.test(rest)) { return '<span class="j-str">' + rest + '</span>'; }
+    if (/^(true|false)/.test(rest)) { return '<span class="j-bool">' + rest + '</span>'; }
+    if (/^null/.test(rest)) { return '<span class="j-null">' + rest + '</span>'; }
+    if (/^-?\d/.test(rest)) { return '<span class="j-num">' + rest + '</span>'; }
+    return rest;
+}
+
+function ipGeoJsonHtml(payload, raw) {
+    var text = payload ? JSON.stringify(payload, null, 2) : (raw || 'No data');
+    return String(text).split('\n').map(function (line) {
+        var safe = ipGeoEscape(line);
+        var pair = /^(\s*)(&quot;.*?&quot;)(\s*:\s*)(.*)$/.exec(safe);
+        if (!pair) { return ipGeoJsonValue(safe); }
+        return pair[1] + '<span class="j-key">' + pair[2] + '</span>' + pair[3] +
+            ipGeoJsonValue(pair[4]);
+    }).join('\n');
+}
+
 function ipGeoOpen(ip, data) {
     var old = document.getElementById('ipGeoModal');
     if (old) { ipGeoDismiss(old); }
 
-    var facts = '';
-    var fields = [
-        ['Country', data && data.country], ['Country code', data && data.country_code],
-        ['Continent', data && data.continent], ['Region', data && data.region],
-        ['City', data && data.city], ['Postal', data && data.postal],
-        ['Calling code', data && data.calling_code], ['Capital', data && data.capital],
-        ['Borders', data && data.borders], ['ISP', data && data.isp],
-        ['Organisation', data && data.org], ['ASN', data && data.asn],
-        ['Domain', data && data.domain], ['Timezone', data && data.timezone],
-        ['UTC offset', data && data.utc],
-        ['Coordinates', (data && data.latitude != null && data.latitude !== '') ? data.latitude + ', ' + data.longitude : '']
-    ];
-    fields.forEach(function (pair) {
-        if (pair[1] === '' || pair[1] == null) { return; }
-        facts += '<div class="ipgeo-fact"><span>' + pair[0] + '</span><strong>' +
-            ipGeoEscape(pair[1]) + '</strong></div>';
-    });
+    function ipRow(label, value) {
+        if (value === '' || value == null) { return ''; }
+        return '<div class="ipgeo-row"><span>' + label + '</span><strong>' +
+            ipGeoEscape(value) + '</strong></div>';
+    }
+    function ipSection(title, rows) {
+        return rows ? '<section class="ipgeo-sec"><h4 class="ipgeo-sec-title">' + title +
+            '</h4>' + rows + '</section>' : '';
+    }
+    var payload = (data && data.payload) || {};
+    var conn = payload.connection || {};
+    var continent = (data && data.continent)
+        ? data.continent + (data.continent_code ? ' (' + data.continent_code + ')' : '') : '';
+    var groups =
+        ipSection('Location',
+            ipRow('Country', data && data.country) + ipRow('Code', data && data.country_code) +
+            ipRow('Continent', continent) + ipRow('State / region', data && data.region) +
+            ipRow('City', data && data.city) + ipRow('Postal', data && data.postal) +
+            ipRow('Capital', data && data.capital) + ipRow('Calling code', data && data.calling_code) +
+            ipRow('Borders', data && data.borders)) +
+        ipSection('Connection',
+            ipRow('ISP', data && (data.isp || conn.isp)) +
+            ipRow('Organisation', data && (data.org || conn.org)) +
+            ipRow('ASN', data && (data.asn || conn.asn)) +
+            ipRow('Domain', data && (data.domain || conn.domain)) +
+            ipRow('Type', data && (data.type || conn.type))) +
+        ipSection('Timezone',
+            ipRow('Timezone', data && data.timezone) + ipRow('UTC offset', data && data.utc)) +
+        ipSection('Coordinates',
+            ipRow('Latitude', data && data.latitude) + ipRow('Longitude', data && data.longitude));
 
     var raw = (data && data.payload) ? JSON.stringify(data.payload, null, 2)
         : (data && data.error ? data.error : 'No data');
@@ -1519,18 +1579,35 @@ function ipGeoOpen(ip, data) {
     var wrap = document.createElement('div');
     wrap.id = 'ipGeoModal';
     wrap.className = 'ipgeo-modal';
+    var headline = (data && data.country) ? ipGeoEscape(data.country) : 'IP ' + ipGeoEscape(ip);
+    var headlineState = (data && data.region)
+        ? '<span class="ipgeo-card-dash">&ndash;</span>' + ipGeoEscape(data.region) : '';
+    var subline = ipGeoEscape(ip) +
+        (data && data.city ? ' &middot; ' + ipGeoEscape(data.city) : '') +
+        (data && data.country_code ? ' &middot; ' + ipGeoEscape(data.country_code) : '');
+    var rawOpen = (data && data.payload) ? '' : ' open';
+
     wrap.innerHTML = '<div class="ipgeo-card" role="dialog" aria-modal="true" aria-label="IP details">' +
-        '<div class="ipgeo-card-head"><div class="ipgeo-card-title">' +
-        (data && data.flag ? '<span class="ipgeo-flag">' + data.flag + '</span>' : '') +
-        ipGeoEscape(ip) + (data && data.country ? ' &middot; ' + ipGeoEscape(data.country) : '') +
-        '</div><button type="button" class="ipgeo-btn" data-ipgeo-close="1">Close</button></div>' +
+        '<div class="ipgeo-card-head"><div>' +
+        '<div class="ipgeo-card-title">' + headline + headlineState + '</div>' +
+        '<div class="ipgeo-card-sub">' + subline + '</div></div>' +
+        '<button type="button" class="ipgeo-btn" data-ipgeo-close="1">Close</button></div>' +
         '<div class="ipgeo-card-body">' + map + note +
-        '<div class="ipgeo-facts">' + facts + '</div>' +
-        '<div style="font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:.3rem">ipwho.is response</div>' +
-        '<pre class="ipgeo-json"></pre>' +
+        '<div class="ipgeo-groups">' + groups + '</div>' +
+        '<details class="ipgeo-raw"' + rawOpen + '><summary><span>Full ipwho.is response</span><em>JSON</em></summary>' +
+        '<div class="ipgeo-raw-bar"><button type="button" class="ipgeo-btn" data-ipgeo-copy="1">Copy JSON</button></div>' +
+        '<pre class="ipgeo-json"></pre></details>' +
         '<div class="ipgeo-actions"><button type="button" class="ipgeo-btn" data-ipgeo-refresh="1">Re-fetch from ipwho.is</button>' +
         saved + '</div></div></div>';
-    wrap.querySelector('.ipgeo-json').textContent = raw;
+    wrap.querySelector('.ipgeo-json').innerHTML = ipGeoJsonHtml(data && data.payload, raw);
+    wrap.querySelector('[data-ipgeo-copy]').addEventListener('click', function () {
+        var btn = this;
+        function done() {
+            btn.textContent = 'Copied';
+            window.setTimeout(function () { btn.textContent = 'Copy JSON'; }, 1400);
+        }
+        try { navigator.clipboard.writeText(raw).then(done, done); } catch (e) { done(); }
+    });
     wrap.addEventListener('click', function (event) { if (event.target === wrap) { ipGeoDismiss(wrap); } });
     wrap.querySelector('[data-ipgeo-close]').addEventListener('click', function () { ipGeoDismiss(wrap); });
     wrap.querySelector('[data-ipgeo-refresh]').addEventListener('click', function () {
