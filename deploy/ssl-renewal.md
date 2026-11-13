@@ -1,26 +1,29 @@
 # Renewing the `newmovies.linkpc.net` certificate
 
-The certificate nginx serves expires **2026-11-19**, nothing on the box tracks it
-for renewal, and the cron line that was supposed to handle it points at a script
-that was never installed. This document is the setup for that job: three files in
-`deploy/ssl/`, applied on the box with the commands below. No server-side settings
-file has to be edited: the expiry alarm (section 5) defaults to the chain nginx
-serves.
+The certificate nginx served expired **2026-11-19**, nothing on the box tracked it
+for renewal, and the cron line that was supposed to handle it pointed at a script
+that was never installed. This document is the setup for that job: four files in
+`deploy/ssl/` — three that are installed on the box, and one that installs them —
+applied with the commands below. No server-side settings file has to be edited:
+the expiry alarm (section 5) defaults to the chain nginx serves.
 
 It is the "separate job" [`nginx-hardening.md`](nginx-hardening.md)
 already refers to (section 2, which says so in as many words): snippet 2 opens
 the ACME path under `/var/www/html`, and this document is what uses it.
 
-Local-first, like the rest: nothing here has been run on the box. The files are
-in this repo, they are applied with `server\server_admin.bat 2`, and the commands
-in sections 1–6 are run on the box afterwards. What was and was not verified
-locally is in section 9.
+Local-first, like the rest: the files live in this repo and are carried to the box
+by `server\server_admin.bat 2`. Sections 1–6 are one script,
+`deploy/ssl/apply-ssl-renewal.sh`, so the procedure is repeatable without retyping
+it; **it was run on the box on 2026-11-13 and section 10 is that record** — the
+renewed certificate, the installed cron entry and every check. What was and was not
+verified locally is in section 9.
 
 | File | Goes to | Purpose |
 | --- | --- | --- |
 | `deploy/ssl/ssl_deploy_cert.sh` | `/usr/local/bin/ssl_deploy_cert.sh` | certbot deploy hook: copies the new chain to `/etc/ssl/custom`, `nginx -t`, reload |
 | `deploy/ssl/ssl_auto_renew.sh` | `/usr/local/bin/ssl_auto_renew.sh` | `certbot renew` + a log line saying what is actually deployed |
 | `deploy/ssl/ssl-renewal.cron` | `/etc/cron.d/ssl-renewal` | the monthly backstop that replaces the broken user-crontab line |
+| `deploy/ssl/apply-ssl-renewal.sh` | — (run in place) | sections 1–6 unattended and idempotent, with the checks built in |
 | `movie_portal/settings.py` (already in the repo) | — | `HEALTH_CERT_PATHS` defaults to the chain nginx serves, so the expiry alarm needs no server edit |
 
 ---
@@ -110,12 +113,18 @@ Persistent=true
 ```
 
 **The ACME path is closed.** Until snippet 2 of `nginx-hardening.md` is applied,
-the challenge URL answers 403 to the world *and* locally:
+the challenge URL never reaches a file: the port-80 `newmovies.linkpc.net` block
+proxies *everything* to gunicorn, so Django's `SECURE_SSL_REDIRECT` answers it with
+a **301** to https:
 
 ```console
 $ curl -s -o /dev/null -w '%{http_code}\n' http://newmovies.linkpc.net/.well-known/acme-challenge/test
-403
+301
 ```
+
+A 301 is as fatal to `certbot --webroot` as a 403 would be — the key authorisation
+is not in the body. Snippet 2 also removes the bare `listen 80;` from that block,
+because the exception needs port 80 to have its own block for this name.
 
 ---
 
@@ -279,8 +288,12 @@ $ sudo grep -E "^(authenticator|webroot_path|renew_hook|key_type)" /etc/letsencr
 authenticator = webroot
 webroot_path = /var/www/html,
 renew_hook = /usr/local/bin/ssl_deploy_cert.sh
-key_type = ecdsa
 ```
+
+There is no `key_type` line: this build (1.21.0) writes the default, and
+`certbot certificates` reports `Key Type: RSA` for the lineage issued on
+2026-11-13. That is fine — nginx serves it as it served the old pair, and the
+run in section 10 confirmed the handshake.
 
 `renew_hook` is the important line: it is the `--deploy-hook` flag persisted
 under its config-file name (`cli_constants.py:81` maps `renew_hook` ↔
@@ -519,7 +532,8 @@ the next successful install.
 Run on the box, read-only: certificate dates, SANs and issuer; the nginx
 `ssl_certificate` lines; the `/etc/ssl/custom/` listing; the absence of
 `/etc/letsencrypt/{renewal,accounts}`; the crontab line; `/etc/cron.d/`;
-`certbot.timer`; the 403 on the ACME path; `certbot --version`; and the certbot
+`certbot.timer`; the challenge URL (`301`, not the 403 an earlier draft of this
+document assumed); `certbot --version`; and the certbot
 1.21.0 source that fixes the hook behaviour — `_internal/main.py:137` (fresh
 issuance runs only `--deploy-hook`), `_internal/hooks.py:190` (path-based
 de-duplication) and `:213` (dry runs skip deploy hooks), `compat/misc.py:163`
@@ -547,14 +561,15 @@ and still exits 0, so a machine that serves no certificate is unaffected; with
 gives the `[PROBLEM] ... expires in 5 days` finding and exit 1, a 90-day chain
 `[OK] ... expires in 89 days`, and an unreadable path `unknown`.
 
-Not verified, because it needs the box: no `certbot` or `nginx` runs (nothing was
-installed, issued or reloaded), so the sections above are instructions to run,
-not a record of a run. File modes from `install -m 0600/0700` could not be
-checked on NTFS — confirm them with `sudo ls -l /etc/ssl/custom/` after the first
-`certonly` (section 4). The 1.21.0 source lines above are read from the installed
-package, but the issued-lineage config (`webroot_path`, `renew_hook`, `key_type`)
-is written by certbot itself and must be checked with section 4's `grep` on the
-box.
+Not verified when this was written, because it needs the box: no `certbot` or
+`nginx` runs (nothing was installed, issued or reloaded), so the sections above
+were instructions to run, not a record of a run. **They were then run on the box
+on 2026-11-13: section 10 is that record, and it is where the box-side facts
+(file modes, lineage config, the deployed date, the cron entry) now live.** File
+modes from `install -m 0600/0700` could not be checked on NTFS, so they were
+confirmed on the box instead. The 1.21.0 source lines above are read from the
+installed package; the issued-lineage config (`webroot_path`, `renew_hook`) is
+written by certbot itself and was checked with section 4's `grep` on the box.
 
 Deliberate choices, restated: the wildcard SAN is dropped (it needs `dns-01`);
 `www` is not added back (already broken, and absent from `ALLOWED_HOSTS`); the
@@ -566,3 +581,91 @@ script does not pass `--no-random-sleep-on-renew`, which this certbot does not
 have. The ACME account is created without an email address, so Let's Encrypt
 sends no expiry notices — the 21-day alarm is this setup's substitute, and it
 fires before Let's Encrypt's own first notice would.
+
+---
+
+## 10. Applied on the box, 2026-11-13
+
+The whole of sections 1–6 was run as ubuntu on `151.145.57.106` through
+`deploy/ssl/apply-ssl-renewal.sh` (every privileged step is a `sudo -n` inside
+that file, and it stops at the first step if passwordless sudo is not available).
+It is idempotent, so re-running it re-installs the same files and re-checks the
+same things.
+
+### Why neither renewal path had ever done anything
+
+* **`certbot.timer` had nothing to renew.** `/etc/letsencrypt` held only
+  `cli.ini` and an empty `renewal-hooks/deploy/` — no `live/`, no `renewal/`, no
+  `accounts/`. Its twice-daily `certbot -q renew` exited `0` in about 1.3 s
+  having attempted nothing (`journalctl -u certbot`: *Starting Certbot ...
+  Deactivated successfully*), so the timer was healthy and the lineage it needs
+  did not exist. Section 3 creates it.
+* **The user-crontab line did fire, and failed.** syslog caught its only run:
+
+  ```console
+  $ zgrep -h ssl_auto_renew /var/log/syslog*
+  Nov  1 03:00:01 instance-20260702-2010 CRON[284565]: (ubuntu) CMD (/usr/local/bin/ssl_auto_renew.sh >> /var/log/ssl_renewal.log 2>&1)
+  ```
+
+  Four reasons it could not have worked: nothing matching `ssl` was ever in
+  `/usr/local/bin`; the entry runs as ubuntu, where the script's `id -u` guard
+  refuses; the redirect could not create `/var/log/ssl_renewal.log` because
+  `/var/log` is root-owned; and a monthly cadence fired 2026-11-01 and would next
+  fire 2026-12-01, after the 2026-11-19 expiry. The repo's
+  `/etc/cron.d/ssl-renewal` was never installed (`ls /etc/cron.d/` →
+  `.placeholder`, `certbot`, `e2scrub_all`).
+
+### What was run, and what came back
+
+| Step | Result |
+| --- | --- |
+| snippet 2 (`nginx-hardening.md`) | applied to `/etc/nginx/sites-enabled/movies`: ACME block appended, bare `listen 80;` removed, `nginx -t` ok, reloaded; backup in `/tmp/movies.nginx.*.bak` |
+| ACME path proof | `http://newmovies.linkpc.net/.well-known/acme-challenge/precheck` → `precheck-ok`, then `404` after removal |
+| three files installed | `/usr/local/bin/ssl_deploy_cert.sh` `0755 root root`; `/usr/local/bin/ssl_auto_renew.sh` `0755 root root`; `/etc/cron.d/ssl-renewal` `830 B 0644 root root` |
+| `certonly --dry-run` | *The dry run was successful.* (no deploy hook ran) |
+| `certonly` | *Successfully received certificate ... expires on 2027-02-11* |
+| deploy hook | `ssl-deploy: installed /etc/ssl/custom/newmovies.linkpc.net_fullchain.cer (notAfter Feb 11 12:04:54 2027 GMT) and reloaded nginx` |
+| lineage | `Certificate Name: newmovies.linkpc.net`, `Key Type: RSA`, `Expiry Date: 2027-02-11 12:04:54+00:00 (VALID: 89 days)`, plus `authenticator = webroot`, `webroot_path = /var/www/html,`, `renew_hook = /usr/local/bin/ssl_deploy_cert.sh` |
+| deployed pair | `-rw-r--r-- root root ..._fullchain.cer`, `-rw------- root root ....key`, `drwx------ root root previous/` (the Aug 21 `.cer`/`_ca.cer` are untouched) |
+| fingerprints | on disk and served are both `EC:8A:81:12:23:86:4F:D0:10:2A:18:58:0E:ED:0D:0D:0F:74:30:57:71:29:84:D7:08:B6:6E:6A:61:86:F3:13` |
+| expiry now | `notAfter=Feb 11 12:04:54 2027 GMT` on disk, over the public handshake, and in the alarm |
+| alarm | `[OK] TLS certificate — /etc/ssl/custom/newmovies.linkpc.net_fullchain.cer expires in 89 days (Feb 11 12:04:54 2027 GMT, warn at 21 days)`, `check_health --no-send` exit `0` |
+| cron in | `/etc/cron.d/ssl-renewal` last line `17 3 1 * * root /usr/local/bin/ssl_auto_renew.sh >> /var/log/ssl_renewal.log 2>&1`, trailing `\n` present |
+| cron out | ubuntu crontab `ssl` lines: `1` → `0` |
+| hand run | `ssl_auto_renew.sh` exit `0`; `journalctl -t ssl-renew`: `renewing: certbot 1.21.0`, `deployed certificate notAfter Feb 11 12:04:54 2027 GMT` |
+| `renew --dry-run` | *Congratulations, all simulated renewals succeeded: /etc/letsencrypt/live/newmovies.linkpc.net/fullchain.pem (success)*, `no renewal failures`, `Dry run: skipping deploy hook command: /usr/local/bin/ssl_deploy_cert.sh` — and the deployed fingerprint was unchanged afterwards |
+| services | `nginx` active, `movies` active, `certbot.timer` active |
+| from off the box | `http://…/` → `301`; `http://…/.well-known/acme-challenge/x` → `404` with no `Location:` header; `https://…/` → `200`; `openssl s_client` → `notAfter=Feb 11 12:04:54 2027 GMT`, issuer `CN=YR2` |
+
+### Five things the run taught
+
+1. **`sed -i` cannot edit `sites-enabled/movies`.** The file is ubuntu-owned but
+   its directory is root-owned, and `sed -i` writes its temporary file next to the
+   target. The installer builds the new config in `/tmp` and copies it over the
+   file. Backups go to `/tmp` too: a `*.bak` file left in `sites-enabled/` is
+   loaded by the `sites-enabled/*` include and breaks `nginx -t`.
+2. **The precheck is racy straight after a reload.** Old nginx workers keep
+   accepting connections for a moment and answered the first probe out of the
+   previous config (`301`). The installer retries the probe up to ten times.
+   Do not read one probe as the verdict.
+3. **The ACME location answers `Content-Type: application/octet-stream`**, not
+   `text/plain`: nginx takes the type from the extension and `.precheck` is not in
+   `mime.types`. certbot fetches the body and does not care, and its own tokens
+   have no extension either.
+4. **`/var/log/ssl_renewal.log` will not exist until the cron entry runs**
+   (next: 2026-12-01 03:17) — the redirect is cron's. The hand run's evidence is
+   the journal, `journalctl -t ssl-renew`, as quoted above.
+5. **`certbot renew` delays itself before doing anything.** The dry run above
+   took about eight minutes from invocation to `2027-02-11`-style success
+   (`13:05` → `13:12:42`), so it must not be wrapped in a short timeout, and an
+   ssh session that seems to hang is not a hang.
+
+The next scheduled events are `certbot.timer` (twice daily; it now finds a lineage
+and renews inside the 30-day window from roughly 2027-01-12) and
+`/etc/cron.d/ssl-renewal` on the 1st of each month at 03:17 as the backstop.
+
+One scope change to keep in mind: this lineage is obtained over HTTP-01 (webroot),
+so it covers `newmovies.linkpc.net` alone, where the hand-placed August file also
+carried `*.newmovies.linkpc.net`. A subdomain that was relying on that wildcard
+would need a DNS-01 lineage of its own — the wildcard cannot be renewed through
+the webroot challenge.
