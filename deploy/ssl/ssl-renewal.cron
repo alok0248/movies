@@ -1,0 +1,16 @@
+# Certificate renewal for newmovies.linkpc.net.
+#
+# Installed as /etc/cron.d/ssl-renewal (root-owned 0644, one entry, trailing
+# newline — cron ignores a file or line without one). The user field is
+# `root` because every step needs it: certbot writes /etc/letsencrypt and the
+# ACME challenge under /var/www/html, the deploy hook writes /etc/ssl/custom
+# and reloads nginx.
+#
+# This is the backstop the site always intended to have. The primary path is
+# systemd's certbot.timer, which runs `certbot -q renew` twice a day; this
+# entry keeps working if the timer is ever disabled, and writes the readable
+# line-by-line log at /var/log/ssl_renewal.log.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+17 3 1 * * root /usr/local/bin/ssl_auto_renew.sh >> /var/log/ssl_renewal.log 2>&1
