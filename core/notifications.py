@@ -89,10 +89,15 @@ def notifications_admin(request):
                        'audience=%s recipients=%d' % (audience, len(emails)))
             messages.success(request, 'Sent to %d user%s.' % (
                 len(emails), '' if len(emails) == 1 else 's'))
-            # Come back to the same app so a second message does not silently
-            # fall back to "All apps".
+            # Come back to the same app and audience so a second message does
+            # not silently fall back to "All apps" or to everyone.
+            state = []
+            if app_obj:
+                state.append('app=%s' % app_obj.id)
+            if audience:
+                state.append('audience=%s' % audience)
             return redirect(reverse('notifications_admin') +
-                            ('?app=%s' % app_obj.id if app_obj else ''))
+                            ('?' + '&'.join(state) if state else ''))
 
     notes = list(AppNotification.objects.select_related('app')[:60])
     total_users = SyncedUser.objects.count()

@@ -41,7 +41,7 @@
                             <label for="nt-aud">Audience</label>
                             <select id="nt-aud" name="audience">
                                 {% for value, label in audiences %}
-                                <option value="{{ value }}">{{ label }}</option>
+                                <option value="{{ value }}"{% if request.GET.audience == value %} selected{% endif %}>{{ label }}</option>
                                 {% endfor %}
                             </select>
                         </div>
