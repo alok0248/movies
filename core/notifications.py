@@ -183,9 +183,16 @@ def notification_toggle(request, notification_id):
         note.title[:60], 'on' if note.is_active else 'off'))
 
     app_id = (request.POST.get('app') or '').strip()
-    if app_id.isdigit():
+    if app_id.isdigit() and request.POST.get('from') != 'composer':
         return redirect('android_app_dashboard_detail', app_id=int(app_id))
-    return redirect('notifications_admin')
+    # Fired from the Sent list: come back to it, keeping whatever it was
+    # filtered by.
+    state = ['app=%s' % app_id] if app_id.isdigit() else []
+    audience = (request.POST.get('audience') or '').strip()
+    if audience:
+        state.append('audience=%s' % audience)
+    return redirect(reverse('notifications_admin') +
+                    ('?' + '&'.join(state) if state else ''))
 
 
 @login_required

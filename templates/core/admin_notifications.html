@@ -26,6 +26,12 @@
     .nt-results .nt-r-meta { display: block; color: var(--text-2); font-size: .68rem; }
     .nt-results .nt-r-empty { color: var(--text-2); cursor: default; }
     .nt-sub-label { margin-top: .5rem; }
+    /* The full Sent list: the switch needs room, so the audience and the
+       counters step aside on a phone the same way they do in the endpoint
+       panel; both are on the notification's own page. */
+    .nt-toggle { margin: 0; }
+    .nt-toggle button { white-space: nowrap; }
+    @media (max-width: 640px) { .adm-table .nt-hide-sm { display: none; } }
 </style>
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
@@ -108,8 +114,10 @@
                         <table class="adm-table">
                             <thead>
                                 <tr>
-                                    <th>Sent</th><th>Title</th><th>Audience</th>
-                                    <th class="num">Recipients</th><th class="num">Delivered</th><th class="num">Read</th>
+                                    <th>Sent</th><th>Title</th><th class="nt-hide-sm">Audience</th>
+                                    <th class="num">Recipients</th>
+                                    <th class="num nt-hide-sm">Delivered</th><th class="num nt-hide-sm">Read</th>
+                                    <th class="num">In app</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -121,10 +129,22 @@
                                         {% if note.link_url %}<i class="fas fa-link ms-1 adm-sub"></i>{% endif %}
                                         {% if not note.is_active %}<span class="adm-badge is-off">off</span>{% endif %}
                                     </td>
-                                    <td><span class="adm-badge is-off">{{ note.get_audience_display }}</span></td>
+                                    <td class="nt-hide-sm"><span class="adm-badge is-off">{{ note.get_audience_display }}</span></td>
                                     <td class="num">{{ note.recipients_total }}</td>
-                                    <td class="num">{{ note.delivered_count }}</td>
-                                    <td class="num">{{ note.read_count }}</td>
+                                    <td class="num nt-hide-sm">{{ note.delivered_count }}</td>
+                                    <td class="num nt-hide-sm">{{ note.read_count }}</td>
+                                    <td class="num">
+                                        <form class="nt-toggle" method="post" action="{% url 'notification_toggle' note.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="from" value="composer">
+                                            <input type="hidden" name="app" value="{{ request.GET.app }}">
+                                            <input type="hidden" name="audience" value="{{ request.GET.audience }}">
+                                            <button type="submit" class="adm-btn is-sm{% if note.is_active %} is-quiet{% endif %}"
+                                                    title="{% if note.is_active %}Stop showing this message in the app{% else %}Show this message in the app again{% endif %}">
+                                                {% if note.is_active %}Turn off{% else %}Turn on{% endif %}
+                                            </button>
+                                        </form>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
