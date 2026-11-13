@@ -36,6 +36,7 @@
 
     <div class="d-flex gap-2 flex-wrap mb-2 align-items-center">
         <span class="sub me-1">Show by:</span>
+        <a class="fbtn {% if daily_gran == 'hourly' %}active{% endif %}" href="?tab=dailyusers&amp;g=hourly&amp;mu={{ daily_metric }}">Hourly</a>
         <a class="fbtn {% if daily_gran == 'daily' %}active{% endif %}" href="?tab=dailyusers&amp;g=daily&amp;mu={{ daily_metric }}">Daily</a>
         <a class="fbtn {% if daily_gran == 'monthly' %}active{% endif %}" href="?tab=dailyusers&amp;g=monthly&amp;mu={{ daily_metric }}">Monthly</a>
         <a class="fbtn {% if daily_gran == 'yearly' %}active{% endif %}" href="?tab=dailyusers&amp;g=yearly&amp;mu={{ daily_metric }}">Yearly</a>

@@ -4779,18 +4779,19 @@ def android_app_users_full(request, app_id):
         # counts the devices behind the period's visits — the distinct count is
         # taken at the period itself, so a month is never the sum of its days —
         # and "New" counts the devices that appeared for the first time in it.
-        # The daily axis is the last 30 days and the monthly one the last 12
-        # months, so the chart stays continuous and quiet periods read as zero
-        # instead of silently disappearing.
-        from django.db.models.functions import TruncDate, TruncMonth, TruncYear
+        # The hourly axis is the last 24 hours, the daily one the last 30 days
+        # and the monthly one the last 12 months, so the chart stays continuous
+        # and quiet periods read as zero instead of silently disappearing.
+        from django.db.models.functions import TruncDate, TruncHour, TruncMonth, TruncYear
 
         gran = (request.GET.get('g') or '').strip().lower()
-        if gran not in ('daily', 'monthly', 'yearly'):
+        if gran not in ('hourly', 'daily', 'monthly', 'yearly'):
             gran = 'daily'
         metric = (request.GET.get('mu') or '').strip().lower()
         if metric not in ('active', 'new'):
             metric = 'active'
-        trunc = {'daily': TruncDate, 'monthly': TruncMonth, 'yearly': TruncYear}[gran]
+        trunc = {'hourly': TruncHour, 'daily': TruncDate,
+                 'monthly': TruncMonth, 'yearly': TruncYear}[gran]
 
         if metric == 'new':
             bucket_rows = (all_devices.annotate(b=trunc('first_seen_at'))
@@ -4802,6 +4803,7 @@ def android_app_users_full(request, app_id):
                            .annotate(n=Count('device', distinct=True)).order_by())
 
         key_of = {
+            'hourly': lambda b: (b.year, b.month, b.day, b.hour),
             'daily': lambda b: (b.year, b.month, b.day),
             'monthly': lambda b: (b.year, b.month),
             'yearly': lambda b: (b.year,),
@@ -4814,7 +4816,14 @@ def android_app_users_full(request, app_id):
         # ------------------------------------------------------------ the axis
         today = timezone.localdate()
         slots = []
-        if gran == 'daily':
+        if gran == 'hourly':
+            now_hour = timezone.localtime(timezone.now()).replace(
+                minute=0, second=0, microsecond=0)
+            for i in range(23, -1, -1):
+                hour = now_hour - datetime.timedelta(hours=i)
+                slots.append((hour.strftime('%H:00'),
+                              (hour.year, hour.month, hour.day, hour.hour)))
+        elif gran == 'daily':
             for i in range(29, -1, -1):
                 d = today - datetime.timedelta(days=i)
                 slots.append((d.strftime('%d %b'), (d.year, d.month, d.day)))
@@ -4860,10 +4869,13 @@ def android_app_users_full(request, app_id):
             'daily_labels': labels,
             'daily_values': values,
             'daily_rows': rows,
-            'daily_word': {'daily': 'day', 'monthly': 'month', 'yearly': 'year'}[gran],
-            'daily_window': {'daily': 'Last 30 days', 'monthly': 'Last 12 months',
+            'daily_word': {'hourly': 'hour', 'daily': 'day', 'monthly': 'month',
+                           'yearly': 'year'}[gran],
+            'daily_window': {'hourly': 'Last 24 hours', 'daily': 'Last 30 days',
+                             'monthly': 'Last 12 months',
                              'yearly': 'All years on record'}[gran],
-            'daily_span': {'daily': 'the last 30 days', 'monthly': 'the last 12 months',
+            'daily_span': {'hourly': 'the last 24 hours', 'daily': 'the last 30 days',
+                           'monthly': 'the last 12 months',
                            'yearly': 'all years on record'}[gran],
             'daily_stats': {
                 'total': total_users,
