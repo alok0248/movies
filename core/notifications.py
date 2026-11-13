@@ -22,6 +22,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
 
 from .audit import log_action
@@ -285,8 +286,14 @@ def api_notifications(request):
     return JsonResponse({'status': 'ok', 'unread': unread, 'notifications': items})
 
 
+@csrf_exempt
 def api_notifications_read(request):
-    """POST /api/notifications/read/ {email, ids: [...]} — mark as read."""
+    """POST /api/notifications/read/ {email, ids: [...]} — mark as read.
+
+    CSRF exempt: the app authenticates with Basic auth and sends no cookies,
+    so the CSRF check could only ever reject it (it did — a 403 that left
+    every message unread on the site).
+    """
     app_match, err = _validate_android_auth(request)
     if err:
         return err
