@@ -1,12 +1,19 @@
-"""IP geolocation for the admin panels.
+"""IP geolocation: one path from an address to a saved location.
 
-ipwho.is is the source. Results are cached in ``IPLocation`` so that a table full
-of repeat addresses costs nothing, and the API is only touched for an address an
-admin actually asked about. A stale cache entry is preferred over an error: if
-the lookup fails we show the last saved answer instead of a blank cell.
+ipwho.is is the source. Every address the site writes is converted here through
+``ensure`` (core/signals.py calls it on save), so a visit, a download, an app
+attempt, an audit row and a blocked address all end up with the same answer in
+``IPLocation`` -- and the admin pages read that saved answer instead of waiting on
+the network. An address with no saved answer is linked to iplocation.io instead.
+Results are cached in ``IPLocation`` so that a table full of repeat addresses
+costs nothing. A stale cache entry is preferred over an error: if the lookup
+fails we show the last saved answer instead of a blank cell.
 """
+import ipaddress
 import json
 import logging
+import threading
+import time
 from datetime import timedelta
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -16,12 +23,68 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 API_ROOT = 'https://ipwho.is/'
+# Where an admin is sent for an address ipwho.is has no saved answer for.
+EXTERNAL_ROOT = 'https://iplocation.io/ip/'
 CACHE_TTL = timedelta(days=30)
+# An address ipwho.is could not answer is retried after this rather than on
+# every write.
+FAILED_RETRY = timedelta(hours=6)
 TIMEOUT = 6
+# Addresses this process checks a moment ago, so writing the same address on
+# every request costs one check instead of one per row.
+RECENT_TTL = 120.0
+RECENT_MAX = 4096
+# How many addresses may be queued at once, so a burst of new visitors cannot
+# start an unbounded number of threads. An address skipped this way is queued by
+# its next row, and the admin pages can still look it up on demand.
+MAX_IN_FLIGHT = 12
+
+_in_flight = set()
+_recent = {}
+_lock = threading.Lock()
 
 
 def _text(value):
     return value if isinstance(value, str) else ''
+
+
+def address(ip):
+    """The parsed address behind a log line, or None when there is not one."""
+    raw = (ip or '').strip()
+    if not raw or len(raw) > 64:
+        return None
+    try:
+        return ipaddress.ip_address(raw)
+    except ValueError:
+        pass
+    # Some logs keep the source port ("1.2.3.4:5678"); the address is still there.
+    host, _, port = raw.partition(':')
+    if host and port.isdigit():
+        try:
+            return ipaddress.ip_address(host)
+        except ValueError:
+            return None
+    return None
+
+
+def is_public(ip):
+    """True for the addresses ipwho.is can actually answer.
+
+    LAN, loopback, link-local, reserved and multicast ranges are not on the
+    internet, so no API call is spent on them: the admin page links those to
+    iplocation.io instead.
+    """
+    addr = address(ip)
+    if addr is None:
+        return False
+    return not (addr.is_private or addr.is_loopback or addr.is_link_local
+                or addr.is_multicast or addr.is_reserved or addr.is_unspecified)
+
+
+def external_url(ip):
+    """The iplocation.io page for an address we have no saved answer for."""
+    ip = (ip or '').strip()[:64]
+    return (EXTERNAL_ROOT + quote(ip, safe='')) if ip else ''
 
 
 def summarize(data):
@@ -171,3 +234,66 @@ def lookup(ip, force=False):
     summary['cached'] = False
     summary['payload'] = data
     return summary
+
+
+def _warm(ip, force=False):
+    """Look one address up in the background, store it, stop tracking it."""
+    try:
+        lookup(ip, force=force)
+    except Exception as exc:  # never surface a lookup failure
+        logger.debug('background ip lookup failed for %s: %s', ip, exc)
+    finally:
+        try:
+            from django.db import connections
+            connections.close_all()
+        except Exception:
+            pass
+        with _lock:
+            _in_flight.discard(ip)
+
+
+def ensure(ip, force=False):
+    """Convert an address that was just written into a saved location.
+
+    This is the single path from "an address exists" to "its location is in the
+    database": core/signals.py calls it for every row saved with an address, so
+    the admin pages find the answer stored instead of looking it up themselves.
+
+    The ipwho.is call runs on a background thread, so nothing waits on the
+    network: a stored answer younger than ``CACHE_TTL`` is reused, an address
+    that failed is retried at most every ``FAILED_RETRY``, the same address is
+    never looked up twice at once, and an address this process checked in the
+    last couple of minutes is left alone. Private and loopback addresses are
+    skipped -- the API has nothing to say about them, and the admin page links
+    those to iplocation.io.
+
+    Returns True when a lookup was queued.
+    """
+    from .models import IPLocation
+
+    ip = (ip or '').strip()[:64]
+    if not ip or not is_public(ip):
+        return False
+
+    now = time.monotonic()
+    if not force:
+        seen = _recent.get(ip)
+        if seen is not None and (now - seen) < RECENT_TTL:
+            return False
+        row = IPLocation.objects.filter(ip=ip).first()
+        if row is not None:
+            age = timezone.now() - row.fetched_at
+            if age < (CACHE_TTL if row.success else FAILED_RETRY):
+                _recent[ip] = now
+                return False
+
+    with _lock:
+        if ip in _in_flight or len(_in_flight) >= MAX_IN_FLIGHT:
+            return False
+        _in_flight.add(ip)
+        if len(_recent) > RECENT_MAX:
+            _recent.clear()
+        _recent[ip] = now
+
+    threading.Thread(target=_warm, args=(ip, force), daemon=True).start()
+    return True

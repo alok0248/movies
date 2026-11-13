@@ -11,25 +11,12 @@ free API does not rate-limit the run.
     python manage.py backfill_ip_countries --force
 """
 
-import ipaddress
 import time
 
 from django.core.management.base import BaseCommand
 
 from core import geoip
 from core.models import DeviceIPHistory, IPLocation, RequestLog
-
-
-def _public(ip):
-    """True for addresses ipwho.is can actually answer (skip LAN/loopback/etc.)."""
-    try:
-        address = ipaddress.ip_address(ip)
-    except ValueError:
-        return False
-    return not (
-        address.is_private or address.is_loopback or address.is_link_local
-        or address.is_multicast or address.is_reserved or address.is_unspecified
-    )
 
 
 class Command(BaseCommand):
@@ -67,8 +54,8 @@ class Command(BaseCommand):
             ip for ip in DeviceIPHistory.objects.values_list('ip', flat=True).distinct() if ip
         )
 
-        skipped_private = sorted(ip for ip in addresses if not _public(ip))
-        candidates = sorted(ip for ip in addresses if _public(ip))
+        skipped_private = sorted(ip for ip in addresses if not geoip.is_public(ip))
+        candidates = sorted(ip for ip in addresses if geoip.is_public(ip))
 
         cached = {}
         for row in IPLocation.objects.filter(ip__in=candidates).values('ip', 'success', 'fetched_at'):

@@ -8,6 +8,9 @@ class CoreConfig(AppConfig):
     def ready(self):
         # Import signals to connect them!
         import core.signals
+        # Convert every address the site writes into a saved location, so the
+        # admin pages read it from IPLocation (core/geoip.py).
+        core.signals.connect_address_watchers()
         # Register the admin-configured external DB. The app registry is
         # ready here, so the config models can be queried — settings.py
         # import time is too early (AppRegistryNotReady).

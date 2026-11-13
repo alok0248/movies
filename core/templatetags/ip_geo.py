@@ -4,6 +4,10 @@ The chip needs the country in the first HTML, but a page can show hundreds of
 rows. Looking the address up in IPLocation per row would be a query per row, so
 answers are memoised per thread for a short window: one query per distinct
 address per half minute, regardless of how many rows repeat it.
+
+An address with no saved answer is not looked up here: the chip links to
+https://iplocation.io/ip/<address> in a new tab, and the page's background fill
+replaces that link with the country as soon as core/geoip.ensure() has one.
 """
 
 import json
@@ -48,7 +52,7 @@ def ip_geo_chip(ip):
     ip = (ip or '').strip()
     if not ip:
         return {'ip': '', 'country': '', 'place': '', 'region': '', 'city': '',
-                'flag': '', 'flag_img': ''}
+                'flag': '', 'flag_img': '', 'url': ''}
 
     store = _memo()
     entry = store.get(ip)
@@ -73,4 +77,15 @@ def ip_geo_chip(ip):
 
     return {'ip': ip, 'country': entry['country'], 'region': entry['region'],
             'city': entry['city'], 'place': entry['place'],
-            'flag': entry['flag'], 'flag_img': entry['flag_img']}
+            'flag': entry['flag'], 'flag_img': entry['flag_img'],
+            'url': '' if entry['country'] else _external_url(ip)}
+
+
+def _external_url(ip):
+    """iplocation.io page for an address, for the chip's fallback link."""
+    from .. import geoip
+
+    try:
+        return geoip.external_url(ip)
+    except Exception:
+        return ''

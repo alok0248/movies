@@ -15,16 +15,14 @@ into the request that triggered it.
 """
 
 import logging
-import threading
 
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Addresses currently being looked up, so a burst of requests from the same new
-# address queues exactly one ipwho.is call.
-_in_flight = set()
-_lock = threading.Lock()
+# The lookup itself lives in core/geoip.py (``geoip.ensure``): one path converts
+# an address to a stored location, whether it arrives on this table, on a request
+# log row or on any other row that carries an address.
 
 PLATFORM_BY_PREFIX = (
     ('/api/', 'android'),
@@ -79,41 +77,12 @@ def _platform(request):
     return 'web'
 
 
-def _warm(ip):
-    """Look the address up in the background and store the answer."""
-    try:
-        from django.db import connection
-        from . import geoip
-
-        geoip.lookup(ip)
-    except Exception as exc:  # never surface a lookup failure
-        logger.debug('background ip lookup failed for %s: %s', ip, exc)
-    finally:
-        try:
-            from django.db import connections
-            connections.close_all()
-        except Exception:
-            pass
-        with _lock:
-            _in_flight.discard(ip)
-
-
 def ensure_lookup(ip, force=False):
-    """Queue an ipwho.is lookup for an address that is not cached yet."""
-    if not ip:
-        return
+    """Queue the ipwho.is lookup for an address that is not saved yet."""
     try:
         from . import geoip
-        from .models import IPLocation
 
-        row = IPLocation.objects.filter(ip=ip).first()
-        if row is not None and not force and (timezone.now() - row.fetched_at) < geoip.CACHE_TTL:
-            return
-        with _lock:
-            if ip in _in_flight:
-                return
-            _in_flight.add(ip)
-        threading.Thread(target=_warm, args=(ip,), daemon=True).start()
+        geoip.ensure(ip, force=force)
     except Exception:
         pass
 
