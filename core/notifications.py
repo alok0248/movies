@@ -188,6 +188,26 @@ def notification_toggle(request, notification_id):
     return redirect('notifications_admin')
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def synced_user_search(request):
+    """Typeahead behind the composer's user picker.
+
+    Staff only, matches on address or display name, and answers the ten most
+    recent matches — enough for a picker, and cheap on a large SyncedUser.
+    """
+    q = (request.GET.get('q') or '').strip()
+    users = SyncedUser.objects.all()
+    if q:
+        users = users.filter(Q(email__icontains=q) | Q(display_name__icontains=q))
+    users = users.order_by('-last_synced_at').values(
+        'email', 'display_name', 'is_subscribed', 'block_mode')[:10]
+    return JsonResponse({'results': [
+        {'email': u['email'], 'name': u['display_name'],
+         'subscribed': u['is_subscribed'], 'blocked': bool(u['block_mode'])}
+        for u in users]}, headers={'Cache-Control': 'no-store'})
+
+
 def _payload(note, recipient):
     return {
         'id': note.id,

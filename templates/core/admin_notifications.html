@@ -1,6 +1,32 @@
 {% extends 'core/admin_base.html' %}
 {% block title %}Notifications - Admin{% endblock %}
 {% block admin_content %}
+<style>
+    /* User picker: a searchable dropdown that writes into the email box, which
+       stays the field that is submitted. */
+    .nt-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .4rem; }
+    .nt-chips:empty { display: none; }
+    .nt-chip { display: inline-flex; align-items: center; gap: .3rem; max-width: 100%;
+        padding: .1rem .3rem .1rem .5rem; border-radius: 999px; font-size: .72rem;
+        background: rgba(56,189,248,.12); border: 1px solid rgba(56,189,248,.3); color: var(--text); }
+    .nt-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nt-chip button { border: 0; background: transparent; color: inherit; opacity: .55; padding: 0 .15rem; line-height: 1; cursor: pointer; }
+    .nt-chip button:hover { opacity: 1; color: #ef4444; }
+    .nt-search { position: relative; }
+    .nt-search > i { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%);
+        font-size: .72rem; color: var(--text-2); pointer-events: none; }
+    .nt-search > input { padding-left: 1.75rem; }
+    .nt-results { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + .25rem);
+        max-height: 15rem; overflow: auto; margin: 0; padding: .2rem; list-style: none;
+        border-radius: var(--adm-r-sm); background: var(--card-bg, var(--surface));
+        border: 1px solid var(--adm-line); box-shadow: 0 12px 30px -12px rgba(0,0,0,.5);
+        color: var(--text); }
+    .nt-results li { padding: .35rem .5rem; border-radius: 6px; font-size: .76rem; cursor: pointer; }
+    .nt-results li[aria-selected="true"], .nt-results li:hover { background: var(--surface-hover); }
+    .nt-results .nt-r-meta { display: block; color: var(--text-2); font-size: .68rem; }
+    .nt-results .nt-r-empty { color: var(--text-2); cursor: default; }
+    .nt-sub-label { margin-top: .5rem; }
+</style>
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
         <div>
@@ -46,8 +72,17 @@
                             </select>
                         </div>
                         <div class="adm-field">
-                            <label for="nt-emails">Selected users (emails, comma or newline separated)</label>
-                            <textarea id="nt-emails" name="selected_emails" placeholder="Only used with the &quot;Selected users&quot; audience"></textarea>
+                            <label for="nt-user-search">Selected users</label>
+                            <div id="nt-chips" class="nt-chips"></div>
+                            <div class="nt-search">
+                                <i class="fas fa-search"></i>
+                                <input id="nt-user-search" type="text" autocomplete="off" role="combobox"
+                                       aria-expanded="false" aria-autocomplete="list" aria-controls="nt-results"
+                                       placeholder="Search a synced user by email or name">
+                                <ul id="nt-results" class="nt-results" role="listbox" hidden></ul>
+                            </div>
+                            <label for="nt-emails" class="nt-sub-label">Emails — picked users land here; type an address to reach someone who has not synced</label>
+                            <textarea id="nt-emails" name="selected_emails" placeholder="name@example.com, other@example.com"></textarea>
                         </div>
                         <div class="adm-field">
                             <label for="nt-app">App (optional)</label>
@@ -103,4 +138,133 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var textarea = document.getElementById('nt-emails');
+    var input = document.getElementById('nt-user-search');
+    var list = document.getElementById('nt-results');
+    var chips = document.getElementById('nt-chips');
+    if (!textarea || !input || !list || !chips) return;
+
+    var SEARCH_URL = "{% url 'synced_user_search' %}";
+    var items = [];
+    var active = -1;
+
+    function emails() {
+        return textarea.value.split(/[\s,;]+/).filter(function (e) { return e.indexOf('@') > 0; });
+    }
+
+    function write(all) {
+        var seen = {};
+        var out = [];
+        all.forEach(function (e) {
+            var clean = e.trim();
+            var key = clean.toLowerCase();
+            if (clean && !seen[key]) { seen[key] = 1; out.push(clean); }
+        });
+        textarea.value = out.join('\n');
+        renderChips();
+    }
+
+    function renderChips() {
+        chips.innerHTML = '';
+        emails().forEach(function (email) {
+            var chip = document.createElement('span');
+            chip.className = 'nt-chip';
+            var label = document.createElement('span');
+            label.textContent = email;
+            var drop = document.createElement('button');
+            drop.type = 'button';
+            drop.setAttribute('aria-label', 'Remove ' + email);
+            drop.innerHTML = '<i class="fas fa-times"></i>';
+            drop.addEventListener('click', function () {
+                write(emails().filter(function (e) { return e !== email; }));
+            });
+            chip.appendChild(label);
+            chip.appendChild(drop);
+            chips.appendChild(chip);
+        });
+    }
+
+    function close() {
+        list.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        active = -1;
+    }
+
+    function paint() {
+        list.innerHTML = '';
+        if (!items.length) {
+            var empty = document.createElement('li');
+            empty.className = 'nt-r-empty';
+            empty.textContent = 'No synced user matches that.';
+            list.appendChild(empty);
+        }
+        items.forEach(function (user, i) {
+            var row = document.createElement('li');
+            row.setAttribute('role', 'option');
+            row.setAttribute('aria-selected', i === active ? 'true' : 'false');
+            var name = document.createElement('b');
+            name.textContent = user.name || user.email;
+            var meta = document.createElement('span');
+            meta.className = 'nt-r-meta';
+            meta.textContent = (user.name ? user.email : '') +
+                (user.subscribed ? ' · subscribed' : ' · not subscribed') +
+                (user.blocked ? ' · blocked' : '');
+            row.appendChild(name);
+            row.appendChild(meta);
+            row.addEventListener('mousedown', function (ev) { ev.preventDefault(); choose(user.email); });
+            list.appendChild(row);
+        });
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+    }
+
+    function choose(email) {
+        write(emails().concat([email]));
+        input.value = '';
+        items = [];
+        close();
+        input.focus();
+    }
+
+    var timer = null;
+    function search() {
+        var q = input.value.trim();
+        var url = SEARCH_URL + '?q=' + encodeURIComponent(q);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : { results: [] }; })
+            .then(function (data) {
+                items = (data && data.results) || [];
+                active = -1;
+                paint();
+            })
+            .catch(function () { items = []; close(); });
+    }
+
+    input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(search, 180);
+    });
+    input.addEventListener('focus', function () { if (input.value.trim() === '') search(); });
+    input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') { close(); return; }
+        if (ev.key === 'ArrowDown' && items.length) {
+            ev.preventDefault(); active = Math.min(active + 1, items.length - 1); paint();
+        } else if (ev.key === 'ArrowUp' && items.length) {
+            ev.preventDefault(); active = Math.max(active - 1, 0); paint();
+        } else if (ev.key === 'Enter' && items.length) {
+            ev.preventDefault();
+            choose(items[active >= 0 ? active : 0].email);
+        }
+    });
+    input.addEventListener('blur', function () { setTimeout(close, 120); });
+    textarea.addEventListener('change', renderChips);
+
+    renderChips();
+})();
+</script>
 {% endblock %}

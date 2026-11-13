@@ -131,6 +131,7 @@ urlpatterns = [
     path('admin-dashboard/notifications/', notification_views.notifications_admin, name='notifications_admin'),
     path('admin-dashboard/notifications/<int:notification_id>/', notification_views.notification_detail, name='notification_detail'),
     path('admin-dashboard/notifications/<int:notification_id>/toggle/', notification_views.notification_toggle, name='notification_toggle'),
+    path('admin-dashboard/notifications/user-search/', notification_views.synced_user_search, name='synced_user_search'),
     # Per-device online time: actual online/offline hours with graphs.
     path('admin-dashboard/devices/', views.devices_ips, name='devices_ips'),
     path('admin-dashboard/device-activity/', activity_views.device_activity, name='device_activity'),
