@@ -1298,9 +1298,6 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             <a href="{% url 'android_app_dashboard' %}" class="sb-item {% if 'android-apps' in request.path and 'analytics' in request.path %}active{% endif %}">
                 <i class="fas fa-chart-line"></i> Android Analytics
             </a>
-            <a href="{% url 'notifications_admin' %}" class="sb-item {% if 'admin-dashboard/notifications' in request.path %}active{% endif %}">
-                <i class="fas fa-bell"></i> App Notifications
-            </a>
             <a href="{% url 'ad_list' %}" class="sb-item {% if 'ads' in request.path %}active{% endif %}">
                 <i class="fas fa-ad"></i> Ads
             </a>

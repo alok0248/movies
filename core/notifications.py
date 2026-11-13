@@ -89,19 +89,17 @@ def notifications_admin(request):
                        'audience=%s recipients=%d' % (audience, len(emails)))
             messages.success(request, 'Sent to %d user%s.' % (
                 len(emails), '' if len(emails) == 1 else 's'))
-            target = reverse('notifications_admin')
-            if app_obj is not None:
-                target = '%s?app=%s' % (target, app_obj.id)
-            return redirect(target)
+            # Come back to the same app so a second message does not silently
+            # fall back to "All apps".
+            return redirect(reverse('notifications_admin') +
+                            ('?app=%s' % app_obj.id if app_obj else ''))
 
     notes = list(AppNotification.objects.select_related('app')[:60])
     total_users = SyncedUser.objects.count()
-    preselect_app = (request.GET.get('app') or '').strip()
     subscribed = SyncedUser.objects.filter(is_subscribed=True).count()
     return render(request, 'core/admin_notifications.html', {
         'notes': notes,
         'apps': AndroidApp.objects.all().order_by('name'),
-        'preselect_app': preselect_app,
         'audiences': AppNotification.AUDIENCE_CHOICES,
         'stats': {
             'total_users': total_users,
