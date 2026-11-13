@@ -4214,9 +4214,28 @@ def android_app_dashboard(request, app_id=None):
         except Exception:
             logger.debug('build health: could not read the build split', exc_info=True)
 
+    # Notifications that reach this endpoint's users: the ones sent for this app
+    # plus the all-app messages. The panel next to the send button reads from it.
+    app_notifications = []
+    if selected_app is not None:
+        from .models import AppNotification
+        app_notifications = list(
+            AppNotification.objects
+            .filter(Q(app=selected_app) | Q(app__isnull=True))
+            .annotate(
+                delivered_n=Count('recipients',
+                                  filter=Q(recipients__delivered_at__isnull=False),
+                                  distinct=True),
+                read_n=Count('recipients',
+                             filter=Q(recipients__read_at__isnull=False),
+                             distinct=True),
+            )
+            .order_by('-sent_at')[:6])
+
     return render(request, 'core/android_app_dashboard.html', {
         'apps': apps,
         'selected_app': selected_app,
+        'app_notifications': app_notifications,
         'summary_rows': summary_rows,
         'chart_labels_json': json.dumps(chart_labels),
         'chart_values_json': json.dumps(chart_values),

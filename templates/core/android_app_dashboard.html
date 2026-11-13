@@ -85,6 +85,11 @@
         .aad-note { font-size: .71rem; color: var(--text-2); line-height: 1.55; }
         .aad-table-scroll { max-height: 460px; overflow: auto; }
         .aad-stack .adm-empty { padding: 1.7rem 1rem; }
+        /* Notification panel: the timestamp never wraps, the title carries the
+           link to the delivery detail, and the numbers stay right-aligned. */
+        .aad-nt-when { white-space: nowrap; width: 1%; }
+        .aad-nt-title { font-weight: 600; }
+        .aad-nt-table .adm-sub { font-size: .7rem; }
         .aad-stack .adm-empty i { font-size: 1.5rem; opacity: .45; margin-bottom: .45rem; }
         .aad-stack .adm-empty { font-size: .78rem; }
     </style>
@@ -162,6 +167,50 @@
                             <div class="v">{{ synced_total }}</div>
                             <div class="n">{{ synced_subscribed }} subscribed &middot; {{ synced_free }} free</div>
                         </div>
+                    </div>
+
+                    <div class="adm-card">
+                        <div class="adm-card-head">
+                            <div class="aad-head-titles">
+                                <span class="aad-icon is-info"><i class="fas fa-bell"></i></span>
+                                <div>
+                                    <div class="adm-card-title">Notifications</div>
+                                    <p class="adm-card-sub">What this endpoint's users are sent, newest first. Every row opens its delivery detail.</p>
+                                </div>
+                            </div>
+                            <a href="{% url 'notifications_admin' %}?app={{ selected_app.id }}" class="adm-btn is-sm"><i class="fas fa-paper-plane"></i> Send</a>
+                        </div>
+                        {% if app_notifications %}
+                        <div class="adm-table-wrap">
+                            <table class="adm-table aad-nt-table">
+                                <thead>
+                                    <tr>
+                                        <th class="aad-nt-when">Sent</th><th>Message</th>
+                                        <th class="num">Sent to</th><th class="num">Delivered</th><th class="num">Read</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for note in app_notifications %}
+                                    <tr>
+                                        <td class="adm-sub aad-nt-when">{{ note.sent_at|date:"M j" }}<br>{{ note.sent_at|date:"H:i" }}</td>
+                                        <td>
+                                            <a class="aad-nt-title" href="{% url 'notification_detail' note.id %}">{{ note.title }}</a>
+                                            <div class="adm-sub">{{ note.get_audience_display }}{% if not note.app %} &middot; all apps{% endif %}</div>
+                                        </td>
+                                        <td class="num">{{ note.recipients_total }}</td>
+                                        <td class="num">{{ note.delivered_n }}</td>
+                                        <td class="num">{{ note.read_n }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="adm-empty">
+                            <i class="fas fa-bell-slash"></i>
+                            <div>Nothing sent for this endpoint yet.</div>
+                        </div>
+                        {% endif %}
                     </div>
 
                     <div class="aad-split">
