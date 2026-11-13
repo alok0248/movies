@@ -73,6 +73,22 @@
        too heavy for a dense table, so the text carries it; the city and the
        full record stay a click away. */
     .ipgeo.has-flag { padding: .1rem .42rem; line-height: 1.45; }
+    /* In a flex row (the drawer's actions, badge rows) the chip must keep its own
+       height and must not be squeezed, or it stretches or pushes the row open. */
+    .ipgeo { flex: none; align-self: center; }
+    .ipgeo-text { flex: none; }
+    /* A chip inside another pill (trusted addresses, journeys) is part of that
+       label: dropping its own box stops the pill reading as two nested pills.
+       The doubled class outranks the light-theme colour rule, which would
+       otherwise paint the chip's background back on. */
+    .adm-badge .ipgeo.ipgeo, .adm-badge .ipgeo.ipgeo.is-known,
+    .adm-chip .ipgeo.ipgeo, .adm-chip .ipgeo.ipgeo.is-known {
+        border: 0; background: transparent; padding: 0; gap: .18rem;
+        margin-left: .3rem;
+    }
+    .adm-badge .ipgeo.ipgeo:hover, .adm-chip .ipgeo.ipgeo:hover {
+        background: transparent; text-decoration: underline;
+    }
     .ipgeo-text {
         display: inline-flex; flex-direction: row; align-items: baseline;
         gap: .25rem; min-width: 0;
