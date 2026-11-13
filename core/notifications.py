@@ -20,6 +20,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -88,7 +89,10 @@ def notifications_admin(request):
                        'audience=%s recipients=%d' % (audience, len(emails)))
             messages.success(request, 'Sent to %d user%s.' % (
                 len(emails), '' if len(emails) == 1 else 's'))
-            return redirect('notifications_admin')
+            target = reverse('notifications_admin')
+            if app_obj is not None:
+                target = '%s?app=%s' % (target, app_obj.id)
+            return redirect(target)
 
     notes = list(AppNotification.objects.select_related('app')[:60])
     total_users = SyncedUser.objects.count()
