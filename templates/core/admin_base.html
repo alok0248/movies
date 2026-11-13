@@ -125,6 +125,7 @@
     .ipgeo-map-note { display: flex; justify-content: space-between; gap: .6rem; padding: .3rem .55rem; font-size: .64rem; color: #94a3b8; }
     .ipgeo-map-note a { color: #93c5fd; text-decoration: none; }
     .ipgeo-map-note a:hover { text-decoration: underline; }
+    .ipgeo-map-warn { color: #fbbf24; margin-right: .5rem; }
     .ipgeo-map .leaflet-container { background: #0b1220; font: inherit; }
     .ipgeo-map .leaflet-control-attribution { font-size: .58rem; }
     .ipgeo-card-sub { margin-top: .15rem; font-size: .67rem; color: #94a3b8; font-family: Consolas, Menlo, monospace; }
@@ -1670,11 +1671,34 @@ function ipGeoPlot(lat, lon, el) {
             try { window._ipGeoMap.remove(); } catch (e) { /* already gone */ }
             window._ipGeoMap = null;
         }
-        var map = window._ipGeoMap = L.map(el, { scrollWheelZoom: false, worldCopyJump: true }).setView([lat, lon], 11);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+        /* OpenStreetMap's tile server answers 403 to browsers on other sites, and
+           CARTO's public basemaps now come back watermarked "API key required", so
+           the card draws Esri's canvas tiles: no key, no watermark, and a canvas
+           for each theme. */
+        var map = window._ipGeoMap = L.map(el, { scrollWheelZoom: false, worldCopyJump: true, maxZoom: 16 })
+            .setView([lat, lon], 11);
+        var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        var esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+        var tiles = L.tileLayer(esri + (dark ? 'Canvas/World_Dark_Gray_Base' : 'Canvas/World_Light_Gray_Base') +
+            '/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 16,
+            attribution: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>'
         }).addTo(map);
+        L.tileLayer(esri + (dark ? 'Canvas/World_Dark_Gray_Reference' : 'Canvas/World_Light_Gray_Reference') +
+            '/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(map);
+        /* If the tiles cannot be reached either, say so where the coordinates are
+           rather than leaving a blank panel. */
+        var tileFails = 0;
+        tiles.on('tileerror', function () {
+            tileFails += 1;
+            if (tileFails !== 4) { return; }
+            var note = el.parentElement && el.parentElement.querySelector('.ipgeo-map-note');
+            if (!note || note.querySelector('.ipgeo-map-warn')) { return; }
+            var warn = document.createElement('span');
+            warn.className = 'ipgeo-map-warn';
+            warn.textContent = 'Tiles could not load';
+            note.insertBefore(warn, note.firstChild);
+        });
         L.circleMarker([lat, lon], {
             radius: 7, color: '#34d399', weight: 2, fillColor: '#34d399', fillOpacity: .45
         }).addTo(map).bindPopup(ipGeoEscape([lat.toFixed(4), lon.toFixed(4)].join(', ')));
