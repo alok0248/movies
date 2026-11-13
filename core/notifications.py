@@ -157,6 +157,32 @@ def notification_detail(request, notification_id):
     })
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def notification_toggle(request, notification_id):
+    """Switch one message off, or back on, for the app inbox.
+
+    The app only returns active messages, so this is the stop switch for a
+    message that went out with a mistake in it. Recipients and their read
+    state are kept, so turning it back on restores the same record.
+    """
+    note = get_object_or_404(AppNotification, id=notification_id)
+    if request.method != 'POST':
+        return redirect('notifications_admin')
+
+    note.is_active = not note.is_active
+    note.save(update_fields=['is_active'])
+    log_action(request, 'notification_toggle', '%s #%d' % (note.title[:60], note.id),
+               'active=%s' % note.is_active)
+    messages.success(request, '"%s" is now %s in the app.' % (
+        note.title[:60], 'on' if note.is_active else 'off'))
+
+    app_id = (request.POST.get('app') or '').strip()
+    if app_id.isdigit():
+        return redirect('android_app_dashboard_detail', app_id=int(app_id))
+    return redirect('notifications_admin')
+
+
 def _payload(note, recipient):
     return {
         'id': note.id,
