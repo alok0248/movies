@@ -3504,7 +3504,10 @@ class AlertSettings(models.Model):
 
     Three checks: the 5xx rate over a short window, free disk space, and
     whether the gunicorn workers are still alive. Each can be switched off,
-    and each has its own threshold. Delivery is by email (to the
+    and each has its own threshold. A fourth, not switchable here, watches the
+    expiry date of the TLS certificate nginx serves (settings.HEALTH_CERT_PATHS)
+    and reports under the check key ``cert``, which recipients can route to
+    like any other. Delivery is by email (to the
     AlertRecipient rows, through the SMTP settings the site already uses) and
     optionally by Telegram, using a bot token and chat id the admin supplies.
     """

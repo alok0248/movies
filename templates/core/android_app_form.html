@@ -49,10 +49,22 @@
 
                     <div class="col-12">
                         <label class="adm-label text-white">{{ form.apk_file.label }}</label>
-                        {{ form.apk_file }}
+                        {% comment %}
+                        Rendered by hand: Django's ClearableFileInput wraps the stored file name in a
+                        link to the media disk path, which nginx now answers with 404
+                        (deploy/nginx-hardening.md, snippet 4). The link goes to the apk_download
+                        route instead.
+                        {% endcomment %}
+                        {% if android_app and android_app.apk_file %}
+                        <div class="mb-1 text-secondary small">Current file: {{ android_app.apk_file.name }}</div>
+                        {% endif %}
+                        <input type="file" name="{{ form.apk_file.html_name }}" id="id_{{ form.apk_file.html_name }}" class="form-control">
                         <div class="form-text text-secondary">Upload the APK that should be returned when the client must update.</div>
                         {% if android_app and android_app.apk_file %}
-                        <div class="mt-2"><a href="{{ android_app.apk_file.url }}" class="link-info" target="_blank" rel="noopener">Current APK</a></div>
+                        <div class="mt-2 d-flex align-items-center gap-3">
+                            <a href="{% url 'apk_download' android_app.id %}" class="link-info" target="_blank" rel="noopener">Current APK</a>
+                            <label class="text-secondary small mb-0"><input type="checkbox" name="{{ form.apk_file.html_name }}-clear" id="id_{{ form.apk_file.html_name }}-clear"> Clear stored APK</label>
+                        </div>
                         {% endif %}
                         {% if form.apk_file.errors %}<div class="text-danger small mt-1">{{ form.apk_file.errors|join:', ' }}</div>{% endif %}
                     </div>

@@ -3865,6 +3865,38 @@ def _mark_apk_opened(ip_address, user_id='', device_model='', os_version='',
         return None
 
 
+def _apk_file_sha256(file_field):
+    """SHA-256 of an APK file, so a client can verify what it received.
+
+    The digest is cached against (name, size, mtime), so a re-uploaded APK is
+    re-hashed while repeated downloads of the same file cost one lookup.
+    """
+    import hashlib
+    import os
+
+    from django.core.cache import cache
+
+    try:
+        stat = os.stat(file_field.path)
+    except Exception:
+        return ''
+    cache_key = f'apk-sha256:{file_field.name}:{stat.st_size}:{int(stat.st_mtime)}'
+    digest = cache.get(cache_key)
+    if digest:
+        return digest
+    try:
+        hasher = hashlib.sha256()
+        with file_field.open('rb') as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                hasher.update(chunk)
+        digest = hasher.hexdigest()
+    except Exception:
+        logger.debug('Could not hash APK file', exc_info=True)
+        return ''
+    cache.set(cache_key, digest, 60 * 60 * 24)
+    return digest
+
+
 def apk_download(request, app_id):
     """Serve an app's APK and record who downloaded it (IP + user agent).
 
@@ -3896,10 +3928,18 @@ def apk_download(request, app_id):
     except Exception:
         raise Http404('APK file is missing')
     filename = os.path.basename(android_app.apk_file.name or 'app.apk')
-    return FileResponse(
+    response = FileResponse(
         handle, as_attachment=True, filename=filename,
         content_type='application/vnd.android.package-archive',
     )
+    # Deliver the package as an opaque download: never sniffed, never stored by
+    # a cache, and accompanied by its SHA-256 so the app can verify the bytes.
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    digest = _apk_file_sha256(android_app.apk_file)
+    if digest:
+        response['X-Checksum-Sha256'] = digest
+    return response
 
 
 @login_required
@@ -5565,9 +5605,20 @@ def ajax_login(request):
     if request.method == 'POST':
         username = request.POST.get('username', '')
         password = request.POST.get('password', '')
+        identifier = username.strip().lower()
+
+        # Failed attempts are throttled per IP and per account, but a correct
+        # password is always let through (40/15 min per address, 10 per account)
+        # so ten typos from one person can never lock out everyone behind a
+        # shared carrier/office address.
+        def _failed(payload):
+            _auth_rate_limit_record(request, 'web_login', identifier)
+            return _auth_rate_limit_error(request, 'web_login', identifier) or JsonResponse(payload)
+
         # Try standard auth first
         user = authenticate(request, username=username, password=password)
         if user:
+            _auth_rate_limit_reset(request, 'web_login', identifier)
             login(request, user)
             _record_session(user, 'web', request)
             _lift_block_after_auth(request)
@@ -5582,6 +5633,7 @@ def ajax_login(request):
                     if new_pass and len(new_pass) >= 6:
                         user.set_password(new_pass)
                         user.save()
+                        _auth_rate_limit_reset(request, 'web_login', identifier)
                         login(request, user)
                         _record_session(user, 'web', request)
                         _lift_block_after_auth(request)
@@ -5593,10 +5645,10 @@ def ajax_login(request):
                         'email': user.email,
                     })
                 else:
-                    return JsonResponse({'success': False, 'message': 'Invalid password'})
+                    return _failed({'success': False, 'message': 'Invalid password'})
             except User.DoesNotExist:
                 pass
-        return JsonResponse({'success': False, 'message': 'Invalid username or password'})
+        return _failed({'success': False, 'message': 'Invalid username or password'})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
@@ -5686,6 +5738,14 @@ def ajax_register(request):
         email = request.POST.get('email', '').strip().lower()
         password = request.POST.get('password', '')
         confirm_password = request.POST.get('confirm_password', '')
+
+        # Registration sends an email, so the successful attempts are throttled
+        # (5 per address, 20 per IP every 15 minutes) to stop account farming
+        # and mailbox flooding.
+        rate_err = _auth_rate_limit_error(request, 'web_register', email,
+                                          max_attempts=5, ip_max_attempts=20)
+        if rate_err:
+            return rate_err
         
         if not username or not email or not password:
             return JsonResponse({'success': False, 'message': 'All fields are required'})
@@ -5714,6 +5774,7 @@ def ajax_register(request):
                 existing_user.first_name = username
                 existing_user.is_active = False
                 existing_user.save()
+                _auth_rate_limit_record(request, 'web_register', email)
                 _issue_verification_email(existing_user, request, display_name=username)
                 _lift_block_after_auth(request)
                 return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
@@ -5725,6 +5786,7 @@ def ajax_register(request):
         user = User.objects.create_user(username=username, email=email, password=password)
         user.is_active = False
         user.save()
+        _auth_rate_limit_record(request, 'web_register', email)
         _issue_verification_email(user, request, display_name=username)
         _lift_block_after_auth(request)
 
@@ -5821,9 +5883,16 @@ def ajax_resend_verification(request):
     email = request.POST.get('email', '').strip().lower()
     if not email:
         return JsonResponse({'success': False, 'message': 'Email is required'})
+    rate_err = _auth_rate_limit_error(request, 'web_resend_verify', email,
+                                      max_attempts=5, ip_max_attempts=20)
+    if rate_err:
+        return rate_err
     django_user = User.objects.filter(email__iexact=email, is_active=False).first()
     if not django_user:
-        return JsonResponse({'success': False, 'message': 'No pending account found for this email.'})
+        # Never confirm whether an address has a pending account (matches the
+        # Android /api/user/resend-verification endpoint).
+        return JsonResponse({'success': True, 'message': "If that email has an unverified account, we've sent a new code to it."})
+    _auth_rate_limit_record(request, 'web_resend_verify', email)
     _issue_verification_email(django_user, request, display_name=django_user.first_name or django_user.username)
     return JsonResponse({'success': True, 'message': 'Verification code resent. Check your inbox.'})
 
@@ -5833,15 +5902,30 @@ def ajax_forgot_password(request):
         email = request.POST.get('email', '').strip().lower()
         if not email:
             return JsonResponse({'success': False, 'message': 'Email is required'})
+        # Throttle before anything else: this endpoint sends mail, so it is a
+        # mailbox-flooding target as well as an account-enumeration one.
+        rate_err = _auth_rate_limit_error(request, 'web_forgot_pwd', email,
+                                          max_attempts=5, ip_max_attempts=20)
+        if rate_err:
+            return rate_err
+        user = User.objects.filter(email__iexact=email).first()
+        response = JsonResponse({
+            'success': True,
+            'message': 'If that email is registered, a password reset code has been sent to it. Check your inbox or spam folder.',
+        })
+        if not user:
+            # Same answer as for a known address — the response must not reveal
+            # which emails have accounts (matches /api/user/forgot-password).
+            return response
+        _auth_rate_limit_record(request, 'web_forgot_pwd', email)
         try:
-            user = User.objects.get(email__iexact=email)
             # Email contains both the 6-digit reset code (app/OTP use) and the browser link
             _issue_password_reset_email(user, request)
-            return JsonResponse({'success': True, 'message': 'Password reset code sent to your email. Check your inbox or spam folder.'})
-        except User.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Email not found'})
         except Exception as e:
-            return JsonResponse({'success': False, 'message': f'Error sending email: {str(e)}'})
+            # Never echo the mailer error to the browser: it leaked SMTP host,
+            # credentials errors and, for a bad address, account existence.
+            logger.warning(f'Password reset email failed for {email}: {e}', exc_info=True)
+        return response
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
 
 
@@ -7265,6 +7349,13 @@ def download_proxy(request):
     if not target_url:
         return HttpResponse('No URL provided', status=400)
 
+    # Open-relay hardening (core/proxy_guard.py).
+    from .proxy_guard import PROXY_TOKEN_PARAM, apply_proxy_cors, check_proxy_access
+    denied = check_proxy_access(request, target_url,
+                                request.GET.get(PROXY_TOKEN_PARAM, ''))
+    if denied is not None:
+        return denied
+
     # SSRF guard: never let a browser talk us into fetching loopback, LAN,
     # link-local / cloud-metadata or otherwise non-public addresses.
     from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
@@ -7325,7 +7416,7 @@ def download_proxy(request):
         response['Content-Disposition'] = f'attachment; filename="{safe_name}"'
         if content_length:
             response['Content-Length'] = content_length
-        response['Access-Control-Allow-Origin'] = '*'
+        apply_proxy_cors(request, response)
         return response
 
     except requests.exceptions.Timeout:
@@ -7804,6 +7895,12 @@ def proxy_embed(request):
     if not target:
         return HttpResponse('No URL provided', status=400)
 
+    # Open-relay hardening (core/proxy_guard.py).
+    from .proxy_guard import PROXY_TOKEN_PARAM, check_proxy_access
+    denied = check_proxy_access(request, target, request.GET.get(PROXY_TOKEN_PARAM, ''))
+    if denied is not None:
+        return denied
+
     # SSRF guard (see core/url_guard.py).
     from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
     try:
@@ -7921,8 +8018,9 @@ def proxy_embed(request):
         resp_content = html.encode('utf-8', errors='replace')
         return HttpResponse(resp_content, content_type='text/html; charset=utf-8',
                             headers={
-                                'X-Frame-Options': 'ALLOWALL',
-                                'Content-Security-Policy': "frame-ancestors *",
+                                # Only this site frames the interceptor iframe.
+                                'X-Frame-Options': 'SAMEORIGIN',
+                                'Content-Security-Policy': "frame-ancestors 'self'",
                                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                             })
 
@@ -8531,6 +8629,28 @@ def proxy_view(request, target):
     else:
         target_url = "https://" + target
 
+    # Open-relay hardening (core/proxy_guard.py): only our own pages, the
+    # players we embed, or a caller holding a signed /api/links/ proxy_url may
+    # use this route. Checked before any upstream fetch.
+    from .proxy_guard import (
+        PROXY_TOKEN_PARAM, apply_proxy_cors, check_proxy_access,
+        make_proxy_token, proxy_token_valid,
+    )
+    access_token = request.GET.get(PROXY_TOKEN_PARAM, '')
+    denied = check_proxy_access(request, target, access_token)
+    if denied is not None:
+        return denied
+    # A caller that proved itself with a token needs one on every child URL the
+    # rewritten manifest returns (segments, keys, sub-playlists).
+    token_children = bool(access_token and proxy_token_valid(target, access_token))
+
+    def _child_query(host_path, upstream_query):
+        """Query string for a child proxy URL, carrying the token when needed."""
+        parts = [upstream_query] if upstream_query else []
+        if token_children:
+            parts.append(f"{PROXY_TOKEN_PARAM}={make_proxy_token(host_path)}")
+        return '&'.join(parts)
+
     from .url_guard import UnsafeURLError, ensure_public_url, guarded_get
     try:
         target_url = ensure_public_url(target_url)
@@ -8584,8 +8704,9 @@ def proxy_view(request, target):
                     try:
                         u = _urlparse.urlparse(stripped)
                         proxy_path = u.hostname + u.path
-                        if u.query:
-                            proxy_path += '?' + u.query
+                        child_query = _child_query(u.hostname + u.path, u.query)
+                        if child_query:
+                            proxy_path += '?' + child_query
                         rewritten.append(f"{origin}/{proxy_path}")
                     except Exception:
                         rewritten.append(stripped)
@@ -8599,8 +8720,9 @@ def proxy_view(request, target):
                         try:
                             u = _urlparse.urlparse(uri)
                             proxy_path = u.hostname + u.path
-                            if u.query:
-                                proxy_path += '?' + u.query
+                            child_query = _child_query(u.hostname + u.path, u.query)
+                            if child_query:
+                                proxy_path += '?' + child_query
                             return f'URI="{origin}/{proxy_path}"'
                         except Exception:
                             return m.group(0)
@@ -8609,7 +8731,7 @@ def proxy_view(request, target):
                     rewritten.append(stripped)
             body = '\n'.join(rewritten)
             http_resp = HttpResponse(body, content_type='application/vnd.apple.mpegurl')
-            http_resp['Access-Control-Allow-Origin'] = '*'
+            apply_proxy_cors(request, http_resp)
             http_resp['Cache-Control'] = 'public, max-age=5, stale-while-revalidate=10'
             return http_resp
 
@@ -8637,7 +8759,7 @@ def proxy_view(request, target):
                 except Exception:
                     pass
         http_resp = StreamingHttpResponse(stream_chunks(), content_type=real_content_type)
-        http_resp['Access-Control-Allow-Origin'] = '*'
+        apply_proxy_cors(request, http_resp)
         http_resp['Accept-Ranges'] = 'bytes'
         if content_length:
             http_resp['Content-Length'] = content_length
@@ -8726,7 +8848,8 @@ def _proxy_fetch_url(target_url, origin=None, referer=None):
                 except Exception:
                     pass
         http_resp = StreamingHttpResponse(stream_chunks(), content_type=content_type)
-        http_resp['Access-Control-Allow-Origin'] = '*'
+        # CORS is applied by the calling view (core/proxy_guard.apply_proxy_cors);
+        # this helper used to answer with a wildcard origin.
         http_resp['Accept-Ranges'] = 'bytes'
         if content_length:
             http_resp['Content-Length'] = content_length
@@ -8972,6 +9095,8 @@ def api_links_view(request):
     import time as _time
     import concurrent.futures
 
+    from .proxy_guard import proxy_path_and_query, signed_proxy_query
+
     tmdb_id = request.GET.get('tmdb_id', '')
     media_type = request.GET.get('type', 'movie')
     season = request.GET.get('season', '')
@@ -9058,6 +9183,10 @@ def api_links_view(request):
                     continue
                 url = src['url']
                 is_hls = '.m3u8' in url or 'mpegurl' in url
+                # Signed, expiring capability token so native clients can keep
+                # playing proxy_url now that /proxy/ is no longer an open relay
+                # (core/proxy_guard.py).
+                proxy_target, proxy_query = proxy_path_and_query(url)
                 links.append({
                     'server': server_name,
                     'quality': quality,
@@ -9066,7 +9195,9 @@ def api_links_view(request):
                     'url': url,
                     # Proxy route: rewrites the manifest so segments stream
                     # through our proxy — use when the raw url 403s in the app.
-                    'proxy_url': request.build_absolute_uri(f"/proxy/{url.split('://', 1)[-1]}"),
+                    'proxy_url': request.build_absolute_uri(
+                        f"/proxy/{proxy_target}" + (f"?{proxy_query}&" if proxy_query else '?')
+                        + signed_proxy_query(proxy_target)),
                     'headers': {
                         # Referer some CDNs expect; harmless otherwise.
                         'Referer': _VIDEASY_ORIGIN + '/',
@@ -9606,6 +9737,38 @@ def serve_robots_txt(request):
     return HttpResponse('\n'.join(lines), content_type='text/plain')
 
 
+def serve_security_txt(request):
+    """Serve /.well-known/security.txt (RFC 9116) to report vulnerabilities.
+
+    Gives a researcher one predictable place to find out how to report a
+    security problem instead of posting it publicly or probing blindly.
+    """
+    import datetime
+
+    from django.http import HttpResponse
+
+    site = getattr(settings, 'SITE_URL', SEO_SITE_URL) or SEO_SITE_URL
+    site = site.rstrip('/')
+    try:
+        settings_row = SiteSettings.get_settings()
+        sender = (getattr(settings_row, 'email_host_user', '') or '').strip()
+    except Exception:
+        sender = ''
+    contact = f'mailto:{sender}' if '@' in sender else f'{site}/'
+    expires = (datetime.date.today() + datetime.timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    lines = [
+        f'Contact: {contact}',
+        f'Expires: {expires}',
+        'Preferred-Languages: en',
+        f'Canonical: {site}/.well-known/security.txt',
+        'Policy: Please send a description of the issue and how to reproduce it.',
+        '',
+    ]
+    response = HttpResponse('\n'.join(lines), content_type='text/plain; charset=utf-8')
+    response['Cache-Control'] = 'public, max-age=86400'
+    return response
+
+
 def serve_sitemap_xml(request):
     """Serve sitemap.xml at the site root for Google indexing.
 
@@ -9773,7 +9936,7 @@ from .auth import send_configured_email
 from .auth import (
     create_user_token_pair, decode_jwt_token, reset_rate_limit,
     check_rate_limit, record_rate_limit_attempt, rate_limit_response,
-    RATE_LIMIT_IP_MAX_ATTEMPTS,
+    RATE_LIMIT_IP_MAX_ATTEMPTS, RATE_LIMIT_MAX_ATTEMPTS,
 )
 import hashlib
 
@@ -10928,6 +11091,14 @@ def api_user_register(request):
     if len(password) < 6:
         return JsonResponse({'status': 'error', 'message': 'Password must be at least 6 characters'}, status=400)
 
+    # Registration sends a verification email, so successful attempts are
+    # throttled per address and per IP to stop account farming and mailbox
+    # flooding from the API.
+    rate_err = _auth_rate_limit_error(request, 'api_register', email,
+                                      max_attempts=5, ip_max_attempts=20, api=True)
+    if rate_err:
+        return rate_err
+
     # Check if already registered (case-insensitive so Alok.AK639@gmail.com matches alok.ak639@gmail.com)
     existing_user = User.objects.filter(email__iexact=email).first()
     if existing_user and existing_user.has_usable_password():
@@ -10978,6 +11149,7 @@ def api_user_register(request):
         created = True
 
     # Send verification email with link token + 6-digit OTP (app can verify via OTP)
+    _auth_rate_limit_record(request, 'api_register', email)
     _token, otp = _issue_verification_email(django_user, request, display_name=display_name)
     _lift_block_after_auth(request)
 
@@ -11603,11 +11775,18 @@ def api_user_forgot_password(request):
     email = body.get('email', '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+    # This endpoint sends mail, so throttle before doing any work (per address
+    # and per IP) — otherwise it is a free mailbox-flooding relay.
+    rate_err = _auth_rate_limit_error(request, 'api_forgot_pwd', email,
+                                      max_attempts=5, ip_max_attempts=20, api=True)
+    if rate_err:
+        return rate_err
     # Always return success to prevent email enumeration; the reset uid/token
     # (used by the app's token path) is only included when the user exists.
     django_user = User.objects.filter(email__iexact=email).first()
     resp = {'status': 'success', 'message': 'Password reset instructions sent to your email.'}
     if django_user and django_user.has_usable_password():
+        _auth_rate_limit_record(request, 'api_forgot_pwd', email)
         # Email contains both the 6-digit reset code (for the app) and a browser link
         reset_info = _issue_password_reset_email(django_user, request)
         resp.update({
@@ -11783,6 +11962,61 @@ def _reset_otp_rate_limit(request, email, action):
         reset_rate_limit(email, f'{action}_email')
 
 
+def _auth_rate_limit_response(retry_after, api=False):
+    """429 body in the shape the calling endpoint's clients already parse.
+
+    The website's AJAX endpoints answer ``{success, message}`` and the Android
+    API answers ``{status, message}``, so a throttled client keeps seeing the
+    error envelope it knows instead of a bare Django 429 page.
+    """
+    if api:
+        return rate_limit_response(retry_after)
+    response = JsonResponse({
+        'success': False,
+        'message': 'Too many attempts. Please wait a few minutes and try again.',
+        'retryAfter': retry_after,
+    }, status=429)
+    response['Retry-After'] = str(retry_after)
+    return response
+
+
+def _auth_rate_limit_error(request, action, identifier=None,
+                           max_attempts=RATE_LIMIT_MAX_ATTEMPTS,
+                           ip_max_attempts=RATE_LIMIT_IP_MAX_ATTEMPTS,
+                           api=False):
+    """Return a 429 when this IP or account has spent its attempt budget.
+
+    Budgets are separate on purpose: one account is limited to `max_attempts`
+    tries, while a single address (mobile carrier NAT, an office, a household)
+    gets the much larger `ip_max_attempts` so a few people sharing an address
+    can never lock each other out. Only failed or email-sending attempts are
+    recorded by the callers, so a correct password always gets in.
+    """
+    ip = _get_client_ip(request)
+    allowed, _, retry_after = check_rate_limit(ip, f'{action}_ip', max_attempts=ip_max_attempts)
+    if not allowed:
+        return _auth_rate_limit_response(retry_after, api=api)
+    if identifier:
+        allowed, _, retry_after = check_rate_limit(identifier, action, max_attempts=max_attempts)
+        if not allowed:
+            return _auth_rate_limit_response(retry_after, api=api)
+    return None
+
+
+def _auth_rate_limit_record(request, action, identifier=None):
+    """Count one attempt against both buckets (used for failures and mail sends)."""
+    record_rate_limit_attempt(_get_client_ip(request), f'{action}_ip')
+    if identifier:
+        record_rate_limit_attempt(identifier, action)
+
+
+def _auth_rate_limit_reset(request, action, identifier=None):
+    """Clear both buckets after a successful authentication."""
+    reset_rate_limit(_get_client_ip(request), f'{action}_ip')
+    if identifier:
+        reset_rate_limit(identifier, action)
+
+
 @_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -11876,6 +12110,11 @@ def api_user_resend_verification(request):
         return JsonResponse({'status': 'success', 'message': 'If your email is registered, a new verification code has been sent to your inbox.'})
     if django_user.is_active:
         return JsonResponse({'status': 'success', 'message': 'This email is already verified. You can login now.'})
+    rate_err = _auth_rate_limit_error(request, 'api_resend_verify', email,
+                                      max_attempts=5, ip_max_attempts=20, api=True)
+    if rate_err:
+        return rate_err
+    _auth_rate_limit_record(request, 'api_resend_verify', email)
     _token, otp = _issue_verification_email(django_user, request, display_name=django_user.first_name)
     return JsonResponse({
         'status': 'success',

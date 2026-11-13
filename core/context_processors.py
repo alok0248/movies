@@ -4,6 +4,26 @@ from .models import SiteSettings, NavbarItem, Ad, AdsterraLink, AmazonAffiliateP
 from .google_auth import google_login_enabled, resolve_client_id
 
 
+def _json_for_inline_script(value):
+    """Serialise ``value`` for embedding inside an inline <script> block.
+
+    json.dumps leaves ``<``, ``>`` and ``&`` as themselves, so an ad title or
+    URL containing ``</script>`` would end the template's script element and
+    the remainder of the value would then be parsed by the browser as page
+    markup. Escaping them as \\uXXXX keeps the value byte-identical once the
+    page reads it back (the template evaluates these blobs as JS literals), so
+    nothing an ad shows changes.
+    """
+    return (
+        json.dumps(value)
+        .replace('<', '\\u003C')
+        .replace('>', '\\u003E')
+        .replace('&', '\\u0026')
+        .replace('\u2028', '\\u2028')
+        .replace('\u2029', '\\u2029')
+    )
+
+
 def _ad_consent_value(request):
     """The visitor's stored ad-consent choice: 'given', 'denied' or ''."""
     try:
@@ -113,15 +133,15 @@ def site_settings(request):
         'enabled_providers': enabled_providers,
         'watch_regions_nav': watch_regions_nav,
         'auto_click_every_clicks': ss.auto_click_every_clicks or 10,
-        'deferred_ads_settings_json': json.dumps(deferred_settings),
-        'autoclick_ad_urls_json': json.dumps(autoclick_urls),
-        'tile_ads_json': json.dumps(tile_ads),
-        'gating_ad_urls_json': json.dumps(gating_ad_urls),
-        'amazon_products_json': json.dumps(amazon_products),
+        'deferred_ads_settings_json': _json_for_inline_script(deferred_settings),
+        'autoclick_ad_urls_json': _json_for_inline_script(autoclick_urls),
+        'tile_ads_json': _json_for_inline_script(tile_ads),
+        'gating_ad_urls_json': _json_for_inline_script(gating_ad_urls),
+        'amazon_products_json': _json_for_inline_script(amazon_products),
         'enable_tile_click_gating': ss.enable_tile_click_gating,
         'tile_gating_source': gating_source,
         'tile_ad_source': tile_ad_source,
-        'adsterra_links_json': json.dumps(adsterra_links),
+        'adsterra_links_json': _json_for_inline_script(adsterra_links),
         'adsterra_js_codes': adsterra_js_codes,
         'adsterra_probe_url': adsterra_probe_url,
         'adsterra_banner_url': adsterra_banner_url,

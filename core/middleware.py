@@ -552,21 +552,83 @@ class RequestLogMiddleware:
 
 
 class ContentSecurityPolicyMiddleware:
+    """Clickjacking protection via CSP, with everything else left open.
+
+    The policy is deliberately permissive: scripts, styles, images, frames and
+    connections from any origin (including inline and eval) stay allowed, so
+    the third-party players, ad iframes and extractors keep working exactly as
+    before. The only restriction is ``frame-ancestors 'self'`` — nobody but
+    this site may frame our pages — which browsers honour even where
+    X-Frame-Options is ignored. Views that set their own policy (e.g.
+    ``proxy_embed``) keep it.
+    """
+
+    POLICY = (
+        "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
+        "script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
+        "style-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
+        "img-src * data: blob:; "
+        "font-src * data: blob:; "
+        "media-src * data: blob:; "
+        "connect-src * data: blob: ws: wss:; "
+        "frame-src * data: blob:; "
+        "frame-ancestors 'self'; "
+    )
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
-        # Set a very permissive CSP to avoid breaking any site features
-        csp = (
-            "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
-            "script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
-            "style-src * 'unsafe-inline' 'unsafe-eval' data: blob:; "
-            "img-src * 'unsafe-inline' data: blob:; "
-            "font-src * 'unsafe-inline' data: blob:; "
-            "connect-src * 'unsafe-inline' data: blob:; "
-            "frame-src * 'unsafe-inline' data: blob:; "
-            "frame-ancestors * 'unsafe-inline'; "
+        if 'Content-Security-Policy' not in response:
+            response['Content-Security-Policy'] = self.POLICY
+        return response
+
+
+class AdminLoginThrottleMiddleware:
+    """Throttle password guesses against Django's own admin sign-in form.
+
+    The site's public login endpoints count failed attempts, but /admin/login/
+    was accepting unlimited guesses. Only failures are counted and a successful
+    sign-in clears the counter, so a correct password is never punished for
+    earlier typos beyond the (short) lockout an attacker causes for itself.
+    """
+
+    ADMIN_LOGIN_PATH = '/admin/login/'
+    MAX_ATTEMPTS = 15
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        is_admin_login = (
+            request.method == 'POST'
+            and request.path.rstrip('/') + '/' == self.ADMIN_LOGIN_PATH
         )
-        response["Content-Security-Policy"] = csp
+        if not is_admin_login:
+            return self.get_response(request)
+
+        from django.http import HttpResponse
+
+        from .auth import check_rate_limit, record_rate_limit_attempt, reset_rate_limit
+
+        client_ip = get_client_ip(request) or 'unknown'
+        allowed, _remaining, retry_after = check_rate_limit(
+            client_ip, 'admin_login', max_attempts=self.MAX_ATTEMPTS
+        )
+        if not allowed:
+            response = HttpResponse(
+                'Too many failed sign-in attempts from this address. '
+                'Please try again later.',
+                status=429,
+                content_type='text/plain; charset=utf-8',
+            )
+            response['Retry-After'] = str(retry_after or 60)
+            return response
+
+        response = self.get_response(request)
+        if getattr(request.user, 'is_authenticated', False) and response.status_code in (302, 303):
+            reset_rate_limit(client_ip, 'admin_login')
+        else:
+            record_rate_limit_attempt(client_ip, 'admin_login')
         return response

@@ -311,6 +311,7 @@ urlpatterns = [
     path('app-ads.txt', views.serve_app_ads_txt, name='serve_app_ads_txt'),
     path('robots.txt', views.serve_robots_txt, name='robots_txt'),
     path('sitemap.xml', views.serve_sitemap_xml, name='sitemap_xml'),
+    path('.well-known/security.txt', views.serve_security_txt, name='security_txt'),
     path('google3d3495bfc5b3fba2.html', views.serve_google_verification, name='google_verification'),
     path('admin-dashboard/ad-files/', views.admin_ad_files, name='admin_ad_files'),
     path('ajax/ad-files/save/', views.ajax_save_ad_file, name='ajax_save_ad_file'),

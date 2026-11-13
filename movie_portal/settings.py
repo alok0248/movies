@@ -57,11 +57,14 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    # 'core.middleware.ContentSecurityPolicyMiddleware',
+    'core.middleware.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Counts failed Django-admin sign-ins (needs request.user, so it sits
+    # after AuthenticationMiddleware).
+    'core.middleware.AdminLoginThrottleMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.EmailSettingsMiddleware',
@@ -189,16 +192,11 @@ CACHES = {
 # Login URL
 LOGIN_URL = '/login/'
 
-# Security settings for production (configurable via environment variables)
-if ENV == 'prod':
-    SECURE_SSL_REDIRECT = False  # Disable for ngrok
-    SESSION_COOKIE_SECURE = False  # Disable for ngrok
-    CSRF_COOKIE_SECURE = False  # Disable for ngrok
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = os.environ.get('DJANGO_X_FRAME_OPTIONS', 'ALLOWALL')
-else:
-    X_FRAME_OPTIONS = 'ALLOWALL'
+# Security settings now live *after* the settings_local import at the bottom of
+# this file — see "Security settings" there. They used to sit here, where ENV
+# was still the environment default because settings_local (the file that sets
+# ENV='prod' on the server) had not been loaded yet, so production silently ran
+# with development values.
 
 # Trust the proxy (nginx)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -236,11 +234,54 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 # Static files caching — ManifestStaticFilesStorage adds content-hash for cache busting
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
+# Health watch: the TLS certificates nginx serves for this site, checked for
+# expiry by `manage.py check_health` against core.health.CERT_WARN_DAYS. The
+# default is the chain the deploy hook installs and nginx actually serves
+# (line 73 of the site config; deploy/ssl/ssl_deploy_cert.sh), so the alarm is
+# on for every deployment and cannot be forgotten in settings_local.py. A
+# machine that has no such file — a laptop, a container — reports the check as
+# unknown ("no readable certificate at ..."), which is not a failure and does
+# not change the exit status. Override the list, or set it to [], in
+# settings_local.py to watch different files or switch the check off.
+HEALTH_CERT_PATHS = ['/etc/ssl/custom/newmovies.linkpc.net_fullchain.cer']
+
 # Load local settings LAST (if exists) for environment-specific config
 try:
     from movie_portal.settings_local import *
 except ImportError:
     pass
+
+
+# ---------------------------------------------------------------------------
+# Security settings
+# ---------------------------------------------------------------------------
+# Evaluated after settings_local, which is what sets ENV='prod' on the server.
+
+def _env_flag(name, default):
+    return os.environ.get(name, str(default)).strip().lower() in ('true', '1', 't', 'yes')
+
+
+# Only this site may frame its own pages (was ALLOWALL). The CSP added by
+# core.middleware.ContentSecurityPolicyMiddleware enforces the same rule where
+# X-Frame-Options is ignored, and every other directive stays wide open so the
+# players, ads and third-party iframes keep working.
+X_FRAME_OPTIONS = os.environ.get('DJANGO_X_FRAME_OPTIONS', 'SAMEORIGIN')
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+if ENV == 'prod':
+    # nginx forwards X-Forwarded-Proto (proxy_params), and SECURE_PROXY_SSL_HEADER
+    # above makes request.is_secure() follow it — so this cannot redirect-loop.
+    SECURE_SSL_REDIRECT = _env_flag('DJANGO_SECURE_SSL_REDIRECT', True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    # HSTS: 180 days, no preload and no includeSubDomains (the host is a
+    # dynamic-DNS name, and preloading is irreversible for that long).
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '15552000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 # Configure logging after settings_local sets ENV
 LOGGING = {

@@ -6,8 +6,9 @@ The three failures that actually take this site down are cheap to detect:
 * the disk filling (logs, sqlite, backups),
 * the gunicorn workers disappearing (an OOM kill, a crash loop).
 
-``check_health`` reads those three signals, and ``dispatch`` sends one alert
-when any of them crosses its threshold. Email goes to every active
+``check_health`` reads those three signals, plus the expiry date of the TLS
+certificate nginx serves (``HEALTH_CERT_PATHS``), and ``dispatch`` sends one
+alert when any of them crosses its threshold. Email goes to every active
 ``AlertRecipient`` row through the SMTP settings the site already uses, and
 Telegram is optional (bot token + chat id).
 
@@ -20,7 +21,9 @@ than thrown.
 
 import logging
 import shutil
+import ssl
 import subprocess
+import time
 
 from django.conf import settings as django_settings
 from django.core.cache import cache
@@ -72,6 +75,70 @@ def gunicorn_workers():
         return -1
 
 
+# -------------------------------------------------------------- certificate
+
+# Days of warning before the certificate nginx serves expires. Let's Encrypt
+# renews with 30 days left, so a healthy box never gets near this; a finding
+# here means a renewal run failed or the deploy hook did not install the new
+# chain into /etc/ssl/custom.
+CERT_WARN_DAYS = 21
+
+
+def cert_paths():
+    """The certificate files to watch, from ``settings.HEALTH_CERT_PATHS``."""
+    paths = getattr(django_settings, 'HEALTH_CERT_PATHS', None) or []
+    return [path for path in paths if path]
+
+
+def cert_not_after(path):
+    """``notAfter`` of the first certificate in ``path``; None when unreadable."""
+    try:
+        out = subprocess.run(
+            ['openssl', 'x509', '-in', path, '-noout', '-enddate'],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        logger.debug('health: could not read %s with openssl', path, exc_info=True)
+        return None
+    line = (out.stdout or '').strip()
+    if out.returncode != 0 or not line.startswith('notAfter='):
+        logger.debug('health: %s is not a readable certificate: %s',
+                     path, (out.stderr or '').strip()[:200])
+        return None
+    return line.split('=', 1)[1].strip()
+
+
+def cert_days_until(stamp):
+    """Whole days from now until an openssl date stamp; None when unparseable."""
+    try:
+        expires = ssl.cert_time_to_seconds(stamp)
+    except ValueError:
+        logger.debug('health: could not parse the certificate date %r', stamp)
+        return None
+    return int((expires - time.time()) // 86400)
+
+
+def cert_days_left(path):
+    """Whole days until the certificate in ``path`` expires; None when unreadable."""
+    stamp = cert_not_after(path)
+    return None if stamp is None else cert_days_until(stamp)
+
+
+def soonest_expiry(paths=None):
+    """The soonest-expiring of ``paths`` as ``(days_left, notAfter, path)``.
+
+    Unreadable files are skipped, so one unreadable path cannot hide the others;
+    ``(None, None, None)`` when none of them can be read.
+    """
+    soonest = (None, None, None)
+    for path in (cert_paths() if paths is None else paths):
+        stamp = cert_not_after(path)
+        days = None if stamp is None else cert_days_until(stamp)
+        if days is not None and (soonest[0] is None or days < soonest[0]):
+            soonest = (days, stamp, path)
+    return soonest
+
+
 def run_checks(record=True):
     """Every enabled check as ``{key, title, ok, detail}``, in display order.
 
@@ -114,6 +181,26 @@ def run_checks(record=True):
             'detail': ('could not count them' if count < 0
                        else '%d running (minimum %d)' % (count, minimum)),
         })
+
+    paths = cert_paths()
+    if paths:
+        days, stamp, path = soonest_expiry(paths)
+        if days is None:
+            findings.append({
+                'key': 'cert',
+                'title': 'TLS certificate',
+                'ok': None,
+                'detail': 'no readable certificate at %s' % ', '.join(paths),
+            })
+        else:
+            when = ('expires in %d days' % days if days >= 0
+                    else 'expired %d days ago' % -days)
+            findings.append({
+                'key': 'cert',
+                'title': 'TLS certificate',
+                'ok': days >= CERT_WARN_DAYS,
+                'detail': '%s %s (%s, warn at %d days)' % (path, when, stamp, CERT_WARN_DAYS),
+            })
 
     if record:
         try:

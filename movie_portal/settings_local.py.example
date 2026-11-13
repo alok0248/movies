@@ -29,6 +29,12 @@ ALLOWED_HOSTS = ['*']
 #     }
 # }
 
+# Health watch: TLS certificate files checked for expiry by
+# `manage.py check_health`. movie_portal/settings.py already defaults to the
+# chain nginx serves on the server, so nothing is needed here; uncomment to
+# watch a different list, or set it to [] to switch the check off.
+# HEALTH_CERT_PATHS = ['/etc/ssl/custom/newmovies.linkpc.net_fullchain.cer']
+
 # API Keys (optional, can also be set in credentials.json or environment variables)
 # TMDB_API_KEY = 'your_tmdb_api_key_here'
 # CODESPECTERS_API_KEY = 'your_codespecters_api_key_here'

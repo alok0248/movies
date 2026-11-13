@@ -4445,41 +4445,85 @@
                     else window.openOwnTab(String(url), '_blank');
                 } catch (e) {}
             }
+            /* Ad records are edited in the admin and some of their fields are
+               filled from affiliate feeds, so their text is treated as data,
+               never as markup: every value is written with textContent and
+               every URL has to prove an http(s) protocol before it is used.
+               The surrounding markup (tags, classes, inline styles) is
+               unchanged, so an ad renders exactly as it did before. */
+            function safeAdUrl(value) {
+                var raw = String(value == null ? '' : value).trim();
+                if (!raw) return '';
+                try {
+                    var parsed = new URL(raw, window.location.href);
+                    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+                } catch (e) {}
+                return '';
+            }
+            function adNode(tag, styleText, text) {
+                var node = document.createElement(tag);
+                if (styleText) node.style.cssText = styleText;
+                if (text !== undefined && text !== null) node.textContent = String(text);
+                return node;
+            }
             function buildTileAdHtml(ad) {
                 if (!ad) return '';
                 var provider = String(ad.provider || '');
                 if (provider === 'amazon_affiliate' && ad.affiliate_url) {
-                    var imgHtml = '';
-                    if (ad.affiliate_image_url) {
-                        imgHtml = '<img src="' + ad.affiliate_image_url + '" alt="' + (ad.affiliate_title || ad.name || '').replace(/"/g, '&quot;') + '" style="max-height:180px;object-fit:contain;width:auto;margin:0 auto 0.5rem auto;display:block;">';
+                    var affUrl = safeAdUrl(ad.affiliate_url);
+                    var box = affUrl ? document.createElement('a') : document.createElement('div');
+                    if (affUrl) {
+                        box.setAttribute('href', affUrl);
+                        box.setAttribute('target', '_blank');
+                        box.setAttribute('rel', 'sponsored noopener noreferrer');
                     }
-                    var priceHtml = ad.affiliate_price ? '<div class="mt-1" style="color:#ff9900;font-weight:600;">' + ad.affiliate_price + '</div>' : '';
-                    return (
-                        '<a href="' + ad.affiliate_url + '" target="_blank" rel="sponsored noopener noreferrer" class="d-block text-decoration-none p-2 rounded h-100" style="border:1px solid rgba(255,153,0,.35);background:rgba(255,153,0,.08);min-height:260px;display:flex;flex-direction:column;justify-content:center;">' +
-                            '<div style="text-align:center;font-size:0.7rem;color:#94a3b8;margin-bottom:0.35rem;">SPONSORED</div>' +
-                            imgHtml +
-                            '<div style="font-size:0.82rem;font-weight:600;color:#e2e8f0;line-height:1.25;">' + (ad.affiliate_title || ad.name || '') + '</div>' +
-                            priceHtml +
-                            '<div class="mt-2"><span class="btn btn-sm" style="background:rgba(255,153,0,.95);color:#0f171e;font-weight:700;font-size:0.75rem;padding:0.25rem 0.6rem;">View on Amazon</span></div>' +
-                        '</a>'
-                    );
+                    box.className = 'd-block text-decoration-none p-2 rounded h-100';
+                    box.style.cssText = 'border:1px solid rgba(255,153,0,.35);background:rgba(255,153,0,.08);min-height:260px;display:flex;flex-direction:column;justify-content:center;';
+                    box.appendChild(adNode('div', 'text-align:center;font-size:0.7rem;color:#94a3b8;margin-bottom:0.35rem;', 'SPONSORED'));
+                    var affImage = safeAdUrl(ad.affiliate_image_url);
+                    if (affImage) {
+                        var affImg = document.createElement('img');
+                        affImg.setAttribute('src', affImage);
+                        affImg.setAttribute('alt', ad.affiliate_title || ad.name || '');
+                        affImg.style.cssText = 'max-height:180px;object-fit:contain;width:auto;margin:0 auto 0.5rem auto;display:block;';
+                        box.appendChild(affImg);
+                    }
+                    box.appendChild(adNode('div', 'font-size:0.82rem;font-weight:600;color:#e2e8f0;line-height:1.25;', ad.affiliate_title || ad.name || ''));
+                    if (ad.affiliate_price) {
+                        var priceEl = adNode('div', 'color:#ff9900;font-weight:600;', ad.affiliate_price);
+                        priceEl.className = 'mt-1';
+                        box.appendChild(priceEl);
+                    }
+                    var ctaWrap = adNode('div', null, null);
+                    ctaWrap.className = 'mt-2';
+                    var ctaEl = adNode('span', 'background:rgba(255,153,0,.95);color:#0f171e;font-weight:700;font-size:0.75rem;padding:0.25rem 0.6rem;', 'View on Amazon');
+                    ctaEl.className = 'btn btn-sm';
+                    ctaWrap.appendChild(ctaEl);
+                    box.appendChild(ctaWrap);
+                    return box.outerHTML;
                 } else if (provider === 'custom_image') {
-                    var imgTag = '';
-                    if (ad.image_url) {
-                        imgTag = '<img src="' + ad.image_url + '" alt="' + (ad.alt_text || ad.name || '').replace(/"/g, '&quot;') + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
+                    var imageUrl = safeAdUrl(ad.image_url);
+                    var linkUrl = ad.link_url ? safeAdUrl(ad.link_url) : '';
+                    var boxEl = adNode('div', 'min-height:260px;position:relative;border-radius:8px;overflow:hidden;background:rgba(15,23,42,0.8);', null);
+                    boxEl.appendChild(adNode('div', 'position:absolute;top:4px;left:4px;z-index:2;background:rgba(0,0,0,.55);color:#cbd5e1;font-size:0.6rem;padding:0.1rem 0.35rem;border-radius:4px;', 'AD'));
+                    if (imageUrl) {
+                        var adImg = document.createElement('img');
+                        adImg.setAttribute('src', imageUrl);
+                        adImg.setAttribute('alt', ad.alt_text || ad.name || '');
+                        adImg.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:6px;';
+                        if (linkUrl) {
+                            var adLink = document.createElement('a');
+                            adLink.setAttribute('href', linkUrl);
+                            adLink.setAttribute('target', '_blank');
+                            adLink.setAttribute('rel', 'noopener noreferrer sponsored');
+                            adLink.className = 'd-block h-100';
+                            adLink.appendChild(adImg);
+                            boxEl.appendChild(adLink);
+                        } else {
+                            boxEl.appendChild(adImg);
+                        }
                     }
-                    var wrapStart = '';
-                    var wrapEnd = '';
-                    if (ad.link_url) {
-                        wrapStart = '<a href="' + ad.link_url + '" target="_blank" rel="noopener noreferrer sponsored" class="d-block h-100">';
-                        wrapEnd = '</a>';
-                    }
-                    return (
-                        '<div style="min-height:260px;position:relative;border-radius:8px;overflow:hidden;background:rgba(15,23,42,0.8);">' +
-                            '<div style="position:absolute;top:4px;left:4px;z-index:2;background:rgba(0,0,0,.55);color:#cbd5e1;font-size:0.6rem;padding:0.1rem 0.35rem;border-radius:4px;">AD</div>' +
-                            wrapStart + imgTag + wrapEnd +
-                        '</div>'
-                    );
+                    return boxEl.outerHTML;
                 } else if (provider === 'custom_script' || provider === 'google_adsense') {
                     return (
                         '<div style="min-height:260px;background:rgba(15,23,42,0.8);padding:0.5rem;border-radius:8px;overflow:hidden;">' +
@@ -4620,7 +4664,7 @@
             };
         })();
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
     <script>
     /* ===== Global TMDB Rate Limiter ===== */
     window.TMDBQueue = (function() {
