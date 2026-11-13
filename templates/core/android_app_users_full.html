@@ -70,6 +70,41 @@
     .pill { font-size: .66rem; padding: .16rem .45rem; border-radius: 6px; }
     tr.data-wiped td { background: rgba(127,29,29,.18) !important; }
     .act-btn { font-size: .7rem; padding: .16rem .45rem; border-radius: 7px; }
+
+    /* --- Users per day/month/year tab: KPI tiles, chart card, share bar --- */
+    .du-tiles {
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .6rem; margin-bottom: .8rem;
+    }
+    .du-tile {
+        background: rgba(15, 23, 42, .72); border: 1px solid rgba(148, 163, 184, .2);
+        border-radius: 12px; padding: .6rem .75rem;
+    }
+    .du-k {
+        font-size: .64rem; text-transform: uppercase; letter-spacing: .05em;
+        color: #94a3b8;
+    }
+    .du-v { font-size: 1.3rem; font-weight: 700; color: #f1f5f9; line-height: 1.25; }
+    .du-card {
+        background: rgba(15, 23, 42, .72); border: 1px solid rgba(148, 163, 184, .2);
+        border-radius: 14px; padding: .8rem .9rem .7rem;
+    }
+    .du-card-head {
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem;
+    }
+    .du-card-title { font-size: .84rem; font-weight: 700; color: #e2e8f0; }
+    /* Chart.js needs a sized parent when maintainAspectRatio is off. */
+    .du-chart-box { position: relative; height: 320px; }
+    .du-bar {
+        background: rgba(148, 163, 184, .16); border-radius: 999px;
+        height: 7px; overflow: hidden; min-width: 90px;
+    }
+    .du-bar > span { display: block; height: 100%; border-radius: 999px; background: #22c55e; }
+    @media (max-width: 767px) {
+        .du-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .du-chart-box { height: 240px; }
+    }
 </style>
 
 <div class="full-users-wrap">
@@ -103,6 +138,7 @@
             <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill chip-count ms-1">{{ counts.signed_out }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill chip-count ms-1">{{ counts.visits }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'dailyusers' %}active{% endif %}" data-tab="dailyusers" href="?tab=dailyusers" role="tab" aria-selected="{% if active_tab == 'dailyusers' %}true{% else %}false{% endif %}" title="How many users the app saw each day, month and year"><i class="fas fa-chart-column me-1"></i>Users per day</a>
         </div>
 
         <!-- Kept outside the swappable panel: the row actions need both. -->
@@ -120,6 +156,81 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+/* ===================== Users per day/month/year chart =====================
+   The panel arrives either with the page or as a fragment (a tab switch), and
+   a <script> inside HTML inserted with innerHTML never executes — so the
+   numbers travel as a JSON data island and this one function draws them. It
+   runs on load and again after every panel swap. */
+window.__renderDailyChart = function () {
+    var canvas = document.getElementById('dailyUsersChart');
+    var labelsEl = document.getElementById('dailyUsersLabels');
+    var valuesEl = document.getElementById('dailyUsersValues');
+    if (!canvas || !labelsEl || !valuesEl || typeof Chart === 'undefined') return;
+    var labels, values;
+    try {
+        labels = JSON.parse(labelsEl.textContent);
+        values = JSON.parse(valuesEl.textContent);
+    } catch (e) { return; }
+    if (window.__dailyChart) {
+        try { window.__dailyChart.destroy(); } catch (e) {}
+        window.__dailyChart = null;
+    }
+    window.__dailyChart = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                /* Built from the chart area, so it is the real height even
+                   though the canvas is sized by CSS. */
+                backgroundColor: function (c) {
+                    var area = c.chart.chartArea;
+                    if (!area) { return 'rgba(34,197,94,.75)'; }
+                    var g = c.chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
+                    g.addColorStop(0, 'rgba(34,197,94,.32)');
+                    g.addColorStop(1, 'rgba(34,197,94,.95)');
+                    return g;
+                },
+                hoverBackgroundColor: '#4ade80',
+                borderRadius: 5, borderSkipped: false, maxBarThickness: 34
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 320 },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(2,6,23,.94)',
+                    borderColor: 'rgba(148,163,184,.3)', borderWidth: 1,
+                    padding: 10, displayColors: false,
+                    callbacks: {
+                        label: function (item) {
+                            return item.parsed.y + (item.parsed.y === 1 ? ' user' : ' users');
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0,
+                             autoSkip: true, maxTicksLimit: 12 }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#94a3b8', font: { size: 10 }, precision: 0 },
+                    grid: { color: 'rgba(148,163,184,.14)' }
+                }
+            }
+        }
+    });
+};
+/* The page may already be on that tab. */
+document.addEventListener('DOMContentLoaded', function () { window.__renderDailyChart(); });
+</script>
 <script>
 function _csrf() {
     var el = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -279,6 +390,9 @@ function resendCode(id, btn) {
         .then(function (html) {
             wrap.innerHTML = html;
             markActive(tabOf(url));
+            /* A <script> inside HTML set with innerHTML never runs, so the
+               chart redraws itself from the JSON island the panel carries. */
+            if (window.__renderDailyChart) { window.__renderDailyChart(); }
             try { history.replaceState(null, '', url); } catch (e) {}
             window.scrollTo(0, 0);
         })

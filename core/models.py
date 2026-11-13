@@ -3715,6 +3715,67 @@ class AppNotificationRecipient(models.Model):
         return '%s -> %s' % (self.notification_id, self.email)
 
 
+class UserMessage(models.Model):
+    """A message a user writes to the admin from the app inbox.
+
+    Two shapes land here: a reply to one of the admin's notifications (``kind``
+    is ``reply`` and ``notification`` is set) and a plain suggestion the user
+    types from the inbox. Guests are allowed, so ``email`` is empty for a device
+    that has not signed in; the app then fetches its thread by ``device_id`` and
+    the admin answers the device instead of an address.
+
+    The admin's answer is kept on the row (``reply_body``) so the app can show
+    it inline, and for a signed-in user it is also delivered as a notification
+    (see ``user_messages_admin``) so it arrives the same way every other message
+    does.
+    """
+    KIND_SUGGESTION = 'suggestion'
+    KIND_REPLY = 'reply'
+    KIND_CHOICES = [
+        (KIND_SUGGESTION, 'Suggestion'),
+        (KIND_REPLY, 'Reply'),
+    ]
+
+    app = models.ForeignKey('AndroidApp', null=True, blank=True,
+                            on_delete=models.SET_NULL, related_name='user_messages')
+    notification = models.ForeignKey('AppNotification', null=True, blank=True,
+                                     on_delete=models.SET_NULL, related_name='user_messages')
+    email = models.EmailField(blank=True, default='', db_index=True)
+    device_id = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    device_type = models.CharField(max_length=10, blank=True, default='')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES,
+                            default=KIND_SUGGESTION)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    is_read = models.BooleanField(default=False)
+    reply_body = models.TextField(blank=True, default='')
+    replied_at = models.DateTimeField(null=True, blank=True)
+    replied_by = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'User message'
+        verbose_name_plural = 'User messages'
+        indexes = [models.Index(fields=['app', '-created_at'], name='usermsg_app_created_idx')]
+
+    def __str__(self):
+        who = self.email or ('device %s' % self.device_id if self.device_id else 'unknown')
+        return '%s: %s' % (who, self.body[:40])
+
+    @property
+    def is_registered(self):
+        """Signed in on this device, so the admin can answer a person."""
+        return bool(self.email)
+
+    @property
+    def is_answered(self):
+        return bool(self.replied_at)
+
+    @property
+    def display_user(self):
+        return self.email or 'Guest (%s)' % (self.device_id or 'unknown device')
+
+
 class GuestPlayQuota(models.Model):
     """How many titles one unregistered device has played.
 

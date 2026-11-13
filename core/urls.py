@@ -132,6 +132,8 @@ urlpatterns = [
     path('admin-dashboard/notifications/<int:notification_id>/', notification_views.notification_detail, name='notification_detail'),
     path('admin-dashboard/notifications/<int:notification_id>/toggle/', notification_views.notification_toggle, name='notification_toggle'),
     path('admin-dashboard/notifications/user-search/', notification_views.synced_user_search, name='synced_user_search'),
+    # Messages users write to the admin from the app inbox, and the answers.
+    path('admin-dashboard/user-messages/', notification_views.user_messages_admin, name='user_messages_admin'),
     # Per-device online time: actual online/offline hours with graphs.
     path('admin-dashboard/devices/', views.devices_ips, name='devices_ips'),
     path('admin-dashboard/device-activity/', activity_views.device_activity, name='device_activity'),
@@ -141,6 +143,9 @@ urlpatterns = [
     path('api/notifications', notification_views.api_notifications),
     path('api/notifications/read/', notification_views.api_notifications_read, name='api_notifications_read'),
     path('api/notifications/read', notification_views.api_notifications_read),
+    # Messages from a device to the admin (replies and suggestions).
+    path('api/messages/', notification_views.api_user_messages, name='api_user_messages'),
+    path('api/messages', notification_views.api_user_messages),
     # Guest playback quota (10 free titles per device, then registration).
     path('api/guest/quota/', guest_views.api_guest_quota, name='api_guest_quota'),
     path('api/guest/quota', guest_views.api_guest_quota),

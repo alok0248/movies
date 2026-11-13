@@ -4365,7 +4365,7 @@ def android_app_users_full(request, app_id):
     # signed-out list at the same time, which is what made it heavy. The tab
     # bar asks for ?partial=1 when the admin switches, so that swap needs no
     # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'uniquedevices', 'signedout', 'visits')
+    TABS = ('accounts', 'uniquedevices', 'signedout', 'visits', 'dailyusers')
     tab = (request.GET.get('tab') or '').strip().lower()
     legacy_devices = tab == 'devices'
     if legacy_devices:
@@ -4770,6 +4770,114 @@ def android_app_users_full(request, app_id):
                     # Row numbers continue across pages instead of restarting at 1.
                     'row_offset': (unique_page.number - 1) * 25})
 
+
+    elif tab == 'dailyusers':
+        # ---------------------------------------------- users per day / month / year
+        # How many users the app saw in each period. A user here is a device:
+        # the app reports one install per device and the server keeps one row
+        # per install, so counting distinct devices counts users. "Active"
+        # counts the devices behind the period's visits — the distinct count is
+        # taken at the period itself, so a month is never the sum of its days —
+        # and "New" counts the devices that appeared for the first time in it.
+        # The daily axis is the last 30 days and the monthly one the last 12
+        # months, so the chart stays continuous and quiet periods read as zero
+        # instead of silently disappearing.
+        from django.db.models.functions import TruncDate, TruncMonth, TruncYear
+
+        gran = (request.GET.get('g') or '').strip().lower()
+        if gran not in ('daily', 'monthly', 'yearly'):
+            gran = 'daily'
+        metric = (request.GET.get('mu') or '').strip().lower()
+        if metric not in ('active', 'new'):
+            metric = 'active'
+        trunc = {'daily': TruncDate, 'monthly': TruncMonth, 'yearly': TruncYear}[gran]
+
+        if metric == 'new':
+            bucket_rows = (all_devices.annotate(b=trunc('first_seen_at'))
+                           .values('b').annotate(n=Count('id')).order_by())
+        else:
+            bucket_rows = (AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
+                           .annotate(b=trunc('visited_at'))
+                           .values('b')
+                           .annotate(n=Count('device', distinct=True)).order_by())
+
+        key_of = {
+            'daily': lambda b: (b.year, b.month, b.day),
+            'monthly': lambda b: (b.year, b.month),
+            'yearly': lambda b: (b.year,),
+        }[gran]
+        counts_by_bucket = {}
+        for row in bucket_rows:
+            if row['b'] is not None:
+                counts_by_bucket[key_of(row['b'])] = row['n']
+
+        # ------------------------------------------------------------ the axis
+        today = timezone.localdate()
+        slots = []
+        if gran == 'daily':
+            for i in range(29, -1, -1):
+                d = today - datetime.timedelta(days=i)
+                slots.append((d.strftime('%d %b'), (d.year, d.month, d.day)))
+        elif gran == 'monthly':
+            for i in range(11, -1, -1):
+                yy, mm0 = divmod(today.year * 12 + today.month - 1 - i, 12)
+                slots.append((datetime.date(yy, mm0 + 1, 1).strftime('%b %Y'),
+                              (yy, mm0 + 1)))
+        else:
+            years = [k[0] for k in counts_by_bucket if k[0]] or [today.year]
+            for yy in range(max(min(years), today.year - 9), today.year + 1):
+                slots.append((str(yy), (yy,)))
+
+        labels = [label for label, _ in slots]
+        values = [counts_by_bucket.get(key, 0) for _, key in slots]
+
+        # ----------------------------------------------------------- the stats
+        visits = AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
+        total_users = visits.aggregate(n=Count('device', distinct=True))['n'] or 0
+        day_start = timezone.make_aware(
+            datetime.datetime.combine(today, datetime.time.min))
+        active_today = (visits.filter(visited_at__gte=day_start)
+                        .aggregate(n=Count('device', distinct=True))['n'] or 0)
+        best = max(range(len(values)), key=lambda i: values[i]) if values else 0
+        max_value = max(values) if values and max(values) else 1
+
+        rows = []
+        for i, (label, _) in enumerate(slots):
+            count = values[i]
+            prev = values[i - 1] if i else None
+            rows.append({
+                'label': label,
+                'count': count,
+                'pct': round(count * 100.0 / max_value, 1),
+                'delta': (count - prev) if prev is not None else None,
+                'delta_pct': (round((count - prev) * 100.0 / prev) if prev else None),
+            })
+        rows.reverse()  # newest period first in the table
+
+        ctx.update({
+            'daily_gran': gran,
+            'daily_metric': metric,
+            'daily_labels': labels,
+            'daily_values': values,
+            'daily_rows': rows,
+            'daily_word': {'daily': 'day', 'monthly': 'month', 'yearly': 'year'}[gran],
+            'daily_window': {'daily': 'Last 30 days', 'monthly': 'Last 12 months',
+                             'yearly': 'All years on record'}[gran],
+            'daily_span': {'daily': 'the last 30 days', 'monthly': 'the last 12 months',
+                           'yearly': 'all years on record'}[gran],
+            'daily_stats': {
+                'total': total_users,
+                'registered': all_devices.count(),
+                'today': active_today,
+                'new30': all_devices.filter(
+                    first_seen_at__gte=timezone.now()
+                    - datetime.timedelta(days=30)).count(),
+                'peak': {'label': labels[best] if labels else '—',
+                         'count': values[best] if values else 0},
+                'average': round(sum(values) / len(values), 1) if values else 0,
+                'shown': sum(values),
+            },
+        })
 
     elif tab == 'visits':
         # ---------------------------------------------------------------- visits

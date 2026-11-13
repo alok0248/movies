@@ -1,0 +1,511 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}User messages - Admin{% endblock %}
+{% block admin_content %}
+<style>
+    /* Support console: a conversation rail beside the thread the admin is
+       answering. Structure only — colours, cards, buttons and fields come from
+       the admin kit; the pieces below are the two-pane console itself. */
+    .um-page {
+        --um-line: var(--adm-line);
+        --um-spring: var(--adm-spring, cubic-bezier(.32,.72,0,1));
+        position: relative; isolation: isolate;
+        padding: .4rem .4rem 2.5rem;
+    }
+    /* One soft brand wash behind the console, painted once and left alone. */
+    .um-page::before {
+        content: ''; position: absolute; z-index: -1;
+        left: -6%; right: -6%; top: -2rem; height: 22rem; pointer-events: none;
+        opacity: .55;
+        background:
+            radial-gradient(52% 80% at 16% 0%, color-mix(in srgb, var(--brand) 26%, transparent), transparent 70%),
+            radial-gradient(44% 70% at 84% 4%, rgba(96,165,250,.16), transparent 72%);
+    }
+    html[data-theme="light"] .um-page::before { opacity: .3; }
+
+    /* ---- filters ---- */
+    .um-bar { margin-bottom: 1.5rem; }
+    .um-bar-core { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; padding: .8rem .9rem; }
+    .um-bar-core .adm-pills { margin: 0; }
+    .um-state { display: grid; gap: .3rem; }
+    .um-state > .adm-label { margin: 0; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+    .um-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; margin: 0 0 0 auto; }
+    .um-filters .adm-field { margin: 0; }
+    .um-filters .adm-field > label {
+        font-size: .6rem; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--text-3);
+    }
+    .um-search { flex: 1 1 15rem; min-width: 11rem; }
+
+    /* ---- console shell ---- */
+    .um-console { display: grid; grid-template-columns: minmax(264px, 336px) minmax(0, 1fr);
+        height: clamp(460px, calc(100dvh - 320px), 780px); }
+
+    /* ---- rail ---- */
+    .um-rail { display: flex; flex-direction: column; min-height: 0;
+        border-right: 1px solid var(--um-line); }
+    .um-rail-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
+        padding: .8rem .9rem .7rem; border-bottom: 1px solid var(--um-line); }
+    .um-rail-title { margin: 0; font-size: .67rem; font-weight: 700; letter-spacing: .14em;
+        text-transform: uppercase; color: var(--text-2); }
+    .um-rail-count { font-size: .68rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+    .um-rail-list { flex: 1; min-height: 0; overflow-y: auto; padding: .45rem; display: flex;
+        flex-direction: column; gap: .2rem; scrollbar-width: thin;
+        scrollbar-color: var(--surface-hover) transparent; }
+    .um-rail-list::-webkit-scrollbar { width: 5px; }
+    .um-rail-list::-webkit-scrollbar-thumb { background: var(--surface-hover); border-radius: 3px; }
+    .um-rail-foot { border-top: 1px solid var(--um-line); padding: .5rem .55rem .6rem; }
+    .um-rail-foot .adm-pager { flex-direction: column; align-items: stretch; gap: .45rem; margin: 0; }
+    .um-rail-foot .adm-pager-info { font-size: .66rem; }
+    .um-rail-foot .adm-pager-links { flex-wrap: wrap; gap: .3rem; }
+
+    /* One conversation. Reads as a row until it is the one you are reading. */
+    .um-conv {
+        display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+        align-items: center; gap: .6rem;
+        padding: .5rem .55rem; border-radius: 14px;
+        border: 1px solid transparent; text-decoration: none; color: var(--text);
+        transition: background-color .45s var(--um-spring), border-color .45s var(--um-spring),
+                    transform .45s var(--um-spring);
+    }
+    .um-conv:hover { background: var(--surface); border-color: var(--um-line); transform: translateX(2px); }
+    .um-conv:focus-visible { outline: 2px solid var(--adm-ring); outline-offset: 1px; }
+    .um-conv.is-active {
+        background: color-mix(in srgb, var(--brand) 12%, transparent);
+        border-color: color-mix(in srgb, var(--brand) 32%, transparent);
+    }
+    .um-conv-main { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+    .um-conv-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+    .um-conv-top b { font-size: .77rem; font-weight: 650; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap; }
+    .um-conv-top time { font-size: .62rem; color: var(--text-3); white-space: nowrap;
+        font-variant-numeric: tabular-nums; }
+    .um-conv-last { font-size: .71rem; color: var(--text-2); overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap; }
+    .um-conv-meta { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap;
+        margin-top: .1rem; font-size: .6rem; color: var(--text-3); }
+    .um-conv-meta > span + span::before { content: '·'; margin-right: .35rem; opacity: .6; }
+
+    /* Waiting counter on the row: the one thing that must catch the eye. */
+    .um-flag {
+        min-width: 18px; padding: 0 .3rem; border-radius: 999px; text-align: center;
+        font-size: .62rem; font-weight: 700; line-height: 1.5;
+        color: #fbbf24; background: rgba(251,191,36,.14);
+        border: 1px solid rgba(251,191,36,.32);
+    }
+    html[data-theme="light"] .um-flag { color: #b45309; background: rgba(180,83,9,.1);
+        border-color: rgba(180,83,9,.26); }
+
+    /* ---- avatars ---- */
+    .um-av {
+        display: grid; place-items: center; width: 32px; height: 32px; flex: none;
+        border-radius: 50%; font-size: .66rem; font-weight: 700; letter-spacing: .02em;
+        color: var(--text); background: var(--surface-hover);
+        border: 1px solid var(--um-line);
+    }
+    .um-av.is-guest { color: var(--text-2); background: transparent; border-style: dashed; }
+    .um-av.is-admin {
+        color: #fff; border-color: transparent;
+        background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 66%, #fff 34%));
+    }
+    .um-av.is-lg { width: 38px; height: 38px; font-size: .74rem; }
+
+    /* ---- thread ---- */
+    .um-thread { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .um-thread-head { display: flex; align-items: center; gap: .7rem;
+        padding: .7rem .9rem; border-bottom: 1px solid var(--um-line); }
+    .um-thread-id { min-width: 0; flex: 1; }
+    .um-thread-id h2 { margin: 0; font-size: .88rem; font-weight: 700; letter-spacing: -.01em;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .um-chips { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; margin-top: .3rem; }
+    .um-chip {
+        display: inline-flex; align-items: center; gap: .28rem;
+        padding: .06rem .45rem; border-radius: 999px; font-size: .62rem; line-height: 1.6;
+        color: var(--text-2); background: var(--surface); border: 1px solid var(--um-line);
+    }
+    .um-chip i { font-size: .6rem; opacity: .8; }
+    .um-chip.is-user { color: var(--text); }
+    .um-chip.is-warn { color: #fbbf24; border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.1); }
+    .um-chip.is-done { color: #34d399; border-color: rgba(52,211,153,.28); background: rgba(52,211,153,.1); }
+    html[data-theme="light"] .um-chip.is-warn { color: #b45309; border-color: rgba(180,83,9,.26); background: rgba(180,83,9,.08); }
+    html[data-theme="light"] .um-chip.is-done { color: #047857; border-color: rgba(4,120,87,.24); background: rgba(4,120,87,.07); }
+    .um-back { display: none; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 50%; flex: none;
+        color: var(--text-2); text-decoration: none; border: 1px solid var(--um-line); }
+    .um-back:hover { color: var(--text); }
+
+    /* The stream scrolls; the composer never does. */
+    .um-stream {
+        flex: 1; min-height: 0; overflow-y: auto;
+        display: flex; flex-direction: column; gap: .9rem;
+        padding: 1.1rem 1rem 1.2rem;
+        scrollbar-width: thin; scrollbar-color: var(--surface-hover) transparent;
+    }
+    .um-stream::-webkit-scrollbar { width: 6px; }
+    .um-stream::-webkit-scrollbar-thumb { background: var(--surface-hover); border-radius: 3px; }
+    /* A short thread sits at the bottom, where a chat belongs. */
+    .um-stream > .um-msg:first-child { margin-top: auto; }
+    .um-msg { display: flex; align-items: flex-end; gap: .55rem; }
+    .um-msg.is-admin { flex-direction: row-reverse; }
+    .um-col { display: flex; flex-direction: column; gap: .3rem; min-width: 0; max-width: min(34rem, 82%); }
+    .um-msg.is-admin .um-col { align-items: flex-end; }
+    .um-bubble {
+        padding: .6rem .8rem .5rem; border-radius: 18px 18px 18px 6px;
+        background: var(--surface); border: 1px solid var(--um-line);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+        transition: border-color .5s var(--um-spring), box-shadow .5s var(--um-spring);
+    }
+    .um-msg.is-admin .um-bubble {
+        border-radius: 18px 18px 6px 18px; border-color: transparent;
+        background: linear-gradient(150deg, color-mix(in srgb, var(--brand) 30%, transparent),
+                    color-mix(in srgb, var(--brand) 14%, transparent));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+    }
+    html[data-theme="light"] .um-bubble { background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+    html[data-theme="light"] .um-msg.is-admin .um-bubble {
+        background: linear-gradient(150deg, color-mix(in srgb, var(--brand) 14%, #fff),
+                    color-mix(in srgb, var(--brand) 6%, #fff));
+        box-shadow: 0 1px 2px rgba(15,23,42,.05);
+    }
+    /* The message the composer is pointing at. */
+    .um-msg.is-target .um-bubble { border-color: var(--adm-ring);
+        box-shadow: 0 0 0 3px var(--adm-ring-soft); }
+    .um-text { margin: 0; font-size: .8rem; line-height: 1.6; white-space: pre-wrap;
+        word-break: break-word; color: var(--text); }
+    .um-quote { display: block; margin-bottom: .35rem; padding-left: .5rem;
+        border-left: 2px solid color-mix(in srgb, var(--brand) 60%, transparent);
+        font-size: .68rem; color: var(--text-2); }
+    .um-bubble-foot { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap;
+        margin-top: .35rem; font-size: .6rem; color: var(--text-3);
+        font-variant-numeric: tabular-nums; }
+    .um-bubble-foot > span { display: inline-flex; align-items: center; gap: .2rem; }
+    .um-bubble-foot .is-waiting { color: #fbbf24; }
+    .um-bubble-foot .is-done { color: #34d399; }
+    html[data-theme="light"] .um-bubble-foot .is-waiting { color: #b45309; }
+    html[data-theme="light"] .um-bubble-foot .is-done { color: #047857; }
+    .um-answer-btn {
+        align-self: flex-start; padding: .1rem .55rem .1rem .45rem;
+        border-radius: 999px; border: 1px solid var(--um-line); background: transparent;
+        color: var(--text-2); font-size: .62rem; cursor: pointer;
+        transition: color .4s var(--um-spring), border-color .4s var(--um-spring),
+                    transform .4s var(--um-spring);
+    }
+    .um-answer-btn:hover { color: var(--text); border-color: var(--adm-ring); transform: translateY(-1px); }
+    .um-answer-btn i { margin-right: .2rem; }
+
+    /* ---- composer ---- */
+    .um-composer { border-top: 1px solid var(--um-line); padding: .6rem .8rem .75rem; }
+    .um-composer-box {
+        padding: .35rem; border-radius: 18px;
+        background: var(--surface); border: 1px solid var(--um-line);
+        transition: border-color .5s var(--um-spring), box-shadow .5s var(--um-spring);
+    }
+    .um-composer-box:focus-within { border-color: var(--adm-ring); box-shadow: 0 0 0 3px var(--adm-ring-soft); }
+    .um-textarea {
+        width: 100%; min-height: 2.6rem; max-height: 13.75rem; resize: none;
+        padding: .45rem .6rem; border: 0; border-radius: 14px; background: transparent;
+        color: var(--text); font: inherit; font-size: .8rem; line-height: 1.55; outline: none;
+    }
+    .um-textarea::placeholder { color: var(--text-3); }
+    .um-composer-foot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+        padding: .15rem .25rem .1rem .6rem; }
+    .um-hint { flex: 1 1 12rem; min-width: 0; font-size: .63rem; color: var(--text-3); line-height: 1.5; }
+    .um-count { font-size: .6rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+    /* ---- empty states ---- */
+    .um-empty { padding: 2.2rem 1.2rem; text-align: center; }
+    .um-empty i { font-size: 1.5rem; color: var(--text-3); }
+    .um-empty b { display: block; margin-top: .6rem; font-size: .84rem; }
+    .um-empty span { display: block; margin-top: .25rem; font-size: .72rem; color: var(--text-2); }
+
+    /* ---- small screens: one pane at a time ---- */
+    @media (max-width: 900px) {
+        .um-page { padding: .25rem .1rem 2rem; }
+        .um-console { grid-template-columns: minmax(0, 1fr); height: auto; }
+        .um-rail { border-right: 0; border-bottom: 1px solid var(--um-line); }
+        .um-rail-list { max-height: 42vh; }
+        .um-stream { max-height: 58vh; }
+        .um-console.has-thread .um-rail { display: none; }
+        .um-back { display: inline-flex; }
+        .um-filters { margin: 0; width: 100%; }
+        .um-search { flex: 1 1 100%; }
+        .um-col { max-width: 88%; }
+    }
+</style>
+
+<div class="um-page container-fluid" style="max-width:1480px">
+    <div class="adm-hero">
+        <div>
+            <span class="adm-hero-eyebrow"><i class="far fa-comments"></i> Support console</span>
+            <h1 class="adm-hero-title">User messages</h1>
+            <p class="adm-hero-sub">Everything users write from the app's notifications screen, one thread per person. Answering a signed-in user also delivers the answer to their app inbox; a guest reads it in the thread on their device.</p>
+        </div>
+        <div class="adm-hero-side">
+            <a class="adm-btn" href="{% url 'notifications_admin' %}"><i class="far fa-bell"></i> App notifications</a>
+        </div>
+    </div>
+
+    <div class="adm-tiles">
+        <div class="adm-tile adm-rise{% if stats.open %} is-warn{% endif %}" style="--i:0">
+            <span class="adm-tile-ico"><i class="far fa-clock"></i></span>
+            <b class="adm-tile-num">{{ stats.open }}</b>
+            <span class="adm-tile-label">Waiting</span>
+            <span class="adm-tile-hint">Messages without an answer</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:1">
+            <span class="adm-tile-ico"><i class="far fa-comments"></i></span>
+            <b class="adm-tile-num">{{ stats.threads }}</b>
+            <span class="adm-tile-label">Conversations</span>
+            <span class="adm-tile-hint">People and devices that wrote in</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:2">
+            <span class="adm-tile-ico"><i class="far fa-envelope"></i></span>
+            <b class="adm-tile-num">{{ stats.total }}</b>
+            <span class="adm-tile-label">Messages</span>
+            <span class="adm-tile-hint">All time</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:3">
+            <span class="adm-tile-ico"><i class="far fa-user"></i></span>
+            <b class="adm-tile-num">{{ stats.registered }}</b>
+            <span class="adm-tile-label">Registered</span>
+            <span class="adm-tile-hint">Answered in the app inbox</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:4">
+            <span class="adm-tile-ico"><i class="far fa-user-circle"></i></span>
+            <b class="adm-tile-num">{{ stats.guest }}</b>
+            <span class="adm-tile-label">Guests</span>
+            <span class="adm-tile-hint">Answered in their thread</span>
+        </div>
+    </div>
+
+    <div class="adm-shell um-bar adm-rise" style="--i:5">
+        <div class="adm-shell-core um-bar-core">
+            <div class="um-state">
+                <span class="adm-label">State</span>
+                <div class="adm-pills">
+                    <a class="{% if state == 'open' %}active{% endif %}" href="?state=open{{ filter_qs }}">Waiting</a>
+                    <a class="{% if state == 'answered' %}active{% endif %}" href="?state=answered{{ filter_qs }}">Answered</a>
+                    <a class="{% if state == 'all' %}active{% endif %}" href="?state=all{{ filter_qs }}">All</a>
+                </div>
+            </div>
+            <form method="get" class="um-filters">
+                <input type="hidden" name="state" value="{{ state }}">
+                <div class="adm-field">
+                    <label for="um-app">App</label>
+                    <select id="um-app" name="app">
+                        <option value="">All apps</option>
+                        {% for app in apps %}
+                        <option value="{{ app.id }}"{% if app_id == app.id|stringformat:'s' %} selected{% endif %}>{{ app.name|default:app.slug|default:app.id }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="adm-field">
+                    <label for="um-user">User</label>
+                    <select id="um-user" name="user">
+                        <option value="all"{% if user_kind == 'all' %} selected{% endif %}>Everyone</option>
+                        <option value="registered"{% if user_kind == 'registered' %} selected{% endif %}>Registered</option>
+                        <option value="guest"{% if user_kind == 'guest' %} selected{% endif %}>Guests</option>
+                    </select>
+                </div>
+                <div class="adm-field um-search">
+                    <label for="um-q">Search</label>
+                    <input id="um-q" class="adm-input" type="text" name="q" value="{{ q }}" placeholder="Email, device id or words in the message">
+                </div>
+                <button class="adm-cta" type="submit"><span>Apply</span><span class="adm-cta-ico"><i class="fas fa-filter"></i></span></button>
+            </form>
+        </div>
+    </div>
+
+    {% if conversations %}
+    <div class="adm-shell adm-rise" style="--i:6">
+        <div class="adm-shell-core um-console{% if active %} has-thread{% endif %}">
+            <aside class="um-rail">
+                <div class="um-rail-head">
+                    <h2 class="um-rail-title">Conversations</h2>
+                    <span class="um-rail-count">{{ page.paginator.count }}</span>
+                </div>
+                <div class="um-rail-list">
+                    {% for conv in page.object_list %}
+                    <a class="um-conv{% if conv.key == active_key %} is-active{% endif %}"
+                       href="?thread={{ conv.key|urlencode }}{{ thread_qs }}"
+                       {% if conv.key == active_key %}aria-current="true"{% endif %}>
+                        <span class="um-av{% if not conv.is_registered %} is-guest{% endif %}">{{ conv.initials }}</span>
+                        <span class="um-conv-main">
+                            <span class="um-conv-top">
+                                <b>{{ conv.display_user }}</b>
+                                <time>{{ conv.last_at|date:"d M H:i" }}</time>
+                            </span>
+                            <span class="um-conv-last">{{ conv.last_body|truncatechars:80 }}</span>
+                            <span class="um-conv-meta">
+                                {% if conv.app_label %}<span>{{ conv.app_label }}</span>{% endif %}
+                                <span>{{ conv.total }} message{{ conv.total|pluralize }}</span>
+                                {% if conv.last_kind == 'reply' %}<span>reply</span>{% else %}<span>suggestion</span>{% endif %}
+                            </span>
+                        </span>
+                        {% if conv.waiting %}<span class="um-flag" title="{{ conv.waiting }} waiting for an answer">{{ conv.waiting }}</span>{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% if page.paginator.num_pages > 1 %}
+                <div class="um-rail-foot">{% include "core/_adm_pager.html" with pg=page %}</div>
+                {% endif %}
+            </aside>
+
+            <section class="um-thread">
+                {% if active %}
+                <header class="um-thread-head">
+                    <a class="um-back" href="?state={{ state }}{{ filter_qs }}" aria-label="Back to all conversations"><i class="fas fa-chevron-left"></i></a>
+                    <span class="um-av is-lg{% if not active.is_registered %} is-guest{% endif %}">{{ active.initials }}</span>
+                    <div class="um-thread-id">
+                        <h2>{{ active.display_user }}</h2>
+                        <div class="um-chips">
+                            {% if active.is_registered %}
+                            <span class="um-chip is-user"><i class="far fa-envelope"></i> registered</span>
+                            {% else %}
+                            <span class="um-chip"><i class="far fa-user-circle"></i> guest{% if active.device_type %} · {{ active.device_type }}{% endif %}</span>
+                            {% endif %}
+                            {% if active.app_label %}<span class="um-chip"><i class="fas fa-mobile-alt"></i> {{ active.app_label }}</span>{% endif %}
+                            <span class="um-chip">{{ active.total }} message{{ active.total|pluralize }}</span>
+                            {% if active.waiting %}
+                            <span class="um-chip is-warn"><i class="far fa-clock"></i> {{ active.waiting }} waiting</span>
+                            {% else %}
+                            <span class="um-chip is-done"><i class="far fa-check-circle"></i> answered</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </header>
+
+                <div class="um-stream" id="um-stream">
+                    {% for row in thread_messages %}
+                    <div class="um-msg{% if forloop.last and not row.replied_at %} is-target{% endif %}"{% if forloop.counter0 < 12 %} style="--i:{{ forloop.counter0 }}"{% endif %}>
+                        <span class="um-av{% if not active.is_registered %} is-guest{% endif %}">{{ active.initials }}</span>
+                        <div class="um-col">
+                            <div class="um-bubble">
+                                {% if row.kind == 'reply' and row.notification %}
+                                <span class="um-quote">about “{{ row.notification.title|truncatechars:52 }}”</span>
+                                {% endif %}
+                                <p class="um-text">{{ row.body }}</p>
+                                <div class="um-bubble-foot">
+                                    <time>{{ row.created_at|date:"d M Y H:i" }}</time>
+                                    {% if row.replied_at %}
+                                    <span class="is-done"><i class="far fa-check-circle"></i> answered</span>
+                                    {% else %}
+                                    <span class="is-waiting"><i class="far fa-clock"></i> waiting</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if not row.replied_at %}
+                            <button class="um-answer-btn" type="button"
+                                    data-answer-message="{{ row.id }}"
+                                    data-answer-hint="Answering this message — the answer replaces what the app shows for it.">
+                                <i class="far fa-comment-alt"></i> Answer this message
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if row.replied_at %}
+                    <div class="um-msg is-admin{% if forloop.last %} adm-rise{% endif %}">
+                        <span class="um-av is-admin"><i class="far fa-paper-plane"></i></span>
+                        <div class="um-col">
+                            <div class="um-bubble">
+                                <p class="um-text">{{ row.reply_body }}</p>
+                                <div class="um-bubble-foot">
+                                    <time>{{ row.replied_at|date:"d M Y H:i" }}</time>
+                                    {% if row.replied_by %}<span>{{ row.replied_by }}</span>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                {% if reply_target %}
+                <form class="um-composer" method="post" action="{% url 'user_messages_admin' %}" id="um-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="message_id" value="{{ reply_target.id }}" id="um-message-id">
+                    <input type="hidden" name="app" value="{{ app_id }}">
+                    <input type="hidden" name="user" value="{{ user_kind }}">
+                    <input type="hidden" name="state" value="{{ state }}">
+                    <input type="hidden" name="q" value="{{ q }}">
+                    <input type="hidden" name="page" value="{{ page.number }}">
+                    <input type="hidden" name="thread" value="{{ active_key }}">
+                    <div class="um-composer-box">
+                        <textarea class="um-textarea" id="um-reply" name="reply" maxlength="2000" required
+                                  placeholder="Write the answer to {{ active.display_user }}"></textarea>
+                        <div class="um-composer-foot">
+                            <span class="um-hint" id="um-hint">{% if reply_target.replied_at %}This answer replaces the one already sent.{% else %}Answering their latest message.{% endif %} Ctrl + Enter sends.{% if active.is_registered %} The app shows it in their inbox.{% else %} The app shows it in their thread.{% endif %}</span>
+                            <span class="um-count" id="um-count">0/2000</span>
+                            <button class="adm-cta" type="submit"><span>Send reply</span><span class="adm-cta-ico"><i class="far fa-paper-plane"></i></span></button>
+                        </div>
+                    </div>
+                </form>
+                {% endif %}
+                {% else %}
+                <div class="um-empty">
+                    <i class="far fa-comments"></i>
+                    <b>Pick a conversation</b>
+                    <span>Messages users send from the app land in the list on the left.</span>
+                </div>
+                {% endif %}
+            </section>
+        </div>
+    </div>
+    {% else %}
+    <div class="adm-shell adm-rise" style="--i:6">
+        <div class="adm-shell-core">
+            <div class="um-empty">
+                <i class="far fa-comments"></i>
+                <b>Nothing here yet</b>
+                <span>{% if q or app_id or user_kind != 'all' %}No conversation matches these filters.{% else %}Messages users send from the app's notifications screen land on this page.{% endif %}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var stream = document.getElementById('um-stream');
+    if (stream) stream.scrollTop = stream.scrollHeight;
+
+    var form = document.getElementById('um-form');
+    var area = document.getElementById('um-reply');
+    var field = document.getElementById('um-message-id');
+    var hint = document.getElementById('um-hint');
+    var count = document.getElementById('um-count');
+    if (!form || !area) return;
+
+    function resize() {
+        area.style.height = 'auto';
+        area.style.height = Math.min(area.scrollHeight, 220) + 'px';
+        if (count) count.textContent = area.value.length + '/2000';
+    }
+    area.addEventListener('input', resize);
+    resize();
+
+    area.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) {
+            ev.preventDefault();
+            if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+        }
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-answer-message]'), function (btn) {
+        btn.addEventListener('click', function () {
+            if (field) field.value = btn.getAttribute('data-answer-message');
+            Array.prototype.forEach.call(document.querySelectorAll('.um-msg.is-target'), function (msg) {
+                msg.classList.remove('is-target');
+            });
+            var msg = btn.closest('.um-msg');
+            if (msg) msg.classList.add('is-target');
+            if (hint) hint.textContent = btn.getAttribute('data-answer-hint') + ' Ctrl + Enter sends.';
+            area.focus();
+            var box = document.querySelector('.um-composer');
+            if (box) box.scrollIntoView({ block: 'nearest' });
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -16,6 +16,7 @@
     .nt-search > i { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%);
         font-size: .72rem; color: var(--text-2); pointer-events: none; }
     .nt-search > input { padding-left: 1.75rem; }
+    .nt-plate .adm-field .nt-search > input[type="text"] { padding-left: 1.8rem; }
     .nt-results { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + .25rem);
         max-height: 15rem; overflow: auto; margin: 0; padding: .2rem; list-style: none;
         border-radius: var(--adm-r-sm); background: var(--card-bg, var(--surface));
@@ -26,6 +27,18 @@
     .nt-results .nt-r-meta { display: block; color: var(--text-2); font-size: .68rem; }
     .nt-results .nt-r-empty { color: var(--text-2); cursor: default; }
     .nt-sub-label { margin-top: .5rem; }
+    /* The page wash: one soft brand light behind the header, painted once. */
+    .nt-page { position: relative; isolation: isolate; }
+    .nt-page::before {
+        content: ''; position: absolute; z-index: -1; pointer-events: none;
+        left: -4%; right: -4%; top: -2rem; height: 18rem; opacity: .5;
+        background:
+            radial-gradient(46% 84% at 14% 0%, color-mix(in srgb, var(--brand) 24%, transparent), transparent 70%),
+            radial-gradient(40% 70% at 86% 2%, rgba(96,165,250,.14), transparent 72%);
+    }
+    html[data-theme="light"] .nt-page::before { opacity: .28; }
+    /* Inside a bezel shell the card gives up its own frame. */
+    .nt-plate .adm-card { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
     /* The full Sent list: the switch needs room, so the audience and the
        counters step aside on a phone the same way they do in the endpoint
        panel; both are on the notification's own page. */
@@ -33,25 +46,63 @@
     .nt-toggle button { white-space: nowrap; }
     @media (max-width: 640px) { .adm-table .nt-hide-sm { display: none; } }
 </style>
-<div class="container-fluid py-3" style="max-width:1500px">
-    <div class="adm-page-head">
+<div class="nt-page container-fluid" style="max-width:1500px">
+    <div class="adm-hero">
         <div>
-            <h1 class="adm-page-title"><i class="fas fa-bell me-2"></i>App notifications</h1>
-            <p class="adm-page-sub">Messages and links for the app. Opening the app fetches them; the app marks one read when the user opens it.</p>
+            <span class="adm-hero-eyebrow"><i class="far fa-bell"></i> Broadcast</span>
+            <h1 class="adm-hero-title">App notifications</h1>
+            <p class="adm-hero-sub">Messages and links for the app. Opening the app fetches them; the app marks one read when the user opens it. Replies to user messages are sent from the support console.</p>
+        </div>
+        <div class="adm-hero-side">
+            <a class="adm-btn" href="{% url 'user_messages_admin' %}">
+                <i class="far fa-comments"></i> User messages{% if open_user_messages %} <span class="sb-badge">{{ open_user_messages }}</span>{% endif %}
+            </a>
         </div>
     </div>
 
-    <div class="adm-grid mb-3">
-        <div class="adm-stat"><b>{{ stats.total_users }}</b><span>users</span></div>
-        <div class="adm-stat"><b>{{ stats.subscribed }}</b><span>subscribed</span></div>
-        <div class="adm-stat"><b>{{ stats.unsubscribed }}</b><span>unsubscribed</span></div>
-        <div class="adm-stat"><b>{{ stats.sent }}</b><span>sent</span></div>
-        <div class="adm-stat"><b>{{ stats.delivered }}</b><span>delivered</span></div>
-        <div class="adm-stat"><b>{{ stats.read }}</b><span>read</span></div>
+    <div class="adm-tiles">
+        <div class="adm-tile adm-rise" style="--i:0">
+            <span class="adm-tile-ico"><i class="far fa-user"></i></span>
+            <b class="adm-tile-num">{{ stats.total_users }}</b>
+            <span class="adm-tile-label">Users</span>
+            <span class="adm-tile-hint">Synced from the app</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:1">
+            <span class="adm-tile-ico"><i class="far fa-bell"></i></span>
+            <b class="adm-tile-num">{{ stats.subscribed }}</b>
+            <span class="adm-tile-label">Subscribed</span>
+            <span class="adm-tile-hint">Receive every message</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:2">
+            <span class="adm-tile-ico"><i class="far fa-bell-slash"></i></span>
+            <b class="adm-tile-num">{{ stats.unsubscribed }}</b>
+            <span class="adm-tile-label">Unsubscribed</span>
+            <span class="adm-tile-hint">Opted out in the app</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:3">
+            <span class="adm-tile-ico"><i class="far fa-paper-plane"></i></span>
+            <b class="adm-tile-num">{{ stats.sent }}</b>
+            <span class="adm-tile-label">Sent</span>
+            <span class="adm-tile-hint">Messages published</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:4">
+            <span class="adm-tile-ico"><i class="far fa-envelope"></i></span>
+            <b class="adm-tile-num">{{ stats.delivered }}</b>
+            <span class="adm-tile-label">Delivered</span>
+            <span class="adm-tile-hint">Fetched by a device</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:5">
+            <span class="adm-tile-ico"><i class="far fa-eye"></i></span>
+            <b class="adm-tile-num">{{ stats.read }}</b>
+            <span class="adm-tile-label">Read</span>
+            <span class="adm-tile-hint">Opened in the app</span>
+        </div>
     </div>
 
     <div class="row g-3">
         <div class="col-lg-5">
+            <div class="adm-shell nt-plate adm-rise" style="--i:6">
+            <div class="adm-shell-core">
             <div class="adm-card">
                 <div class="adm-card-head"><h2 class="adm-card-title">Send a notification</h2></div>
                 <div class="adm-card-body">
@@ -99,13 +150,17 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <button class="adm-btn is-primary" type="submit"><i class="fas fa-paper-plane"></i> Send</button>
+                        <button class="adm-cta" type="submit"><span>Send notification</span><span class="adm-cta-ico"><i class="far fa-paper-plane"></i></span></button>
                     </form>
                 </div>
+            </div>
+            </div>
             </div>
         </div>
 
         <div class="col-lg-7">
+            <div class="adm-shell nt-plate adm-rise" style="--i:7">
+            <div class="adm-shell-core">
             <div class="adm-card">
                 <div class="adm-card-head"><h2 class="adm-card-title">Sent</h2></div>
                 {% if notes %}
@@ -152,8 +207,10 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="adm-empty"><i class="fas fa-bell-slash"></i>Nothing sent yet.</div>
+                <div class="adm-empty"><i class="far fa-bell-slash"></i>Nothing sent yet.</div>
                 {% endif %}
+            </div>
+            </div>
             </div>
         </div>
     </div>

@@ -1161,6 +1161,132 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
     /* A focusable row or card sits inside a scrolling wrapper, so its ring is
        drawn inside the box, where the wrapper cannot clip it. */
     tr[data-drawer]:focus-visible { outline-offset: -2px; }
+
+    /* ===== SUPPORT CONSOLE CHROME (user messages + app notifications) =====
+       The two pages an admin uses to talk to users share this much: a quiet
+       hero, a tray of KPI tiles and a "double bezel" shell (an outer tray with
+       the plate it holds inside it). New class names only, so no existing
+       admin page is touched. */
+    .adm-hero {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: 1.25rem; flex-wrap: wrap; margin: .25rem 0 1.5rem;
+    }
+    .adm-hero-eyebrow {
+        display: inline-flex; align-items: center; gap: .4rem;
+        padding: .12rem .6rem; margin-bottom: .7rem;
+        border-radius: 999px; border: 1px solid var(--adm-line);
+        background: var(--surface);
+        font-size: .62rem; font-weight: 600; letter-spacing: .18em;
+        text-transform: uppercase; color: var(--text-2);
+    }
+    .adm-hero-eyebrow i { font-size: .66rem; color: var(--brand); }
+    .adm-hero-title {
+        margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem); font-weight: 700;
+        letter-spacing: -.025em; line-height: 1.1; color: var(--text);
+    }
+    .adm-hero-sub {
+        max-width: 64ch; margin: .55rem 0 0; font-size: .8rem; line-height: 1.6;
+        color: var(--text-2);
+    }
+    .adm-hero-side { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+    /* KPI tiles: the number sits in its own tray instead of floating loose. */
+    .adm-tiles {
+        display: grid; gap: .7rem; margin-bottom: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    }
+    .adm-tile {
+        display: flex; flex-direction: column; gap: .4rem;
+        padding: .7rem; border-radius: var(--adm-r);
+        background: var(--surface); border: 1px solid var(--adm-line);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+        transition: border-color .5s var(--adm-spring), transform .5s var(--adm-spring);
+    }
+    .adm-tile:hover { transform: translateY(-2px); border-color: var(--adm-ring); }
+    .adm-tile-ico {
+        display: grid; place-items: center; width: 26px; height: 26px;
+        border-radius: 9px; font-size: .68rem;
+        background: var(--surface-hover); border: 1px solid var(--adm-line);
+        color: var(--text-2);
+        transition: transform .5s var(--adm-spring), color .5s var(--adm-spring);
+    }
+    .adm-tile:hover .adm-tile-ico { transform: translateY(-1px) scale(1.04); }
+    .adm-tile-num {
+        font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em;
+        line-height: 1; color: var(--text); font-variant-numeric: tabular-nums;
+    }
+    .adm-tile-label {
+        font-size: .64rem; letter-spacing: .06em; text-transform: uppercase;
+        color: var(--text-2);
+    }
+    .adm-tile-hint { font-size: .67rem; color: var(--text-3); line-height: 1.4; }
+    .adm-tile.is-warn .adm-tile-ico,
+    .adm-tile.is-warn .adm-tile-num { color: #fbbf24; }
+    .adm-tile.is-warn .adm-tile-ico {
+        border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.12);
+    }
+    html[data-theme="light"] .adm-tile.is-warn .adm-tile-ico,
+    html[data-theme="light"] .adm-tile.is-warn .adm-tile-num { color: #b45309; }
+    html[data-theme="light"] .adm-tile.is-warn .adm-tile-ico {
+        border-color: rgba(180,83,9,.28); background: rgba(180,83,9,.1);
+    }
+
+    /* Double bezel: outer tray, then the plate it holds (concentric radii). */
+    .adm-shell {
+        padding: 6px; border-radius: 26px;
+        background: rgba(148,163,184,.06);
+        border: 1px solid var(--adm-line);
+        box-shadow: 0 26px 60px -42px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .adm-shell-core {
+        border-radius: 20px; overflow: hidden;
+        background: var(--card-bg, var(--bg-2));
+        border: 1px solid var(--adm-line);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,.07);
+    }
+    html[data-theme="light"] .adm-shell {
+        background: rgba(15,23,42,.035);
+        box-shadow: 0 22px 50px -42px rgba(15,23,42,.35), inset 0 1px 0 rgba(255,255,255,.8);
+    }
+    html[data-theme="light"] .adm-shell-core { box-shadow: inset 0 1px 1px rgba(255,255,255,.9); }
+
+    /* Primary pill CTA: the trailing icon sits in its own circle, flush with the
+       button's right inner padding, and travels on hover. */
+    .adm-cta {
+        display: inline-flex; align-items: center; gap: .55rem;
+        padding: .34rem .34rem .34rem 1rem; border-radius: 999px;
+        border: 1px solid transparent; cursor: pointer;
+        background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 68%, #fff 32%));
+        color: #fff; font-size: .75rem; font-weight: 650; line-height: 1;
+        box-shadow: 0 12px 26px -18px color-mix(in srgb, var(--brand) 70%, transparent);
+        transition: transform .5s var(--adm-spring, cubic-bezier(.32,.72,0,1)),
+                    box-shadow .5s var(--adm-spring, cubic-bezier(.32,.72,0,1));
+    }
+    .adm-cta:hover { transform: translateY(-1px); }
+    .adm-cta:active { transform: scale(.985); }
+    .adm-cta:focus-visible { outline: 2px solid var(--adm-ring); outline-offset: 2px; }
+    .adm-cta[disabled] { opacity: .55; cursor: not-allowed; transform: none; }
+    .adm-cta-ico {
+        display: grid; place-items: center; width: 26px; height: 26px;
+        border-radius: 50%; font-size: .7rem; background: rgba(255,255,255,.2);
+        transition: transform .5s var(--adm-spring, cubic-bezier(.32,.72,0,1)),
+                    background .5s var(--adm-spring, cubic-bezier(.32,.72,0,1));
+    }
+    .adm-cta:hover .adm-cta-ico { transform: translate(2px, -1px) scale(1.05); background: rgba(255,255,255,.28); }
+
+    /* Entry motion: heavy, springed fade-up, staggered by --i. */
+    .adm-rise { animation: adm-rise .8s var(--adm-spring) both; animation-delay: calc(var(--i, 0) * 55ms); }
+    @keyframes adm-rise {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) { .adm-rise { animation: none; } }
+    @media (max-width: 640px) {
+        .adm-hero { align-items: stretch; }
+        .adm-hero-side { width: 100%; }
+        .adm-shell { border-radius: 20px; padding: 5px; }
+        .adm-shell-core { border-radius: 15px; }
+    }
 </style>
 
 <!-- Toast container -->
@@ -1264,6 +1390,9 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             </a>
             <a href="{% url 'notifications_admin' %}" class="sb-item {% if 'admin-dashboard/notifications' in request.path %}active{% endif %}">
                 <i class="fas fa-bell"></i> Notifications
+            </a>
+            <a href="{% url 'user_messages_admin' %}" class="sb-item {% if 'user-messages' in request.path %}active{% endif %}">
+                <i class="fas fa-comments"></i> User Messages
             </a>
             <a href="{% url 'admin_history_calendar' %}" class="sb-item {% if 'history-calendar' in request.path %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> History Calendar
