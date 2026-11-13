@@ -29,24 +29,26 @@ def _memo():
 
 
 def _payload_bits(payload):
-    """(flag emoji, flag image url, state/region) for a stored ipwho.is payload."""
+    """(flag emoji, flag image url, state/region, city) from a stored ipwho.is payload."""
     if not payload:
-        return '', '', ''
+        return '', '', '', ''
     try:
         data = json.loads(payload)
     except (TypeError, ValueError):
-        return '', '', ''
+        return '', '', '', ''
     flag = data.get('flag')
     if not isinstance(flag, dict):
         flag = {}
-    return flag.get('emoji') or '', flag.get('img') or '', data.get('region') or ''
+    return (flag.get('emoji') or '', flag.get('img') or '',
+            data.get('region') or '', data.get('city') or '')
 
 
 @register.inclusion_tag('core/_ip_geo.html')
 def ip_geo_chip(ip):
     ip = (ip or '').strip()
     if not ip:
-        return {'ip': '', 'country': '', 'region': '', 'flag': '', 'flag_img': ''}
+        return {'ip': '', 'country': '', 'place': '', 'region': '', 'city': '',
+                'flag': '', 'flag_img': ''}
 
     store = _memo()
     entry = store.get(ip)
@@ -54,14 +56,21 @@ def ip_geo_chip(ip):
         from ..models import IPLocation
 
         row = IPLocation.objects.filter(ip=ip).values('success', 'country', 'payload').first()
-        emoji, image, region = _payload_bits(row['payload']) if row else ('', '', '')
+        emoji, image, region, city = (_payload_bits(row['payload']) if row
+                                     else ('', '', '', ''))
+        known = bool(row and row['success'])
+        # region stands in for the state; the city is the fallback so a chip
+        # never reads as a country name alone.
         entry = {
-            'country': (row['country'] or '') if row and row['success'] else '',
-            'region': region if row and row['success'] else '',
+            'country': (row['country'] or '') if known else '',
+            'region': region if known else '',
+            'city': city if known else '',
+            'place': (region or city) if known else '',
             'flag': emoji,
             'flag_img': image,
         }
         store[ip] = entry
 
     return {'ip': ip, 'country': entry['country'], 'region': entry['region'],
+            'city': entry['city'], 'place': entry['place'],
             'flag': entry['flag'], 'flag_img': entry['flag_img']}
