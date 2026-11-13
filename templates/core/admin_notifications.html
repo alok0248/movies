@@ -54,7 +54,7 @@
                             <select id="nt-app" name="app">
                                 <option value="">All apps</option>
                                 {% for app in apps %}
-                                <option value="{{ app.id }}">{{ app.name|default:app.id }}</option>
+                                <option value="{{ app.id }}"{% if preselect_app == app.id|stringformat:'s' %} selected{% endif %}>{{ app.name|default:app.id }}</option>
                                 {% endfor %}
                             </select>
                         </div>

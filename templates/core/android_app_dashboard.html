@@ -98,6 +98,7 @@
         <div class="adm-btn-group">
             <a href="{% url 'android_app_list' %}" class="adm-btn">&larr; Android apps</a>
             <a href="{% url 'synced_users_list' %}" class="adm-btn"><i class="fas fa-users"></i> Synced users</a>
+            <a href="{% url 'notifications_admin' %}{% if selected_app %}?app={{ selected_app.id }}{% endif %}" class="adm-btn"><i class="fas fa-bell"></i> Send notification</a>
             <a href="{% url 'android_app_create' %}" class="adm-btn is-ok"><i class="fas fa-plus"></i> New endpoint</a>
         </div>
     </header>

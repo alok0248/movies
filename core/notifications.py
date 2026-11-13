@@ -92,10 +92,12 @@ def notifications_admin(request):
 
     notes = list(AppNotification.objects.select_related('app')[:60])
     total_users = SyncedUser.objects.count()
+    preselect_app = (request.GET.get('app') or '').strip()
     subscribed = SyncedUser.objects.filter(is_subscribed=True).count()
     return render(request, 'core/admin_notifications.html', {
         'notes': notes,
         'apps': AndroidApp.objects.all().order_by('name'),
+        'preselect_app': preselect_app,
         'audiences': AppNotification.AUDIENCE_CHOICES,
         'stats': {
             'total_users': total_users,
