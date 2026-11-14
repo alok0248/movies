@@ -1,0 +1,219 @@
+{% extends 'core/admin_base.html' %}
+
+{% block admin_content %}
+<style>
+    .coh-hero {
+        background: linear-gradient(135deg, rgba(96,165,250,.12), rgba(129,140,248,.08));
+        border: 1px solid rgba(96,165,250,.2);
+        border-radius: 16px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+    }
+    .coh-pct { font-weight: 700; color: #60a5fa; }
+    .coh-cell { white-space: nowrap; }
+    .coh-bar { height: 6px; border-radius: 3px; background: linear-gradient(135deg, #60a5fa, #818cf8); display: inline-block; vertical-align: middle; }
+    .coh-muted { color: rgba(255,255,255,.4); font-size: .72rem; }
+    .coh-step { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .coh-step:last-child { border-bottom: none; }
+    .coh-step-label { width: 150px; font-size: .78rem; color: rgba(255,255,255,.6); }
+    .coh-step-track { flex: 1; height: 10px; background: rgba(255,255,255,.06); border-radius: 5px; overflow: hidden; }
+    .coh-step-fill { height: 100%; background: linear-gradient(135deg, #60a5fa, #818cf8); }
+    .coh-step-value { width: 110px; text-align: right; font-size: .8rem; font-weight: 700; }
+    .filter-group { display: inline-flex; gap: 2px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); }
+    .filter-group a { padding: .4rem .85rem; font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.45); text-decoration: none; }
+    .filter-group a.active { background: rgba(96,165,250,.2); color: #60a5fa; }
+    html[data-theme="light"] .coh-step-track { background: rgba(0,0,0,.06); }
+    html[data-theme="light"] .coh-muted { color: rgba(25,25,45,.55); }
+    html[data-theme="light"] .coh-step-label { color: rgba(25,25,45,.7); }
+    html[data-theme="light"] .filter-group { border-color: rgba(0,0,0,.12); }
+    html[data-theme="light"] .filter-group a { color: rgba(0,0,0,.5); }
+    html[data-theme="light"] .filter-group a.active { background: rgba(96,165,250,.15); color: #1d4ed8; }
+    html[data-theme="light"] .coh-pct { color: #1d4ed8; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-3">
+    <div>
+        <h1 class="mb-0 gradient-text" style="font-size:1.5rem;font-weight:800;">Cohorts &amp; Funnels</h1>
+        <div class="coh-muted mt-1">
+            Signup-week retention, first-play completion, install and subscription funnels —
+            from the rows already in the database ({{ user_db }}).
+        </div>
+    </div>
+    <div class="filter-group">
+        <a href="?weeks=4" class="{% if weeks == 4 %}active{% endif %}">4 weeks</a>
+        <a href="?weeks=8" class="{% if weeks == 8 %}active{% endif %}">8 weeks</a>
+        <a href="?weeks=12" class="{% if weeks == 12 %}active{% endif %}">12 weeks</a>
+        <a href="?weeks=16" class="{% if weeks == 16 %}active{% endif %}">16 weeks</a>
+    </div>
+</div>
+
+<div class="coh-hero">
+    <div class="row g-3 text-center">
+        <div class="col-6 col-md-3 stat-counter">
+            <div class="stat-value">{{ cohort_totals.size }}</div>
+            <div class="stat-label">Signups in window</div>
+        </div>
+        <div class="col-6 col-md-3 stat-counter">
+            <div class="stat-value">{{ cohort_totals.d1 }}<span style="font-size:1rem;"> ({{ cohort_totals.d1_pct }}%)</span></div>
+            <div class="stat-label">Returned on D1</div>
+        </div>
+        <div class="col-6 col-md-3 stat-counter">
+            <div class="stat-value">{{ cohort_totals.d7 }}<span style="font-size:1rem;"> ({{ cohort_totals.d7_pct }}%)</span></div>
+            <div class="stat-label">Returned on D7</div>
+        </div>
+        <div class="col-6 col-md-3 stat-counter">
+            <div class="stat-value">{{ cohort_totals.d30 }}<span style="font-size:1rem;"> ({{ cohort_totals.d30_pct }}%)</span></div>
+            <div class="stat-label">Returned on D30</div>
+        </div>
+    </div>
+</div>
+
+<div class="admin-card mb-4">
+    <div class="admin-card-header">
+        <div>
+            <span class="text-white fw-bold">Retention by signup week</span>
+            <div class="coh-muted">
+                “Active” = played something that calendar day. Exact day counts the day itself;
+                rolling counts D{{ rolling_offset }} or later.
+            </div>
+        </div>
+    </div>
+    <div class="admin-card-body">
+        {% if cohorts %}
+        <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Week</th>
+                    <th>Signups</th>
+                    <th>D1</th>
+                    <th>D7</th>
+                    <th>D30</th>
+                    <th>D{{ rolling_offset }} or later</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in cohorts %}
+                <tr>
+                    <td class="coh-cell">
+                        {{ row.label }}
+                        {% if row.partial %}<span class="coh-muted">(so far)</span>{% endif %}
+                    </td>
+                    <td class="coh-cell">{{ row.size }}</td>
+                    <td class="coh-cell">{{ row.d1 }} <span class="coh-pct">({{ row.d1_pct }}%)</span></td>
+                    <td class="coh-cell">{{ row.d7 }} <span class="coh-pct">({{ row.d7_pct }}%)</span></td>
+                    <td class="coh-cell">{{ row.d30 }} <span class="coh-pct">({{ row.d30_pct }}%)</span></td>
+                    <td class="coh-cell">
+                        <span class="coh-bar" style="width:{{ row.rolling_pct }}px;max-width:80px;"></span>
+                        {{ row.rolling }} <span class="coh-pct">({{ row.rolling_pct }}%)</span>
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td class="coh-cell"><strong class="text-white">All weeks</strong></td>
+                    <td class="coh-cell"><strong class="text-white">{{ cohort_totals.size }}</strong></td>
+                    <td class="coh-cell"><strong class="text-white">{{ cohort_totals.d1_pct }}%</strong></td>
+                    <td class="coh-cell"><strong class="text-white">{{ cohort_totals.d7_pct }}%</strong></td>
+                    <td class="coh-cell"><strong class="text-white">{{ cohort_totals.d30_pct }}%</strong></td>
+                    <td class="coh-cell"><strong class="text-white">{{ cohort_totals.rolling_pct }}%</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        <div class="coh-muted mt-2">
+            A day that has not happened yet is never counted, so the newest cohort's D7 and D30
+            read low until a week (or a month) has passed.
+        </div>
+        {% else %}
+        <div class="coh-muted">No signups in this window.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-xl-6">
+        <div class="admin-card h-100">
+            <div class="admin-card-header">
+                <span class="text-white fw-bold">First play</span>
+            </div>
+            <div class="admin-card-body">
+                <div class="coh-step">
+                    <div class="coh-step-label">Accounts that played</div>
+                    <div class="coh-step-track"><div class="coh-step-fill" style="width:100%"></div></div>
+                    <div class="coh-step-value">{{ first_play.players }}</div>
+                </div>
+                <div class="coh-step">
+                    <div class="coh-step-label">Finished that first title</div>
+                    <div class="coh-step-track"><div class="coh-step-fill" style="width:{{ first_play.finished_first_pct }}%"></div></div>
+                    <div class="coh-step-value">{{ first_play.finished_first }} ({{ first_play.finished_first_pct }}%)</div>
+                </div>
+                <div class="coh-step">
+                    <div class="coh-step-label">Never reached the end</div>
+                    <div class="coh-step-track"><div class="coh-step-fill" style="width:{{ first_play.started_only_pct }}%;background:linear-gradient(135deg,#f59e0b,#f97316);"></div></div>
+                    <div class="coh-step-value">{{ first_play.never_finished_first }}</div>
+                </div>
+                <div class="coh-step">
+                    <div class="coh-step-label">No watch time at all</div>
+                    <div class="coh-step-track"><div class="coh-step-fill" style="width:{{ first_play.started_only_pct }}%;background:linear-gradient(135deg,#ef4444,#f97316);"></div></div>
+                    <div class="coh-step-value">{{ first_play.started_only }} ({{ first_play.started_only_pct }}%)</div>
+                </div>
+                <div class="coh-muted mt-3">
+                    Last {{ first_play.days }} days: {{ first_play.recent_plays }} plays by
+                    {{ first_play.recent_users }} accounts, {{ first_play.recent_completed }}
+                    finished ({{ first_play.recent_completed_pct }}%).
+                </div>
+                {% if first_play.top_first %}
+                <div class="coh-muted mt-2">
+                    Most common first titles:
+                    {% for title, count in first_play.top_first %}{{ title }} ({{ count }}){% if not forloop.last %}, {% endif %}{% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+        <div class="admin-card h-100">
+            <div class="admin-card-header">
+                <span class="text-white fw-bold">Install funnel</span>
+            </div>
+            <div class="admin-card-body">
+                {% for step in install.steps %}
+                <div class="coh-step">
+                    <div class="coh-step-label">{{ step.label }}</div>
+                    <div class="coh-step-track"><div class="coh-step-fill" style="width:{{ step.pct }}%"></div></div>
+                    <div class="coh-step-value">{{ step.value }} ({{ step.pct }}%)</div>
+                </div>
+                {% endfor %}
+                <div class="coh-muted mt-3">
+                    Each step is counted from the download record itself, so it never guesses which
+                    download became which account. Accounts on the site right now: {{ install.accounts }}.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="admin-card mb-4">
+    <div class="admin-card-header">
+        <div>
+            <span class="text-white fw-bold">Subscription funnel</span>
+            <div class="coh-muted">Accounts → watched → ever subscribed → subscribed today.</div>
+        </div>
+    </div>
+    <div class="admin-card-body">
+        {% for step in subscriptions.steps %}
+        <div class="coh-step">
+            <div class="coh-step-label">{{ step.label }}</div>
+            <div class="coh-step-track"><div class="coh-step-fill" style="width:{{ step.pct }}%"></div></div>
+            <div class="coh-step-value">{{ step.value }} ({{ step.pct }}%)</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="coh-muted mb-4">
+    Generated {{ generated_at|date:"Y-m-d H:i" }} · retention is by signup week (Monday start),
+    based on plays recorded through the app and the site.
+</div>
+{% endblock %}

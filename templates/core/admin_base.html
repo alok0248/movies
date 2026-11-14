@@ -1419,6 +1419,9 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             <a href="{% url 'admin_engagement_analytics' %}" class="sb-item {% if 'engagement' in request.path %}active{% endif %}">
                 <i class="fas fa-fire"></i> Engagement
             </a>
+            <a href="{% url 'admin_retention_analytics' %}" class="sb-item {% if 'cohorts' in request.path %}active{% endif %}">
+                <i class="fas fa-users-viewfinder"></i> Cohorts &amp; Funnels
+            </a>
             <a href="{% url 'web_management_dashboard' %}" class="sb-item {% if 'web-management' in request.path %}active{% endif %}">
                 <i class="fas fa-chart-bar"></i> Web Analytics
             </a>

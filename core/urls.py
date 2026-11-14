@@ -368,6 +368,7 @@ urlpatterns = [
     # Admin Analytics
     path('admin-dashboard/analytics/', views.admin_analytics, name='admin_analytics'),
     path('admin-dashboard/analytics/engagement/', views.admin_engagement_analytics, name='admin_engagement_analytics'),
+    path('admin-dashboard/analytics/cohorts/', views.admin_retention_analytics, name='admin_retention_analytics'),
     path('admin-dashboard/analytics/user/<int:user_id>/', views.admin_user_analytics_detail, name='admin_user_analytics_detail'),
     # Kept for old links/bookmarks — the active-users view now lives on the
     # merged Requests & Users page above.

@@ -14712,6 +14712,25 @@ def admin_engagement_analytics(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def admin_retention_analytics(request):
+    """Signup cohorts (D1/D7/D30), first-play completion and the funnels.
+
+    The numbers come from core.retention, which reads the rows the site already
+    keeps; this view only parses the window and renders them.
+    """
+    from .retention import build_report
+    try:
+        weeks = int(request.GET.get('weeks', 8))
+    except (TypeError, ValueError):
+        weeks = 8
+    report = build_report(weeks=weeks)
+    response = render(request, 'core/admin_retention_analytics.html', report)
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def admin_user_analytics_detail(request, user_id):
     """Detailed analytics for a single user."""
     from .models import UserPageView, UserSession
