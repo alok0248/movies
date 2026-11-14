@@ -30,6 +30,8 @@ blocking rule is local to the portal and never touches the external user DB.
 import base64
 import ipaddress
 import logging
+import os
+import socket
 import time
 from collections import Counter
 
@@ -231,8 +233,63 @@ def blocked_ip_for(ip_address):
         return None
 
 
+# --- addresses that can never be blocked ----------------------------------
+# Loopback and the server's own address are how the site checks itself: a smoke
+# test, a health probe or a cron ``curl`` from the box arrives from 127.0.0.1,
+# or from the box's own public address when it goes out over the internet. A
+# block on either turns every self-check into a false alarm, and there is no
+# legitimate reason to block them — so they are refused here as well as being
+# exempt from the automatic watches.
+_SELF_ADDRESSES = None
+
+
+def _self_addresses():
+    """Loopback plus this machine's own addresses, resolved once per worker."""
+    global _SELF_ADDRESSES
+    if _SELF_ADDRESSES is not None:
+        return _SELF_ADDRESSES
+
+    found = set()
+    for raw in ('127.0.0.1', '::1'):
+        try:
+            found.add(ipaddress.ip_address(raw))
+        except ValueError:
+            pass
+
+    hosts = []
+    try:
+        from django.conf import settings as dj_settings
+        hosts.extend(h for h in (getattr(dj_settings, 'ALLOWED_HOSTS', []) or [])
+                     if h and h != '*' and not h.startswith('.'))
+    except Exception:
+        logger.debug('IPBlock: could not read ALLOWED_HOSTS', exc_info=True)
+    hosts.extend(h.strip() for h in os.environ.get('SERVER_IPS', '').replace(';', ',').split(',') if h.strip())
+
+    for host in hosts:
+        try:
+            found.add(ipaddress.ip_address(socket.gethostbyname(host)))
+        except Exception:
+            continue
+
+    _SELF_ADDRESSES = frozenset(found)
+    return _SELF_ADDRESSES
+
+
+def is_self_address(ip_address):
+    """True when this address is the box itself (loopback or its own IP)."""
+    ip = normalize_ip(ip_address)
+    if not ip:
+        return False
+    try:
+        return ipaddress.ip_address(ip) in _self_addresses()
+    except ValueError:
+        return False
+
+
 def is_ip_blocked(ip_address):
     """True when this address is currently blocked. Never raises."""
+    if is_self_address(ip_address):
+        return False
     return blocked_ip_for(ip_address) is not None
 
 
@@ -302,6 +359,8 @@ def reset_allowed_ips_cache():
 
 def is_ip_allowed(ip_address):
     """True when this address is operator-trusted and must never be blocked."""
+    if is_self_address(ip_address):
+        return True
     ip = normalize_ip(ip_address)
     if not ip:
         return False
@@ -326,6 +385,9 @@ def block_ip(ip_address, blocked_by='', reason='', permanent=False):
     """
     ip = normalize_ip(ip_address)
     if not ip:
+        return None, False
+    if is_self_address(ip):
+        logger.info('IPBlock: refused to block %s (this is the server itself)', ip)
         return None, False
     from .models import BlockedIP
     row = BlockedIP.objects.filter(ip_address=ip).first()
