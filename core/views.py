@@ -11485,26 +11485,25 @@ def _sync_too_fast_response(retry_after):
     return response
 
 
-REMOTE_CONFIG_CACHE_KEY = 'app:remote-config'
-REMOTE_CONFIG_CACHE_SECONDS = 60
-
-
 def _remote_config_payload():
-    """Server-driven app settings, cached briefly so sync stays cheap.
+    """Server-driven app settings, read fresh on every sync.
+
+    Deliberately not cached: a kill-switch that a worker keeps serving from its
+    own cache for a minute is not a kill-switch. The cost is one row read per
+    sync, which is smaller than the sync it travels with, and Django's cache is
+    per process anyway — a flip made from the shell or the admin could never
+    reach the running workers by deleting a cache key from another process.
 
     Always a dict: a missing row, a broken payload or a database error answer
     with ``{}``, so the sync response keeps its shape whatever the config says.
     """
     try:
-        cached = cache.get(REMOTE_CONFIG_CACHE_KEY)
-        if cached is not None:
-            return cached
         from .models import AppRemoteConfig
         conf = AppRemoteConfig.get_config()
-        payload = conf.as_dict() if conf else {}
-        if conf is not None:
-            payload.setdefault('version', conf.updated_at.isoformat(timespec='seconds'))
-        cache.set(REMOTE_CONFIG_CACHE_KEY, payload, REMOTE_CONFIG_CACHE_SECONDS)
+        if conf is None:
+            return {}
+        payload = conf.as_dict()
+        payload.setdefault('version', conf.updated_at.isoformat(timespec='seconds'))
         return payload
     except Exception:
         logger.debug('remote config unavailable', exc_info=True)
