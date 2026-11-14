@@ -181,6 +181,79 @@ def backup_status():
     return {'key': 'backup', 'title': 'Database backup', 'ok': ok, 'detail': detail}
 
 
+# Every cron job that must keep firing, with how long it may stay silent.
+# The window is the job's own period plus a margin for a slow run: a nightly job
+# is late at 26 h, a weekly one at 8 days. ``job_beat <name>`` writes the stamp
+# from the crontab line, so a cron that stops running shows up here.
+SCHEDULED_JOBS = [
+    ('backup_db', 'Nightly database snapshot', 26),
+    ('expire_subscriptions', 'Subscription expiry', 30),
+    ('db_maintenance', 'Database maintenance', 8 * 24),
+    ('cleanup_orphans', 'Orphan cleanup', 8 * 24),
+    ('link_devices', 'Device linking', 8 * 24),
+    ('sync_verification', 'Verification sync', 8 * 24),
+    ('verify_backup', 'Backup verification', 8 * 24),
+    ('check_catalogue_links', 'Catalogue link check', 8 * 24),
+    ('prune_app_data', 'Retention prune', 32 * 24),
+    ('restore_drill', 'Restore drill', 32 * 24),
+]
+
+
+def scheduled_jobs_status():
+    """Did every cron job actually run, and did it succeed?
+
+    A job that never stamped anything is reported as unknown rather than
+    failed: right after the beats are added, the weekly jobs have not run yet,
+    and a fresh deployment must not raise an alarm it cannot explain.
+    """
+    from .models import ScheduledJob
+
+    try:
+        rows = {row.name: row for row in ScheduledJob.objects.all()}
+    except Exception:
+        logger.debug('health: could not read the job heartbeats', exc_info=True)
+        return {'key': 'cron', 'title': 'Scheduled jobs', 'ok': None,
+                'detail': 'could not read the job heartbeats'}
+
+    now = timezone.now()
+    stale, failed, missing = [], [], []
+    for name, label, hours in SCHEDULED_JOBS:
+        row = rows.get(name)
+        if row is None or row.last_run_at is None:
+            missing.append(label)
+            continue
+        age_hours = (now - row.last_run_at).total_seconds() / 3600.0
+        if age_hours > hours:
+            stale.append('%s (%s ago)' % (label, _human_hours(age_hours)))
+        elif not row.last_ok:
+            failed.append('%s (exit %d)' % (label, row.last_status))
+
+    if stale or failed:
+        parts = []
+        if stale:
+            parts.append('did not run: ' + ', '.join(stale))
+        if failed:
+            parts.append('last run failed: ' + ', '.join(failed))
+        if missing:
+            parts.append('never recorded: ' + ', '.join(missing))
+        ok = False
+    elif missing:
+        parts = ['never recorded yet: ' + ', '.join(missing)]
+        ok = None
+    else:
+        parts = ['all %d jobs ran within their window' % len(SCHEDULED_JOBS)]
+        ok = True
+    return {'key': 'cron', 'title': 'Scheduled jobs', 'ok': ok,
+            'detail': '; '.join(parts)}
+
+
+def _human_hours(hours):
+    """'3.2 h' / '2.1 days' for the finding line."""
+    if hours >= 48:
+        return '%.1f days' % (hours / 24.0)
+    return '%.1f h' % hours
+
+
 def run_checks(record=True):
     """Every enabled check as ``{key, title, ok, detail}``, in display order.
 
@@ -225,6 +298,7 @@ def run_checks(record=True):
         })
 
     findings.append(backup_status())
+    findings.append(scheduled_jobs_status())
 
     paths = cert_paths()
     if paths:

@@ -3780,6 +3780,33 @@ class HealthCheckAck(models.Model):
         return f'{self.slug} until {self.acknowledged_at:%Y-%m-%d %H:%M}'
 
 
+class ScheduledJob(models.Model):
+    """When a cron job last ran, so a job that stopped firing is noticed.
+
+    Every crontab line records its own run (``manage.py job_beat <name>``,
+    given that command's exit status), and the health check compares the
+    timestamp with the job's own interval. A heartbeat is the only way to see a
+    job that *did not run at all*: nothing in the database changes when a
+    command never starts, so a missing or stale stamp is the signal.
+    """
+    name = models.CharField(max_length=64, unique=True)
+    label = models.CharField(max_length=120, blank=True, default='')
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.IntegerField(default=0)
+    last_ok = models.BooleanField(default=True)
+    runs = models.PositiveIntegerField(default=0)
+    failures = models.PositiveIntegerField(default=0)
+    last_detail = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Scheduled job'
+        verbose_name_plural = 'Scheduled jobs'
+
+    def __str__(self):
+        return '%s (%s)' % (self.name, self.last_run_at or 'never')
+
+
 class AppNotification(models.Model):
     """A message (with an optional link) sent to app users.
 
