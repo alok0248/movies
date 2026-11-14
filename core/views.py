@@ -10147,6 +10147,35 @@ def _https_only(view_func):
     return _wrapper
 
 
+def _app_from_request(request, candidates):
+    """Which of the credential-matched apps this request belongs to.
+
+    Several app rows can share one credential pair (the same key was copied into
+    more than one build), so the credentials alone do not say which app is
+    calling. The app endpoint names its app in the URL, which settles it for
+    /api/android-apps/<slug>/; an endpoint without a slug (/api/messages/,
+    /api/notifications/) only has the app's user agent, and then the app the
+    credential pair was created for.
+    """
+    match = getattr(request, 'resolver_match', None)
+    slug = (match.kwargs.get('app_slug') or '').strip() if match is not None else ''
+    if slug:
+        return candidates.filter(slug=slug).first()
+
+    agent = (request.META.get('HTTP_USER_AGENT') or '').lower()
+    if agent:
+        best = None
+        for app in candidates:
+            keys = [key for key in (app.slug, app.name) if key and len(key) >= 3]
+            hits = [key for key in keys if key.lower() in agent]
+            if hits and (best is None or max(len(key) for key in hits) > best[0]):
+                best = (max(len(key) for key in hits), app)
+        if best is not None:
+            return best[1]
+
+    return candidates.order_by('id').first()
+
+
 def _validate_android_auth(request):
     """Validate Basic Auth + Android headers. Returns (app_match, error_response)."""
     from .models import AndroidApp
@@ -10158,9 +10187,10 @@ def _validate_android_auth(request):
         username, password = decoded.split(':', 1)
     except Exception:
         return None, JsonResponse({'status': 'error', 'message': 'Invalid Authorization header'}, status=401)
-    app_match = AndroidApp.objects.filter(
+    candidates = AndroidApp.objects.filter(
         access_username=username, access_password=password, is_active=True,
-    ).first()
+    )
+    app_match = _app_from_request(request, candidates)
     if not app_match:
         return None, JsonResponse({'status': 'error', 'message': 'Invalid credentials'}, status=403)
     return app_match, None
