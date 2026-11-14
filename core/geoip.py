@@ -1,7 +1,8 @@
 """IP geolocation: one path from an address to a saved location.
 
 ipwho.is is the source, and ip-api.com answers instead when ipwho.is rate-limits
-this host. Every address the site writes is converted here through
+this host — once it refuses, it is skipped for a few minutes rather than retried
+on every lookup. Every address the site writes is converted here through
 ``ensure`` (core/signals.py calls it on save), so a visit, a download, an app
 attempt, an audit row and a blocked address all end up with the same answer in
 ``IPLocation`` -- and the admin pages read that saved answer instead of waiting on
@@ -46,9 +47,15 @@ RECENT_MAX = 4096
 # start an unbounded number of threads. An address skipped this way is queued by
 # its next row, and the admin pages can still look it up on demand.
 MAX_IN_FLIGHT = 12
+# ipwho.is answers 429 for the rest of its period once the quota is gone, so one
+# refusal takes it out of the rotation for this long: lookups go straight to the
+# mirror instead of spending a round trip on a call that is going to fail.
+PRIMARY_COOLDOWN = 300.0
 
 _in_flight = set()
 _recent = {}
+_primary_down_until = 0.0
+_primary_lock = threading.Lock()
 _lock = threading.Lock()
 
 
@@ -62,6 +69,20 @@ def _flag_emoji(code):
     if len(code) != 2 or not code.isalpha():
         return ''
     return ''.join(chr(0x1F1E6 + ord(ch) - ord('A')) for ch in code)
+
+
+def _primary_ready():
+    """False while ipwho.is is cooling down after a refusal."""
+    with _primary_lock:
+        return time.monotonic() >= _primary_down_until
+
+
+def _hold_primary(reason):
+    """Take ipwho.is out of the rotation for ``PRIMARY_COOLDOWN`` seconds."""
+    global _primary_down_until
+    with _primary_lock:
+        _primary_down_until = time.monotonic() + PRIMARY_COOLDOWN
+    logger.warning('ipwho.is out for %d seconds: %s', PRIMARY_COOLDOWN, reason)
 
 
 def _fetch(url):
@@ -257,7 +278,10 @@ def _store(ip, data):
 
 
 def lookup(ip, force=False):
-    """Geo details for one address: cache first, ipwho.is on a miss.
+    """Geo details for one address: cache first, a lookup on a miss.
+
+    ipwho.is answers unless it has just refused, in which case the mirror is
+    asked straight away instead of spending a call on the refusal.
 
     Never raises -- the caller always gets a dict with ``ok`` set.
     """
@@ -275,13 +299,17 @@ def lookup(ip, force=False):
         return row_summary(row)
 
     data = None
-    try:
-        data = _fetch(API_ROOT + quote(ip, safe=''))
-    except Exception as exc:  # network, timeout, bad JSON, DNS, HTTP 429
-        logger.warning('ipwho.is lookup failed for %s: %s', ip, exc)
+    if _primary_ready():
+        try:
+            data = _fetch(API_ROOT + quote(ip, safe=''))
+        except Exception as exc:  # network, timeout, bad JSON, DNS, HTTP 429
+            _hold_primary(exc)
+    else:
+        logger.debug('ipwho.is cooling down, asking ip-api.com for %s', ip)
+
+    if data is None:
         try:
             data = _fallback(ip)
-            logger.info('ipwho.is refused %s, ip-api.com answered it', ip)
         except Exception as exc2:
             logger.warning('ip-api.com lookup failed for %s: %s', ip, exc2)
             if row is not None and row.payload:
