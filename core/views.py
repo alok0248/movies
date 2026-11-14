@@ -1297,6 +1297,60 @@ def admin_dashboard(request):
     })
 
 
+def app_page(request):
+    """Public dashboard for the CineStream app: the build people are on, what
+    the server is currently telling it to do, and how to get the latest APK.
+
+    Deliberately read-only and independent of the player pages: it answers
+    "which build is live, what is switched on, is an update being forced" from
+    the same rows the sync endpoint serves, so the page cannot drift from what
+    the app actually receives.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .models import AndroidApp, AndroidAppBuildLog, AppRemoteConfig
+
+    today = timezone.localdate()
+    since = today - timedelta(days=7)
+
+    apps = list(AndroidApp.objects.filter(is_active=True).order_by('name'))
+    app_ids = [a.id for a in apps]
+
+    recent_builds = list(
+        AndroidAppBuildLog.objects
+        .filter(android_app_id__in=app_ids, access_date__gte=since)
+        .select_related('android_app')
+        .order_by('-last_accessed_at')[:20]
+    )
+    latest_by_app = {}
+    for row in recent_builds:
+        latest_by_app.setdefault(row.android_app_id, row.build_identifier)
+
+    app_rows = [{
+        'name': app.name,
+        'allowed': app.allowed_endpoint or '',
+        'apk_url': app.apk_file.url if app.apk_file else '',
+        'latest': latest_by_app.get(app.id, ''),
+    } for app in apps]
+
+    conf = AppRemoteConfig.get_config()
+    payload = conf.as_dict() if conf else {}
+    flags = payload.get('flags') if isinstance(payload.get('flags'), dict) else {}
+
+    context = {
+        'app_rows': app_rows,
+        'recent_builds': recent_builds,
+        'flags': sorted(flags.items()),
+        'min_supported_build': payload.get('min_supported_build') or 0,
+        'message': payload.get('message') or '',
+        'config_updated_at': conf.updated_at if conf else None,
+        'window_start': since,
+    }
+    return render(request, 'core/app_dashboard.html', context)
+
+
 @require_http_methods(["GET"])
 def ajax_dashboard_stats(request):
     """Live stats for the admin dashboard — called every 30s by auto-refresh."""

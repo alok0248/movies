@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}CineStream app - newmovies{% endblock %}
+{% block content %}
+<div style="max-width:1000px;margin:2rem auto;padding:0 1.5rem;">
+  <h1 style="font-size:2rem;font-weight:800;color:var(--text);margin-bottom:.4rem;">CineStream app</h1>
+  <p style="color:var(--text-2);margin-bottom:1.6rem;font-size:.95rem;">
+    Live build status, server-driven settings and downloads for the Android app. Everything here is read
+    from the same rows that <code>/api/user/sync</code> serves.
+  </p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:2rem;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.2rem;">
+      <div style="font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);">Minimum supported build</div>
+      <div style="font-size:1.7rem;font-weight:800;color:var(--text);margin-top:.3rem;">
+        {% if min_supported_build %}#{{ min_supported_build }}{% else %}none{% endif %}
+      </div>
+      <div style="font-size:.82rem;color:var(--text-2);margin-top:.3rem;">
+        {% if min_supported_build %}Builds below this are asked to update.{% else %}Every installed build keeps working.{% endif %}
+      </div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.2rem;">
+      <div style="font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);">Feature flags</div>
+      <div style="margin-top:.45rem;">
+        {% if flags %}
+          {% for name, enabled in flags %}
+            <div style="display:flex;justify-content:space-between;font-size:.9rem;color:var(--text);padding:.18rem 0;">
+              <span>{{ name }}</span>
+              <strong style="color:{% if enabled %}#22c55e{% else %}#ef4444{% endif %};">{% if enabled %}on{% else %}off{% endif %}</strong>
+            </div>
+          {% endfor %}
+        {% else %}
+          <span style="color:var(--text-2);font-size:.9rem;">No flags set &mdash; every feature stays on.</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.2rem;">
+      <div style="font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);">Message to users</div>
+      <div style="font-size:.95rem;color:var(--text);margin-top:.4rem;">
+        {% if message %}{{ message }}{% else %}<span style="color:var(--text-2);">None.</span>{% endif %}
+      </div>
+      <div style="font-size:.78rem;color:var(--text-2);margin-top:.5rem;">
+        {% if config_updated_at %}Updated {{ config_updated_at|date:"M j, Y H:i" }}{% else %}No remote config saved yet.{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.25rem;font-weight:700;color:var(--text);margin-bottom:.7rem;">Apps</h2>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:2rem;">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
+      <thead>
+        <tr style="color:var(--text-2);text-align:left;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;">
+          <th style="padding:.8rem 1rem;">App</th>
+          <th style="padding:.8rem 1rem;">Latest build seen (7 days)</th>
+          <th style="padding:.8rem 1rem;">Allowed builds</th>
+          <th style="padding:.8rem 1rem;">APK</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for app in app_rows %}
+        <tr style="border-top:1px solid var(--border);color:var(--text);">
+          <td style="padding:.8rem 1rem;">{{ app.name }}</td>
+          <td style="padding:.8rem 1rem;">{% if app.latest %}#{{ app.latest }}{% else %}&mdash;{% endif %}</td>
+          <td style="padding:.8rem 1rem;color:var(--text-2);">{{ app.allowed|default:"any" }}</td>
+          <td style="padding:.8rem 1rem;">
+            {% if app.apk_url %}<a href="{{ app.apk_url }}" style="color:#6366f1;font-weight:600;">Download</a>{% else %}<span style="color:var(--text-2);">&mdash;</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="padding:1rem;color:var(--text-2);">No active apps configured.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="font-size:1.25rem;font-weight:700;color:var(--text);margin-bottom:.7rem;">Recent builds</h2>
+  <p style="color:var(--text-2);font-size:.85rem;margin-bottom:.7rem;">Connections since {{ window_start|date:"M j, Y" }}.</p>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
+      <thead>
+        <tr style="color:var(--text-2);text-align:left;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;">
+          <th style="padding:.8rem 1rem;">Build</th>
+          <th style="padding:.8rem 1rem;">Day</th>
+          <th style="padding:.8rem 1rem;">Connections</th>
+          <th style="padding:.8rem 1rem;">Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in recent_builds %}
+        <tr style="border-top:1px solid var(--border);color:var(--text);">
+          <td style="padding:.7rem 1rem;">#{{ row.build_identifier }}</td>
+          <td style="padding:.7rem 1rem;color:var(--text-2);">{{ row.access_date|date:"M j" }}</td>
+          <td style="padding:.7rem 1rem;">{{ row.connection_count }}</td>
+          <td style="padding:.7rem 1rem;color:var(--text-2);">{{ row.last_accessed_at|date:"M j, H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="padding:1rem;color:var(--text-2);">No build activity recorded in this window.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
