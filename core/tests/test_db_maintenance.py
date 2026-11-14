@@ -60,7 +60,7 @@ class DbMaintenanceUnitTest(SimpleTestCase):
         self.assertTrue(ok)
         self.assertIn('quick_check', out)
         self.assertIn('bloat', out)
-        self.assertIn('busy_timeout', out)
+        self.assertIn('busy timeout', out)
 
     def test_vacuum_reclaims_the_free_pages(self):
         _fill(self.path)
