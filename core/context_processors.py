@@ -186,7 +186,9 @@ def admin_badges(request):
     * ``blocked_today`` — app accounts blocked since midnight,
     * ``api_errors``    — errors recorded since this admin last opened the page
                           (per-browser watermark in the session),
-    * ``alerts``        — health checks currently failing.
+    * ``alerts``        — health checks currently failing,
+    * ``waiting_messages`` / ``overdue_messages`` — support messages without an
+      answer, and those past the first-response target.
 
     Everything is wrapped: a database hiccup must never break a page render,
     and the whole processor only runs for staff inside /admin-dashboard/.
@@ -200,7 +202,8 @@ def admin_badges(request):
     except Exception:
         return {}
 
-    badges = {'blocked': 0, 'blocked_today': 0, 'api_errors': 0, 'alerts': 0}
+    badges = {'blocked': 0, 'blocked_today': 0, 'api_errors': 0, 'alerts': 0,
+              'waiting_messages': 0, 'overdue_messages': 0}
     try:
         from django.core.cache import cache
         from django.utils import timezone
@@ -248,6 +251,20 @@ def admin_badges(request):
                 failing = 0
             cache.set('admin_badge_health', failing, 120)
         badges['alerts'] = int(failing)
+
+        waiting = cache.get('admin_badge_waiting_messages')
+        if waiting is None:
+            from .models import UserMessage
+            waiting = UserMessage.objects.filter(replied_at=None).count()
+            cache.set('admin_badge_waiting_messages', waiting, 60)
+        badges['waiting_messages'] = int(waiting)
+
+        overdue = cache.get('admin_badge_overdue_messages')
+        if overdue is None:
+            from .support import stats as support_stats
+            overdue = support_stats()['overdue']
+            cache.set('admin_badge_overdue_messages', overdue, 120)
+        badges['overdue_messages'] = int(overdue)
     except Exception:
         pass
 

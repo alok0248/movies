@@ -4,6 +4,7 @@ from . import views
 from . import local_player
 from . import mbtv_views
 from . import notifications as notification_views
+from . import support as support_views
 from . import guest_access as guest_views
 from . import device_activity as activity_views
 from . import user_chat as chat_views
@@ -151,6 +152,10 @@ urlpatterns = [
     path('api/notifications/read/', notification_views.api_notifications_read, name='api_notifications_read'),
     path('api/notifications/read', notification_views.api_notifications_read),
     # Messages from a device to the admin (replies and suggestions).
+    # One-question CSAT: the link in a support reply, no login needed.
+    path('support/rate/<str:token>/<int:rating>/', support_views.support_rate,
+         name='support_rate'),
+
     path('api/messages/', notification_views.api_user_messages, name='api_user_messages'),
     path('api/messages', notification_views.api_user_messages),
     # Guest playback quota (10 free titles per device, then registration).

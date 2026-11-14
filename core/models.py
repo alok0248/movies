@@ -3938,6 +3938,72 @@ class UserMessage(models.Model):
         return self.email or 'Guest (%s)' % (self.device_id or 'unknown device')
 
 
+class CannedReply(models.Model):
+    """A saved answer the support desk can drop into the composer.
+
+    The support questions repeat (how to change the plan, why a title will not
+    play, how to get the app), and retyping the same explanation is how answers
+    get shorter and worse over time.
+    """
+    title = models.CharField(max_length=120)
+    body = models.TextField()
+    sort_order = models.IntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    uses = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'title']
+        verbose_name = 'Canned reply'
+        verbose_name_plural = 'Canned replies'
+
+    def __str__(self):
+        return self.title
+
+
+class SupportTicket(models.Model):
+    """One support conversation, and what the message rows alone cannot say.
+
+    The conversation itself is the ``UserMessage`` thread (same key the console
+    groups by). This row keeps the workflow around it: whether the automatic
+    acknowledgement went out, when the one-question CSAT was asked, and how it
+    was answered. A rating is kept even after the messages are pruned, so the
+    CSAT score does not quietly reset.
+    """
+    RATING_HELPFUL = 1
+    RATING_NOT_HELPFUL = 0
+
+    key = models.CharField(max_length=300, unique=True)
+    app = models.ForeignKey('AndroidApp', null=True, blank=True,
+                            on_delete=models.SET_NULL, related_name='support_tickets')
+    email = models.EmailField(blank=True, default='', db_index=True)
+    device_id = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    # The CSAT link is the credential: unguessable, one per conversation.
+    token = models.CharField(max_length=64, unique=True)
+    acked_at = models.DateTimeField(null=True, blank=True)
+    csat_asked_at = models.DateTimeField(null=True, blank=True)
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    rated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Support ticket'
+        verbose_name_plural = 'Support tickets'
+
+    def __str__(self):
+        return self.email or self.device_id or self.key
+
+    @property
+    def rated(self):
+        return self.rating is not None
+
+    @property
+    def helpful(self):
+        return self.rating == self.RATING_HELPFUL
+
+
 class GuestPlayQuota(models.Model):
     """How many titles one unregistered device has played.
 

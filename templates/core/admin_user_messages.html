@@ -275,6 +275,26 @@
             <span class="adm-tile-label">Guests</span>
             <span class="adm-tile-hint">Answered in their thread</span>
         </div>
+        <div class="adm-tile adm-rise{% if stats.overdue %} is-warn{% endif %}" style="--i:5">
+            <span class="adm-tile-ico"><i class="far fa-hourglass-half"></i></span>
+            <b class="adm-tile-num">{{ stats.overdue }}</b>
+            <span class="adm-tile-label">Overdue</span>
+            <span class="adm-tile-hint">Waiting over {{ stats.sla_hours }}h</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:6">
+            <span class="adm-tile-ico"><i class="far fa-stopwatch"></i></span>
+            <b class="adm-tile-num">{{ stats.median_first_reply_hours }}h</b>
+            <span class="adm-tile-label">Median first reply</span>
+            <span class="adm-tile-hint">{% if stats.oldest_wait_hours %}Oldest waiting {{ stats.oldest_wait_hours }}h{% else %}Nothing waiting{% endif %}</span>
+        </div>
+        <div class="adm-tile adm-rise" style="--i:7">
+            <span class="adm-tile-ico"><i class="far fa-star"></i></span>
+            <b class="adm-tile-num">{% if support_stats.csat_count %}{{ support_stats.csat_pct }}%{% else %}–{% endif %}</b>
+            <span class="adm-tile-label">Found it helpful</span>
+            <span class="adm-tile-hint">
+                {% if support_stats.csat_count %}{{ support_stats.csat_helpful }}/{{ support_stats.csat_count }} answers rated, last {{ support_stats.window_days }} days{% else %}No ratings yet{% endif %}
+            </span>
+        </div>
     </div>
 
     <div class="adm-shell um-bar adm-rise" style="--i:5">
@@ -429,6 +449,27 @@
                     <input type="hidden" name="q" value="{{ q }}">
                     <input type="hidden" name="page" value="{{ page.number }}">
                     <input type="hidden" name="thread" value="{{ active_key }}">
+                    {% if thread_rating %}
+                    <div class="um-hint" style="margin:0 .8rem .3rem;">
+                        {% if thread_rating.rated %}
+                            The user rated this answer {% if thread_rating.helpful %}👍 helpful{% else %}👎 not helpful{% endif %} ({{ thread_rating.rated_at|date:"d M Y H:i" }}).
+                        {% elif thread_rating.acked_at %}
+                            Acknowledged automatically{{ thread_rating.csat_asked_at|yesno:", and the helpfulness question was asked" }}.
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if canned_replies %}
+                    <div class="um-hint" style="margin:0 .8rem .3rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                        <label for="um-canned" style="margin:0;">Canned reply</label>
+                        <select id="um-canned" style="max-width:22rem;">
+                            <option value="">Insert a saved answer…</option>
+                            {% for canned in canned_replies %}
+                            <option value="{{ canned.body|escape }}" data-title="{{ canned.title|escape }}">{{ canned.title }}</option>
+                            {% endfor %}
+                        </select>
+                        <span>then edit it before sending.</span>
+                    </div>
+                    {% endif %}
                     <div class="um-composer-box">
                         <textarea class="um-textarea" id="um-reply" name="reply" maxlength="2000" required
                                   placeholder="Write the answer to {{ active.display_user }}"></textarea>
@@ -461,6 +502,57 @@
         </div>
     </div>
     {% endif %}
+
+    <div class="adm-shell adm-rise" style="--i:8;margin-top:1.2rem;">
+        <div class="adm-shell-core">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem;">
+                <div>
+                    <b class="text-white">Canned replies</b>
+                    <div class="um-hint">Saved answers to the questions that keep coming back. Pick one in the composer, then edit it for the person.</div>
+                </div>
+                <span class="um-hint">Auto-acknowledge: a signed-in user's first message gets an immediate reply saying a human will answer within {{ stats.sla_hours }} hours.</span>
+            </div>
+            {% if canned_replies %}
+            <table class="adm-table" style="width:100%;">
+                <thead>
+                    <tr><th>Title</th><th>Answer</th><th>Used</th><th></th></tr>
+                </thead>
+                <tbody>
+                    {% for canned in canned_replies %}
+                    <tr>
+                        <td>{{ canned.title }}</td>
+                        <td class="um-hint" style="max-width:40rem;">{{ canned.body|truncatechars:120 }}</td>
+                        <td>{{ canned.uses }}</td>
+                        <td>
+                            <form method="post" action="{% url 'user_messages_admin' %}" style="margin:0;">
+                                {% csrf_token %}
+                                <input type="hidden" name="canned_action" value="delete">
+                                <input type="hidden" name="canned_id" value="{{ canned.id }}">
+                                <button class="adm-btn" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="um-hint">No canned replies yet.</div>
+            {% endif %}
+            <form method="post" action="{% url 'user_messages_admin' %}" style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;">
+                {% csrf_token %}
+                <input type="hidden" name="canned_action" value="add">
+                <div class="adm-field">
+                    <label for="canned-title">Title</label>
+                    <input class="adm-input" id="canned-title" name="canned_title" maxlength="120" placeholder="How to change a plan" required>
+                </div>
+                <div class="adm-field" style="flex:1 1 22rem;">
+                    <label for="canned-body">Answer</label>
+                    <textarea class="adm-input" id="canned-body" name="canned_body" rows="2" placeholder="The answer, as it should reach the user" required></textarea>
+                </div>
+                <button class="adm-cta" type="submit"><span>Save canned reply</span></button>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -484,6 +576,18 @@
     }
     area.addEventListener('input', resize);
     resize();
+
+    // A canned reply fills the composer; it is meant to be edited before it goes.
+    var canned = document.getElementById('um-canned');
+    if (canned) {
+        canned.addEventListener('change', function () {
+            if (!canned.value) return;
+            area.value = canned.value;
+            area.focus();
+            resize();
+            canned.selectedIndex = 0;
+        });
+    }
 
     area.addEventListener('keydown', function (ev) {
         if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) {

@@ -28,6 +28,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
 
+from . import support as support_desk
 from .audit import log_action
 from .models import (AndroidApp, AppNotification, AppNotificationRecipient,
                      SyncedUser, UserMessage)
@@ -379,6 +380,14 @@ def user_messages_admin(request):
     """
     from django.core.paginator import Paginator
 
+    if request.method == 'POST' and (request.POST.get('canned_action') or '').strip():
+        message, error = support_desk.handle_canned_post(request)
+        if message:
+            messages.success(request, message)
+        if error:
+            messages.error(request, error)
+        return redirect(reverse('user_messages_admin') + _message_filters(request))
+
     if request.method == 'POST':
         row = get_object_or_404(UserMessage, id=request.POST.get('message_id') or 0)
         reply = (request.POST.get('reply') or '').strip()
@@ -388,6 +397,8 @@ def user_messages_admin(request):
             messages.error(request, 'Keep the reply under %d characters.'
                            % MAX_USER_MESSAGE_LEN)
         else:
+            # The one-question CSAT rides on the human reply, once per thread.
+            reply = support_desk.ask_for_rating(row, request, reply)
             row.reply_body = reply
             row.replied_at = timezone.now()
             row.replied_by = getattr(request.user, 'username', '') or ''
@@ -395,6 +406,7 @@ def user_messages_admin(request):
             row.save(update_fields=['reply_body', 'replied_at', 'replied_by',
                                     'is_read'])
             delivered = _deliver_reply(row)
+            support_desk.bump_canned_use(request.POST.get('reply'))
             log_action(request, 'user_message_reply', 'message #%d' % row.id,
                        'to=%s delivered=%s' % (row.email or row.device_id, delivered))
             messages.success(request, 'Replied to %s. %s' % (
@@ -487,18 +499,40 @@ def user_messages_admin(request):
         'state': state,
         'q': q,
         'app_id': app_id,
-        'stats': {
-            'total': UserMessage.objects.count(),
-            'open': UserMessage.objects.filter(replied_at=None).count(),
-            'registered': UserMessage.objects.exclude(email='').count(),
-            'guest': UserMessage.objects.filter(email='').count(),
-            'threads': (
-                UserMessage.objects.exclude(email='').values('app_id', 'email')
-                .distinct().count()
-                + UserMessage.objects.filter(email='').values('app_id', 'device_id')
-                .distinct().count()),
-        },
+        'stats': _stats(),
+        'support_stats': support_desk.stats(),
+        'canned_replies': support_desk.canned_replies(),
+        'thread_rating': _thread_rating(active),
     })
+
+
+def _stats():
+    """What the console's own tiles show, plus the desk's waiting counters."""
+    from .support import stats as support_stats
+    desk = support_stats()
+    return {
+        'total': UserMessage.objects.count(),
+        'open': UserMessage.objects.filter(replied_at=None).count(),
+        'registered': UserMessage.objects.exclude(email='').count(),
+        'guest': UserMessage.objects.filter(email='').count(),
+        'threads': (
+            UserMessage.objects.exclude(email='').values('app_id', 'email')
+            .distinct().count()
+            + UserMessage.objects.filter(email='').values('app_id', 'device_id')
+            .distinct().count()),
+        'overdue': desk['overdue'],
+        'oldest_wait_hours': desk['oldest_wait_hours'],
+        'median_first_reply_hours': desk['median_first_reply_hours'],
+        'sla_hours': desk['sla_hours'],
+    }
+
+
+def _thread_rating(active):
+    """The ticket behind the open thread: acked, asked, and how it was rated."""
+    if not active:
+        return None
+    from .models import SupportTicket
+    return SupportTicket.objects.filter(key=active['key']).first()
 
 
 def _message_filters(request):
@@ -727,5 +761,8 @@ def api_user_messages(request):
         device_id=device_id, device_type=device_type, kind=kind,
         body=text[:MAX_USER_MESSAGE_LEN],
     )
+    # First message of a thread gets an immediate acknowledgement (see
+    # core.support). It never raises, so a stored message is still a success.
+    support_desk.auto_acknowledge(row)
     return JsonResponse({'status': 'ok', 'message': _message_payload(row)},
                         headers={'Cache-Control': 'no-store'})

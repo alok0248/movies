@@ -1403,6 +1403,7 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             </a>
             <a href="{% url 'user_messages_admin' %}" class="sb-item {% if 'user-messages' in request.path %}active{% endif %}">
                 <i class="fas fa-comments"></i> User Messages
+                {% if admin_badges.overdue_messages %}<span class="sb-badge danger" title="{{ admin_badges.overdue_messages }} message{{ admin_badges.overdue_messages|pluralize }} waiting longer than the first-response target">{{ admin_badges.overdue_messages }}</span>{% elif admin_badges.waiting_messages %}<span class="sb-badge info" title="{{ admin_badges.waiting_messages }} message{{ admin_badges.waiting_messages|pluralize }} waiting for an answer">{{ admin_badges.waiting_messages }}</span>{% endif %}
             </a>
             <a href="{% url 'admin_history_calendar' %}" class="sb-item {% if 'history-calendar' in request.path %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> History Calendar
