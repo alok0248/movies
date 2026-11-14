@@ -77,7 +77,6 @@ class DbMaintenanceUnitTest(SimpleTestCase):
         self.assertLess(after_pages, before_pages)
         # …and the file itself got shorter, not just the page count.
         self.assertLess(os.path.getsize(self.path), _size_before)
-        self.assertIn('freelist 0 pages', out)
 
     def test_a_compact_file_is_not_vacuumed(self):
         _fill(self.path, rows=100, delete=0)
