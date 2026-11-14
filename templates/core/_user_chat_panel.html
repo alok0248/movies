@@ -1,0 +1,128 @@
+{% load custom_filters %}
+<!-- The popup behind a row's Message button: the device's conversation with the
+     admin on the left, its watch history and live activity on the right. It is
+     fetched into a modal and re-fetched after every send, so the admin never
+     leaves the user list. -->
+<div class="ucm-head">
+    <div>
+        <div class="fw-semibold text-white">{{ user.display_name|default:user.email|default:'Guest device' }}</div>
+        <div class="sub mono">{{ email|default:'no email — guest device' }}</div>
+        <div class="sub">
+            device <span class="mono">{{ device_id|default:'unknown' }}</span>
+            {% if user.device_model %} &middot; {{ user.device_model }}{% endif %}
+            {% if user.app_version %} &middot; v{{ user.app_version }}{% if user.build_number %} ({{ user.build_number }}){% endif %}{% endif %}
+        </div>
+    </div>
+    <div class="text-end">
+        {% if user.is_subscribed %}
+            <span class="pill bg-success">Subscribed{% if user.valid_until %} until {{ user.valid_until|date:'Y-m-d' }}{% endif %}</span>
+        {% else %}
+            <span class="pill bg-secondary">Free</span>
+        {% endif %}
+        {% if user.block_mode %}<span class="pill bg-danger">{{ user.get_block_mode_display }}</span>{% endif %}
+        {% if activity %}
+            <div class="sub mt-1">
+                {% if activity.online %}<span class="text-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>online now</span>
+                {% else %}last seen {{ activity.seen|timesince }} ago{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if sent %}<div class="ucm-alert ok"><i class="fas fa-check me-1"></i>{{ sent }}</div>{% endif %}
+{% if error %}<div class="ucm-alert bad"><i class="fas fa-triangle-exclamation me-1"></i>{{ error }}</div>{% endif %}
+
+<div class="row g-2 mt-2">
+    <div class="col-lg-7">
+        <div class="ucm-card">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-comments me-1 text-info"></i>Chat history</span>
+                <span class="sub">{{ timeline|length }} entr{{ timeline|length|pluralize:"y,ies" }}</span>
+            </div>
+            <div class="ucm-thread">
+                {% for m in timeline %}
+                    <div class="ucm-msg {{ m.side }}">
+                        <div class="ucm-meta">{{ m.who }}{% if m.title %} &middot; {{ m.title }}{% endif %} &middot; {{ m.at|date:'Y-m-d H:i' }}</div>
+                        <div class="ucm-body">{{ m.body|linebreaksbr }}</div>
+                    </div>
+                {% empty %}
+                    <div class="sub py-3 text-center">
+                        <i class="fas fa-inbox fa-lg d-block mb-2"></i>
+                        This device has not written from the app inbox yet.
+                    </div>
+                {% endfor %}
+            </div>
+            <form data-chat-form method="post" action="{% url 'android_app_user_chat' app.id user.id %}">
+                {% csrf_token %}
+                <textarea class="form-control form-control-sm" name="body" rows="2" maxlength="{{ max_len }}"
+                          style="background:rgba(15,23,42,.85);border-color:rgba(148,163,184,.3);color:#e2e8f0;font-size:.76rem;"
+                          placeholder="{% if email %}Answer {{ email }} — it arrives in the app inbox.{% else %}Answer this device's message.{% endif %}"
+                          {% if not can_send %}disabled{% endif %}></textarea>
+                <div class="d-flex justify-content-between align-items-center gap-2 mt-2">
+                    <span class="sub">
+                        {% if email %}Sent to the app inbox and kept in this thread.
+                        {% elif can_send %}Guests have no address; the answer shows in the thread their app fetches.
+                        {% else %}Nothing to answer — this device has never written from the app.{% endif %}
+                    </span>
+                    <button class="btn btn-sm btn-success" type="submit" {% if not can_send %}disabled{% endif %}>
+                        <i class="fas fa-paper-plane me-1"></i>Send
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="ucm-card">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-clock-rotate-left me-1 text-warning"></i>Watch history</span>
+                <span class="sub">{{ watch|length }} title{{ watch|length|pluralize }}</span>
+            </div>
+            <div class="ucm-watch">
+                {% for w in watch %}
+                    <div class="ucm-watch-row">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="text-white" style="font-size:.78rem;">{{ w.title|truncatechars:44 }}</div>
+                            <span class="pill {% if w.completed %}bg-success{% else %}bg-dark border border-secondary{% endif %}">
+                                {{ w.kind }}{% if w.episode %} {{ w.episode }}{% endif %}
+                            </span>
+                        </div>
+                        <div class="sub">
+                            {% if w.episode_title %}{{ w.episode_title|truncatechars:30 }} &middot; {% endif %}
+                            {% if w.at %}{{ w.at|timesince }} ago{% else %}from cloud history{% endif %}
+                            {% if w.total_min %} &middot; {{ w.watched_min }}/{{ w.total_min }} min{% endif %}
+                            {% if w.completed %} &middot; finished{% endif %}
+                        </div>
+                        {% if w.pct %}
+                            <div class="du-bar mt-1"><span style="width:{{ w.pct }}%;"></span></div>
+                        {% endif %}
+                    </div>
+                {% empty %}
+                    <div class="sub py-3 text-center">
+                        <i class="fas fa-film fa-lg d-block mb-2"></i>
+                        No watch history synced for this account yet.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if activity %}
+            <div class="ucm-card mt-2">
+                <div class="ucm-card-title">
+                    <span><i class="fas fa-tv me-1 text-success"></i>On the device now</span>
+                </div>
+                <div class="sub">
+                    {% if activity.title %}<div class="text-white" style="font-size:.78rem;">{% if activity.playing %}<i class="fas fa-play me-1"></i>{% endif %}{{ activity.title }}</div>{% endif %}
+                    {% if activity.pct %}<div class="du-bar mt-1"><span style="width:{{ activity.pct }}%;"></span></div>{% endif %}
+                    {% if activity.screen %}<div class="mt-1">{{ activity.screen }}</div>{% endif %}
+                </div>
+                {% if activity.actions %}
+                    <div class="sub mt-2">
+                        <div class="text-secondary">Recent actions</div>
+                        {% for a in activity.actions %}<div>&middot; {{ a|truncatechars:70 }}</div>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>

@@ -62,6 +62,11 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'core.middleware.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # "Login as" previews: a session key in the URL serves /preview/<key>/...
+    # as that user. Sits before AuthenticationMiddleware (which then reads the
+    # preview session) and before CommonMiddleware (so APPEND_SLASH sees the
+    # path the preview's own URL prefix has been stripped from).
+    'core.preview_middleware.PreviewSessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

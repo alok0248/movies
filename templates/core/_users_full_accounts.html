@@ -123,6 +123,8 @@
                             <button type="button" class="btn btn-sm btn-outline-info act-btn" title="Send a fresh verification code" onclick="resendCode({{ u.id }}, this)"><i class="fas fa-envelope me-1"></i>Code</button>
                             <a class="btn btn-sm btn-outline-light act-btn" href="{% url 'synced_user_detail' u.id %}"><i class="fas fa-id-card me-1"></i>Detail</a>
                             <a class="btn btn-sm btn-outline-secondary act-btn" href="{% url 'synced_user_edit' u.id %}"><i class="fas fa-pen me-1"></i>Edit</a>
+                            <button type="button" class="btn btn-sm btn-outline-info act-btn" title="This device's messages with the admin, its watch history and a box to answer" onclick="openUserChat({{ u.id }})"><i class="fas fa-comment-dots me-1"></i>Message</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary act-btn" title="Open the website signed in as this user, in a separate session — your admin session stays as it is" onclick="loginAs({{ u.id }})"><i class="fas fa-user-secret me-1"></i>Login as</button>
                         </div>
                     </td>
                 </tr>

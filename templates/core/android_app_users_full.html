@@ -105,6 +105,57 @@
         .du-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .du-chart-box { height: 240px; }
     }
+
+    /* ----- Message popup: one device's chat + watch history ----- */
+    .ucm-overlay {
+        position: fixed; inset: 0; z-index: 1080; display: none;
+        background: rgba(2, 6, 23, .74); padding: 1.2rem; overflow-y: auto;
+    }
+    .ucm-overlay.open { display: block; }
+    .ucm-dialog {
+        max-width: 1080px; margin: 1.5rem auto;
+        background: #0b1220; border: 1px solid rgba(148, 163, 184, .3);
+        border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
+    }
+    .ucm-dialog-head {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: .5rem; padding: .6rem .8rem;
+        border-bottom: 1px solid rgba(148, 163, 184, .25);
+    }
+    .ucm-dialog-title { font-size: .9rem; font-weight: 700; color: #e2e8f0; }
+    .ucm-dialog-body { padding: .8rem; }
+    .ucm-head { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+    .ucm-card {
+        background: rgba(15, 23, 42, .72); border: 1px solid rgba(148, 163, 184, .2);
+        border-radius: 12px; padding: .6rem .7rem;
+    }
+    .ucm-card-title {
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: .5rem; font-size: .82rem; font-weight: 700; color: #e2e8f0;
+        padding-bottom: .4rem; margin-bottom: .5rem;
+        border-bottom: 1px solid rgba(148, 163, 184, .15);
+    }
+    .ucm-thread { max-height: 330px; overflow-y: auto; margin-bottom: .6rem; }
+    .ucm-msg {
+        border-radius: 10px; padding: .4rem .55rem; margin-bottom: .45rem;
+        font-size: .76rem; border: 1px solid rgba(148, 163, 184, .18);
+        background: rgba(30, 41, 59, .6);
+    }
+    .ucm-msg.out {
+        background: rgba(22, 101, 52, .28); border-color: rgba(34, 197, 94, .35);
+        margin-left: 1.4rem;
+    }
+    .ucm-msg.note {
+        background: rgba(30, 58, 138, .25); border-color: rgba(59, 130, 246, .3);
+    }
+    .ucm-meta { font-size: .62rem; color: #94a3b8; margin-bottom: .15rem; }
+    .ucm-body { color: #e2e8f0; white-space: pre-wrap; }
+    .ucm-watch { max-height: 330px; overflow-y: auto; }
+    .ucm-watch-row { padding: .35rem 0; border-bottom: 1px dashed rgba(148, 163, 184, .18); }
+    .ucm-watch-row:last-child { border-bottom: 0; }
+    .ucm-alert { font-size: .74rem; border-radius: 8px; padding: .35rem .55rem; margin-top: .5rem; }
+    .ucm-alert.ok { background: rgba(22, 101, 52, .25); border: 1px solid rgba(34, 197, 94, .35); color: #dcfce7; }
+    .ucm-alert.bad { background: rgba(127, 29, 29, .25); border: 1px solid rgba(248, 113, 113, .35); color: #fee2e2; }
 </style>
 
 <div class="full-users-wrap">
@@ -151,6 +202,18 @@
     <!-- Only the selected tab's list is rendered here (see _users_full_panels). -->
     <div id="panelWrap" class="mt-1">
         {% include 'core/_users_full_panels.html' %}
+    </div>
+</div>
+
+<!-- Message popup: the device's chat + watch history panel is fetched into it,
+     so opening one costs a fragment, not a page. -->
+<div class="ucm-overlay" id="userChatOverlay" role="dialog" aria-modal="true" aria-labelledby="userChatTitle">
+    <div class="ucm-dialog">
+        <div class="ucm-dialog-head">
+            <div class="ucm-dialog-title" id="userChatTitle"><i class="fas fa-comment-dots me-2 text-info"></i>Messages &amp; watch history</div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeUserChat()" aria-label="Close"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="ucm-dialog-body" id="userChatBody"></div>
     </div>
 </div>
 {% endblock %}
@@ -460,6 +523,106 @@ function resendCode(id, btn) {
         .finally(function () { btn.disabled = false; });
     });
 })();
+</script>
+<script>
+/* ============ Per-row Message popup + Login as ============
+   Message opens the device's conversation with the admin (what it wrote, the
+   answers, the notifications it received) beside its watch history and a box
+   that sends the next answer; the panel is fetched, and re-fetched after every
+   send so the list behind never reloads. Login as opens the website as that
+   user in a separate session window: the server mints that session and returns
+   a /preview/<key>/ URL, which needs no cookie — so it can also be pasted into
+   an incognito window — and the admin's own session is left untouched. */
+var USERS_APP_ID = {{ selected_app.id }};
+
+function _chatUrl(id) {
+    return '/admin-dashboard/android-apps/' + USERS_APP_ID + '/users/' + id + '/chat/';
+}
+
+function _chatLoad(id) {
+    var body = document.getElementById('userChatBody');
+    if (!body) return;
+    body.setAttribute('data-user', id);
+    body.innerHTML = '<div class="sub py-4 text-center"><i class="fas fa-spinner fa-spin me-1"></i>Loading conversation...</div>';
+    fetch(_chatUrl(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (html) { body.innerHTML = html; })
+        .catch(function () {
+            body.innerHTML = '<div class="ucm-alert bad">Could not load the conversation.</div>';
+        });
+}
+
+function openUserChat(id) {
+    var overlay = document.getElementById('userChatOverlay');
+    if (!overlay) return;
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    _chatLoad(id);
+}
+
+function closeUserChat() {
+    var overlay = document.getElementById('userChatOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeUserChat();
+});
+document.addEventListener('click', function (e) {
+    var overlay = document.getElementById('userChatOverlay');
+    if (overlay && e.target === overlay) closeUserChat();
+});
+
+/* Sending answers with the panel itself, so the thread stays on screen. */
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || !form.hasAttribute || !form.hasAttribute('data-chat-form')) return;
+    e.preventDefault();
+    var body = document.getElementById('userChatBody');
+    var btn = form.querySelector('button[type=submit]');
+    if (btn) btn.disabled = true;
+    fetch(form.getAttribute('action'), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': _csrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form)
+    })
+    .then(function (r) { return r.text(); })
+    .then(function (html) { if (body) body.innerHTML = html; })
+    .catch(function () { _status('Could not send the message', 'text-danger'); })
+    .finally(function () { if (btn) btn.disabled = false; });
+});
+
+function loginAs(id) {
+    /* The window opens here, inside the click, so the browser does not block
+       it; the URL that makes it that user's session comes with the response. */
+    var win = window.open('', '_blank');
+    if (win) {
+        try {
+            win.document.write('<body style="font-family:system-ui;padding:2rem;background:#0b1220;color:#e2e8f0;">Opening the site as this user...</body>');
+        } catch (err) {}
+    }
+    fetch('/admin-dashboard/android-apps/' + USERS_APP_ID + '/users/' + id + '/login-as/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': _csrf(), 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+        var data = res.data || {};
+        if (res.ok && data.ok && data.url) {
+            if (win) { win.location.href = data.url; } else { window.location.href = data.url; }
+            _status('<i class="fas fa-check me-1"></i>Preview window opened as ' + (data.email || 'this user'), 'text-success');
+        } else {
+            if (win) win.close();
+            _status(data.error || 'Could not open the preview', 'text-danger');
+        }
+    })
+    .catch(function () {
+        if (win) win.close();
+        _status('Request failed', 'text-danger');
+    });
+}
 </script>
 <script src="{% static 'js/typed-confirm.js' %}"></script>
 {% endblock %}

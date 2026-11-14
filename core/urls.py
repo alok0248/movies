@@ -6,6 +6,7 @@ from . import mbtv_views
 from . import notifications as notification_views
 from . import guest_access as guest_views
 from . import device_activity as activity_views
+from . import user_chat as chat_views
 from cineplayer import views as cineplayer_views
 
 handler404 = 'core.views.page_not_found_view'
@@ -124,6 +125,12 @@ urlpatterns = [
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
     # Full-screen user + device list behind the "Users & Blocking" card (no side nav).
     path('admin-dashboard/android-apps/<int:app_id>/users-full/', views.android_app_users_full, name='android_app_users_full'),
+    # Per-device popup from the full user list: chat + watch history, and the
+    # separate-session "login as" preview.
+    path('admin-dashboard/android-apps/<int:app_id>/users/<int:user_id>/chat/', chat_views.user_chat_panel, name='android_app_user_chat'),
+    path('admin-dashboard/android-apps/<int:app_id>/users/<int:user_id>/login-as/', chat_views.login_as_preview, name='android_app_login_as'),
+    # The only path inside a preview window (the middleware strips the prefix).
+    path('preview-exit/', chat_views.preview_exit, name='preview_as_exit'),
     path('admin-dashboard/data-health/', views.data_health, name='data_health'),
     # Public APK download — records the download, then serves the file.
     path('apps/download/<int:app_id>/', views.apk_download, name='apk_download'),
