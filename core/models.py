@@ -1235,6 +1235,11 @@ class AndroidApp(models.Model):
         default=True,
         help_text="Enable or disable log collection from this app. When disabled, the app's /log/ endpoint will reject incoming logs."
     )
+    legacy_user_auth_until = models.DateField(
+        null=True, blank=True,
+        help_text=("Last day requests WITHOUT a per-user token (X-User-Token) are accepted from this app. "
+                   "After it, users of token-less builds must update; empty means no deadline set.")
+    )
     log_retention_days = models.PositiveIntegerField(
         default=30,
         help_text="Number of days to retain AndroidAppLog entries. Older logs are automatically deleted by the clean_analytics command."

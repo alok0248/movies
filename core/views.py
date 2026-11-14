@@ -6,6 +6,7 @@ from django.http import (JsonResponse, HttpResponse, HttpResponseForbidden, Http
 from django.http.request import UnreadablePostError
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from .user_auth import authenticate_user
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -11594,6 +11595,10 @@ def api_user_sync(request):
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
 
+    email, auth_err = authenticate_user(request, email, app_match, endpoint='api/user/sync')
+    if auth_err:
+        return auth_err
+
     # Admin access control: full/app block refuses data sync.
     block_err = _enforce_user_block(email, app_match)
     if block_err:
@@ -11706,7 +11711,7 @@ def api_user_delete(request, kind):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON body'}, status=400)
 
-    return _item_deletion_response(body, kind, app_match)
+    return _item_deletion_response(body, kind, app_match, request=request)
 
 
 # Maps the app's ``deleteType`` onto the internal kind, so a call that routed
@@ -11722,7 +11727,7 @@ _DELETE_TYPE_KINDS = {
 }
 
 
-def _item_deletion_response(body, kind, app_match=None, derive_from_body=False):
+def _item_deletion_response(body, kind, app_match=None, derive_from_body=False, request=None):
     """Apply one real-time item deletion and answer with the updated payload.
 
     Shared by the dedicated /api/user/<kind>/delete|clear/ routes and by the
@@ -11738,6 +11743,10 @@ def _item_deletion_response(body, kind, app_match=None, derive_from_body=False):
     email = (body.get('email') or '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    email, auth_err = authenticate_user(request, email, app_match, endpoint='api/user/delete')
+    if auth_err:
+        return auth_err
 
     # Admin access control: a full/app block stops all writes to this account.
     block_err = _enforce_user_block(email, app_match)
@@ -11863,7 +11872,7 @@ def api_user_profile(request):
     payload = decode_jwt_token(token)
     if not payload:
         return JsonResponse({'status': 'error', 'message': 'Invalid or expired token'}, status=401)
-    django_user = User.objects.filter(pk=int(payload.get('sub', 0))).first()
+    django_user = User.objects.filter(pk=int(payload.get('sub', 0) or 0)).first()
     if not django_user:
         return JsonResponse({'status': 'error', 'message': 'User not found'}, status=404)
     user_obj = SyncedUser.objects.filter(user=django_user).first()
@@ -11937,6 +11946,10 @@ def api_user_heartbeat(request):
     email = (body.get('email') or '').strip().lower()
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    email, auth_err = authenticate_user(request, email, app_match, endpoint='api/user/heartbeat')
+    if auth_err:
+        return auth_err
 
     block_err = _enforce_user_block(email, app_match)
     if block_err:
@@ -13119,7 +13132,7 @@ def api_user_delete_account(request):
     # carries only a deleteType and no code/confirmation is treated the same
     # way so a client that omits `action` still cannot lose an account.
     if not otp_code and not confirms and (action == 'delete' or delete_type):
-        return _item_deletion_response(body, None, app_match, derive_from_body=True)
+        return _item_deletion_response(body, None, app_match, derive_from_body=True, request=request)
 
     if not otp_code:
         return JsonResponse({'status': 'error', 'message': 'Verification code is required'}, status=400)

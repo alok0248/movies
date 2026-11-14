@@ -31,6 +31,7 @@ from django.utils.dateparse import parse_datetime
 from .audit import log_action
 from .models import (AndroidApp, AppNotification, AppNotificationRecipient,
                      SyncedUser, UserMessage)
+from .user_auth import authenticate_user
 from .views import _enforce_user_block, _validate_android_auth, is_staff_or_superuser
 
 # One message from the app is capped at this many characters, and a device (or
@@ -536,6 +537,10 @@ def api_notifications(request):
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
 
+    email, auth_err = authenticate_user(request, email, app_match, endpoint='api/notifications')
+    if auth_err:
+        return auth_err
+
     block_err = _enforce_user_block(email, app_match)
     if block_err:
         return block_err
@@ -603,6 +608,10 @@ def api_notifications_read(request):
     ids = body.get('ids') or []
     if not email:
         return JsonResponse({'status': 'error', 'message': 'Email is required'}, status=400)
+
+    email, auth_err = authenticate_user(request, email, app_match, endpoint='api/notifications/read')
+    if auth_err:
+        return auth_err
     if not isinstance(ids, list) or not ids:
         return JsonResponse({'status': 'error', 'message': 'ids must be a non-empty list'}, status=400)
 
@@ -647,6 +656,12 @@ def api_user_messages(request):
     if request.method == 'GET':
         email = (request.GET.get('email') or '').strip().lower()
         device_id = (request.GET.get('deviceId') or '').strip()[:100]
+        if email:
+            # A signed-in reading is always scoped to the credential, never to
+            # the address the caller typed.
+            email, auth_err = authenticate_user(request, email, app_match, endpoint='api/messages')
+            if auth_err:
+                return auth_err
         rows = UserMessage.objects.filter(app=app_match).select_related('notification')
         if email:
             # Messages written before signing in belong to this device too.
@@ -684,6 +699,9 @@ def api_user_messages(request):
                             status=400)
 
     if email:
+        email, auth_err = authenticate_user(request, email, app_match, endpoint='api/messages')
+        if auth_err:
+            return auth_err
         block_err = _enforce_user_block(email, app_match)
         if block_err:
             return block_err
