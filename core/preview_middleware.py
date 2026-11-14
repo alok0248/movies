@@ -18,7 +18,8 @@ from django.http import HttpResponse
 from django.urls import set_script_prefix
 from django.utils.module_loading import import_string
 
-PREVIEW_PATH = re.compile(r'^/preview/([0-9a-fA-F]{32})(?=/|$)')
+# Django session keys are 32 alphanumeric characters, not hex.
+PREVIEW_PATH = re.compile(r'^/preview/([0-9A-Za-z]{32})(?=/|$)')
 
 
 def session_store():
