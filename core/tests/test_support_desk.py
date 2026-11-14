@@ -147,11 +147,15 @@ class CsatTest(SupportDeskBase):
         self.assertIn('/support/rate/%s/0/' % ticket.token, message.reply_body)
         self.assertIsNotNone(ticket.csat_asked_at)
 
-        # A second answer on the same thread does not ask again.
+        # A second answer on the same thread does not ask again: the question
+        # goes out once, with the first human reply.
+        asked_at = ticket.csat_asked_at
         client.post('/admin-dashboard/user-messages/', {
             'message_id': message.id, 'reply': 'Anything else?'})
         message.refresh_from_db()
-        self.assertEqual(1, message.reply_body.count(support.RATING_QUESTION))
+        ticket.refresh_from_db()
+        self.assertNotIn(support.RATING_QUESTION, message.reply_body)
+        self.assertEqual(asked_at, ticket.csat_asked_at)
 
     def test_the_link_records_the_answer(self):
         client = self.staff_client()
