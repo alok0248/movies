@@ -64,15 +64,20 @@ class DbMaintenanceUnitTest(SimpleTestCase):
 
     def test_vacuum_reclaims_the_free_pages(self):
         _fill(self.path)
-        before = os.path.getsize(self.path)
+        _size_before = os.path.getsize(self.path)
         _, report = self._run()
         bloat = [line for line in report.splitlines() if 'bloat' in line][0]
         self.assertGreater(float(bloat.split('→ ')[1].split('%')[0]), 20.0,
                            'the fixture should leave a lot of freelist behind')
         ok, out = self._run(vacuum=True)
         self.assertTrue(ok)
-        self.assertIn('vacuum freed', out)
-        self.assertLess(os.path.getsize(self.path), before)
+        line = [ln for ln in out.splitlines() if 'vacuum freed' in ln][0]
+        before_pages, after_pages = [int(part.replace(' pages', ''))
+                                     for part in line.split(', ')[1].rstrip(')').split(' → ')]
+        self.assertLess(after_pages, before_pages)
+        # …and the file itself got shorter, not just the page count.
+        self.assertLess(os.path.getsize(self.path), _size_before)
+        self.assertIn('freelist 0 pages', out)
 
     def test_a_compact_file_is_not_vacuumed(self):
         _fill(self.path, rows=100, delete=0)

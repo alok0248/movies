@@ -167,15 +167,26 @@ class Command(BaseCommand):
                               '(use --vacuum-always to force it)'
                               % (bloat, options['vacuum_if_bloat']))
             return
-        before = os.path.getsize(path)
+        before_size = os.path.getsize(path)
+        before_pages = self._scalar(connection, 'PRAGMA page_count') or 0
+        page_size = self._scalar(connection, 'PRAGMA page_size') or 0
         self.stdout.write('        vacuuming…')
         connection.isolation_level = None
         connection.execute('VACUUM')
-        after = os.path.getsize(path)
-        reclaimed = before - after
-        self.stdout.write('  OK    vacuum freed %.1f MB (%.1f MB → %.1f MB)'
-                          % (reclaimed / 1048576.0, before / 1048576.0,
-                             after / 1048576.0))
+        # Under WAL the shrink is only visible to the filesystem after the WAL
+        # is checkpointed, so the report would otherwise always say 0 MB freed.
+        try:
+            connection.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except sqlite3.DatabaseError:
+            pass
+        after_pages = self._scalar(connection, 'PRAGMA page_count') or 0
+        after_size = os.path.getsize(path)
+        freed_pages = max(0, before_pages - after_pages)
+        self.stdout.write('  OK    vacuum freed %s (%.1f MB → %.1f MB, %d → %d pages)'
+                          % ('%.1f MB' % (freed_pages * page_size / 1048576.0)
+                             if page_size else _plural(freed_pages, 'page'),
+                             before_size / 1048576.0, after_size / 1048576.0,
+                             before_pages, after_pages))
 
     @staticmethod
     def _scalar(connection, pragma):
