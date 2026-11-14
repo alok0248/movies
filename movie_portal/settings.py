@@ -21,9 +21,12 @@ from db_config import get_db_config
 ENV = os.environ.get('DJANGO_ENV', 'dev')
 
 # Load credentials from JSON file or environment variables.
-# The shared cred\ folder lives next to the project (../cred/website/); the
+# The shared cred\ folder lives in the workspace's extra\ folder
+# (../extra/cred/website/), falling back to the old ../cred/ layout; the
 # in-project copy is kept as a fallback for a standalone checkout.
-CRED_DIR = BASE_DIR.parent / 'cred'
+CRED_DIR = BASE_DIR.parent / 'extra' / 'cred'
+if not CRED_DIR.exists():
+    CRED_DIR = BASE_DIR.parent / 'cred'
 creds_path = CRED_DIR / 'website' / 'credentials.json'
 if not creds_path.exists():
     creds_path = BASE_DIR / 'cred' / 'credentials.json'
