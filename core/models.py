@@ -1064,6 +1064,66 @@ class TMDBApiKey(models.Model):
         return f"TMDB API Key: {self.masked}"
 
 
+class CatalogueTitleHealth(models.Model):
+    """How a title is holding up across the players that serve it.
+
+    One row per (media_type, tmdb_id). ``consecutive_failures`` counts probe
+    runs in which every provider that was tried failed; when it reaches the
+    threshold the title is marked ``hidden`` and stop_sources refuses to hand out
+    a stream for it, so a dead title disappears instead of showing "cannot play".
+    One successful probe clears the counter and lifts an automatic hide - a
+    transient provider outage must not bury a title for good.
+    """
+
+    MEDIA_TYPE_CHOICES = [('movie', 'Movie'), ('tv', 'TV show')]
+
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='movie')
+    tmdb_id = models.IntegerField()
+    title = models.CharField(max_length=255, blank=True, default='')
+    checks = models.PositiveIntegerField(default=0)
+    successes = models.PositiveIntegerField(default=0)
+    consecutive_failures = models.PositiveIntegerField(default=0)
+    providers_checked = models.PositiveIntegerField(default=0)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    last_ok_at = models.DateTimeField(null=True, blank=True)
+    hidden = models.BooleanField(default=False)
+    hidden_at = models.DateTimeField(null=True, blank=True)
+    hidden_reason = models.CharField(max_length=300, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Catalogue title health'
+        verbose_name_plural = 'Catalogue title health'
+        unique_together = ('media_type', 'tmdb_id')
+        indexes = [models.Index(fields=['hidden']), models.Index(fields=['-last_checked_at'])]
+
+    def __str__(self):
+        state = 'hidden' if self.hidden else ('ok' if self.consecutive_failures == 0 else '%d fail' % self.consecutive_failures)
+        return '%s %s (%s)' % (self.media_type, self.tmdb_id, state)
+
+
+class CatalogueLinkCheck(models.Model):
+    """One probe of one title on one provider - the evidence behind a hide."""
+
+    health = models.ForeignKey(CatalogueTitleHealth, on_delete=models.CASCADE, related_name='link_checks')
+    provider = models.ForeignKey('PlayerConfiguration', null=True, blank=True, on_delete=models.SET_NULL)
+    provider_name = models.CharField(max_length=150, blank=True, default='')
+    url = models.TextField(blank=True, default='')
+    ok = models.BooleanField(default=False)
+    status_code = models.IntegerField(null=True, blank=True)
+    latency_ms = models.IntegerField(default=0)
+    error = models.CharField(max_length=300, blank=True, default='')
+    checked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Catalogue link check'
+        verbose_name_plural = 'Catalogue link checks'
+        ordering = ['-checked_at']
+        indexes = [models.Index(fields=['-checked_at'])]
+
+    def __str__(self):
+        return '%s %s: %s' % (self.provider_name or 'provider', self.health_id, 'ok' if self.ok else 'fail')
+
+
 class AppRemoteConfig(models.Model):
     """Server-driven settings that installed apps read from ``/api/user/sync``.
 

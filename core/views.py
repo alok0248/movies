@@ -7844,6 +7844,18 @@ def fetch_embed_sources(request):
     except (ValueError, TypeError):
         return JsonResponse({'success': False, 'error': 'Invalid tmdb_id', 'sources': []})
 
+    # A title the link-health probe has hidden keeps failing: answer with no
+    # sources instead of handing the player a URL that will not play.
+    try:
+        from .models import CatalogueTitleHealth
+        if CatalogueTitleHealth.objects.filter(
+                media_type=media_type, tmdb_id=tmdb_id, hidden=True).exists():
+            return JsonResponse({'success': False,
+                                 'error': 'This title is temporarily unavailable',
+                                 'sources': []})
+    except Exception:
+        logger.debug('catalogue health lookup failed', exc_info=True)
+
     timestamp = str(int(_time.time() * 1000))
 
     # Step 1: Get TMDB info (title, year, imdb_id)

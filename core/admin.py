@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import AppRemoteConfig, SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, AmazonAffiliateProduct
+from .models import (AppRemoteConfig, CatalogueLinkCheck, CatalogueTitleHealth,
+                     SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, AmazonAffiliateProduct)
 
 
 @admin.register(AppRemoteConfig)
@@ -11,6 +12,42 @@ class AppRemoteConfigAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         obj.updated_by = request.user.get_username()
         super().save_model(request, obj, form, change)
+
+
+@admin.register(CatalogueTitleHealth)
+class CatalogueTitleHealthAdmin(admin.ModelAdmin):
+    list_display = ('media_type', 'tmdb_id', 'title', 'hidden', 'consecutive_failures',
+                    'checks', 'successes', 'last_checked_at')
+    list_filter = ('hidden', 'media_type')
+    search_fields = ('title', 'tmdb_id')
+    ordering = ('-hidden', '-consecutive_failures', '-last_checked_at')
+    readonly_fields = ('last_checked_at', 'last_ok_at', 'hidden_at')
+    actions = ('hide_titles', 'unhide_titles')
+
+    @admin.action(description='Hide selected titles from the players')
+    def hide_titles(self, request, queryset):
+        from django.utils import timezone as tz
+        updated = queryset.update(hidden=True, hidden_at=tz.now(),
+                                  hidden_reason='manual: hidden from the admin')
+        self.message_user(request, '%d title(s) hidden' % updated)
+
+    @admin.action(description='Unhide selected titles')
+    def unhide_titles(self, request, queryset):
+        updated = queryset.update(hidden=False, hidden_at=None, hidden_reason='',
+                                  consecutive_failures=0)
+        self.message_user(request, '%d title(s) visible again' % updated)
+
+
+@admin.register(CatalogueLinkCheck)
+class CatalogueLinkCheckAdmin(admin.ModelAdmin):
+    list_display = ('health', 'provider_name', 'ok', 'status_code', 'latency_ms', 'checked_at')
+    list_filter = ('ok', 'provider_name')
+    search_fields = ('provider_name', 'url', 'error')
+    readonly_fields = ('health', 'provider', 'provider_name', 'url', 'ok', 'status_code',
+                       'latency_ms', 'error', 'checked_at')
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(AndroidApp)
