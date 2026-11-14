@@ -15,6 +15,7 @@ env/
 
 # Django
 db.sqlite3
+backups/
 db.sqlite3.bak
 db.sqlite3-shm
 db.sqlite3-wal

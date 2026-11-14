@@ -19,11 +19,14 @@ returns a finding instead of raising, and delivery errors are reported rather
 than thrown.
 """
 
+import json
 import logging
+import os
 import shutil
 import ssl
 import subprocess
 import time
+from datetime import datetime
 
 from django.conf import settings as django_settings
 from django.core.cache import cache
@@ -139,6 +142,45 @@ def soonest_expiry(paths=None):
     return soonest
 
 
+BACKUP_WARN_HOURS = 26
+BACKUP_OFFBOX_WARN_HOURS = 50
+
+
+def backup_status():
+    """Age of the newest snapshot from ``backup_db`` and whether it left the box."""
+    path = os.path.join(str(django_settings.BASE_DIR), 'backups', 'status.json')
+    if not os.path.exists(path):
+        return {'key': 'backup', 'title': 'Database backup', 'ok': None,
+                'detail': 'no snapshot yet — run manage.py backup_db'}
+    try:
+        with open(path, encoding='utf-8') as fh:
+            status = json.load(fh)
+        at = datetime.fromisoformat(status['at'])
+    except Exception as exc:
+        return {'key': 'backup', 'title': 'Database backup', 'ok': None,
+                'detail': 'unreadable status.json (%s)' % exc}
+
+    hours = (datetime.now() - at).total_seconds() / 3600.0
+    files = status.get('files') or []
+    size = max([f.get('bytes') or 0 for f in files] or [0]) / 1048576.0
+    detail = 'newest snapshot %.1f h ago (%.1f MB)' % (hours, size)
+    ok = hours <= BACKUP_WARN_HOURS
+
+    offbox = status.get('offbox') or {}
+    if offbox.get('configured'):
+        detail += '; off-box: %s' % ('ok' if offbox.get('ok') else (offbox.get('detail') or 'failed'))
+        if not offbox.get('ok'):
+            ok = False
+    else:
+        detail += '; off-box: not configured'
+
+    if status.get('failures'):
+        ok = False
+        detail += '; failures: %s' % '; '.join(status['failures'])[:200]
+
+    return {'key': 'backup', 'title': 'Database backup', 'ok': ok, 'detail': detail}
+
+
 def run_checks(record=True):
     """Every enabled check as ``{key, title, ok, detail}``, in display order.
 
@@ -181,6 +223,8 @@ def run_checks(record=True):
             'detail': ('could not count them' if count < 0
                        else '%d running (minimum %d)' % (count, minimum)),
         })
+
+    findings.append(backup_status())
 
     paths = cert_paths()
     if paths:
