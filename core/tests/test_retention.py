@@ -175,7 +175,8 @@ class CohortsPageTest(CohortBase):
                                    HTTP_HOST='newmovies.linkpc.net',
                                    HTTP_X_FORWARDED_PROTO='https')
         self.assertEqual(302, response.status_code)
-        self.assertIn('/admin/login/', response['Location'])
+        self.assertIn('/login/', response['Location'])
+        self.assertIn('cohorts', response['Location'])
 
     def test_the_weeks_parameter_garbage_does_not_break_the_page(self):
         User.objects.create_superuser(username='admin2', email='a2@example.invalid',
