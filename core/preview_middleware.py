@@ -72,6 +72,16 @@ class PreviewSessionMiddleware:
             response = self.get_response(request)
         finally:
             set_script_prefix('/')
+            # Pages inside the preview do touch request.session (the home page
+            # even marks it modified), and SessionMiddleware reads those flags
+            # afterwards: left alone it would save the preview session and send
+            # its cookie, which would log the admin's own tab in as the
+            # customer. A preview session never writes back to the browser.
+            try:
+                request.session.modified = False
+                request.session.accessed = False
+            except AttributeError:
+                pass
         # A preview is one person's private pages: never share it through a
         # cache.
         response['Cache-Control'] = 'private, no-store'

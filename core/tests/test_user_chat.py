@@ -5,6 +5,7 @@ history, and sends the next answer; Login as mints a session that renders the
 website as that user from a URL, so it needs no cookie (it works in an
 incognito window) and never touches the admin's own session.
 """
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -166,7 +167,9 @@ class LoginAsPreviewTest(UserChatBase):
         # Links stay inside the preview window, and the banner offers the way out.
         self.assertContains(resp, '/preview/%s/preview-exit/' % key)
         self.assertContains(resp, 'Previewing the site as')
-        # The admin's own session is exactly as it was.
+        # The admin's own session is exactly as it was, and the preview never
+        # hands the browser a session cookie of its own.
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, resp.cookies)
         self.assertEqual(admin_id, self.client.session['_auth_user_id'])
         self.assertEqual(str(self.staff.pk), self.client.session['_auth_user_id'])
         self.assertEqual(200, self.client.get(
