@@ -68,6 +68,35 @@ class Command(BaseCommand):
         except Exception as exc:
             return None, str(exc).encode('utf-8', 'replace')
 
+    def _post_json(self, url, host, credentials, payload, timeout):
+        """POST JSON and follow a redirect while keeping the body.
+
+        The site redirects http to https, and a plain urllib POST would turn
+        into a GET on the redirect and hit a 405 - which would report the app
+        endpoint as broken when it is only the scheme that moved.
+        """
+        body = json.dumps(payload).encode('utf-8')
+        for _ in range(3):
+            request = urllib.request.Request(url, data=body, method='POST')
+            request.add_header('Host', host)
+            request.add_header('Content-Type', 'application/json')
+            request.add_header('User-Agent', 'CinestreamSmokeTest/1.0')
+            if credentials:
+                request.add_header('Authorization', 'Basic ' + base64.b64encode(
+                    credentials.encode('utf-8')).decode('ascii'))
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    return response.status, response.read(8000)
+            except urllib.error.HTTPError as exc:
+                location = exc.headers.get('Location') if exc.headers else None
+                if exc.code in (301, 302, 307, 308) and location:
+                    url = location
+                    continue
+                return exc.code, exc.read(8000)
+            except Exception as exc:
+                return None, str(exc).encode('utf-8', 'replace')
+        return None, b'too many redirects'
+
     def handle(self, *args, **options):
         base = options['base_url'].rstrip('/')
         host = options['host'] or base.split('//')[-1].split('/')[0]
@@ -88,6 +117,34 @@ class Command(BaseCommand):
             results.append({'check': name, 'path': path, 'status': status, 'ok': ok, 'detail': detail})
             if not ok:
                 failures += 1
+
+        # --- the app's own sync call -------------------------------------
+        # Old builds depend on this response shape, so the smoke suite asserts
+        # the keys they parse rather than only the status code.
+        sync_path = '/api/user/sync/'
+        status, body = self._post_json(base + sync_path, host, credentials,
+                                       {'email': PROBE_EMAIL, 'userData': {}},
+                                       options['timeout'])
+        detail, ok = 'HTTP %s' % (status if status is not None else 'no response'), False
+        if status is None:
+            detail = body[:160].decode('utf-8', 'replace')
+        elif status != 200:
+            detail += ' (wanted 200) ' + body[:160].decode('utf-8', 'replace').replace('\n', ' ')
+        else:
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+            missing = [k for k in ('status', 'subscription', 'userData', 'remoteConfig')
+                       if k not in payload]
+            ok = not missing and payload.get('status') == 'success'
+            detail = ('all four keys present' if ok
+                      else 'missing %s' % ', '.join(missing) if missing
+                      else 'status=%r' % payload.get('status'))
+        results.append({'check': 'app sync payload', 'path': sync_path,
+                        'status': status, 'ok': ok, 'detail': detail})
+        if not ok:
+            failures += 1
 
         if options['json']:
             self.stdout.write(json.dumps({'base_url': base, 'ok': failures == 0,
