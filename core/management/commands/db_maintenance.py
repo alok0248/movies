@@ -117,7 +117,6 @@ class Command(BaseCommand):
             freelist = self._scalar(connection, 'PRAGMA freelist_count') or 0
             journal = connection.execute('PRAGMA journal_mode').fetchone()
             journal = (journal[0] if journal else '?') or '?'
-            busy_timeout = self._scalar(connection, 'PRAGMA busy_timeout') or 0
 
             size = os.path.getsize(path)
             bloat = (100.0 * freelist / page_count) if page_count else 0.0
@@ -126,12 +125,7 @@ class Command(BaseCommand):
                                  size / 1048576.0))
             self.stdout.write('        freelist %s → %.1f%% bloat'
                               % (_plural(freelist, 'page'), bloat))
-            if busy_timeout < EXPECTED_BUSY_TIMEOUT_MS:
-                self.stdout.write('  WARN  busy_timeout is %d ms (expected >= %d ms '
-                                  'from DATABASES OPTIONS timeout)'
-                                  % (busy_timeout, EXPECTED_BUSY_TIMEOUT_MS))
-            else:
-                self.stdout.write('        busy_timeout %d ms' % busy_timeout)
+            self._report_busy_timeout(alias, connection)
 
             if options['vacuum'] and ok:
                 self._vacuum(connection, path, size, bloat, options)
@@ -140,6 +134,31 @@ class Command(BaseCommand):
         finally:
             connection.close()
         return ok
+
+    def _report_busy_timeout(self, alias, connection):
+        """Say how long a writer waits for the lock.
+
+        The timeout that matters is the one Django hands the driver
+        (``DATABASES['default']['OPTIONS']['timeout']``); the pragma on this
+        command's own connection only tells us what this run uses.
+        """
+        options = (settings.DATABASES.get(alias) or {}).get('OPTIONS') or {}
+        configured = options.get('timeout')
+        try:
+            configured_ms = int(float(configured) * 1000)
+        except (TypeError, ValueError):
+            configured_ms = None
+        actual = self._scalar(connection, 'PRAGMA busy_timeout') or 0
+        if configured_ms is None:
+            self.stdout.write('  WARN  no busy timeout in DATABASES["%s"]["OPTIONS"] — '
+                              'a blocked writer would fail immediately' % alias)
+        elif configured_ms < EXPECTED_BUSY_TIMEOUT_MS:
+            self.stdout.write('  WARN  busy timeout is %d ms (expected >= %d ms) '
+                              '— busy writes may fail with "database is locked"'
+                              % (configured_ms, EXPECTED_BUSY_TIMEOUT_MS))
+        else:
+            self.stdout.write('        busy timeout %d ms (this connection: %d ms)'
+                              % (configured_ms, actual))
 
     def _vacuum(self, connection, path, size, bloat, options):
         """Compact the file, unless the bloat threshold says it is not worth it."""

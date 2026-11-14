@@ -9,7 +9,9 @@ import io
 import os
 import sqlite3
 import tempfile
+from unittest import mock
 
+from django.conf import settings
 from django.core.management import call_command
 from django.test import SimpleTestCase
 
@@ -64,7 +66,8 @@ class DbMaintenanceUnitTest(SimpleTestCase):
         _fill(self.path)
         before = os.path.getsize(self.path)
         _, report = self._run()
-        self.assertGreater(float(report.split('→ ')[1].split('%')[0]), 20.0,
+        bloat = [line for line in report.splitlines() if 'bloat' in line][0]
+        self.assertGreater(float(bloat.split('→ ')[1].split('%')[0]), 20.0,
                            'the fixture should leave a lot of freelist behind')
         ok, out = self._run(vacuum=True)
         self.assertTrue(ok)
@@ -90,15 +93,27 @@ class DbMaintenanceUnitTest(SimpleTestCase):
         self.assertFalse(ok)
         self.assertIn('FAIL', out)
 
-    def test_a_small_busy_timeout_is_reported_but_not_a_failure(self):
+    def test_the_configured_busy_timeout_is_reported(self):
         connection = sqlite3.connect(self.path)
-        connection.execute('PRAGMA busy_timeout=1000')
         connection.execute('CREATE TABLE t (id INTEGER)')
         connection.commit()
         connection.close()
         ok, out = self._run()
         self.assertTrue(ok)
-        self.assertIn('WARN  busy_timeout', out)
+        self.assertIn('busy timeout 20000 ms', out)
+
+    def test_a_short_busy_timeout_is_warned_about_but_not_a_failure(self):
+        with mock.patch.dict(settings.DATABASES['default'],
+                             {'OPTIONS': {'timeout': 5}}):
+            ok, out = self._run()
+        self.assertTrue(ok)
+        self.assertIn('WARN  busy timeout is 5000 ms', out)
+
+    def test_a_missing_busy_timeout_is_warned_about(self):
+        with mock.patch.dict(settings.DATABASES['default'], {'OPTIONS': {}}):
+            ok, out = self._run()
+        self.assertTrue(ok)
+        self.assertIn('WARN  no busy timeout', out)
 
 
 class DbMaintenanceCommandTest(SimpleTestCase):
