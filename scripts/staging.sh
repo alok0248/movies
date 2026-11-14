@@ -43,6 +43,14 @@ PY
 
     ln -sfn "$PROD/media" "$STAGE/media"
     ln -sfn "$PROD/staticfiles" "$STAGE/staticfiles"
+
+    # The staging copy of the database is refreshed from production every time,
+    # so a schema change in the pulled code has to be applied here before the
+    # smoke suite reads any new table.
+    (cd "$STAGE" && "$PY" manage.py migrate --noinput >/dev/null 2>&1) || {
+        echo "staging: migrations failed — see the output above" >&2
+        return 1
+    }
 }
 
 start() {

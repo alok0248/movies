@@ -11485,6 +11485,32 @@ def _sync_too_fast_response(retry_after):
     return response
 
 
+REMOTE_CONFIG_CACHE_KEY = 'app:remote-config'
+REMOTE_CONFIG_CACHE_SECONDS = 60
+
+
+def _remote_config_payload():
+    """Server-driven app settings, cached briefly so sync stays cheap.
+
+    Always a dict: a missing row, a broken payload or a database error answer
+    with ``{}``, so the sync response keeps its shape whatever the config says.
+    """
+    try:
+        cached = cache.get(REMOTE_CONFIG_CACHE_KEY)
+        if cached is not None:
+            return cached
+        from .models import AppRemoteConfig
+        conf = AppRemoteConfig.get_config()
+        payload = conf.as_dict() if conf else {}
+        if conf is not None:
+            payload.setdefault('version', conf.updated_at.isoformat(timespec='seconds'))
+        cache.set(REMOTE_CONFIG_CACHE_KEY, payload, REMOTE_CONFIG_CACHE_SECONDS)
+        return payload
+    except Exception:
+        logger.debug('remote config unavailable', exc_info=True)
+        return {}
+
+
 @_guard_android_api_errors
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -11527,6 +11553,7 @@ def api_user_sync(request):
                     'message': 'User data synced successfully',
                     'subscription': recent_profile.subscription_payload() if recent_profile else FREE_SUBSCRIPTION,
                     'userData': recent_cloud.get_cloud_payload(),
+                    'remoteConfig': _remote_config_payload(),
                 })
     cache.set(throttle_key, timezone.now(),
               int(getattr(app_match, 'sync_min_interval_seconds', 0)
@@ -11551,6 +11578,7 @@ def api_user_sync(request):
         'message': 'User data synced successfully',
         'subscription': sub_payload,
         'userData': cloud.get_cloud_payload(),
+        'remoteConfig': _remote_config_payload(),
     })
 
 

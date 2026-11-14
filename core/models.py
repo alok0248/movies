@@ -1064,6 +1064,76 @@ class TMDBApiKey(models.Model):
         return f"TMDB API Key: {self.masked}"
 
 
+class AppRemoteConfig(models.Model):
+    """Server-driven settings that installed apps read from ``/api/user/sync``.
+
+    One row for the whole install base. The payload is a JSON object the app
+    merges over its own defaults::
+
+        {"flags": {"downloads": true, "playback": true},
+         "min_supported_build": 600,
+         "message": "Downloads are paused for maintenance"}
+
+    A flag set to ``false`` is a kill-switch: an app that understands the flag
+    stops offering that feature without a release. An app too old to know the
+    field simply never reads it, which is why this can be served long before
+    every install is updated — the response only ever gains a key, never loses
+    one.
+    """
+
+    payload = models.TextField(
+        default='{}', blank=True,
+        help_text='JSON object served to the apps. Unknown keys are ignored by old builds.')
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Remote config'
+        verbose_name_plural = 'Remote config'
+
+    def __str__(self):
+        flags = self.flags()
+        return 'Remote config (%d flag%s, updated %s)' % (
+            len(flags), '' if len(flags) == 1 else 's', self.updated_at.strftime('%Y-%m-%d %H:%M'))
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        try:
+            data = json.loads(self.payload or '{}')
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({'payload': 'Not valid JSON: %s' % exc})
+        if not isinstance(data, dict):
+            raise ValidationError({'payload': 'The payload must be a JSON object.'})
+        flags = data.get('flags')
+        if flags is not None and not isinstance(flags, dict):
+            raise ValidationError({'payload': '\"flags\" must be an object of name: true/false.'})
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        try:
+            from django.core.cache import cache
+            cache.delete('app:remote-config')
+        except Exception:
+            pass
+
+    @classmethod
+    def get_config(cls):
+        """The single config row, created on first use by the admin command."""
+        return cls.objects.order_by('id').first()
+
+    def as_dict(self):
+        """The payload as a dict; a broken payload never raises."""
+        try:
+            data = json.loads(self.payload or '{}')
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def flags(self):
+        flags = self.as_dict().get('flags')
+        return flags if isinstance(flags, dict) else {}
+
+
 class AndroidApp(models.Model):
     name = models.CharField(max_length=255, unique=True)
     slug = models.SlugField(max_length=255, unique=True, blank=True)

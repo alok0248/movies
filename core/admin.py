@@ -1,5 +1,16 @@
 from django.contrib import admin
-from .models import SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, AmazonAffiliateProduct
+from .models import AppRemoteConfig, SiteSettings, ContentRow, WatchList, TMDBMovie, TMDBTV, TMDBGenre, NavbarItem, PlayerConfiguration, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, WebsiteVisitor, WebsiteVisitorVisit, AmazonAffiliateProduct
+
+
+@admin.register(AppRemoteConfig)
+class AppRemoteConfigAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'updated_at', 'updated_by')
+    readonly_fields = ('updated_at', 'updated_by')
+    fields = ('payload', 'updated_at', 'updated_by')
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user.get_username()
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(AndroidApp)
