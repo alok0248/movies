@@ -69,33 +69,43 @@ class Command(BaseCommand):
             return None, str(exc).encode('utf-8', 'replace')
 
     def _post_json(self, url, host, credentials, payload, timeout):
-        """POST JSON and follow a redirect while keeping the body.
+        """POST JSON, following a redirect without dropping the body.
 
-        The site redirects http to https, and a plain urllib POST would turn
-        into a GET on the redirect and hit a 405 - which would report the app
+        The site redirects http to https, and urllib's default handler turns a
+        redirected POST into a GET - which hits 405 and would report the app
         endpoint as broken when it is only the scheme that moved.
         """
+        class _KeepPost(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                new = super().redirect_request(req, fp, code, msg, headers, newurl)
+                if new is None:
+                    return None
+                if code in (301, 302, 303, 307, 308) and req.data is not None:
+                    new.method = 'POST'
+                    new.data = req.data
+                    for header in ('Content-Type', 'Authorization', 'User-Agent'):
+                        value = req.get_header(header)
+                        if value:
+                            new.add_unredirected_header(header, value)
+                return new
+
         body = json.dumps(payload).encode('utf-8')
-        for _ in range(3):
-            request = urllib.request.Request(url, data=body, method='POST')
+        request = urllib.request.Request(url, data=body, method='POST')
+        if host:
             request.add_header('Host', host)
-            request.add_header('Content-Type', 'application/json')
-            request.add_header('User-Agent', 'CinestreamSmokeTest/1.0')
-            if credentials:
-                request.add_header('Authorization', 'Basic ' + base64.b64encode(
-                    credentials.encode('utf-8')).decode('ascii'))
-            try:
-                with urllib.request.urlopen(request, timeout=timeout) as response:
-                    return response.status, response.read(8000)
-            except urllib.error.HTTPError as exc:
-                location = exc.headers.get('Location') if exc.headers else None
-                if exc.code in (301, 302, 307, 308) and location:
-                    url = location
-                    continue
-                return exc.code, exc.read(8000)
-            except Exception as exc:
-                return None, str(exc).encode('utf-8', 'replace')
-        return None, b'too many redirects'
+        request.add_header('Content-Type', 'application/json')
+        request.add_header('User-Agent', 'CinestreamSmokeTest/1.0')
+        if credentials:
+            request.add_header('Authorization', 'Basic ' + base64.b64encode(
+                credentials.encode('utf-8')).decode('ascii'))
+        opener = urllib.request.build_opener(_KeepPost)
+        try:
+            with opener.open(request, timeout=timeout) as response:
+                return response.status, response.read(8000)
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read(8000)
+        except Exception as exc:
+            return None, str(exc).encode('utf-8', 'replace')
 
     def handle(self, *args, **options):
         base = options['base_url'].rstrip('/')
@@ -125,6 +135,13 @@ class Command(BaseCommand):
         status, body = self._post_json(base + sync_path, host, credentials,
                                        {'email': PROBE_EMAIL, 'userData': {}},
                                        options['timeout'])
+        if status != 200:
+            # Production answers plain http with a 301 to https; ask the public
+            # origin directly the way a phone would.
+            status, body = self._post_json('https://' + host + sync_path, None, credentials,
+                                           {'email': PROBE_EMAIL, 'userData': {}},
+                                           options['timeout'])
+            sync_path += ' (https)'
         detail, ok = 'HTTP %s' % (status if status is not None else 'no response'), False
         if status is None:
             detail = body[:160].decode('utf-8', 'replace')
