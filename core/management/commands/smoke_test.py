@@ -17,6 +17,7 @@ and shout instead of reporting success.
 """
 import base64
 import json
+import time
 import os
 import urllib.error
 import urllib.request
@@ -129,36 +130,48 @@ class Command(BaseCommand):
                 failures += 1
 
         # --- the app's own sync call -------------------------------------
-        # Old builds depend on this response shape, so the smoke suite asserts
-        # the keys they parse rather than only the status code.
+        # Old builds depend on this response shape, so the suite asserts the
+        # keys they parse, not only the status code. A full sync writes, so a
+        # busy SQLite answers 503 + retryable; retry like the app does instead
+        # of reporting a false failure.
         sync_path = '/api/user/sync/'
-        status, body = self._post_json(base + sync_path, host, credentials,
-                                       {'email': PROBE_EMAIL, 'userData': {}},
-                                       options['timeout'])
-        if status != 200:
-            # Production answers plain http with a 301 to https; ask the public
-            # origin directly the way a phone would.
-            status, body = self._post_json('https://' + host + sync_path, None, credentials,
-                                           {'email': PROBE_EMAIL, 'userData': {}},
-                                           options['timeout'])
-            sync_path += ' (https)'
+        payload = {'email': PROBE_EMAIL, 'userData': {}}
+        attempts = [(base + sync_path, host, 'loopback'),
+                    ('https://' + host + sync_path, None, 'https')]
+        status, body, used = None, b'', 'loopback'
+        for attempt_url, attempt_host, label in attempts:
+            for attempt in range(3):
+                status, body = self._post_json(attempt_url, attempt_host, credentials,
+                                               payload, options['timeout'])
+                used = label
+                if status == 200:
+                    break
+                if status in (502, 503, 504):
+                    time.sleep(2)
+                    continue
+                break  # 405/403 on this route: try the public origin instead
+            if status == 200:
+                break
+
         detail, ok = 'HTTP %s' % (status if status is not None else 'no response'), False
         if status is None:
             detail = body[:160].decode('utf-8', 'replace')
         elif status != 200:
-            detail += ' (wanted 200) ' + body[:160].decode('utf-8', 'replace').replace('\n', ' ')
+            detail += ' (wanted 200) ' + ' '.join(body[:160].decode('utf-8', 'replace').splitlines())
         else:
             try:
-                payload = json.loads(body)
+                parsed = json.loads(body)
             except Exception:
-                payload = {}
+                parsed = {}
             missing = [k for k in ('status', 'subscription', 'userData', 'remoteConfig')
-                       if k not in payload]
-            ok = not missing and payload.get('status') == 'success'
-            detail = ('all four keys present' if ok
-                      else 'missing %s' % ', '.join(missing) if missing
-                      else 'status=%r' % payload.get('status'))
-        results.append({'check': 'app sync payload', 'path': sync_path,
+                       if k not in parsed]
+            if missing:
+                detail = 'missing %s' % ', '.join(missing)
+            elif parsed.get('status') != 'success':
+                detail = 'status=%r' % parsed.get('status')
+            else:
+                ok, detail = True, 'all four keys present'
+        results.append({'check': 'app sync payload', 'path': sync_path + ' (%s)' % used,
                         'status': status, 'ok': ok, 'detail': detail})
         if not ok:
             failures += 1
