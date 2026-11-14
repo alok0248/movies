@@ -103,7 +103,7 @@ movies/
    - `DJANGO_ALLOWED_HOSTS` (comma-separated list for production)
 
 6. **Set up TMDB Database credentials (optional)**
-   If you want to use the extracted TMDB PostgreSQL database, create a `cred` directory with a `tmdb_credentials.py` file:
+   If you want to use the extracted TMDB PostgreSQL database, put a `tmdb_credentials.py` file in the workspace secrets folder `..\extra\cred\` (this project folder's own `cred\` also works):
    ```python
    import os
 
@@ -114,7 +114,7 @@ movies/
    DB_PASSWORD = os.getenv("DB_PASSWORD", "tmdb123!")
    ```
    
-   We've provided an example file at `cred/tmdb_credentials.example.py`. The `cred` directory is already in `.gitignore` to keep your credentials secure.
+   We've provided an example file at `cred/tmdb_credentials.example.py`. That folder is already in `.gitignore` to keep your credentials secure.
 
    You can also set these credentials via environment variables:
    - `DB_HOST`
