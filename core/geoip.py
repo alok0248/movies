@@ -1,6 +1,7 @@
 """IP geolocation: one path from an address to a saved location.
 
-ipwho.is is the source. Every address the site writes is converted here through
+ipwho.is is the source, and ip-api.com answers instead when ipwho.is rate-limits
+this host. Every address the site writes is converted here through
 ``ensure`` (core/signals.py calls it on save), so a visit, a download, an app
 attempt, an audit row and a blocked address all end up with the same answer in
 ``IPLocation`` -- and the admin pages read that saved answer instead of waiting on
@@ -23,7 +24,14 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 API_ROOT = 'https://ipwho.is/'
-# Where an admin is sent for an address ipwho.is has no saved answer for.
+# ipwho.is gives a shared host a few hundred calls and then answers 429 for the
+# rest of the period, so a refused lookup is retried at the free mirror before
+# the address is left without a country. Its answer is rewritten in the ipwho.is
+# shape, so a stored payload looks the same whichever source produced it.
+FALLBACK_ROOT = 'http://ip-api.com/json/'
+FALLBACK_FIELDS = ('status,message,country,countryCode,regionName,city,zip,lat,lon,'
+                   'timezone,isp,org,as,query')
+# Where an admin is sent for an address neither source has a saved answer for.
 EXTERNAL_ROOT = 'https://iplocation.io/ip/'
 CACHE_TTL = timedelta(days=30)
 # An address ipwho.is could not answer is retried after this rather than on
@@ -46,6 +54,57 @@ _lock = threading.Lock()
 
 def _text(value):
     return value if isinstance(value, str) else ''
+
+
+def _flag_emoji(code):
+    """The regional-indicator flag for a two-letter country code."""
+    code = (code or '').strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return ''
+    return ''.join(chr(0x1F1E6 + ord(ch) - ord('A')) for ch in code)
+
+
+def _fetch(url):
+    """JSON from one of the geo services."""
+    request = Request(url, headers={
+        'User-Agent': 'CineStream-admin/1.0', 'Accept': 'application/json'})
+    with urlopen(request, timeout=TIMEOUT) as response:
+        return json.loads(response.read().decode('utf-8', 'replace'))
+
+
+def _fallback(ip):
+    """An ipwho.is-shaped answer from ip-api.com, for a refused primary call."""
+    data = _fetch('%s%s?fields=%s' % (FALLBACK_ROOT, quote(ip, safe=''),
+                                      quote(FALLBACK_FIELDS, safe=',') ))
+    if not isinstance(data, dict) or data.get('status') != 'success':
+        message = _text(data.get('message')) if isinstance(data, dict) else ''
+        raise ValueError(message or 'ip-api.com returned no answer')
+    code = _text(data.get('countryCode')).upper()
+    asn = _text(data.get('as'))
+    number = asn.split(' ', 1)[0]
+    return {
+        'success': True,
+        'ip': ip,
+        'source': 'ip-api.com',
+        'country': _text(data.get('country')),
+        'country_code': code,
+        'region': _text(data.get('regionName')),
+        'city': _text(data.get('city')),
+        'postal': _text(data.get('zip')),
+        'latitude': data.get('lat'),
+        'longitude': data.get('lon'),
+        'flag': {
+            'emoji': _flag_emoji(code),
+            'img': ('https://flagcdn.com/w80/%s.png' % code.lower()) if code else '',
+        },
+        'connection': {
+            'isp': _text(data.get('isp')),
+            'org': _text(data.get('org')),
+            'domain': '',
+            'asn': int(number[2:]) if number[:2].upper() == 'AS' and number[2:].isdigit() else '',
+        },
+        'timezone': {'id': _text(data.get('timezone')), 'utc': ''},
+    }
 
 
 def address(ip):
@@ -209,25 +268,29 @@ def lookup(ip, force=False):
         return {'ok': False, 'ip': ip, 'error': 'No IP address to look up.'}
 
     row = IPLocation.objects.filter(ip=ip).first()
-    fresh = bool(row and (timezone.now() - row.fetched_at) < CACHE_TTL)
+    # Only an answer is cached for good: an address that failed is asked again on
+    # the next call, and ``ensure`` is what keeps that from becoming a loop.
+    fresh = bool(row and row.success and (timezone.now() - row.fetched_at) < CACHE_TTL)
     if row and fresh and not force:
         return row_summary(row)
 
+    data = None
     try:
-        request = Request(
-            API_ROOT + quote(ip, safe=''),
-            headers={'User-Agent': 'CineStream-admin/1.0', 'Accept': 'application/json'},
-        )
-        with urlopen(request, timeout=TIMEOUT) as response:
-            data = json.loads(response.read().decode('utf-8', 'replace'))
-    except Exception as exc:  # network, timeout, bad JSON, DNS
+        data = _fetch(API_ROOT + quote(ip, safe=''))
+    except Exception as exc:  # network, timeout, bad JSON, DNS, HTTP 429
         logger.warning('ipwho.is lookup failed for %s: %s', ip, exc)
-        if row is not None and row.payload:
-            fallback = row_summary(row)
-            fallback['stale'] = True
-            fallback['error'] = 'Lookup failed -- showing the last saved result.'
-            return fallback
-        return {'ok': False, 'ip': ip, 'error': 'Lookup failed. Try again in a moment.'}
+        try:
+            data = _fallback(ip)
+            logger.info('ipwho.is refused %s, ip-api.com answered it', ip)
+        except Exception as exc2:
+            logger.warning('ip-api.com lookup failed for %s: %s', ip, exc2)
+            if row is not None and row.payload:
+                fallback = row_summary(row)
+                fallback['stale'] = True
+                fallback['error'] = 'Lookup failed -- showing the last saved result.'
+                return fallback
+            return {'ok': False, 'ip': ip,
+                    'error': 'Lookup failed. Try again in a moment.'}
 
     summary = _store(ip, data)
     summary['ip'] = ip
