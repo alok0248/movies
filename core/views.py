@@ -11552,6 +11552,15 @@ def _sync_too_fast_response(retry_after):
     return response
 
 
+# Shipped offline-access policy: only a live subscription may keep using the app
+# without reaching the server, for 17 days after the last successful contact.
+OFFLINE_POLICY_DEFAULTS = {
+    'subscription_grace_days': 17,
+    'allow_guest_offline': False,
+    'allow_registered_offline': False,
+}
+
+
 def _remote_config_payload():
     """Server-driven app settings, read fresh on every sync.
 
@@ -11571,6 +11580,30 @@ def _remote_config_payload():
             return {}
         payload = conf.as_dict()
         payload.setdefault('version', conf.updated_at.isoformat(timespec='seconds'))
+        # Offline access: who may keep using the app while the server is
+        # unreachable, and for how long. The object is always served with the
+        # shipped defaults so the shape is discoverable, and an operator object
+        # in the stored payload wins key by key (a typo simply falls back).
+        offline = payload.get('offline')
+        if not isinstance(offline, dict):
+            offline = {}
+        for key, default in OFFLINE_POLICY_DEFAULTS.items():
+            value = offline.get(key, default)
+            if key == 'subscription_grace_days':
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    value = default
+                if value < 0:
+                    value = default
+            elif not isinstance(value, bool):
+                value = default
+            offline[key] = value
+        if isinstance(offline.get('message'), str):
+            offline['message'] = offline['message'].strip()
+        else:
+            offline.pop('message', None)
+        payload['offline'] = offline
         return payload
     except Exception:
         logger.debug('remote config unavailable', exc_info=True)
