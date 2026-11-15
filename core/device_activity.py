@@ -18,8 +18,8 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
-from .models import (DeviceOnlineDaily, DeviceOnlineState, HeartbeatActivity,
-                     UserHeartbeat)
+from .models import (AccountDevice, DeviceOnlineDaily, DeviceOnlineState,
+                     HeartbeatActivity, SyncedUser, UserHeartbeat)
 from .views import is_staff_or_superuser
 
 ONLINE_WINDOW = UserHeartbeat.ONLINE_WINDOW_SECONDS  # 180 s
@@ -248,6 +248,18 @@ def device_activity(request):
     live = {hb.device_id: hb for hb in
             UserHeartbeat.objects.exclude(device_id='')}
 
+    # The heartbeat carries the version the device is running right now; the
+    # account's device rows keep the last version it was seen with, and the
+    # synced profile is the last resort for devices that stopped reporting
+    # before heartbeats started recording one.
+    version_by_device = {}
+    for dev_id, version in AccountDevice.objects.exclude(app_version='') \
+            .values_list('device_id', 'app_version'):
+        version_by_device[dev_id] = version
+    version_by_email = {
+        email: (version, build) for email, version, build in
+        SyncedUser.objects.exclude(email='').values_list('email', 'app_version', 'build_number')}
+
     devices = []
     now = timezone.now()
     for state in states[:500]:
@@ -258,12 +270,19 @@ def device_activity(request):
         kind = state.device_type or classify_device(
             heartbeat.device_type if heartbeat else '',
             state.device_model or (heartbeat.device_model if heartbeat else ''))
+        app_version = (heartbeat.app_version if heartbeat else '') or ''
+        build_number = version_by_email.get(state.email, ('', 0))[1] or 0
+        if not app_version:
+            account_version = version_by_email.get(state.email, ('', 0))[0] or ''
+            app_version = version_by_device.get(state.device_id) or account_version
         devices.append({
             'device_id': state.device_id,
             'email': state.email,
             'device_type': kind,
             'device_type_label': {'tv': 'TV', 'phone': 'Phone'}.get(kind, 'Unknown'),
             'device_model': state.device_model or (heartbeat.device_model if heartbeat else ''),
+            'app_version': app_version,
+            'build_number': build_number,
             'last_seen_at': state.last_seen_at,
             'is_online': age <= ONLINE_WINDOW,
             'online_today': online_today,

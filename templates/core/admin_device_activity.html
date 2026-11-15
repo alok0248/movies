@@ -38,7 +38,7 @@
                 <table class="adm-table">
                     <thead>
                         <tr>
-                            <th>Status</th><th>Type</th><th>Device</th><th>Account</th><th>Now</th>
+                            <th>Status</th><th>Type</th><th>Device</th><th>App version</th><th>Account</th><th>Now</th>
                             <th class="num">Online today</th><th class="num">Offline today</th><th class="num">7 days</th><th class="num">30 days</th><th>Last seen</th><th></th>
                         </tr>
                     </thead>
@@ -57,6 +57,12 @@
                             <td>
                                 <span class="adm-mono">{{ device.device_id|truncatechars:18 }}</span>
                                 {% if device.device_model %}<div class="adm-sub">{{ device.device_model|truncatechars:22 }}</div>{% endif %}
+                            </td>
+                            <td>
+                                {% if device.app_version %}
+                                    <span class="adm-mono">{{ device.app_version }}</span>
+                                    {% if device.build_number %}<div class="adm-sub">build {{ device.build_number }}</div>{% endif %}
+                                {% else %}<span class="adm-sub">-</span>{% endif %}
                             </td>
                             <td>{{ device.email|default:"guest" }}</td>
                             <td>
