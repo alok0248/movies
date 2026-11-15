@@ -276,6 +276,22 @@
    a <script> inside HTML inserted with innerHTML never executes — so the
    numbers travel as a JSON data island and this one function draws them. It
    runs on load and again after every panel swap. */
+/* The shape of the chart is a reader preference, not server state: the server
+   only says what to start from (?cv=line), and switching redraws in place. */
+window.__dailyChartViewValue = null;
+window.__setDailyView = function (mode) {
+    window.__dailyChartViewValue = (mode === 'line') ? 'line' : 'bar';
+    document.querySelectorAll('[data-du-view]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-du-view') === window.__dailyChartViewValue);
+    });
+    try {
+        var u = new URL(window.location.href);
+        u.searchParams.set('cv', window.__dailyChartViewValue);
+        history.replaceState(null, '', u);
+    } catch (e) {}
+    window.__renderDailyChart();
+};
+
 window.__renderDailyChart = function () {
     var canvas = document.getElementById('dailyUsersChart');
     var labelsEl = document.getElementById('dailyUsersLabels');
@@ -309,51 +325,66 @@ window.__renderDailyChart = function () {
         g.addColorStop(1, 'rgba(251,191,36,.95)');
         return g;
     }
+    /* Two series, one chart, and the reader picks the shape: stacked bars
+       (the period as a single bar with its new slice inside) or two lines
+       (returning against new across the axis). Same numbers either way. */
+    if (!window.__dailyChartViewValue) {
+        var viewIsland = document.getElementById('dailyChartView');
+        try {
+            window.__dailyChartViewValue = viewIsland
+                ? (JSON.parse(viewIsland.textContent) || 'bar') : 'bar';
+        } catch (e) { window.__dailyChartViewValue = 'bar'; }
+    }
+    var view = window.__dailyChartViewValue || 'bar';
+    /* Keep the chips honest when the panel is swapped in again (the server
+       renders them from the URL, which may not carry the clicked shape). */
+    document.querySelectorAll('[data-du-view]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-du-view') === view);
+    });
+    var returning = values.map(function (v, i) {
+        return Math.max(0, v - (newValues[i] || 0));
+    });
+    var cappedNew = newValues.map(function (v, i) {
+        return Math.min(v, values[i] || 0);
+    });
+
+    var datasets = view === 'line'
+        ? [{
+            type: 'line', label: 'Returning users', data: returning,
+            borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.16)',
+            borderWidth: 2, tension: 0.35, pointRadius: 2, fill: true
+        }, {
+            type: 'line', label: 'New users', data: cappedNew,
+            borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,.12)',
+            borderWidth: 2, borderDash: [6, 4], tension: 0.35,
+            pointRadius: 2, fill: false
+        }]
+        : [{
+            label: 'Returning users', data: returning,
+            /* Built from the chart area, so it is the real height even
+               though the canvas is sized by CSS. */
+            backgroundColor: greenFill,
+            hoverBackgroundColor: '#4ade80',
+            borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 5, bottomRight: 5 },
+            borderSkipped: false, maxBarThickness: 30
+        }, {
+            label: 'New users', data: cappedNew,
+            backgroundColor: amberFill,
+            hoverBackgroundColor: '#fbbf24',
+            /* The rounded cap belongs to whichever slice is on top. */
+            borderRadius: { topLeft: 5, topRight: 5, bottomLeft: 0, bottomRight: 0 },
+            borderSkipped: false, maxBarThickness: 30
+        }];
+
     if (window.__dailyChart) {
         try { window.__dailyChart.destroy(); } catch (e) {}
         window.__dailyChart = null;
     }
     window.__dailyChart = new Chart(canvas.getContext('2d'), {
-        type: 'bar',
+        type: view === 'line' ? 'line' : 'bar',
         data: {
             labels: labels,
-            /* One bar per period: the returning part in green with the new
-               part stacked on top in amber, so the bar's height is still the
-               period's user count and the new slice is read inside it. */
-            datasets: [{
-                label: 'Returning users',
-                data: values.map(function (v, i) {
-                    return Math.max(0, v - (newValues[i] || 0));
-                }),
-                /* Built from the chart area, so it is the real height even
-                   though the canvas is sized by CSS. */
-                backgroundColor: greenFill,
-                hoverBackgroundColor: '#4ade80',
-                borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 5, bottomRight: 5 },
-                borderSkipped: false, maxBarThickness: 30
-            }, {
-                label: 'New users',
-                data: newValues.map(function (v, i) {
-                    return Math.min(v, values[i] || 0);
-                }),
-                backgroundColor: amberFill,
-                hoverBackgroundColor: '#fbbf24',
-                /* The rounded cap belongs to whichever slice is on top. */
-                borderRadius: { topLeft: 5, topRight: 5, bottomLeft: 0, bottomRight: 0 },
-                borderSkipped: false, maxBarThickness: 30
-            }, {
-                /* Registered users ride on the same axis as a line: they are a
-                   subset of the active bar, so stacking them would double the
-                   height, while a line reads as "how much of the bar is
-                   signed in" straight across the periods. */
-                type: 'line',
-                label: 'Registered',
-                data: regValues,
-                borderColor: '#38bdf8',
-                backgroundColor: 'rgba(56,189,248,.14)',
-                borderWidth: 2, tension: 0.35, pointRadius: 2, fill: false,
-                stack: undefined
-            }]
+            datasets: datasets
         },
         options: {
             responsive: true, maintainAspectRatio: false,
@@ -403,13 +434,13 @@ window.__renderDailyChart = function () {
             },
             scales: {
                 x: {
-                    stacked: true,
+                    stacked: view !== 'line',
                     grid: { display: false },
                     ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0,
                              autoSkip: true, maxTicksLimit: 12 }
                 },
                 y: {
-                    stacked: true, beginAtZero: true,
+                    stacked: view !== 'line', beginAtZero: true,
                     ticks: { color: '#94a3b8', font: { size: 10 }, precision: 0 },
                     grid: { color: 'rgba(148,163,184,.14)' }
                 }

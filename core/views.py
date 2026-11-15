@@ -4854,6 +4854,9 @@ def android_app_users_full(request, app_id):
         gran = (request.GET.get('g') or '').strip().lower()
         if gran not in ('hourly', 'daily', 'monthly', 'yearly'):
             gran = 'daily'
+        # Which shape the reader last picked; the chart redraws in place, this
+        # only decides what a fresh load starts with.
+        chart_view = 'line' if (request.GET.get('cv') or '').strip().lower() == 'line' else 'bar'
         metric = (request.GET.get('mu') or '').strip().lower()
         if metric not in ('active', 'new'):
             metric = 'active'
@@ -5195,6 +5198,7 @@ def android_app_users_full(request, app_id):
         ctx.update({
             'daily_gran': gran,
             'daily_metric': metric,
+            'daily_chart_view': chart_view,
             'daily_labels': labels,
             'daily_values': values,
             'daily_values_new': new_values,

@@ -41,10 +41,24 @@
 
     <div class="du-bar-row">
         <span class="sub me-1">Show by:</span>
-        <a class="fbtn {% if daily_gran == 'hourly' %}active{% endif %}" href="?tab=dailyusers&amp;g=hourly">Hourly</a>
-        <a class="fbtn {% if daily_gran == 'daily' %}active{% endif %}" href="?tab=dailyusers&amp;g=daily">Daily</a>
-        <a class="fbtn {% if daily_gran == 'monthly' %}active{% endif %}" href="?tab=dailyusers&amp;g=monthly">Monthly</a>
-        <a class="fbtn {% if daily_gran == 'yearly' %}active{% endif %}" href="?tab=dailyusers&amp;g=yearly">Yearly</a>
+        <a class="fbtn {% if daily_gran == 'hourly' %}active{% endif %}" href="?tab=dailyusers&amp;g=hourly&amp;cv={{ daily_chart_view }}">Hourly</a>
+        <a class="fbtn {% if daily_gran == 'daily' %}active{% endif %}" href="?tab=dailyusers&amp;g=daily&amp;cv={{ daily_chart_view }}">Daily</a>
+        <a class="fbtn {% if daily_gran == 'monthly' %}active{% endif %}" href="?tab=dailyusers&amp;g=monthly&amp;cv={{ daily_chart_view }}">Monthly</a>
+        <a class="fbtn {% if daily_gran == 'yearly' %}active{% endif %}" href="?tab=dailyusers&amp;g=yearly&amp;cv={{ daily_chart_view }}">Yearly</a>
+
+        <span class="sub ms-auto me-1">Chart:</span>
+        <a class="fbtn {% if daily_chart_view == 'bar' %}active{% endif %}" data-du-view="bar"
+           href="?tab=dailyusers&amp;g={{ daily_gran }}&amp;cv=bar"
+           onclick="window.__setDailyView('bar'); return false;"
+           title="One stacked bar per period: returning users in green with new users inside">
+            <i class="fas fa-chart-column me-1"></i>Bars
+        </a>
+        <a class="fbtn {% if daily_chart_view == 'line' %}active{% endif %}" data-du-view="line"
+           href="?tab=dailyusers&amp;g={{ daily_gran }}&amp;cv=line"
+           onclick="window.__setDailyView('line'); return false;"
+           title="Two lines: returning users and new users across the axis">
+            <i class="fas fa-chart-line me-1"></i>Lines
+        </a>
     </div>
 
     <div class="du-tiles">
@@ -210,3 +224,4 @@
     {{ daily_values|json_script:"dailyUsersValues" }}
     {{ daily_values_new|json_script:"dailyUsersValuesNew" }}
     {{ daily_values_registered|json_script:"dailyUsersValuesRegistered" }}
+    {{ daily_chart_view|json_script:"dailyChartView" }}
