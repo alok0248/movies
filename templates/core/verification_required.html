@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Verify your email{% endblock %}
+
+{% block content %}
+<style>
+    .verify-gate-wrap {
+        max-width: 540px;
+        margin: 2.5rem auto 4rem;
+        padding: 0 1rem;
+    }
+    .verify-gate-card {
+        background: rgba(255, 255, 255, .04);
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 18px;
+        padding: 2rem 1.75rem;
+        text-align: center;
+    }
+    .verify-gate-icon {
+        width: 68px;
+        height: 68px;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.7rem;
+        color: var(--brand-color, #e50914);
+        background: rgba(229, 9, 20, .12);
+    }
+    .verify-gate-card h1 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin-bottom: .5rem;
+    }
+    .verify-gate-card .verify-gate-lead {
+        color: var(--text-muted, #9aa0a6);
+        font-size: .95rem;
+        line-height: 1.6;
+        margin-bottom: 1.25rem;
+    }
+    .verify-gate-email {
+        display: inline-block;
+        font-weight: 600;
+        color: inherit;
+        word-break: break-all;
+    }
+    .verify-gate-form {
+        display: flex;
+        flex-direction: column;
+        gap: .85rem;
+        margin-top: 1rem;
+    }
+    .verify-gate-input {
+        width: 100%;
+        padding: .85rem 1rem;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, .18);
+        background: rgba(0, 0, 0, .25);
+        color: inherit;
+        font-size: 1.1rem;
+        font-weight: 600;
+        letter-spacing: .35em;
+        text-align: center;
+    }
+    .verify-gate-btn {
+        width: 100%;
+        padding: .85rem 1rem;
+        border: none;
+        border-radius: 12px;
+        background: var(--brand-color, #e50914);
+        color: #fff;
+        font-weight: 700;
+        font-size: .98rem;
+        cursor: pointer;
+    }
+    .verify-gate-btn:disabled { opacity: .6; cursor: default; }
+    .verify-gate-note {
+        margin-top: 1rem;
+        font-size: .85rem;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .verify-gate-link {
+        color: var(--brand-color, #e50914);
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .verify-gate-msg {
+        display: none;
+        margin-top: 1rem;
+        padding: .7rem .9rem;
+        border-radius: 10px;
+        font-size: .88rem;
+        line-height: 1.5;
+    }
+    .verify-gate-msg.is-error { display: block; background: rgba(229, 9, 20, .14); color: #ff8b8b; }
+    .verify-gate-msg.is-success { display: block; background: rgba(46, 204, 113, .14); color: #6ee7a8; }
+    .verify-gate-msg.is-info { display: block; background: rgba(255, 255, 255, .08); color: var(--text-muted, #cfd2d6); }
+</style>
+
+<div class="verify-gate-wrap">
+    <div class="verify-gate-card">
+        <div class="verify-gate-icon"><i class="fas fa-envelope-circle-check"></i></div>
+        <h1>Verify your email to continue</h1>
+        <p class="verify-gate-lead">
+            Your account for <span class="verify-gate-email">{{ user.email|default:"this address" }}</span>
+            has not been confirmed yet. Enter the 6-digit code we emailed you and you will be
+            signed in to the rest of the site. Nothing else is available until then.
+        </p>
+
+        <form class="verify-gate-form" onsubmit="return submitVerifyGate(event)">
+            {% csrf_token %}
+            <input type="text" class="verify-gate-input" id="gateOtp"
+                   placeholder="6-digit code" required maxlength="6"
+                   inputmode="numeric" autocomplete="one-time-code">
+            <button type="submit" class="verify-gate-btn" id="gateVerifyBtn">Verify and continue</button>
+        </form>
+
+        <div class="verify-gate-msg" id="gateMessage"></div>
+
+        <p class="verify-gate-note">
+            Didn't get the code?
+            <a class="verify-gate-link" onclick="resendVerifyGate()">Send a new one</a>
+        </p>
+        <p class="verify-gate-note">
+            <a class="verify-gate-link" href="/ajax/logout/">Sign out</a>
+        </p>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var email = "{{ user.email|escapejs }}";
+        var otp = document.getElementById('gateOtp');
+        var token = document.querySelector('.verify-gate-form [name=csrfmiddlewaretoken]');
+        if (otp) setTimeout(function () { otp.focus(); }, 120);
+
+        function say(text, kind) {
+            var box = document.getElementById('gateMessage');
+            box.textContent = text;
+            box.className = 'verify-gate-msg is-' + (kind || 'info');
+        }
+
+        window.submitVerifyGate = function (event) {
+            event.preventDefault();
+            var value = (otp.value || '').trim();
+            if (!value) { say('Enter the code from the email we sent you.', 'error'); return false; }
+            var btn = document.getElementById('gateVerifyBtn');
+            if (btn) btn.disabled = true;
+            var body = new FormData();
+            body.append('csrfmiddlewaretoken', token.value);
+            body.append('email', email);
+            body.append('otp', value);
+            fetch('{% url "ajax_verify_email_otp" %}', { method: 'POST', body: body })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        say('Email verified. Taking you in…', 'success');
+                        window.location.href = '/';
+                        return;
+                    }
+                    if (btn) btn.disabled = false;
+                    say(data.message || 'That code did not work. Please try again.', 'error');
+                })
+                .catch(function () {
+                    if (btn) btn.disabled = false;
+                    say('Something went wrong. Please try again.', 'error');
+                });
+            return false;
+        };
+
+        window.resendVerifyGate = function () {
+            var body = new FormData();
+            body.append('csrfmiddlewaretoken', token.value);
+            body.append('email', email);
+            fetch('{% url "ajax_resend_verification" %}', { method: 'POST', body: body })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    say(data.message || 'We sent a new code if that address has an unverified account.',
+                        data.success ? 'success' : 'error');
+                })
+                .catch(function () { say('Something went wrong. Please try again.', 'error'); });
+        };
+    })();
+</script>
+{% endblock %}

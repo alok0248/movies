@@ -1,0 +1,269 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Get the Android app{% endblock %}
+
+{% block content %}
+{% with play_url="https://play.google.com/store/apps/details?id=com.aistudio.cinestream.vqdpmr&pcampaignid=web_share" %}
+<style>
+    .ga-page { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+
+    /* ---- Hero ---- */
+    .ga-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 22px;
+        padding: 2.5rem 2rem;
+        background:
+            radial-gradient(1100px 380px at 12% -10%, rgba(229, 9, 20, .35), transparent 62%),
+            linear-gradient(135deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
+        border: 1px solid rgba(255, 255, 255, .1);
+        display: flex;
+        align-items: center;
+        gap: 2.25rem;
+        flex-wrap: wrap;
+    }
+    .ga-hero-copy { flex: 1 1 340px; min-width: 280px; }
+    .ga-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--brand, #e50914);
+        background: rgba(229, 9, 20, .12);
+        border-radius: 999px;
+        padding: .32rem .7rem;
+        margin-bottom: 1rem;
+    }
+    .ga-title { font-size: clamp(1.7rem, 4vw, 2.5rem); font-weight: 800; line-height: 1.15; margin: 0 0 .7rem; }
+    .ga-title span { color: var(--brand, #e50914); }
+    .ga-lead { color: var(--text-muted, #9aa0a6); font-size: 1rem; line-height: 1.65; max-width: 46ch; margin: 0 0 1.4rem; }
+    .ga-cta-row { display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; }
+    .ga-play-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .7rem;
+        background: #111;
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 14px;
+        padding: .62rem 1.15rem;
+        text-decoration: none;
+        transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .ga-play-btn:hover { transform: translateY(-2px); background: #171717; box-shadow: 0 12px 26px rgba(0, 0, 0, .45); }
+    .ga-play-btn i { font-size: 1.65rem; }
+    .ga-play-btn .ga-play-txt { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+    .ga-play-btn .ga-play-small { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; opacity: .78; }
+    .ga-play-btn .ga-play-big { font-size: 1.02rem; font-weight: 700; }
+    .ga-meta { font-size: .82rem; color: var(--text-muted, #9aa0a6); }
+    .ga-meta b { color: inherit; }
+
+    /* ---- Phone mockup (pure CSS, no external art) ---- */
+    .ga-phone {
+        flex: 0 0 232px;
+        width: 232px;
+        height: 470px;
+        border-radius: 34px;
+        border: 8px solid #0c0c0f;
+        background: linear-gradient(160deg, #1b1d24, #0e1014);
+        box-shadow: 0 26px 60px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .06);
+        padding: .9rem .75rem;
+        position: relative;
+    }
+    .ga-phone::before {
+        content: '';
+        position: absolute;
+        top: 8px; left: 50%;
+        transform: translateX(-50%);
+        width: 74px; height: 14px;
+        border-radius: 999px;
+        background: #05050a;
+    }
+    .ga-phone-screen { height: 100%; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; gap: .5rem; padding-top: 1.4rem; }
+    .ga-poster {
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(229, 9, 20, .85), rgba(120, 8, 16, .9));
+        flex: 1 1 58%;
+        display: flex;
+        align-items: flex-end;
+        padding: .75rem;
+        color: #fff;
+        font-weight: 700;
+        font-size: .95rem;
+    }
+    .ga-strip { display: flex; gap: .4rem; }
+    .ga-thumb { flex: 1; height: 58px; border-radius: 9px; background: linear-gradient(135deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05)); }
+    .ga-thumb:nth-child(2) { background: linear-gradient(135deg, rgba(229, 9, 20, .5), rgba(255, 255, 255, .05)); }
+    .ga-thumb:nth-child(3) { background: linear-gradient(135deg, rgba(255, 255, 255, .1), rgba(229, 9, 20, .3)); }
+
+    /* ---- Sections ---- */
+    .ga-section-title { font-size: 1.15rem; font-weight: 700; margin: 2.75rem 0 1.1rem; }
+    .ga-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    .ga-card {
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(255, 255, 255, .085);
+        border-radius: 16px;
+        padding: 1.15rem 1.15rem 1.25rem;
+    }
+    .ga-card i { font-size: 1.35rem; color: var(--brand, #e50914); margin-bottom: .65rem; display: block; }
+    .ga-card h3 { font-size: .98rem; font-weight: 700; margin: 0 0 .35rem; }
+    .ga-card p { font-size: .87rem; line-height: 1.55; color: var(--text-muted, #9aa0a6); margin: 0; }
+
+    .ga-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; }
+    .ga-detail {
+        background: rgba(255, 255, 255, .035);
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: 14px;
+        padding: .9rem 1rem;
+    }
+    .ga-detail .ga-detail-k { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted, #9aa0a6); }
+    .ga-detail .ga-detail-v { font-size: .95rem; font-weight: 600; margin-top: .2rem; }
+
+    .ga-cta-band {
+        margin-top: 2.75rem;
+        border-radius: 20px;
+        padding: 2rem 1.75rem;
+        text-align: center;
+        background: linear-gradient(135deg, rgba(229, 9, 20, .18), rgba(255, 255, 255, .04));
+        border: 1px solid rgba(255, 255, 255, .1);
+    }
+    .ga-cta-band h2 { font-size: 1.3rem; font-weight: 800; margin: 0 0 .5rem; }
+    .ga-cta-band p { color: var(--text-muted, #9aa0a6); font-size: .92rem; margin: 0 0 1.2rem; }
+    .ga-cta-band .ga-cta-row { justify-content: center; }
+    .ga-note { margin-top: .9rem; font-size: .78rem; color: var(--text-muted, #9aa0a6); }
+
+    @media (max-width: 767.98px) {
+        .ga-hero { padding: 1.75rem 1.25rem; justify-content: center; text-align: center; }
+        .ga-hero-copy { text-align: center; }
+        .ga-lead { margin-left: auto; margin-right: auto; }
+        .ga-cta-row { justify-content: center; }
+        .ga-phone { flex-basis: 200px; width: 200px; height: 410px; }
+    }
+</style>
+
+<div class="ga-page">
+
+    <section class="ga-hero">
+        <div class="ga-hero-copy">
+            <span class="ga-eyebrow"><i class="fab fa-google-play"></i> Now on Google Play</span>
+            <h1 class="ga-title">Take {{ site_settings.brand_name|default:"CineStream" }} <span>everywhere</span></h1>
+            <p class="ga-lead">
+                Movies, TV shows and live channels in an app built for your phone. Install it free
+                from Google Play, sign in with the same account you use here, and your watchlist,
+                history and playback position follow you between the phone and the browser.
+            </p>
+            <div class="ga-cta-row">
+                <a class="ga-play-btn" href="{{ play_url }}" target="_blank" rel="noopener"
+                   aria-label="Get the app on Google Play">
+                    <i class="fab fa-google-play" aria-hidden="true"></i>
+                    <span class="ga-play-txt">
+                        <span class="ga-play-small">Get it on</span>
+                        <span class="ga-play-big">Google Play</span>
+                    </span>
+                </a>
+                <span class="ga-meta"><b>Free</b> · Android 6.0+</span>
+            </div>
+        </div>
+
+        <div class="ga-phone" aria-hidden="true">
+            <div class="ga-phone-screen">
+                <div class="ga-poster">Trending now</div>
+                <div class="ga-strip">
+                    <div class="ga-thumb"></div>
+                    <div class="ga-thumb"></div>
+                    <div class="ga-thumb"></div>
+                </div>
+                <div class="ga-strip">
+                    <div class="ga-thumb"></div>
+                    <div class="ga-thumb"></div>
+                    <div class="ga-thumb"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <h2 class="ga-section-title">What you get</h2>
+    <div class="ga-grid">
+        <div class="ga-card">
+            <i class="fas fa-film" aria-hidden="true"></i>
+            <h3>Everything in the catalogue</h3>
+            <p>The same movies, series and live TV you browse on the website, sized for a phone.</p>
+        </div>
+        <div class="ga-card">
+            <i class="fas fa-mobile-screen-button" aria-hidden="true"></i>
+            <h3>Built for small screens</h3>
+            <p>A tap-first layout, full-screen player and controls that stay out of the way.</p>
+        </div>
+        <div class="ga-card">
+            <i class="fas fa-cloud-arrow-down" aria-hidden="true"></i>
+            <h3>Downloads</h3>
+            <p>Save titles to your device and watch them without a steady connection.</p>
+        </div>
+        <div class="ga-card">
+            <i class="fas fa-rotate" aria-hidden="true"></i>
+            <h3>Resume anywhere</h3>
+            <p>Start on the phone, finish in the browser. Progress and watchlist stay in step.</p>
+        </div>
+        <div class="ga-card">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <h3>New-episode alerts</h3>
+            <p>Notified when something you follow lands, so you never miss a release.</p>
+        </div>
+        <div class="ga-card">
+            <i class="fas fa-shield-halved" aria-hidden="true"></i>
+            <h3>One secure account</h3>
+            <p>The same sign-in as the website, and your email has to be confirmed first.</p>
+        </div>
+    </div>
+
+    <h2 class="ga-section-title">App details</h2>
+    <div class="ga-details">
+        <div class="ga-detail">
+            <div class="ga-detail-k">Platform</div>
+            <div class="ga-detail-v">Android</div>
+        </div>
+        <div class="ga-detail">
+            <div class="ga-detail-k">Requires</div>
+            <div class="ga-detail-v">Android 6.0 and up</div>
+        </div>
+        <div class="ga-detail">
+            <div class="ga-detail-k">Price</div>
+            <div class="ga-detail-v">Free</div>
+        </div>
+        <div class="ga-detail">
+            <div class="ga-detail-k">Category</div>
+            <div class="ga-detail-v">Entertainment</div>
+        </div>
+        <div class="ga-detail">
+            <div class="ga-detail-k">Offered by</div>
+            <div class="ga-detail-v">AI Studio</div>
+        </div>
+        <div class="ga-detail">
+            <div class="ga-detail-k">Source</div>
+            <div class="ga-detail-v">Google Play</div>
+        </div>
+    </div>
+
+    <section class="ga-cta-band">
+        <h2>Ready when you are</h2>
+        <p>Install the app now. It is free, and it uses the account you already have.</p>
+        <div class="ga-cta-row">
+            <a class="ga-play-btn" href="{{ play_url }}" target="_blank" rel="noopener"
+               aria-label="Get the app on Google Play">
+                <i class="fab fa-google-play" aria-hidden="true"></i>
+                <span class="ga-play-txt">
+                    <span class="ga-play-small">Get it on</span>
+                    <span class="ga-play-big">Google Play</span>
+                </span>
+            </a>
+        </div>
+        <p class="ga-note">Opens the Google Play Store listing in a new tab.</p>
+    </section>
+
+</div>
+{% endwith %}
+{% endblock %}

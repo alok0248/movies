@@ -2231,6 +2231,11 @@ class UserProfile(models.Model):
     language = models.CharField(max_length=10, blank=True, default='en')
     notifications_email = models.BooleanField(default=True)
     notifications_new_content = models.BooleanField(default=True)
+    # Set once the emailed code has been confirmed. Server-side only: nothing a
+    # browser sends can set it, and no account signs in while it is false (see
+    # core/email_verification.py).
+    email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

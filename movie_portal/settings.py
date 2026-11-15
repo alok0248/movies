@@ -73,6 +73,9 @@ MIDDLEWARE = [
     # Counts failed Django-admin sign-ins (needs request.user, so it sits
     # after AuthenticationMiddleware).
     'core.middleware.AdminLoginThrottleMiddleware',
+    # Show an unconfirmed account only the confirmation screen. Must sit before
+    # the browse gate below, which is about anonymous visitors.
+    'core.middleware.EmailVerificationMiddleware',
     # Site-wide "sign in to browse" gate (off unless an admin turns it on).
     'core.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

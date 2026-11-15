@@ -634,6 +634,71 @@ class AdminLoginThrottleMiddleware:
         return response
 
 
+class EmailVerificationMiddleware:
+    """Show an unconfirmed account nothing but the confirmation screen.
+
+    Signing in is what sets the session cookie, and both registration flows
+    leave a new account inactive until the mailed code is typed back, so in the
+    ordinary course an unconfirmed account cannot sign in at all. This is the
+    backstop for the other ways a session can exist — an administrator
+    switching an account on by hand, or a confirmation being withdrawn — and it
+    is what makes the rule hold for *every* page instead of only the sign-in
+    form.
+
+    Until the address is confirmed the visitor gets the confirmation screen and
+    nothing else: the code box, a way to ask for a new code, and the sign-in /
+    registration forms. Staff and superusers are exempt, because their mailbox
+    may be gone and the dashboard must always open; the machine surfaces — the
+    app's /api/, Django's own admin, static and media files, and the sign-in
+    endpoints the screen itself posts to — pass straight through, so nothing
+    else is disturbed.
+
+    Runs after AuthenticationMiddleware, so request.user is already resolved,
+    and before LoginRequiredMiddleware, so a half-registered visitor is shown
+    the confirmation screen rather than the "sign in to browse" prompt.
+    """
+
+    # Reached even while unconfirmed, matched on the start of the path. The
+    # sign-in, registration, OTP and resend endpoints all live under /ajax/,
+    # so the confirmation screen could not work without it.
+    OPEN_PREFIXES = (
+        '/ajax/', '/api/', '/admin/', '/static/', '/media/',
+        '/login/', '/logout/', '/reset-password/',
+        '/favicon.ico', '/robots.txt', '/sitemap.xml', '/manifest.json',
+        '/sw.js', '/service-worker.js',
+        # The install page asks for no account at all.
+        '/get-app/',
+    )
+    # A page that asks for one of its own parts (the dashboard's tab strips and
+    # other fragment loads) must not be answered with the full screen.
+    OPEN_PARAMS = ('partial',)
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, 'user', None)
+        if user is None or not user.is_authenticated:
+            return self.get_response(request)
+        if getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False):
+            return self.get_response(request)
+
+        from .email_verification import needs_email_verification
+
+        # needs_email_verification() answers "no" for an unauthenticated user
+        # and fails closed (treats an unreadable profile as unconfirmed), so
+        # this never needs its own exception handling.
+        if not needs_email_verification(user):
+            return self.get_response(request)
+        if request.path_info.startswith(self.OPEN_PREFIXES):
+            return self.get_response(request)
+        if any(param in request.GET for param in self.OPEN_PARAMS):
+            return self.get_response(request)
+
+        from django.shortcuts import render
+        return render(request, 'core/verification_required.html', status=403)
+
+
 class LoginRequiredMiddleware:
     """Hold back every page until the visitor signs in.
 
@@ -657,6 +722,9 @@ class LoginRequiredMiddleware:
         '/api/', '/admin/', '/static/', '/media/',
         '/sw.js', '/robots.txt', '/sitemap.xml', '/favicon.ico',
         '/manifest.json', '/service-worker.js',
+        # The Android app's install page is deliberately public: the app has to
+        # be clickable to be installed, and nobody signs in to read about it.
+        '/get-app/',
     )
     # Query flags that mean "this request is the sign-in prompt".
     OPEN_FLAGS = ('login_required', 'register')

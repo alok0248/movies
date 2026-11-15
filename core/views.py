@@ -6334,6 +6334,23 @@ def android_app_endpoint(request, app_slug):
     return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
 
 
+def _verification_required_response(django_user):
+    """Answer a visitor whose password is right but whose address is not confirmed.
+
+    No session is created. Until the address is confirmed the account cannot
+    reach any page at all (see EmailVerificationMiddleware), so signing it in
+    would only hand out a session that shows nothing.
+    """
+    return JsonResponse({
+        'success': False,
+        'message': 'verify_email',
+        'detail': ('Your email address has not been verified yet. Enter the code '
+                   'we emailed you, or ask us to send a new one.'),
+        'email': django_user.email,
+        'requires_verification': True,
+    })
+
+
 def ajax_login(request):
     if request.method == 'POST':
         username = request.POST.get('username', '')
@@ -6348,14 +6365,33 @@ def ajax_login(request):
             _auth_rate_limit_record(request, 'web_login', identifier)
             return _auth_rate_limit_error(request, 'web_login', identifier) or JsonResponse(payload)
 
+        from .email_verification import needs_email_verification
+
         # Try standard auth first
         user = authenticate(request, username=username, password=password)
         if user:
+            # Correct password, but the address may still be unconfirmed. Such
+            # an account is not signed in: it is shown the confirmation screen
+            # instead of a session it could not use.
+            if needs_email_verification(user):
+                return _verification_required_response(user)
             _auth_rate_limit_reset(request, 'web_login', identifier)
             login(request, user)
             _record_session(user, 'web', request)
             _lift_block_after_auth(request)
             return JsonResponse({'success': True, 'message': 'Login successful'})
+        # ModelBackend refuses an inactive account *before* it looks at the
+        # password, so an unconfirmed account produces the same blank answer as
+        # a wrong password. Read the row directly instead, and only speak up
+        # when the password is in fact right, so the visitor is told what is
+        # actually wrong instead of guessing.
+        if password:
+            candidate = User.objects.filter(username__iexact=username).first()
+            if candidate is None and '@' in username:
+                candidate = User.objects.filter(email__iexact=username).first()
+            if (candidate is not None and candidate.check_password(password)
+                    and needs_email_verification(candidate)):
+                return _verification_required_response(candidate)
         # If no password provided, try email-based login for synced users
         if not password and '@' in username:
             try:
@@ -6366,6 +6402,8 @@ def ajax_login(request):
                     if new_pass and len(new_pass) >= 6:
                         user.set_password(new_pass)
                         user.save()
+                        if needs_email_verification(user):
+                            return _verification_required_response(user)
                         _auth_rate_limit_reset(request, 'web_login', identifier)
                         login(request, user)
                         _record_session(user, 'web', request)
@@ -6543,9 +6581,11 @@ def verify_email(request):
         return render(request, 'core/email_verified.html', {'success': False, 'message': 'Verification link has expired. Please register again.'})
     ev.verified = True
     ev.save(update_fields=['verified'])
+    from .email_verification import mark_email_verified
     try:
         ev.user.is_active = True
         ev.user.save(update_fields=['is_active'])
+        mark_email_verified(ev.user)
     except Exception:
         pass  # user may have been deleted
     return render(request, 'core/email_verified.html', {'success': True, 'message': 'Email verified successfully! You can now login.'})
@@ -6606,6 +6646,8 @@ def ajax_verify_email_otp(request):
     ev.save(update_fields=['verified'])
     django_user.is_active = True
     django_user.save(update_fields=['is_active'])
+    from .email_verification import mark_email_verified
+    mark_email_verified(django_user)
     return JsonResponse({'success': True, 'message': 'Email verified successfully! You can now login.'})
 
 
@@ -12200,6 +12242,17 @@ def api_user_login(request):
     if not auth_user:
         return _failed() or JsonResponse({'status': 'error', 'message': 'Invalid password'}, status=401)
 
+    # Correct password, but the address may never have been confirmed — an
+    # account an administrator switched on by hand, for instance. The same
+    # answer the inactive case gives, so the app shows its verification screen.
+    from .email_verification import needs_email_verification
+    if needs_email_verification(auth_user):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Email not verified. Please check your inbox for the verification code.',
+            'requiresVerification': True,
+        }, status=403)
+
     # Success — reset rate limits
     reset_rate_limit(ip, 'login')
     reset_rate_limit(email, 'login_email')
@@ -13117,9 +13170,11 @@ def api_user_verify_email(request):
         return JsonResponse({'status': 'success', 'message': 'Email already verified. You can now login.'})
     ev.verified = True
     ev.save(update_fields=['verified'])
+    from .email_verification import mark_email_verified
     try:
         ev.user.is_active = True
         ev.user.save(update_fields=['is_active'])
+        mark_email_verified(ev.user)
     except Exception:
         pass  # user may have been deleted
     return JsonResponse({'status': 'success', 'message': 'Email verified successfully! You can now login.'})
@@ -14894,7 +14949,16 @@ def ajax_record_play_progress(request):
 def user_profile(request):
     """User profile edit page."""
     from .models import UserProfile
-    profile, created = UserProfile.objects.get_or_create(user=request.user)
+    from .email_verification import is_email_verified
+    # This row is the flag that decides whether the account may sign in, so it
+    # is created already carrying the account's current state. Only a verified
+    # account ever reaches this view (the gate above turns the rest away), and
+    # creating it unverified would otherwise lock that user out on the very
+    # next request.
+    defaults = {}
+    if is_email_verified(request.user):
+        defaults = {'email_verified': True, 'email_verified_at': timezone.now()}
+    profile, created = UserProfile.objects.get_or_create(user=request.user, defaults=defaults)
 
     if request.method == 'POST':
         # Basic info

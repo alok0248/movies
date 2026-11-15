@@ -1719,6 +1719,11 @@
                             </li>
                         {% endif %}
                     {% endfor %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'get_app' %}" title="Install the Android app from Google Play">
+                            <i class="fab fa-google-play"></i> Get the App
+                        </a>
+                    </li>
                     {% if user.is_staff or user.is_superuser %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'navbar_item_list' %}" title="Manage navigation menu items" style="color:var(--brand, #e50914);">
@@ -3777,6 +3782,21 @@
                     // Android-synced user needs to set a password
                     showMessage('loginMessage', '📱 ' + (data.detail || 'Please set a password for your account.'), 'info');
                     setTimeout(() => { switchAuthForm('register'); }, 1500);
+                } else if (data.requires_verification) {
+                    // The password was right, but the address is not confirmed
+                    // yet, so no session was created. Hand the visitor the code
+                    // box with their address already filled in.
+                    window._verifyEmail = data.email || formData.get('username') || '';
+                    showMessage('loginMessage', data.detail || 'Please verify your email address to continue.', 'info');
+                    setTimeout(() => {
+                        const emailField = document.getElementById('verifyEmail');
+                        if (emailField) emailField.value = window._verifyEmail;
+                        const sub = document.getElementById('verifySubtitle');
+                        if (sub) sub.textContent = 'Enter the 6-digit code sent to ' + window._verifyEmail;
+                        switchAuthForm('verify');
+                        const otpInput = document.getElementById('verifyOtpCode');
+                        if (otpInput) setTimeout(() => otpInput.focus(), 100);
+                    }, 1200);
                 } else {
                     showMessage('loginMessage', data.message, 'error');
                 }
