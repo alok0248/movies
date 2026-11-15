@@ -4228,9 +4228,20 @@ def android_app_dashboard(request, app_id=None):
         failed_attempts = selected_app.failed_attempts.all()[:5]
         
         # Get unique visitor data
-        unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
+        unique_logs = list(selected_app.daily_unique_visitors.order_by('access_date'))
         unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
         unique_chart_values = [log.unique_visitor_count for log in unique_logs]
+
+        # How many of each day's users the app was seeing for the first time.
+        # Counted per first_seen_at date and aligned to the visitor axis, so the
+        # two lines share an x axis and a quiet day reads as zero.
+        from django.db.models.functions import TruncDate as _TruncDate
+        new_by_day = {}
+        for row in (selected_app.devices.annotate(d=_TruncDate('first_seen_at'))
+                    .values('d').annotate(n=Count('id')).order_by()):
+            if row['d'] is not None:
+                new_by_day[row['d']] = row['n']
+        unique_new_values = [new_by_day.get(log.access_date, 0) for log in unique_logs]
         
         # Recent devices and visits moved to the full-screen user/device page,
         # so this dashboard no longer loads either list.
@@ -4336,6 +4347,7 @@ def android_app_dashboard(request, app_id=None):
         'chart_values_json': json.dumps(chart_values),
         'unique_chart_labels_json': json.dumps(unique_chart_labels),
         'unique_chart_values_json': json.dumps(unique_chart_values),
+        'unique_new_chart_values_json': json.dumps(unique_new_values),
         'build_chart_labels_json': json.dumps(build_chart_labels),
         'build_chart_values_json': json.dumps(build_chart_values),
         'build_summary': build_summary,
@@ -5304,9 +5316,18 @@ def ajax_android_app_dashboard(request, app_id):
     # The devices / visits lists these polls used to carry are gone from the
     # page (and their full_request dumps are the bulkiest part of the payload),
     # so the poll only sends what the dashboard still renders.
-    unique_logs = selected_app.daily_unique_visitors.order_by('access_date')
+    unique_logs = list(selected_app.daily_unique_visitors.order_by('access_date'))
     unique_chart_labels = [log.access_date.strftime('%Y-%m-%d') for log in unique_logs]
     unique_chart_values = [log.unique_visitor_count for log in unique_logs]
+
+    # Same alignment as the page render: new devices per day, keyed by date.
+    from django.db.models.functions import TruncDate as _TruncDate
+    new_by_day = {}
+    for row in (selected_app.devices.annotate(d=_TruncDate('first_seen_at'))
+                .values('d').annotate(n=Count('id')).order_by()):
+        if row['d'] is not None:
+            new_by_day[row['d']] = row['n']
+    unique_new_values = [new_by_day.get(log.access_date, 0) for log in unique_logs]
 
     return JsonResponse({
         'total_connections': selected_app.total_connections,
@@ -5315,6 +5336,7 @@ def ajax_android_app_dashboard(request, app_id):
         'chart_values': chart_values,
         'unique_chart_labels': unique_chart_labels,
         'unique_chart_values': unique_chart_values,
+        'unique_new_chart_values': unique_new_values,
         'build_chart_labels': build_chart_labels,
         'build_chart_values': build_chart_values,
         'failed_attempts': failed_attempts,

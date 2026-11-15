@@ -800,6 +800,7 @@ function initializeCharts() {
     const dailyValues = {{ chart_values_json|safe }};
     const uniqueLabels = {{ unique_chart_labels_json|safe }};
     const uniqueValues = {{ unique_chart_values_json|safe }};
+    const uniqueNewValues = {{ unique_new_chart_values_json|safe }};
     const buildLabels = {{ build_chart_labels_json|safe }};
     const buildValues = {{ build_chart_values_json|safe }};
 
@@ -813,7 +814,12 @@ function initializeCharts() {
     if (document.getElementById('dailyUniqueVisitorsChart')) {
         uniqueChart = new Chart(document.getElementById('dailyUniqueVisitorsChart'), {
             type: 'line',
-            data: { labels: uniqueLabels, datasets: [{ label: 'Unique Visitors', data: uniqueValues, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.18)', fill: true, tension: 0.35, pointRadius: 3 }] },
+            /* Two lines on one axis: everyone seen that day, and the part of
+               that audience the app was seeing for the first time. */
+            data: { labels: uniqueLabels, datasets: [
+                { label: 'Users', data: uniqueValues, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.18)', fill: true, tension: 0.35, pointRadius: 3 },
+                { label: 'New users', data: uniqueNewValues, borderColor: '#fbbf24', backgroundColor: 'rgba(251, 191, 36, 0.16)', fill: true, tension: 0.35, pointRadius: 3, borderDash: [5, 4] }
+            ] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks: { color: chartText }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } } } }
         });
     }
@@ -846,6 +852,9 @@ function updateDashboard(data) {
     if (uniqueChart) {
         uniqueChart.data.labels = data.unique_chart_labels;
         uniqueChart.data.datasets[0].data = data.unique_chart_values;
+        if (data.unique_new_chart_values && uniqueChart.data.datasets[1]) {
+            uniqueChart.data.datasets[1].data = data.unique_new_chart_values;
+        }
         uniqueChart.update();
     }
     if (buildChart) {
