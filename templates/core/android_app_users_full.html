@@ -265,20 +265,30 @@ window.__renderDailyChart = function () {
         type: 'bar',
         data: {
             labels: labels,
+            /* One bar per period: the returning part in green with the new
+               part stacked on top in amber, so the bar's height is still the
+               period's user count and the new slice is read inside it. */
             datasets: [{
-                label: 'Active users',
-                data: values,
+                label: 'Returning users',
+                data: values.map(function (v, i) {
+                    return Math.max(0, v - (newValues[i] || 0));
+                }),
                 /* Built from the chart area, so it is the real height even
                    though the canvas is sized by CSS. */
                 backgroundColor: greenFill,
                 hoverBackgroundColor: '#4ade80',
-                borderRadius: 5, borderSkipped: false, maxBarThickness: 26
+                borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 5, bottomRight: 5 },
+                borderSkipped: false, maxBarThickness: 30
             }, {
                 label: 'New users',
-                data: newValues,
+                data: newValues.map(function (v, i) {
+                    return Math.min(v, values[i] || 0);
+                }),
                 backgroundColor: amberFill,
                 hoverBackgroundColor: '#fbbf24',
-                borderRadius: 5, borderSkipped: false, maxBarThickness: 26
+                /* The rounded cap belongs to whichever slice is on top. */
+                borderRadius: { topLeft: 5, topRight: 5, bottomLeft: 0, bottomRight: 0 },
+                borderSkipped: false, maxBarThickness: 30
             }]
         },
         options: {
@@ -316,18 +326,23 @@ window.__renderDailyChart = function () {
                             var v = item.parsed.y;
                             return item.dataset.label + ': ' + v + (v === 1 ? ' user' : ' users');
                         },
-                        afterBody: function () { return 'Click to list these users'; }
+                        footer: function (items) {
+                            if (!items || !items.length) { return ''; }
+                            var i = items[0].dataIndex;
+                            return 'Total active: ' + ((values[i] || 0)) + '\nClick to list these users';
+                        }
                     }
                 }
             },
             scales: {
                 x: {
+                    stacked: true,
                     grid: { display: false },
                     ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0,
                              autoSkip: true, maxTicksLimit: 12 }
                 },
                 y: {
-                    beginAtZero: true,
+                    stacked: true, beginAtZero: true,
                     ticks: { color: '#94a3b8', font: { size: 10 }, precision: 0 },
                     grid: { color: 'rgba(148,163,184,.14)' }
                 }
