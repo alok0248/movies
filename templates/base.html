@@ -1587,6 +1587,172 @@
         select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
             outline: 2px solid var(--brand); outline-offset: 3px;
         }
+
+        /* ═══ SECTION IDENTITY ═══════════════════════════════════════════════
+           Movies, series, search, watch list and the rest used to open with the
+           same small heading on the same flat background, so every page read as
+           one template. Each section now carries a short identity band — an
+           eyebrow, a display title, a supporting line and its own accent wash.
+           The brand stays the anchor: the accent only tints the band, the
+           eyebrow, chips and hairlines, never the controls or the cards. */
+        :root {
+            --shadow-raise: 0 26px 60px -42px rgba(0,0,0,.9);
+            --shadow-soft: 0 1px 0 rgba(255,255,255,.05) inset, 0 18px 44px -34px rgba(0,0,0,.85);
+            --accent: var(--brand);
+            --accent-rgb: 229,9,20;
+            --accent-a: .16;
+        }
+        html[data-theme="light"] {
+            --shadow-raise: 0 26px 60px -46px rgba(16,24,40,.35);
+            --shadow-soft: 0 1px 0 rgba(255,255,255,.9) inset, 0 16px 40px -34px rgba(16,24,40,.32);
+            --accent-a: .12;
+        }
+
+        /* One accent per section — siblings sit on different hues so the
+           pages read apart, while every hue shares the same depth and weight. */
+        .section--movies     { --accent: #ff6a3d; --accent-rgb: 255,106,61; }
+        .section--series     { --accent: #e0559b; --accent-rgb: 224,85,155; }
+        .section--search     { --accent: #38bdf8; --accent-rgb: 56,189,248; }
+        .section--watchlist  { --accent: #fbbf24; --accent-rgb: 251,191,36; }
+        .section--live       { --accent: #ef4444; --accent-rgb: 239,68,68; }
+        .section--upcoming   { --accent: #22d3ee; --accent-rgb: 34,211,238; }
+        .section--calendar   { --accent: #818cf8; --accent-rgb: 129,140,248; }
+        .section--person     { --accent: #2dd4bf; --accent-rgb: 45,212,191; }
+        .section--collection { --accent: #f59e0b; --accent-rgb: 245,158,11; }
+        .section--movie      { --accent: #ff6a3d; --accent-rgb: 255,106,61; }
+        .section--tv         { --accent: #e0559b; --accent-rgb: 224,85,155; }
+
+        /* The identity band --------------------------------------------------- */
+        .section-hero {
+            position: relative; overflow: hidden; isolation: isolate;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            background: var(--bg-2);
+            box-shadow: var(--shadow-soft);
+            padding: clamp(1.3rem, 3vw, 2.3rem) clamp(1.2rem, 3vw, 2.4rem);
+            margin-bottom: 1.6rem;
+            animation: uiFadeUp .5s var(--ease-glide) backwards;
+        }
+        /* Layered light: an accent wash from the top-left plus a fine accent
+           rule along the top edge, both behind the content. */
+        .section-hero::before {
+            content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+            background:
+                radial-gradient(760px 260px at 0% -30%, rgba(var(--accent-rgb), calc(var(--accent-a) * 1.7)), transparent 70%),
+                linear-gradient(115deg, rgba(var(--accent-rgb), var(--accent-a)), transparent 58%);
+        }
+        .section-hero::after {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, rgba(var(--accent-rgb), .85), rgba(var(--accent-rgb), 0) 60%);
+        }
+
+        .sh-body { position: relative; z-index: 1; max-width: 780px; }
+        .sh-eyebrow {
+            display: inline-flex; align-items: center; gap: .5rem;
+            font-size: .68rem; font-weight: 800; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--accent);
+            margin-bottom: .6rem;
+        }
+        .sh-eyebrow::before {
+            content: ""; width: 18px; height: 2px; border-radius: 2px;
+            background: currentColor;
+        }
+        .sh-title {
+            font-size: clamp(1.5rem, 1.05rem + 2.3vw, 2.5rem);
+            font-weight: 800; line-height: 1.08; letter-spacing: -.032em;
+            color: var(--text); margin: 0 0 .5rem;
+        }
+        .sh-sub {
+            font-size: .9rem; line-height: 1.6; color: var(--text-2);
+            margin: 0; max-width: 64ch;
+        }
+        .sh-stats { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 1.05rem; }
+        .sh-chip {
+            display: inline-flex; align-items: center; gap: .45rem;
+            padding: .38rem .8rem; border-radius: 999px;
+            font-size: .76rem; font-weight: 600; color: var(--text-2);
+            background: rgba(255,255,255,.05); border: 1px solid var(--border);
+            transition: transform var(--motion-base) var(--ease-spring),
+                        border-color var(--motion-base) var(--ease-spring),
+                        color var(--motion-base) var(--ease-spring);
+        }
+        html[data-theme="light"] .sh-chip { background: rgba(0,0,0,.04); }
+        .sh-chip:hover { transform: translateY(-1px); color: var(--text); border-color: rgba(var(--accent-rgb), .5); }
+        .sh-chip b { color: var(--text); font-weight: 800; }
+        .sh-chip.is-live { color: #fff; background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.4); }
+        .sh-dot {
+            width: 7px; height: 7px; border-radius: 50%; background: #ef4444;
+            animation: shPulse 1.9s var(--ease-glide) infinite;
+        }
+        @keyframes shPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.55); }
+            70%  { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+        .sh-tabs { margin-top: 1.15rem; }
+
+        /* Section head — replaces the three different group titles that used to
+           sit above every grid with one consistent, accented row. */
+        .section-head {
+            display: flex; align-items: center; gap: .65rem;
+            margin: 1.8rem 0 .95rem;
+        }
+        .section-head .sh-icon {
+            width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+            display: grid; place-items: center; font-size: .78rem;
+            color: var(--accent); background: rgba(var(--accent-rgb), .12);
+            border: 1px solid rgba(var(--accent-rgb), .22);
+        }
+        .section-head .sh-label {
+            font-size: 1.02rem; font-weight: 700; letter-spacing: -.012em; color: var(--text);
+        }
+        .section-head .sh-line { flex: 1 1 auto; height: 1px; background: var(--border); }
+        .section-head .sh-count { font-size: .76rem; font-weight: 600; color: var(--text-3); }
+
+        /* Detail pages: an accent eyebrow, deeper info plates and a richer
+           hover on the related rail, so the article pages share the language. */
+        .det-eyebrow {
+            display: inline-flex; align-items: center; gap: .45rem;
+            font-size: .64rem; font-weight: 800; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--accent);
+            margin-bottom: .35rem;
+        }
+        .det-eyebrow::before {
+            content: ""; width: 14px; height: 2px; border-radius: 2px; background: currentColor;
+        }
+        body .det-section-head i { color: var(--accent); }
+        body .det-info-card { box-shadow: 0 1px 0 rgba(255,255,255,.035) inset, 0 16px 36px -32px rgba(0,0,0,.9); }
+        body .det-related-card { box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 18px 38px -30px rgba(0,0,0,.9); }
+        html[data-theme="light"] body .det-info-card { box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 14px 32px -30px rgba(16,24,40,.3); }
+        html[data-theme="light"] body .det-related-card { box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 16px 34px -28px rgba(16,24,40,.3); }
+
+        /* Grouped date plates (Upcoming) pick up the section accent too. */
+        body .date-header { border-left: 3px solid rgba(var(--accent-rgb), .75); }
+        body .date-indicator { background: var(--accent); }
+        body .section-subtitle i, body .search-section-title span { color: var(--accent); }
+
+        /* Calendar keeps its own centred, month-first header — nudged into
+           the same eyebrow/title language as the rest of the site. */
+        .cal-head { text-align: center; margin-bottom: 1rem; }
+        .cal-head .sh-eyebrow { margin-bottom: .2rem; }
+        .cal-head .sh-sub { margin: 0 auto; }
+
+        /* Empty states become a planned panel instead of stranded text. */
+        .empty-panel {
+            text-align: center; padding: clamp(2rem, 6vw, 3.5rem) 1.5rem;
+            border: 1px dashed var(--border); border-radius: var(--radius-lg);
+            background: var(--bg-2);
+        }
+        .empty-panel .ep-icon { font-size: 2.6rem; line-height: 1; margin-bottom: .9rem; color: var(--accent); }
+        .empty-panel .ep-title { font-size: 1.05rem; font-weight: 700; color: var(--text); margin: 0 0 .35rem; }
+        .empty-panel .ep-hint { font-size: .85rem; color: var(--text-2); margin: 0; }
+
+        @media (max-width: 768px) {
+            .section-hero { border-radius: var(--radius); margin-bottom: 1.15rem; }
+            .sh-title { margin-bottom: .4rem; }
+            .sh-stats { margin-top: .85rem; }
+            .section-head { margin: 1.35rem 0 .75rem; }
+        }
     </style>
 
     <!-- Google Identity Services — only loaded when the site offers Google sign-in -->
@@ -1932,6 +2098,8 @@
                         {% endif %}
                         
                     </div>
+                </div>
+            </div>
     </nav>
 
     {% if site_settings.require_login_to_browse and not user.is_authenticated %}

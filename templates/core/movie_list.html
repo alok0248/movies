@@ -4,18 +4,26 @@
 {% block title %}Movies – {{ site_settings.brand_name }}{% endblock %}
 
 {% block content %}
-<div class="catalog-shell">
+<div class="catalog-shell section--movies">
     <div class="catalog-layout">
         <main class="catalog-main">
-            <div class="catalog-toolbar">
-                <h1 class="catalog-heading">{% if genre_id %}{% for genre in all_genres %}{% if genre.name|lower == genre_id|lower %}{{ genre.name }} Movies{% endif %}{% endfor %}{% elif filter_type == 'popular' %}Popular Movies{% elif filter_type == 'upcoming' %}Upcoming Movies{% elif filter_type == 'top_rated' %}Top Rated Movies{% else %}Latest Movies{% endif %}</h1>
-                <nav class="catalog-filter-tabs" aria-label="Movie filters">
+            <section class="section-hero">
+                <div class="sh-body">
+                    <span class="sh-eyebrow">Catalogue · Movies</span>
+                    <h1 class="sh-title">{% if genre_id %}{% for genre in all_genres %}{% if genre.name|lower == genre_id|lower %}{{ genre.name }} Movies{% endif %}{% endfor %}{% elif filter_type == 'popular' %}Popular Movies{% elif filter_type == 'upcoming' %}Upcoming Movies{% elif filter_type == 'top_rated' %}Top Rated Movies{% else %}Latest Movies{% endif %}</h1>
+                    <p class="sh-sub">A curated shelf of films — filter by provider, country, genre or rating.</p>
+                    <div class="sh-stats">
+                        <span class="sh-chip"><b>{{ movies|length }}{% if has_next %}+{% endif %}</b> titles</span>
+                        <span class="sh-chip">Updated daily</span>
+                    </div>
+                    <nav class="catalog-filter-tabs sh-tabs" aria-label="Movie filters">
                     <a href="{% url 'movie_list' %}?{% if genre_id %}genre={{ genre_id }}&{% endif %}{% if provider_slug %}provider={{ provider_slug }}&{% endif %}{% if watch_region %}region={{ watch_region }}{% endif %}" class="filter-tab {% if not filter_type %}active{% endif %}">Latest</a>
                     <a href="{% url 'movie_list' %}?filter_type=popular{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'popular' %}active{% endif %}">Popular</a>
                     <a href="{% url 'movie_list' %}?filter_type=upcoming{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'upcoming' %}active{% endif %}">Coming Soon</a>
                     <a href="{% url 'movie_list' %}?filter_type=top_rated{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'top_rated' %}active{% endif %}">Top Rated</a>
                 </nav>
-            </div>
+                </div>
+            </section>
             <form method="get" class="catalog-filters">
                 {% if filter_type %}<input type="hidden" name="filter_type" value="{{ filter_type }}">{% endif %}
                 <input type="search" name="search" class="form-control search-input" placeholder="Search movies..." value="{{ search_query }}">

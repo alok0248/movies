@@ -97,7 +97,7 @@
 </style>
 
 <!-- Hero -->
-<div class="collection-hero">
+<div class="collection-hero section--collection">
     {% if collection.backdrop_path %}
     <div class="collection-hero-bg" style="background-image:url('https://image.tmdb.org/t/p/w1920{{ collection.backdrop_path }}')"></div>
     {% endif %}
@@ -107,6 +107,7 @@
         <img class="collection-poster" src="https://image.tmdb.org/t/p/w342{{ collection.poster_path }}" alt="{{ collection.name }}">
         {% endif %}
         <div class="collection-info">
+            <span class="sh-eyebrow">Collection</span>
             <h1>{{ collection.name }}</h1>
             <div class="count"><span>{{ movies|length }}</span> movies in this collection</div>
             {% if collection.overview %}
@@ -117,7 +118,7 @@
 </div>
 
 <!-- Movies Grid -->
-<div class="collection-movies">
+<div class="collection-movies section--collection">
     <div class="collection-grid">
         {% for movie in movies %}
         <a href="/movies/id/{{ movie.id }}/" class="coll-card" title="{{ movie.title }}">

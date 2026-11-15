@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Upcoming Releases - StreamFlix{% endblock %}
+{% block title %}Upcoming Releases – {{ site_settings.brand_name }}{% endblock %}
 
 {% block content %}
 <style>
@@ -77,21 +77,22 @@
 @media(max-width:480px) { .upcoming-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; } }
 </style>
 
-<div class="catalog-shell">
-    <div class="catalog-heading">Releases</div>
-
-    <!-- Date Navigation -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;flex-wrap:wrap;gap:1rem;">
-        <a href="{% url 'upcoming' %}?start={{ prev_start }}&end={{ prev_end }}" class="nav-date-btn">
-            &#8249; Previous 2 Months
-        </a>
-        <h3 style="font-size:1rem;font-weight:600;color:var(--text,#f0f0f5);margin:0;text-align:center;">
-            {{ start_date|date:"F d, Y" }} — {{ end_date|date:"F d, Y" }}
-        </h3>
-        <a href="{% url 'upcoming' %}?start={{ next_start }}&end={{ next_end }}" class="nav-date-btn">
-            Next 2 Months &#8250;
-        </a>
-    </div>
+<div class="catalog-shell section--upcoming">
+    <section class="section-hero">
+        <div class="sh-body">
+            <span class="sh-eyebrow">Release roadmap</span>
+            <h1 class="sh-title">Upcoming Releases</h1>
+            <p class="sh-sub">{{ start_date|date:"F j, Y" }} — {{ end_date|date:"F j, Y" }}</p>
+        </div>
+        <div class="sh-stats">
+            <a href="{% url 'upcoming' %}?start={{ prev_start }}&end={{ prev_end }}" class="nav-date-btn">
+                &#8249; Previous 2 Months
+            </a>
+            <a href="{% url 'upcoming' %}?start={{ next_start }}&end={{ next_end }}" class="nav-date-btn">
+                Next 2 Months &#8250;
+            </a>
+        </div>
+    </section>
 
     <div id="upcomingContainer">
         {% for date, releases in grouped_releases.items %}
@@ -102,7 +103,7 @@
                 </div>
 
                 {% if releases.movies %}
-                    <div class="section-subtitle"><i class="fas fa-film"></i> Movies</div>
+                    <div class="section-head"><span class="sh-icon"><i class="fas fa-film"></i></span><span class="sh-label">Movies</span><span class="sh-line"></span><span class="sh-count">{{ releases.movies|length }}</span></div>
                     <div class="upcoming-grid">
                         {% for movie in releases.movies %}
                         <a href="{% if site_settings.url_format == 'id' %}/movies/id/{{ movie.id }}/{% else %}/movies/{{ movie.slug }}/{% endif %}" class="upcoming-card" title="{{ movie.title }}">
@@ -124,7 +125,7 @@
                 {% endif %}
 
                 {% if releases.series %}
-                    <div class="section-subtitle"><i class="fas fa-tv"></i> TV Series</div>
+                    <div class="section-head"><span class="sh-icon"><i class="fas fa-tv"></i></span><span class="sh-label">TV Series</span><span class="sh-line"></span><span class="sh-count">{{ releases.series|length }}</span></div>
                     <div class="upcoming-grid">
                         {% for s in releases.series %}
                         <a href="/series/id/{{ s.id }}/" class="upcoming-card" title="{{ s.title }}">
@@ -146,10 +147,10 @@
                 {% endif %}
             </div>
         {% empty %}
-            <div class="text-center mt-5" style="color:var(--text-3);">
-                <div style="font-size:3rem;margin-bottom:1rem;"><i class="fas fa-calendar-alt"></i></div>
-                <p style="font-size:1.1rem;">No releases found for this period</p>
-                <p style="font-size:.85rem;margin-top:.5rem;">Try navigating to another date range!</p>
+            <div class="empty-panel">
+                <div class="ep-icon"><i class="fas fa-calendar-alt"></i></div>
+                <p class="ep-title">No releases in this window</p>
+                <p class="ep-hint">Try navigating to another date range.</p>
             </div>
         {% endfor %}
     </div>

@@ -79,20 +79,23 @@
 }
 </style>
 
-<div class="catalog-shell">
-    <form method="get" action="{% url 'search' %}" class="search-box d-flex gap-2 mb-4" style="max-width:640px;" role="search">
+<div class="catalog-shell section--search">
+    <section class="section-hero">
+        <div class="sh-body">
+            <span class="sh-eyebrow">Discover</span>
+            <h1 class="sh-title">Search{% if search_query %}: “{{ search_query }}”{% endif %}</h1>
+            <p class="sh-sub">One box for the whole library — films and series together.</p>
+        </div>
+        <form method="get" action="{% url 'search' %}" class="search-box d-flex gap-2" style="max-width:640px;margin-top:1.1rem;position:relative;z-index:1;" role="search">
         <input id="pageSearchInput" class="form-control search-input" type="search" name="q" value="{{ search_query|default:'' }}" placeholder="Search movies &amp; TV series..." aria-label="Search" autocomplete="off" enterkeyhint="search">
         <button class="btn btn-primary px-4" type="submit" aria-label="Submit search">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
         </button>
-    </form>
-
-    <div class="catalog-heading">
-        Search{% if search_query %}: "<span>{{ search_query }}</span>"{% endif %}
-    </div>
+        </form>
+    </section>
 
     {% if movies %}
-    <h2 class="search-section-title">Movies</h2>
+    <div class="section-head"><span class="sh-icon"><i class="fas fa-film"></i></span><span class="sh-label">Movies</span><span class="sh-line"></span><span class="sh-count">{{ movies|length }}</span></div>
     <div class="search-grid">
         {% for movie in movies %}
         <a href="{% if site_settings.url_format == 'id' %}/movies/id/{{ movie.id }}/{% else %}/movies/{{ movie.slug }}/{% endif %}" class="search-card" title="{{ movie.title }}">
@@ -114,7 +117,7 @@
     {% endif %}
 
     {% if series %}
-    <h2 class="search-section-title">TV Series</h2>
+    <div class="section-head"><span class="sh-icon"><i class="fas fa-tv"></i></span><span class="sh-label">TV Series</span><span class="sh-line"></span><span class="sh-count">{{ series|length }}</span></div>
     <div class="search-grid">
         {% for s in series %}
         <a href="/series/id/{{ s.id }}/" class="search-card" title="{{ s.title }}">
@@ -136,17 +139,18 @@
     {% endif %}
 
     {% if not movies and not series and search_query %}
-    <div class="text-center mt-5" style="color:var(--text-3);">
-        <div style="font-size:3rem;margin-bottom:1rem;"><i class="fas fa-search"></i></div>
-        <p style="font-size:1.1rem;">No results found for "<strong style="color:var(--text);">{{ search_query }}</strong>"</p>
-        <p style="font-size:.85rem;margin-top:.5rem;">Try different keywords or check the spelling.</p>
+    <div class="empty-panel mt-4">
+        <div class="ep-icon"><i class="fas fa-search"></i></div>
+        <p class="ep-title">No results for “{{ search_query }}”</p>
+        <p class="ep-hint">Try different keywords, or check the spelling.</p>
     </div>
     {% endif %}
 
     {% if not search_query %}
-    <div class="text-center mt-5" style="color:var(--text-3);">
-        <div style="font-size:3rem;margin-bottom:1rem;">🎬</div>
-        <p style="font-size:1.1rem;">Search for movies and TV series</p>
+    <div class="empty-panel mt-4">
+        <div class="ep-icon">🎬</div>
+        <p class="ep-title">Search for movies and TV series</p>
+        <p class="ep-hint">Start typing a title above to see it here.</p>
     </div>
     {% endif %}
 </div>

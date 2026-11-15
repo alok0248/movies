@@ -1,23 +1,25 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container py-4 live-tv-page">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-        <div class="d-flex align-items-center gap-3">
-            <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#ef4444,#e50914);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.4rem;flex:0 0 auto;">
-                <i class="fas fa-tv"></i>
-            </div>
-            <div>
-                <h1 class="mb-0" style="font-size:1.5rem;font-weight:800;color:var(--text,#fff);">Live TV</h1>
-                <p class="mb-0 text-muted" style="font-size:.8rem;">Sample channel lineup — links open in a new tab</p>
+<div class="container py-4 live-tv-page section--live">
+    <section class="section-hero">
+        <div class="sh-body">
+            <span class="sh-eyebrow">Broadcast</span>
+            <h1 class="sh-title">Live TV</h1>
+            <p class="sh-sub">A sample channel lineup — every link opens in a new tab.</p>
+            <div class="sh-stats">
+                <span class="sh-chip is-live"><span class="sh-dot"></span>On air</span>
+                <span class="sh-chip"><b>{{ channels|length }}{% if has_next %}+{% endif %}</b> channels</span>
             </div>
         </div>
-        {% if has_next %}
+    </section>
+    {% if has_next %}
+    <div class="d-flex justify-content-end mb-2">
         <button type="button" class="btn btn-sm btn-outline-light" id="loadMoreBtn" style="border-radius:50px;padding:.45rem 1.1rem;font-size:.8rem;">
             <i class="fas fa-chevron-down me-1"></i> Load More
         </button>
-        {% endif %}
     </div>
+    {% endif %}
 
     <div class="movie-grid" id="channelsContainer">
         {% include 'core/_channel_cards.html' with channels=channels %}

@@ -718,7 +718,7 @@ body.player-netflix .dual-panel{display:none!important}
 }
 </style>
 
-<div class="det-page">
+<div class="det-page section--tv">
 <!-- Player + Sidebar (starts right under navbar) -->
 {% if all_players %}
 <div class="det-player-section">
@@ -847,6 +847,7 @@ body.player-netflix .dual-panel{display:none!important}
         <div class="deferred-ad-slot" data-ad-position="below_player" data-ad-positions="below_player"></div>
     </div>
     <div class="det-player-right">
+        <div class="det-eyebrow">Series</div>
         <div class="det-sidebar-title">{{ series.title }}</div>
         {% if series.tagline %}<div style="font-size:.75rem;color:rgba(255,255,255,.35);font-style:italic;margin-bottom:.5rem">"{{ series.tagline }}"</div>{% endif %}
         <div class="det-sidebar-meta">

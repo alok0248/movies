@@ -4,19 +4,27 @@
 {% block title %}TV Series – {{ site_settings.brand_name }}{% endblock %}
 
 {% block content %}
-<div class="catalog-shell">
+<div class="catalog-shell section--series">
     <div class="catalog-layout">
         <main class="catalog-main">
-            <div class="catalog-toolbar">
-                <h1 class="catalog-heading">{% if genre_id %}{% for genre in all_genres %}{% if genre.name|lower == genre_id|lower %}{{ genre.name }} TV Series{% endif %}{% endfor %}{% elif filter_type == 'popular' %}Popular TV Series{% elif filter_type == 'airing_today' %}Airing Today TV Series{% elif filter_type == 'top_rated' %}Top Rated TV Series{% else %}Latest TV Series{% endif %}</h1>
-                <nav class="catalog-filter-tabs" aria-label="TV series filters">
+            <section class="section-hero">
+                <div class="sh-body">
+                    <span class="sh-eyebrow">Catalogue · Series</span>
+                    <h1 class="sh-title">{% if genre_id %}{% for genre in all_genres %}{% if genre.name|lower == genre_id|lower %}{{ genre.name }} TV Series{% endif %}{% endfor %}{% elif filter_type == 'popular' %}Popular TV Series{% elif filter_type == 'airing_today' %}Airing Today TV Series{% elif filter_type == 'top_rated' %}Top Rated TV Series{% else %}Latest TV Series{% endif %}</h1>
+                    <p class="sh-sub">Every series in the library — from what airs tonight to the all-time top rated.</p>
+                    <div class="sh-stats">
+                        <span class="sh-chip"><b>{{ series|length }}{% if has_next %}+{% endif %}</b> series</span>
+                        <span class="sh-chip">Latest, popular &amp; airing today</span>
+                    </div>
+                    <nav class="catalog-filter-tabs sh-tabs" aria-label="TV series filters">
                     <a href="{% url 'series_list' %}?{% if genre_id %}genre={{ genre_id }}&{% endif %}{% if provider_slug %}provider={{ provider_slug }}&{% endif %}{% if watch_region %}region={{ watch_region }}{% endif %}" class="filter-tab {% if not filter_type %}active{% endif %}">Latest</a>
                     <a href="{% url 'series_list' %}?filter_type=popular{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'popular' %}active{% endif %}">Popular</a>
                     <a href="{% url 'series_list' %}?filter_type=airing_today{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'airing_today' %}active{% endif %}">Airing Today</a>
                     <a href="{% url 'series_list' %}?filter_type=on_the_air{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'on_the_air' %}active{% endif %}">On The Air</a>
                     <a href="{% url 'series_list' %}?filter_type=top_rated{% if genre_id %}&genre={{ genre_id }}{% endif %}{% if provider_slug %}&provider={{ provider_slug }}{% endif %}{% if watch_region %}&region={{ watch_region }}{% endif %}" class="filter-tab {% if filter_type == 'top_rated' %}active{% endif %}">Top Rated</a>
                 </nav>
-            </div>
+                </div>
+            </section>
             <form method="get" class="catalog-filters">
                 {% if filter_type %}<input type="hidden" name="filter_type" value="{{ filter_type }}">{% endif %}
                 <input type="search" name="search" class="form-control search-input" placeholder="Search series..." value="{{ search_query }}">

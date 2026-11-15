@@ -71,11 +71,21 @@
 @media(max-width:480px) { .watchlist-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem .4rem; } }
 </style>
 
-<div class="catalog-shell">
-    <div class="catalog-heading">My Watch List</div>
+<div class="catalog-shell section--watchlist">
+    <section class="section-hero">
+        <div class="sh-body">
+            <span class="sh-eyebrow">Your library</span>
+            <h1 class="sh-title">My Watch List</h1>
+            <p class="sh-sub">Everything you saved, ready when you are.</p>
+            <div class="sh-stats">
+                <span class="sh-chip"><b>{{ movies|length }}</b> movies</span>
+                <span class="sh-chip"><b>{{ series|length }}</b> series</span>
+            </div>
+        </div>
+    </section>
 
     {% if movies %}
-    <div class="section-subtitle"><i class="fas fa-film"></i> Movies ({{ movies|length }})</div>
+    <div class="section-head"><span class="sh-icon"><i class="fas fa-film"></i></span><span class="sh-label">Movies</span><span class="sh-line"></span><span class="sh-count">{{ movies|length }}</span></div>
     <div class="watchlist-grid">
         {% for movie in movies %}
         <div class="watchlist-card" data-media-type="movie" data-tmdb-id="{{ movie.id }}">
@@ -101,7 +111,7 @@
     {% endif %}
 
     {% if series %}
-    <div class="section-subtitle"><i class="fas fa-tv"></i> TV Series ({{ series|length }})</div>
+    <div class="section-head"><span class="sh-icon"><i class="fas fa-tv"></i></span><span class="sh-label">TV Series</span><span class="sh-line"></span><span class="sh-count">{{ series|length }}</span></div>
     <div class="watchlist-grid">
         {% for s in series %}
         <div class="watchlist-card" data-media-type="tv" data-tmdb-id="{{ s.id }}">
@@ -127,10 +137,10 @@
     {% endif %}
 
     {% if not movies and not series %}
-    <div class="text-center mt-5" style="color:var(--text-3);">
-        <div style="font-size:3rem;margin-bottom:1rem;">📋</div>
-        <p style="font-size:1.1rem;">Your watch list is empty</p>
-        <p style="font-size:.85rem;margin-top:.5rem;">Browse movies and series and add them to your list.</p>
+    <div class="empty-panel">
+        <div class="ep-icon">📋</div>
+        <p class="ep-title">Your watch list is empty</p>
+        <p class="ep-hint">Browse movies and series and add them to your list.</p>
         <a href="{% url 'index' %}" class="btn btn-primary mt-3" style="display:inline-flex;align-items:center;gap:.4rem;">Browse Content</a>
     </div>
     {% endif %}
