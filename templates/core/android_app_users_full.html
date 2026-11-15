@@ -356,6 +356,7 @@ window.__renderDailyChart = function () {
    filter chips only re-render the table and never re-request it. */
 window.__dailyUsersRows = [];
 window.__dailyUsersFilterValue = 'all';
+window.__dailyUsersAcctValue = 'all';
 window.__duEsc = function (s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -380,8 +381,12 @@ window.__openDailyUsers = function (index) {
     var sumEl = document.getElementById('dailyUsersSummary');
     if (sumEl) { sumEl.textContent = ''; }
     window.__dailyUsersFilterValue = 'all';
+    window.__dailyUsersAcctValue = 'all';
     document.querySelectorAll('[data-du-filter]').forEach(function (b) {
         b.classList.toggle('active', b.getAttribute('data-du-filter') === 'all');
+    });
+    document.querySelectorAll('[data-du-acct]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-du-acct') === 'all');
     });
     overlay.classList.add('open');
     fetch(base + '&slot=' + encodeURIComponent(index), {
@@ -391,7 +396,9 @@ window.__openDailyUsers = function (index) {
         window.__dailyUsersRows = data.rows || [];
         if (sumEl) {
             sumEl.textContent = (data.total || 0) + ' users \u00b7 '
-                + (data.new || 0) + ' new \u00b7 ' + (data.old || 0) + ' returning';
+                + (data.new || 0) + ' new \u00b7 ' + (data.old || 0) + ' returning \u00b7 '
+                + (data.registered || 0) + ' registered \u00b7 '
+                + (data.guest || 0) + ' unregistered';
         }
         window.__renderDailyUsers();
     }).catch(function () {
@@ -412,17 +419,28 @@ window.__dailyUsersFilter = function (mode) {
     window.__renderDailyUsers();
 };
 
+window.__dailyUsersAcct = function (mode) {
+    window.__dailyUsersAcctValue = mode;
+    document.querySelectorAll('[data-du-acct]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-du-acct') === mode);
+    });
+    window.__renderDailyUsers();
+};
+
 window.__renderDailyUsers = function () {
     var listEl = document.getElementById('dailyUsersList');
     if (!listEl) { return; }
     var mode = window.__dailyUsersFilterValue;
+    var acct = window.__dailyUsersAcctValue;
     var rows = (window.__dailyUsersRows || []).filter(function (r) {
-        if (mode === 'new') { return r.is_new; }
-        if (mode === 'old') { return !r.is_new; }
+        if (mode === 'new' && !r.is_new) { return false; }
+        if (mode === 'old' && r.is_new) { return false; }
+        if (acct === 'registered' && !r.registered) { return false; }
+        if (acct === 'guest' && r.registered) { return false; }
         return true;
     });
     if (!rows.length) {
-        listEl.innerHTML = '<div class="sub p-3">No users match this filter.</div>';
+        listEl.innerHTML = '<div class="sub p-3">No users match these filters.</div>';
         return;
     }
     var esc = window.__duEsc;
@@ -433,7 +451,9 @@ window.__renderDailyUsers = function () {
         html += '<tr>'
             + '<td class="text-white">' + esc(r.device)
                 + (r.os ? ' <span class="sub">\u00b7 Android ' + esc(r.os) + '</span>' : '') + '</td>'
-            + '<td>' + (r.email ? esc(r.email) : '<span class="sub">guest</span>') + '</td>'
+            + '<td>' + (r.registered
+                ? esc(r.email)
+                : '<span class="sub">unregistered</span>') + '</td>'
             + '<td class="sub">' + (r.ip ? esc(r.ip) : '&mdash;') + '</td>'
             + '<td class="sub">' + (r.location ? esc(r.location) : '&mdash;') + '</td>'
             + '<td class="sub">' + esc(r.first_seen) + '</td>'

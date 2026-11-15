@@ -4950,14 +4950,18 @@ def android_app_users_full(request, app_id):
                                           (place.country if place else '')) if b]
                 is_new = bool(start is not None
                               and dev.first_seen_at and start <= dev.first_seen_at < end)
+                email = (email_by_device.get(dev.user_id)
+                         or email_by_device.get(dev.account_key) or '')
                 list_rows.append({
                     'user_id': dev.user_id,
                     'device': dev.device_model or 'Unknown device',
                     'os': dev.os_version or '',
                     'ip': ip or '',
                     'location': ', '.join(place_bits),
-                    'email': (email_by_device.get(dev.user_id)
-                              or email_by_device.get(dev.account_key) or ''),
+                    'email': email,
+                    # A device with an email has an account behind it; the rest
+                    # are installs the app never signed in for.
+                    'registered': bool(email),
                     'is_new': is_new,
                     'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y %H:%M')
                                   if dev.first_seen_at else '',
@@ -4972,6 +4976,8 @@ def android_app_users_full(request, app_id):
                 'total': len(list_rows),
                 'new': sum(1 for r in list_rows if r['is_new']),
                 'old': sum(1 for r in list_rows if not r['is_new']),
+                'registered': sum(1 for r in list_rows if r['registered']),
+                'guest': sum(1 for r in list_rows if not r['registered']),
                 'rows': list_rows[:500],
                 'truncated': len(list_rows) > 500,
             })

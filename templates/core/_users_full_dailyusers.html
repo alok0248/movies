@@ -121,11 +121,17 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.__closeDailyUsers()" aria-label="Close"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="ucm-dialog-body">
-                <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
-                    <span class="sub me-1">Show:</span>
+                <div class="d-flex gap-2 flex-wrap align-items-center mb-1">
+                    <span class="sub me-1">Age:</span>
                     <button type="button" class="fbtn active" data-du-filter="all" onclick="window.__dailyUsersFilter('all')">All</button>
-                    <button type="button" class="fbtn" data-du-filter="new" onclick="window.__dailyUsersFilter('new')">New</button>
+                    <button type="button" class="fbtn" data-du-filter="new" onclick="window.__dailyUsersFilter('new')"><i class="fas fa-user-plus me-1"></i>New</button>
                     <button type="button" class="fbtn" data-du-filter="old" onclick="window.__dailyUsersFilter('old')">Old</button>
+                </div>
+                <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                    <span class="sub me-1">Account:</span>
+                    <button type="button" class="fbtn active" data-du-acct="all" onclick="window.__dailyUsersAcct('all')">All</button>
+                    <button type="button" class="fbtn" data-du-acct="registered" onclick="window.__dailyUsersAcct('registered')"><i class="fas fa-id-badge me-1"></i>Registered</button>
+                    <button type="button" class="fbtn" data-du-acct="guest" onclick="window.__dailyUsersAcct('guest')">Unregistered</button>
                     <span class="sub ms-2" id="dailyUsersSummary"></span>
                 </div>
                 <div id="dailyUsersList"><div class="sub p-3">Loading&hellip;</div></div>
