@@ -632,3 +632,54 @@ class AdminLoginThrottleMiddleware:
         else:
             record_rate_limit_attempt(client_ip, 'admin_login')
         return response
+
+
+class LoginRequiredMiddleware:
+    """Hold back every page until the visitor signs in.
+
+    Off unless "Require sign-in to browse" is ticked on Settings → Security →
+    Protection, so the site browses as it always has until an admin asks for
+    it. Only pages are gated: the sign-in and password-reset flows, Django's
+    own admin sign-in, the mobile app's /api/ endpoints, and static and media
+    files stay open — otherwise nobody could reach the form, and the form
+    could not load its own CSS.
+
+    The sign-in form is a modal on the home page, opened by ``login_required``
+    in the query string (that is where /login/ redirects), so a request that
+    carries it must pass or the two would bounce off each other forever.
+
+    Runs after AuthenticationMiddleware, so request.user is already resolved.
+    """
+
+    # Kept open while the site is locked, matched on the start of the path.
+    OPEN_PREFIXES = (
+        '/login/', '/logout/', '/ajax/', '/reset-password/',
+        '/api/', '/admin/', '/static/', '/media/',
+        '/sw.js', '/robots.txt', '/sitemap.xml', '/favicon.ico',
+        '/manifest.json', '/service-worker.js',
+    )
+    # Query flags that mean "this request is the sign-in prompt".
+    OPEN_FLAGS = ('login_required', 'register')
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if getattr(request.user, 'is_authenticated', False):
+            return self.get_response(request)
+        try:
+            locked = SiteSettings.get_settings().require_login_to_browse
+        except Exception:
+            # A settings row that cannot be read must never lock the site out.
+            logger.debug('login-required: could not read the setting', exc_info=True)
+            locked = False
+        if not locked:
+            return self.get_response(request)
+        if request.path_info.startswith(self.OPEN_PREFIXES):
+            return self.get_response(request)
+        if any(flag in request.GET for flag in self.OPEN_FLAGS):
+            return self.get_response(request)
+        from django.utils.http import urlencode
+        target = '/?' + urlencode({'login_required': 'true',
+                                   'next': request.get_full_path()})
+        return redirect(target)

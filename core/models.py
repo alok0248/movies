@@ -468,6 +468,11 @@ class SiteSettings(models.Model):
         default=False,
         help_text="If enabled, users with browser DevTools/Inspector open will see a 404 page with ads."
     )
+    require_login_to_browse = models.BooleanField(
+        default=False,
+        help_text="If enabled, every public page needs a signed-in account. The sign-in and "
+                  "password-reset pages, static files and the app's /api/ endpoints stay open."
+    )
 
     # Request-log retention (read by core/request_log.py at prune time). The
     # defaults reproduce the values that used to be hard-coded, so leaving these

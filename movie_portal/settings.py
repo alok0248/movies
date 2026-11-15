@@ -73,6 +73,8 @@ MIDDLEWARE = [
     # Counts failed Django-admin sign-ins (needs request.user, so it sits
     # after AuthenticationMiddleware).
     'core.middleware.AdminLoginThrottleMiddleware',
+    # Site-wide "sign in to browse" gate (off unless an admin turns it on).
+    'core.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.EmailSettingsMiddleware',
