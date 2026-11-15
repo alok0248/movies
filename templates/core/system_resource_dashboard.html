@@ -2,10 +2,7 @@
 {% block admin_content %}
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
-        <div>
-            <h4 class="adm-page-title"><i class="fas fa-server me-2"></i>System resources</h4>
-            <p class="adm-page-sub">CPU, memory, disk, network and system information, refreshed while the page is open.</p>
-        </div>
+        {% include 'core/_adm_page_head.html' with icon='fas fa-server' title='System resources' sub='CPU, memory, disk, network and system information, refreshed while the page is open.' %}
         <div class="adm-btn-group">
             <a class="adm-btn" href="{% url 'admin_dashboard' %}"><i class="fas fa-arrow-left"></i>Admin dashboard</a>
         </div>

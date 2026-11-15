@@ -904,27 +904,57 @@ def home_top_ajax(request):
 def is_staff_or_superuser(user):
     return user.is_staff or user.is_superuser
 
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def admin_dashboard(request):
-    site_settings = SiteSettings.get_settings()
+
+def _dashboard_headline(window_minutes=5):
+    """The four numbers an operator checks first, for the Overview headline row.
+
+    Read-only and never raises: each figure is wrapped on its own so a missing
+    table shows a dash rather than a 500. Shared by the page render and the
+    30-second refresh endpoint so the two can never disagree.
+    """
+    from django.utils import timezone
+    from .models import RequestLog, WebsiteVisitor
+
+    now = timezone.now()
+    out = {'online_now': 0, 'requests_per_min': 0, 'error_rate_pct': 0.0,
+           'p95_ms': None, 'window_minutes': window_minutes}
+    try:
+        out['online_now'] = WebsiteVisitor.objects.filter(
+            last_seen_at__gte=now - timezone.timedelta(minutes=window_minutes)).count()
+    except Exception:
+        logger.debug('dashboard: online-now unavailable', exc_info=True)
+    try:
+        out['requests_per_min'] = RequestLog.objects.filter(
+            created_at__gte=now - timezone.timedelta(minutes=1)).count()
+    except Exception:
+        logger.debug('dashboard: requests per minute unavailable', exc_info=True)
+    try:
+        from .health import five_xx_rate
+        pct, _failed, _total = five_xx_rate(1440)
+        out['error_rate_pct'] = round(pct, 2)
+    except Exception:
+        logger.debug('dashboard: error rate unavailable', exc_info=True)
+    try:
+        out['p95_ms'] = _p95_latency_ms(hours=24)
+    except Exception:
+        logger.debug('dashboard: p95 latency unavailable', exc_info=True)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Dashboard sections.
+#
+# admin_dashboard used to be one 390-line function. Each block below is a
+# section of that page, lifted out unchanged: read-only, individually wrapped,
+# so a missing table shows a gap instead of a 500 on the whole page. Keeping
+# them apart means a failure in one section cannot silently blank another.
+# ---------------------------------------------------------------------------
+
+def _dashboard_counts(today, user_db):
+    """How big is the site: visitors, accounts, play sessions, database sizes."""
     from django.contrib.auth.models import User
     from .models import PlayHistory, WebsiteVisitor
-    from django.utils import timezone
     import os
-
-    today = timezone.localdate()
-
-    # Determine which DB to query for user data
-    # Try external first if routing enabled, fall back to default
-    user_db = 'default'
-    try:
-        from .models import DBRoutingConfig
-        cfg = DBRoutingConfig.get_config()
-        if cfg.use_external_db and cfg.external_db_ready:
-            user_db = 'external'
-    except Exception:
-        pass
 
     # Visitor count today — try user_db first, then default
     visitors_today = 0
@@ -962,7 +992,7 @@ def admin_dashboard(request):
         except Exception:
             continue
 
-    # DB size — show both local and external if applicable
+    # DB size — local, then the external server's own size if it is in use
     db_size = '--'
     try:
         db_path = os.path.join(settings.BASE_DIR, 'db.sqlite3')
@@ -972,7 +1002,6 @@ def admin_dashboard(request):
     except Exception:
         pass
 
-    # External DB size
     ext_db_size = '--'
     if user_db == 'external':
         try:
@@ -985,11 +1014,20 @@ def admin_dashboard(request):
         except Exception:
             pass
 
-    # ------------------------------------------------------------------ status
-    # The dashboard used to be a launcher: four grids of links that repeated the
-    # sidebar. It now answers "is anything wrong right now", because that is the
-    # one question the sidebar cannot. Everything below is read-only and each
-    # block is wrapped, so a missing table shows a gap rather than a 500.
+    return {'visitors_today': visitors_today, 'user_count': user_count,
+            'plays_today': plays_today, 'db_size': db_size,
+            'ext_db_size': ext_db_size}
+
+
+def _dashboard_status(today):
+    """Is anything wrong right now: health checks, incidents, audit, counters.
+
+    The dashboard used to be a launcher of link grids that repeated the sidebar.
+    It now answers "is anything wrong right now", the one question the sidebar
+    cannot. Everything here is read-only.
+    """
+    from django.utils import timezone
+
     findings, open_incidents, recent_audit = [], [], []
     blocked_now = blocked_today = api_errors_day = 0
     five_xx_pct, five_xx_failed, five_xx_total = 0.0, 0, 0
@@ -1035,7 +1073,7 @@ def admin_dashboard(request):
 
     try:
         from datetime import timedelta as _td
-        from django.db.models import Count, Sum
+        from django.db.models import Sum
         from .models import AndroidAppBuildLog, AndroidAppFailedAttempt
         week_ago = today - _td(days=7)
         builds = list(
@@ -1052,13 +1090,22 @@ def admin_dashboard(request):
     except Exception:
         logger.debug('dashboard: could not read the build logs', exc_info=True)
 
-    failing = [f for f in findings if f.get('ok') is False]
-    unknown = [f for f in findings if f.get('ok') is None]
+    return {'findings': findings, 'open_incidents': open_incidents,
+            'recent_audit': recent_audit, 'blocked_now': blocked_now,
+            'blocked_today': blocked_today, 'api_errors_day': api_errors_day,
+            'five_xx_pct': five_xx_pct, 'five_xx_failed': five_xx_failed,
+            'five_xx_total': five_xx_total, 'builds': builds,
+            'gate_rejections': gate_rejections}
 
-    # ------------------------------------------------------- traffic charts
-    # One place that answers "who is actually connected, and what are we
-    # refusing": web and Android connections per day for the last two weeks,
-    # plus the blocks standing right now and the refusals served each day.
+
+def _dashboard_traffic(today, blocked_now):
+    """Who is actually connected, and what are we refusing.
+
+    Web and Android connections per day for the last two weeks, plus the blocks
+    standing right now and the refusals served each day.
+    """
+    from django.utils import timezone
+
     traffic = {'labels': [], 'web': [], 'android': [], 'blocked_hits': []}
     traffic_totals = {
         'web_today': 0, 'android_today': 0, 'web_14': 0, 'android_14': 0,
@@ -1067,9 +1114,9 @@ def admin_dashboard(request):
     }
     try:
         from datetime import timedelta as _td2
-        from django.db.models import Count, Sum, Q
-        from .models import (AndroidAppAccessLog, BlockedHeader, RequestLog,
-                             WebsiteVisitorVisit)
+        from django.db.models import Count, Sum
+        from .models import (AndroidAppAccessLog, BlockedHeader, BlockedIP,
+                             RequestLog, WebsiteVisitorVisit)
         start = today - _td2(days=13)
         day_list = [start + _td2(days=i) for i in range(14)]
         traffic['labels'] = [d.strftime('%d %b') for d in day_list]
@@ -1129,12 +1176,15 @@ def admin_dashboard(request):
     except Exception:
         logger.debug('dashboard: could not build the traffic charts', exc_info=True)
 
-    # ------------------------------------------------- Android endpoint health
-    # The app talks to its own API, so "is the app healthy" is a different
-    # question from "is the website healthy": it is answered by the connections
-    # the app logged, the identities the gate turned away, and the API errors
-    # recorded for those paths.
-    now = timezone.now()
+    return traffic, traffic_totals
+
+
+def _dashboard_android(today, now):
+    """Is the app healthy — a different question from "is the website healthy".
+
+    Answered by the connections the app logged, the identities the gate turned
+    away, and the API errors recorded for those paths.
+    """
     android = {
         'apps': [], 'total_apps': 0, 'active_apps': 0,
         'conn_today': 0, 'conn_week': 0, 'fail_day': 0, 'fail_week': 0,
@@ -1214,7 +1264,11 @@ def admin_dashboard(request):
     except Exception:
         logger.debug('dashboard: could not read the Android API health', exc_info=True)
 
-    # ------------------------------------------------------ devices and addresses
+    return android
+
+
+def _dashboard_devices(now):
+    """Devices, addresses and accounts, and how far each has spread."""
     devices = {
         'devices': 0, 'ips': 0, 'accounts': 0, 'multi_device': 0,
         'multi_ip': 0, 'unknown_country': 0, 'new_day': 0, 'last_seen': None,
@@ -1244,7 +1298,13 @@ def admin_dashboard(request):
     except Exception:
         logger.debug('dashboard: could not summarise devices', exc_info=True)
 
-    # ------------------------------------------------------------ server load
+    return devices
+
+
+def _dashboard_resources(db_size):
+    """Server load: CPU, memory, disk, uptime and the database size."""
+    import os
+
     resources = {'cpu': None, 'cpu_count': 0, 'mem_pct': None, 'mem_used': 0,
                  'mem_total': 0, 'disk_pct': None, 'disk_used': 0,
                  'disk_total': 0, 'load': None, 'uptime_days': None, 'db_size': db_size}
@@ -1269,32 +1329,59 @@ def admin_dashboard(request):
     except Exception:
         logger.debug('dashboard: could not read server resources', exc_info=True)
 
+    return resources
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_dashboard(request):
+    from django.utils import timezone
+
+    site_settings = SiteSettings.get_settings()
+    today = timezone.localdate()
+    now = timezone.now()
+
+    # Determine which DB to query for user data
+    # Try external first if routing enabled, fall back to default
+    user_db = 'default'
+    try:
+        from .models import DBRoutingConfig
+        cfg = DBRoutingConfig.get_config()
+        if cfg.use_external_db and cfg.external_db_ready:
+            user_db = 'external'
+    except Exception:
+        pass
+
+    counts = _dashboard_counts(today, user_db)
+
+    status = _dashboard_status(today)
+    findings = status['findings']
+    failing = [f for f in findings if f.get('ok') is False]
+    unknown = [f for f in findings if f.get('ok') is None]
+
+    traffic, traffic_totals = _dashboard_traffic(today, status['blocked_now'])
+
+    android = _dashboard_android(today, now)
+
+    devices = _dashboard_devices(now)
+
+    resources = _dashboard_resources(counts['db_size'])
+
+    # Counts and status carry the rest of the template's variables; they are
+    # spread last so a section can only ever add to the context.
     return render(request, 'core/admin_dashboard.html', {
+        'headline': _dashboard_headline(),
+        'site_settings': site_settings,
+        'traffic': traffic,
+        'traffic_totals': traffic_totals,
         'android': android,
         'devices': devices,
         'resources': resources,
-        'traffic': traffic,
-        'traffic_totals': traffic_totals,
-        'site_settings': site_settings,
-        'visitors_today': visitors_today,
-        'user_count': user_count,
-        'plays_today': plays_today,
-        'db_size': db_size,
-        'ext_db_size': ext_db_size,
         'active_db': user_db,
-        'findings': findings,
         'failing_checks': failing,
         'unknown_checks': unknown,
-        'open_incidents': open_incidents,
-        'recent_audit': recent_audit,
-        'blocked_now': blocked_now,
-        'blocked_today': blocked_today,
-        'api_errors_day': api_errors_day,
-        'five_xx_pct': five_xx_pct,
-        'five_xx_failed': five_xx_failed,
-        'five_xx_total': five_xx_total,
-        'builds': builds,
-        'gate_rejections': gate_rejections,
+        **counts,
+        **status,
     })
 
 
@@ -1352,9 +1439,16 @@ def app_page(request):
     return render(request, 'core/app_dashboard.html', context)
 
 
+@login_required
+@user_passes_test(is_staff_or_superuser)
 @require_http_methods(["GET"])
 def ajax_dashboard_stats(request):
-    """Live stats for the admin dashboard — called every 30s by auto-refresh."""
+    """Live stats for the admin dashboard — polled by the Overview headline row.
+
+    Staff-only: the response carries usernames and email subjects, so it must
+    never be readable by an anonymous caller. The 30-second poll is skipped by
+    the request log so it cannot inflate its own "requests per minute" figure.
+    """
     from django.contrib.auth.models import User
     from .models import PlayHistory, UserSession, UserPageView, WebsiteVisitor, EmailSendLog
     from django.utils import timezone
@@ -1429,20 +1523,16 @@ def ajax_dashboard_stats(request):
     except Exception:
         pass
 
-    # Server health
-    import subprocess
+    # Server health. psutil is used instead of shelling out to `df`, which only
+    # exists on Linux, so this reports correctly on every platform the app runs.
     server_health = 'healthy'
     try:
-        # Check disk usage
-        result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True, timeout=5)
-        lines = result.stdout.strip().split('\n')
-        if len(lines) > 1:
-            parts = lines[1].split()
-            usage_pct = int(parts[4].replace('%', ''))
-            if usage_pct > 90:
-                server_health = 'critical'
-            elif usage_pct > 75:
-                server_health = 'warning'
+        import psutil
+        usage_pct = psutil.disk_usage(str(settings.BASE_DIR)).percent
+        if usage_pct > 90:
+            server_health = 'critical'
+        elif usage_pct > 75:
+            server_health = 'warning'
     except Exception:
         pass
 
@@ -1506,6 +1596,7 @@ def ajax_dashboard_stats(request):
 
     return JsonResponse({
         'ok': True,
+        'headline': _dashboard_headline(),
         'stats': {
             'active_users': active_users,
             'visitors_today': visitors_today,
@@ -19192,6 +19283,7 @@ def _admin_check_routing(values):
 # purge and its preview all read the same list.
 DATA_VOLUME_TABLES = (
     ('request_log', 'Request log', 'RequestLog', 'created_at', 'Every page and API request'),
+    ('req_rollup', 'Request log rollups', 'RequestLogRollup', 'bucket_start', 'Hourly request history kept after the log is pruned'),
     ('api_errors', 'API errors', 'ErrorLog', 'created_at', 'Failed 4xx/5xx responses'),
     ('app_logs', 'App logs', 'AndroidAppLog', 'timestamp', 'Logs posted by the Android app'),
     ('app_access', 'App access', 'AndroidAppAccessLog', 'access_date', 'Daily access counts per app'),
@@ -19245,6 +19337,27 @@ def admin_data_volume(request):
         days = 30
     days = max(1, min(3650, days))
 
+    if request.method == 'POST' and (request.POST.get('action') or '') == 'retention':
+        from .models import SiteSettings
+        try:
+            conf = SiteSettings.get_settings()
+            rows = max(0, min(1000000, int(request.POST.get('request_log_max_rows') or 0)))
+            every = max(0, min(100000, int(request.POST.get('request_log_prune_every') or 0)))
+            conf.request_log_max_rows = rows
+            conf.request_log_prune_every = every
+            conf.save()
+            from . import request_log as _rl
+            _rl._writes_since_prune[0] = 0
+            log_action(request, 'request_log_retention', 'Data & Retention',
+                       'max_rows=%d prune_every=%d' % (rows, every))
+            messages.success(request, 'Request-log retention saved.')
+        except (TypeError, ValueError):
+            messages.error(request, 'Retention values must be whole numbers.')
+        except Exception as exc:
+            logger.warning('data volume: retention save failed', exc_info=True)
+            messages.error(request, 'Could not save the retention settings: %s' % exc)
+        return redirect('admin_data_volume')
+
     if request.method == 'POST' and (request.POST.get('action') or '') == 'purge':
         key = (request.POST.get('table') or '').strip()
         target = next((t for t in DATA_VOLUME_TABLES if t[0] == key), None)
@@ -19276,12 +19389,19 @@ def admin_data_volume(request):
     except Exception:
         db_size = None
 
+    from . import request_log as _rl
+    retention_rows, retention_every = _rl.retention_limits()
+
     return render(request, 'core/admin_data_volume.html', {
         'rows': rows,
         'days': days,
         'db_size': db_size,
         'total_rows': sum(r['count'] for r in rows),
         'total_preview': sum(r['preview'] for r in rows),
+        'log_max_rows': retention_rows,
+        'log_prune_every': retention_every,
+        'log_max_rows_default': _rl.MAX_ROWS,
+        'log_prune_every_default': _rl._PRUNE_EVERY,
     })
 
 

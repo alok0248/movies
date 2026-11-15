@@ -1,0 +1,20 @@
+{% comment %}
+Shared admin page header — the icon + title + subtitle line that used to be
+copied into every admin page by hand.
+
+Use it like this, keeping the caller's own buttons in the same
+.adm-page-head wrapper so the flex layout is unchanged:
+
+    <div class="adm-page-head">
+        {% include 'core/_adm_page_head.html' with icon='fas fa-heart-pulse' title='Data health' sub='...' %}
+        <div class="adm-btn-group">...page buttons...</div>
+    </div>
+
+Both "icon" and "sub" are optional; omitting them simply renders less. Pass
+"heading_tag" when the page uses a different heading level (the .adm-page-title
+class sets the size either way, so nothing moves on screen).
+{% endcomment %}
+<div>
+    <{{ heading_tag|default:'h4' }} class="adm-page-title">{% if icon %}<i class="{{ icon }} me-2"></i>{% endif %}{{ title }}</{{ heading_tag|default:'h4' }}>
+    {% if sub %}<p class="adm-page-sub">{{ sub }}</p>{% endif %}
+</div>

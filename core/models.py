@@ -469,6 +469,20 @@ class SiteSettings(models.Model):
         help_text="If enabled, users with browser DevTools/Inspector open will see a 404 page with ads."
     )
 
+    # Request-log retention (read by core/request_log.py at prune time). The
+    # defaults reproduce the values that used to be hard-coded, so leaving these
+    # untouched keeps the table exactly as it was.
+    request_log_max_rows = models.PositiveIntegerField(
+        default=5000,
+        help_text=("How many of the newest request-log rows to keep. Older rows are "
+                   "pruned; set 0 to fall back to the built-in default (5000).")
+    )
+    request_log_prune_every = models.PositiveIntegerField(
+        default=200,
+        help_text=("Prune the request log once every N recorded requests. Lower means "
+                   "a tighter table but more counting; set 0 for the default (200).")
+    )
+
     class Meta:
         verbose_name_plural = "Site Settings"
 
@@ -3515,6 +3529,46 @@ class RequestLog(models.Model):
 
     def __str__(self):
         return f'{self.method} {self.path} -> {self.status_code}'
+
+
+class RequestLogRollup(models.Model):
+    """One hour of request-log history, kept after the raw rows are pruned.
+
+    RequestLog keeps only its newest ``request_log.MAX_ROWS`` rows — at busy
+    hours that is a day of traffic at most. This table holds the hourly summary
+    that outlives it: the request-log page's error trend and any future "what am
+    I actually losing" question read from here once the raw rows are gone.
+
+    A row is written by ``manage.py rollup_request_log`` for hours that have
+    already finished, per category and path, so a bucket is only ever created
+    once and re-running the command is safe.
+    """
+
+    bucket_start = models.DateTimeField()
+    category = models.CharField(max_length=10, choices=RequestLog.CATEGORY_CHOICES,
+                                default=RequestLog.CAT_PAGE)
+    path = models.CharField(max_length=500, blank=True, default='')
+    hits = models.PositiveIntegerField(default=0)
+    # 4xx + 5xx responses in the hour.
+    errors = models.PositiveIntegerField(default=0)
+    avg_ms = models.PositiveIntegerField(default=0)
+    p95_ms = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-bucket_start']
+        verbose_name = 'Request log rollup'
+        verbose_name_plural = 'Request log rollups'
+        constraints = [
+            models.UniqueConstraint(fields=['bucket_start', 'category', 'path'],
+                                    name='reqrollup_bucket_uniq'),
+        ]
+        indexes = [
+            models.Index(fields=['-bucket_start'], name='reqrollup_start_idx'),
+            models.Index(fields=['bucket_start', 'category'], name='reqrollup_cat_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.bucket_start:%Y-%m-%d %H}:00 {self.category} {self.path} ({self.hits})'
 
 
 class RequestLogPreset(models.Model):

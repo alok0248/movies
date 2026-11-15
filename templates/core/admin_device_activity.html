@@ -3,10 +3,7 @@
 {% block admin_content %}
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
-        <div>
-            <h4 class="adm-page-title"><i class="fas fa-mobile-screen-button me-2"></i>Device activity</h4>
-            <p class="adm-page-sub">Actual online time per unique device, accumulated from the 1-minute app heartbeat.</p>
-        </div>
+        {% include 'core/_adm_page_head.html' with icon='fas fa-mobile-screen-button' title='Device activity' sub='Actual online time per unique device, accumulated from the 1-minute app heartbeat.' %}
         <form method="get" class="adm-btn-group">
             <input class="adm-input" type="text" name="q" value="{{ search }}" placeholder="Filter by device or email" style="width:15rem">
             <button class="adm-btn" type="submit">Search</button>

@@ -5,10 +5,7 @@
 {% block admin_content %}
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
-        <div>
-            <h4 class="adm-page-title"><i class="fas fa-heart-pulse me-2"></i>Data health</h4>
-            <p class="adm-page-sub">Checks against data that is already stored. Each repair runs the same command the scheduled jobs use.</p>
-        </div>
+        {% include 'core/_adm_page_head.html' with icon='fas fa-heart-pulse' title='Data health' sub='Checks against data that is already stored. Each repair runs the same command the scheduled jobs use.' %}
         <div class="adm-btn-group">
             <span class="adm-badge is-off">{{ account_devices }} account devices</span>
             <a class="adm-btn is-sm" href="{% url 'settings_root' %}"><i class="fas fa-gear"></i>Settings</a>

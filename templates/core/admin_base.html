@@ -1331,16 +1331,16 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
                 <i class="fas fa-heart-pulse"></i> Data Health
                 {% if health_alerts %}<span data-dh-badge role="button" tabindex="0" aria-haspopup="true" aria-label="{{ health_alerts }} data-health check{{ health_alerts|pluralize }} need attention" title="{{ health_alerts }} data-health check{{ health_alerts|pluralize }} need attention" onclick="event.preventDefault();event.stopPropagation();dhToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();dhToggle(this)}" style="width:8px;height:8px;border-radius:50%;background:#fbbf24;margin-left:auto;flex:none;cursor:pointer;box-shadow:0 0 0 2px rgba(251,191,36,.18)"></span>{% endif %}
             </a>
-            <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
-                <i class="fas fa-bell"></i> Health &amp; Alerts
-                {% if admin_badges.alerts %}<span class="sb-badge danger" title="{{ admin_badges.alerts }} health check{{ admin_badges.alerts|pluralize }} failing">{{ admin_badges.alerts }}</span>{% endif %}
-            </a>
         </div>
 
         <div class="sb-divider"></div>
 
         <div class="sb-section">
             <div class="sb-section-title">Traffic &amp; Security</div>
+            <a href="{% url 'admin_alerts' %}" class="sb-item {% if 'admin-dashboard/alerts' in request.path %}active{% endif %}">
+                <i class="fas fa-bell"></i> Health &amp; Alerts
+                {% if admin_badges.alerts %}<span class="sb-badge danger" title="{{ admin_badges.alerts }} health check{{ admin_badges.alerts|pluralize }} failing">{{ admin_badges.alerts }}</span>{% endif %}
+            </a>
             <a href="{% url 'request_log' %}" class="sb-item {% if 'admin-dashboard/requests' in request.path %}active{% endif %}">
                 <i class="fas fa-network-wired"></i> Requests &amp; Users
             </a>

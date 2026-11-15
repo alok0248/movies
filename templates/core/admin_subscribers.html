@@ -3,10 +3,7 @@
 {% block admin_content %}
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
-        <div>
-            <h1 class="adm-page-title"><i class="fas fa-envelope me-2"></i>Subscribers</h1>
-            <p class="adm-page-sub">Newsletter list, one-off mail-outs and the delivery log.</p>
-        </div>
+        {% include 'core/_adm_page_head.html' with heading_tag='h1' icon='fas fa-envelope' title='Subscribers' sub='Newsletter list, one-off mail-outs and the delivery log.' %}
         <div class="adm-btn-group">
             <div class="adm-stat"><b>{{ total_active }}</b><span>active</span></div>
             <div class="adm-stat"><b>{{ total_inactive }}</b><span>unsubscribed</span></div>

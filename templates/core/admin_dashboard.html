@@ -6,10 +6,7 @@
 {% block admin_content %}
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
-        <div>
-            <h4 class="adm-page-title"><i class="fas fa-gauge-high me-2"></i>Overview</h4>
-            <p class="adm-page-sub">API health, traffic, devices and server load in one place &mdash; every figure links to the page behind it.</p>
-        </div>
+        {% include 'core/_adm_page_head.html' with icon='fas fa-gauge-high' title='Overview' sub='API health, traffic, devices and server load in one place — every figure links to the page behind it.' %}
         <div class="adm-btn-group">
             {% if failing_checks %}
             <span class="adm-badge is-danger"><span class="adm-dot is-bad"></span>{{ failing_checks|length }} check{{ failing_checks|length|pluralize }} failing</span>
@@ -19,6 +16,31 @@
             <span class="adm-badge is-ok"><span class="adm-dot is-on"></span>All checks passing</span>
             {% endif %}
             <a class="adm-btn" href="{% url 'admin_dashboard' %}"><i class="fas fa-sync-alt"></i>Refresh</a>
+        </div>
+    </div>
+
+    <!-- The four numbers an operator checks first. Server-rendered so they are
+         already right without JavaScript; the poll below keeps them fresh. -->
+    <div class="adm-grid" style="margin-bottom:1rem" id="headlineRow">
+        <div class="adm-kpi">
+            <div class="k">Online now</div>
+            <div class="v" id="hl-online">{{ headline.online_now }}</div>
+            <div class="n">seen in the last {{ headline.window_minutes }} min</div>
+        </div>
+        <div class="adm-kpi">
+            <div class="k">Requests / min</div>
+            <div class="v" id="hl-rpm">{{ headline.requests_per_min }}</div>
+            <div class="n">all traffic, last minute</div>
+        </div>
+        <div class="adm-kpi">
+            <div class="k">Error rate (24h)</div>
+            <div class="v {% if headline.error_rate_pct > 2 %}is-bad{% endif %}" id="hl-error">{{ headline.error_rate_pct|floatformat:1 }}%</div>
+            <div class="n">share of 5xx responses</div>
+        </div>
+        <div class="adm-kpi">
+            <div class="k">p95 response (24h)</div>
+            <div class="v" id="hl-p95">{% if headline.p95_ms is not None %}{{ headline.p95_ms }} ms{% else %}&mdash;{% endif %}</div>
+            <div class="n">95th percentile of logged requests</div>
         </div>
     </div>
 
@@ -353,5 +375,35 @@ function backfillPosters(model) {
         })
         .catch(function () { el.textContent = 'Network error'; });
 }
+
+// Keep the four headline tiles fresh without reloading the page. The figures are
+// already server-rendered, so this only ever updates the numbers in place and
+// never touches the cards, the chart or the tables below them.
+(function () {
+    var url = '{% url "ajax_dashboard_stats" %}';
+    function setText(id, text, bad) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text;
+        if (bad !== undefined) el.classList.toggle('is-bad', !!bad);
+    }
+    function paint(h) {
+        if (!h) return;
+        setText('hl-online', h.online_now);
+        setText('hl-rpm', h.requests_per_min);
+        var pct = h.error_rate_pct || 0;
+        setText('hl-error', pct.toFixed(1) + '%', pct > 2);
+        setText('hl-p95', (h.p95_ms === null || h.p95_ms === undefined) ? '\u2014' : h.p95_ms + ' ms');
+    }
+    function tick() {
+        // Skip while the tab is hidden so a background tab costs nothing.
+        if (document.hidden) return;
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) { if (d && d.headline) paint(d.headline); })
+            .catch(function () {});
+    }
+    setInterval(tick, 30000);
+})();
 </script>
 {% endblock %}

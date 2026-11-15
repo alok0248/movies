@@ -3,10 +3,7 @@
 {% block admin_content %}
 <div class="container-fluid py-3" style="max-width:1500px">
     <div class="adm-page-head">
-        <div>
-            <h4 class="adm-page-title"><i class="fas fa-heartbeat me-2"></i>Database dashboard</h4>
-            <p class="adm-page-sub">Health, size and table inventory for every configured database.</p>
-        </div>
+        {% include 'core/_adm_page_head.html' with icon='fas fa-heartbeat' title='Database dashboard' sub='Health, size and table inventory for every configured database.' %}
         <div class="adm-btn-group">
             <a class="adm-btn" href="{% url 'admin_dashboard' %}" aria-label="Back to the admin overview" title="Back to the admin overview"><i class="fas fa-arrow-left"></i>Admin dashboard</a>
         </div>

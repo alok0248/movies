@@ -38,6 +38,25 @@ MAX_ROWS = 5000
 _PRUNE_EVERY = 200
 _writes_since_prune = [0]
 
+
+def retention_limits():
+    """(max_rows, prune_every) — the operator's Data & Retention settings.
+
+    Falls back to the module constants above when the settings row cannot be
+    read (before migrations, or a locked database), so the log is always
+    bounded. A value of 0 or blank means "use the default".
+    """
+    try:
+        from .models import SiteSettings
+        conf = SiteSettings.get_settings()
+        rows = int(getattr(conf, 'request_log_max_rows', 0) or 0)
+        every = int(getattr(conf, 'request_log_prune_every', 0) or 0)
+    except Exception:
+        return MAX_ROWS, _PRUNE_EVERY
+    return (max(100, rows) if rows else MAX_ROWS,
+            max(10, every) if every else _PRUNE_EVERY)
+
+
 # Paths that are not worth recording (static assets, health probes). The
 # request-log page itself is skipped too so viewing the log does not keep
 # appending its own rows.
@@ -51,6 +70,9 @@ SKIP_PREFIXES = (
     # The engagement beacon fires on every page leave — recording it would
     # double the log and bury the page row it updates.
     '/ajax/page-activity',
+    # The Overview headline row polls this every 30 seconds. Recording the poll
+    # would both flood the log and inflate its own "requests per minute" figure.
+    '/ajax/dashboard-stats',
 )
 
 
@@ -216,8 +238,9 @@ def record_request(request, status_code, duration_ms=0, response=None):
 
 
 def _maybe_prune():
+    _prev, every = retention_limits()
     _writes_since_prune[0] += 1
-    if _writes_since_prune[0] < _PRUNE_EVERY:
+    if _writes_since_prune[0] < every:
         return
     _writes_since_prune[0] = 0
     prune()
@@ -227,10 +250,11 @@ def prune():
     """Drop everything older than the newest MAX_ROWS rows. Never raises."""
     try:
         from .models import RequestLog
+        keep_rows, _every = retention_limits()
         keep = list(
-            RequestLog.objects.order_by('-created_at').values_list('id', flat=True)[:MAX_ROWS]
+            RequestLog.objects.order_by('-created_at').values_list('id', flat=True)[:keep_rows]
         )
-        if len(keep) < MAX_ROWS:
+        if len(keep) < keep_rows:
             return
         RequestLog.objects.exclude(id__in=keep).delete()
     except Exception:
