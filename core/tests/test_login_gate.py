@@ -59,6 +59,18 @@ class LoginRequiredMiddlewareTest(TestCase):
         self.settings_row.save()
         self.assertEqual(200, self.client.get('/movies/').status_code)
 
+    def test_the_prompt_says_why_a_login_is_needed(self):
+        # Once on the page under the navbar, once inside the prompt itself,
+        # because the prompt is a modal that covers the page.
+        response = self.client.get('/?login_required=true&next=/movies/')
+        self.assertContains(response, 'bot extraction activity', count=2)
+
+    def test_a_signed_in_visitor_is_not_told_why(self):
+        User.objects.create_user('gate-user', 'gate@example.invalid', 'pw-123456')
+        self.client.login(username='gate-user', password='pw-123456')
+        response = self.client.get('/movies/')
+        self.assertNotContains(response, 'bot extraction activity')
+
 
 class LoginRequiredOffTest(TestCase):
     def test_pages_stay_public_while_the_switch_is_off(self):

@@ -739,6 +739,46 @@
         .auth-form-title { font-size: 1.4rem; font-weight: 800; color: var(--text); margin-bottom: .2rem; }
         .auth-form-subtitle { color: var(--text-2); font-size: .85rem; margin-bottom: 0; }
         .auth-modal-body { padding: 1.25rem 1.5rem 1.5rem; }
+        /* Why the site asks for a sign-in — shown on the page and, because the
+           prompt is a modal, repeated at the top of the prompt itself. */
+        .login-gate-notice {
+            position: relative; z-index: 5;
+            background: var(--card-bg); border-bottom: 1px solid var(--border);
+        }
+        .login-gate-notice::before {
+            content: ""; position: absolute; inset: 0; pointer-events: none;
+            background: linear-gradient(90deg, var(--brand-glow) 0%, transparent 55%);
+        }
+        .login-gate-notice-inner {
+            position: relative; display: flex; align-items: center; gap: .85rem; padding: .85rem 0;
+        }
+        .login-gate-notice-icon {
+            flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: var(--brand); color: #fff; font-size: .9rem;
+        }
+        .login-gate-notice-text {
+            flex: 1 1 auto; min-width: 0; margin: 0;
+            color: var(--text); font-size: .92rem; line-height: 1.45;
+        }
+        .login-gate-notice-cta {
+            flex: 0 0 auto; padding: .45rem .95rem; border-radius: 999px;
+            border: 1px solid var(--brand); background: transparent; color: var(--brand);
+            font-size: .82rem; font-weight: 600; cursor: pointer; transition: var(--transition);
+        }
+        .login-gate-notice-cta:hover { background: var(--brand); color: #fff; }
+        .auth-gate-notice {
+            display: flex; align-items: flex-start; gap: .6rem;
+            margin: 1.1rem 1.25rem 0; padding: .7rem .85rem;
+            border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border);
+            color: var(--text-2); font-size: .8rem; line-height: 1.45; text-align: left;
+        }
+        .auth-gate-notice i { flex: 0 0 auto; color: var(--brand); margin-top: .12rem; }
+        @media (max-width: 767.98px) {
+            .login-gate-notice-inner { flex-wrap: wrap; gap: .6rem; padding: .75rem 0; }
+            .login-gate-notice-text { font-size: .85rem; }
+            .login-gate-notice-cta { width: 100%; text-align: center; }
+        }
         .auth-form-group { margin-bottom: .8rem; }
         .auth-form-group label {
             display: block; font-size: .72rem; font-weight: 600;
@@ -1726,6 +1766,18 @@
                     </div>
     </nav>
 
+    {% if site_settings.require_login_to_browse and not user.is_authenticated %}
+    <div class="login-gate-notice" role="status">
+        <div class="container">
+            <div class="login-gate-notice-inner">
+                <span class="login-gate-notice-icon" aria-hidden="true"><i class="fas fa-shield-halved"></i></span>
+                <p class="login-gate-notice-text">Our server is currently experiencing bot extraction activity, so we have implemented a login requirement to access and watch content.</p>
+                <button type="button" class="login-gate-notice-cta" onclick="openAuthModal('login')">Sign in</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div id="navWatchlistWarning" class="text-center py-2" style="background: #dc3545; display: none;">
         You need to login to view your watch list
     </div>
@@ -2068,6 +2120,12 @@
             <button class="auth-modal-close" onclick="closeAuthModal()" style="position:absolute;top:1rem;right:1rem;z-index:10;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,0.06);color:var(--text-muted);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='var(--text-color)'" onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='var(--text-muted)'">&times;</button>
             
             <!-- Login Form -->
+            {% if site_settings.require_login_to_browse and not user.is_authenticated %}
+            <div class="auth-gate-notice" role="status">
+                <i class="fas fa-shield-halved" aria-hidden="true"></i>
+                <span>Our server is currently experiencing bot extraction activity, so we have implemented a login requirement to access and watch content.</span>
+            </div>
+            {% endif %}
             <div id="loginForm">
                 <div class="auth-modal-header">
                     <div class="auth-logo-icon"><i class="fas fa-user-circle"></i></div>
