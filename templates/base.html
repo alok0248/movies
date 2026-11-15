@@ -1503,6 +1503,90 @@
                 animation: none !important;
             }
         }
+
+        /* ═══ PUBLIC UI REFINEMENT ═══════════════════════════════════════════
+           One refinement pass over the shared public surface — home,
+           catalogue, search, watch list and every page built on these
+           classes. It sets a single page gutter, a calmer heading scale,
+           comfortable touch targets and one grid rhythm, so the site reads
+           the same on a laptop and on a phone. Brand colour, theme tokens
+           and the reduced-motion behaviour above are left untouched. */
+        :root {
+            --page-pad: clamp(1rem, 4vw, 2.5rem);
+            --row-pad: clamp(1rem, 4vw, 3.5rem);
+            --text-3: #7f7f96;   /* lift the quietest text to a usable contrast */
+        }
+
+        /* Page gutter + heading rhythm ------------------------------------- */
+        .catalog-shell { max-width: 1440px; padding: 1.4rem var(--page-pad) 3.5rem; }
+        .catalog-heading {
+            font-size: clamp(1.4rem, 1.05rem + 1.5vw, 1.95rem);
+            line-height: 1.14; letter-spacing: -.028em; margin-bottom: .5rem;
+        }
+        .catalog-toolbar { gap: .7rem 1rem; margin-bottom: 1rem; }
+
+        /* Filter tabs become real tap targets with a clear active pill ----- */
+        .catalog-filter-tabs { gap: .35rem; }
+        .catalog-filter-tabs .filter-tab {
+            display: inline-flex; align-items: center;
+            min-height: 40px; padding: .4rem .85rem;
+            border-radius: 999px; border-bottom: 0;
+            font-size: .84rem; font-weight: 600; color: var(--text-2);
+        }
+        .catalog-filter-tabs .filter-tab:hover {
+            color: var(--text); background: var(--surface-hover);
+        }
+        .catalog-filter-tabs .filter-tab.active { color: #fff; background: var(--brand); }
+
+        /* Filter bar: no control smaller than a comfortable thumb --------- */
+        .catalog-filters { gap: .6rem; padding: .8rem .9rem; margin-bottom: 1.2rem; }
+        .catalog-filters .form-control,
+        .catalog-filters .form-select {
+            min-height: 44px; min-width: 0; flex: 1 1 150px;
+            font-size: .82rem; padding: .45rem .7rem;
+        }
+        .catalog-filters .search-input { flex: 1 1 220px; }
+        .catalog-filters .btn { min-height: 44px; padding: .45rem 1.2rem; font-size: .82rem; }
+
+        /* Phone filter bar: two controls per row instead of a cramped line - */
+        @media (max-width: 600px) {
+            .catalog-filters { gap: .5rem; padding: .7rem; }
+            .catalog-filters .form-control,
+            .catalog-filters .form-select { flex: 1 1 calc(50% - .3rem); }
+            .catalog-filters .search-input,
+            .catalog-filters .btn { flex: 1 1 100%; }
+        }
+
+        /* One poster-wall rhythm across the catalogue and the result grids -- */
+        .catalog-grid.movie-grid, .catalog-grid.series-grid { gap: 1.15rem .8rem; }
+        body .search-grid, body .watchlist-grid,
+        body .person-grid, body .collection-grid { gap: 1.15rem .8rem; }
+        @media (max-width: 1200px) {
+            body .search-grid, body .watchlist-grid,
+            body .person-grid, body .collection-grid { gap: 1rem .7rem; }
+        }
+        @media (max-width: 768px) {
+            .catalog-grid.movie-grid, .catalog-grid.series-grid { gap: .85rem .6rem; }
+            body .search-grid, body .watchlist-grid,
+            body .person-grid, body .collection-grid { gap: .85rem .6rem; }
+        }
+        @media (max-width: 480px) {
+            .catalog-grid.movie-grid, .catalog-grid.series-grid { gap: .6rem .45rem; }
+            body .search-grid, body .watchlist-grid,
+            body .person-grid, body .collection-grid { gap: .6rem .45rem; }
+        }
+
+        /* Live TV sits in a Bootstrap container — align it with the rest --- */
+        .container.live-tv-page {
+            max-width: 1440px;
+            padding-left: var(--page-pad); padding-right: var(--page-pad);
+        }
+
+        /* One unmistakable focus ring on every interactive surface ---------- */
+        a:focus-visible, button:focus-visible, input:focus-visible,
+        select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+            outline: 2px solid var(--brand); outline-offset: 3px;
+        }
     </style>
 
     <!-- Google Identity Services — only loaded when the site offers Google sign-in -->

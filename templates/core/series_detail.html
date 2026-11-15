@@ -690,6 +690,32 @@ body.player-netflix .dual-panel{display:none!important}
 .ctrl-toggle:hover{background:rgba(255,255,255,.1);color:#fff}
 .ctrl-toggle.active{background:rgba(70,211,105,.2);color:#46d369;border-color:rgba(70,211,105,.3)}
 #streamListBody.collapsed{max-height:0!important;overflow:hidden;}
+
+/* Refinement: a hero that fills the laptop screen without pushing the
+   poster off it, a title that steps down smoothly, and action targets
+   that stay comfortable to tap on a phone. */
+.det-hero{min-height:clamp(540px,76vh,800px)}
+.det-hero-inner{
+  padding:clamp(2rem,6vh,4.5rem) var(--page-pad,3vw) 0;
+  gap:clamp(1.5rem,3vw,3rem);
+}
+.det-poster-col{width:clamp(190px,24vw,280px)}
+.det-title{font-size:clamp(1.9rem,1.15rem + 3vw,3rem);line-height:1.06;letter-spacing:-.035em}
+.det-overview{font-size:.95rem;line-height:1.75;max-width:68ch}
+.det-actions{gap:.7rem}
+.det-btn{min-height:46px;padding:.8rem 1.5rem}
+.det-btn-play{min-height:50px;padding:.9rem 2rem}
+.det-player-section{padding:1.75rem var(--page-pad,3vw) 2.5rem}
+@media(max-width:768px){
+  .det-hero{min-height:auto;padding-bottom:1.5rem}
+  .det-hero-inner{padding:2.25rem var(--page-pad,4vw) 0}
+  .det-poster-col{width:clamp(150px,42vw,190px)}
+  .det-title{font-size:clamp(1.45rem,1.1rem + 3.2vw,1.95rem)}
+  .det-btn,.det-btn-play{min-height:44px}
+}
+@media(max-width:480px){
+  .det-poster-col{width:142px}
+}
 </style>
 
 <div class="det-page">

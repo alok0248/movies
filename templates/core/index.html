@@ -134,6 +134,28 @@ html[data-theme="light"] .home-scroll-btn:hover { background: rgba(255,255,255,.
     .home-card-img-wrap, .top-card-img { width: 110px; height: 165px; }
     .home-card-title, .top-card-title { max-width: 110px; font-size: .65rem; }
 }
+
+/* Refinement: a calmer rail rhythm and a heading scale that breathes on
+   both a wide laptop and a narrow phone. Card sizes are unchanged so the
+   posters keep their exact 2:3 plate. */
+.home-row { margin-bottom: clamp(2.4rem, 4.5vw, 3.4rem); }
+.home-row-header, .home-row-scroll {
+    padding-left: var(--row-pad, 3.5rem);
+    padding-right: var(--row-pad, 3.5rem);
+}
+.home-row-title {
+    font-size: clamp(1.18rem, 1rem + .8vw, 1.5rem);
+    letter-spacing: -.03em;
+}
+.home-row-see-all {
+    display: inline-flex; align-items: center;
+    min-height: 34px; font-size: .78rem; font-weight: 600;
+}
+.home-row-scroll { scroll-padding-inline: var(--row-pad, 3.5rem); }
+.home-card:focus-visible, .top-card:focus-visible,
+.home-row-see-all:focus-visible, .home-scroll-btn:focus-visible {
+    outline: 2px solid var(--brand, #e50914); outline-offset: 3px; border-radius: 10px;
+}
 </style>
 
 <!-- Hero Shell (shown while loading) -->
