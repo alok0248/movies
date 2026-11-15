@@ -4831,8 +4831,23 @@ def android_app_users_full(request, app_id):
         users_qs.exclude(app_version='')
         .values('app_version')
         .annotate(n=Count('id'), b=_Max('build_number'))
-        .order_by('-b', '-n', 'app_version')
     )
+
+    def _version_key(value):
+        """3.4.8.685 -> (3, 4, 8, 685), so the list orders by release, not text."""
+        parts = []
+        for seg in (value or '').lstrip('vV').split('.'):
+            digits = ''.join(ch for ch in seg if ch.isdigit())
+            parts.append(int(digits) if digits else 0)
+        while len(parts) < 4:
+            parts.append(0)
+        return tuple(parts[:4])
+
+    # build_number on a sync row is sometimes the versionCode (350685) and
+    # sometimes the plain build (685), so ordering by it lifts old releases
+    # above new ones. The version string is the one reliable key.
+    version_facets.sort(key=lambda f: (_version_key(f['app_version']), f['n']),
+                        reverse=True)
     if tab == 'versions' and selected_versions:
         users_qs = users_qs.filter(app_version__in=selected_versions)
 
