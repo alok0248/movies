@@ -230,12 +230,33 @@ window.__renderDailyChart = function () {
     var canvas = document.getElementById('dailyUsersChart');
     var labelsEl = document.getElementById('dailyUsersLabels');
     var valuesEl = document.getElementById('dailyUsersValues');
+    var newEl = document.getElementById('dailyUsersValuesNew');
     if (!canvas || !labelsEl || !valuesEl || typeof Chart === 'undefined') return;
-    var labels, values;
+    var labels, values, newValues;
     try {
         labels = JSON.parse(labelsEl.textContent);
         values = JSON.parse(valuesEl.textContent);
+        newValues = newEl ? JSON.parse(newEl.textContent) : [];
     } catch (e) { return; }
+
+    function greenFill(c) {
+        var area = c.chart.chartArea;
+        if (!area) { return 'rgba(34,197,94,.75)'; }
+        var g = c.chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
+        g.addColorStop(0, 'rgba(34,197,94,.28)');
+        g.addColorStop(1, 'rgba(34,197,94,.92)');
+        return g;
+    }
+    /* New users get amber, so the two series read apart at a glance even
+       where a small amber bar sits on top of a tall green one. */
+    function amberFill(c) {
+        var area = c.chart.chartArea;
+        if (!area) { return 'rgba(251,191,36,.8)'; }
+        var g = c.chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
+        g.addColorStop(0, 'rgba(251,191,36,.3)');
+        g.addColorStop(1, 'rgba(251,191,36,.95)');
+        return g;
+    }
     if (window.__dailyChart) {
         try { window.__dailyChart.destroy(); } catch (e) {}
         window.__dailyChart = null;
@@ -245,34 +266,57 @@ window.__renderDailyChart = function () {
         data: {
             labels: labels,
             datasets: [{
+                label: 'Active users',
                 data: values,
                 /* Built from the chart area, so it is the real height even
                    though the canvas is sized by CSS. */
-                backgroundColor: function (c) {
-                    var area = c.chart.chartArea;
-                    if (!area) { return 'rgba(34,197,94,.75)'; }
-                    var g = c.chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
-                    g.addColorStop(0, 'rgba(34,197,94,.32)');
-                    g.addColorStop(1, 'rgba(34,197,94,.95)');
-                    return g;
-                },
+                backgroundColor: greenFill,
                 hoverBackgroundColor: '#4ade80',
-                borderRadius: 5, borderSkipped: false, maxBarThickness: 34
+                borderRadius: 5, borderSkipped: false, maxBarThickness: 26
+            }, {
+                label: 'New users',
+                data: newValues,
+                backgroundColor: amberFill,
+                hoverBackgroundColor: '#fbbf24',
+                borderRadius: 5, borderSkipped: false, maxBarThickness: 26
             }]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             animation: { duration: 320 },
+            /* A click anywhere above a period opens that period, not only on
+               a bar itself. */
+            interaction: { mode: 'index', intersect: false },
+            onClick: function (evt, elements) {
+                var idx = null;
+                if (elements && elements.length) {
+                    idx = elements[0].index;
+                } else if (evt && evt.x != null) {
+                    var scale = this.scales && this.scales.x;
+                    var guess = scale ? Math.round(scale.getValueForPixel(evt.x)) : NaN;
+                    if (!isNaN(guess) && guess >= 0 && guess < this.data.labels.length) {
+                        idx = guess;
+                    }
+                }
+                if (idx != null) { window.__openDailyUsers(idx); }
+            },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: true, position: 'top', align: 'end',
+                    labels: { color: '#94a3b8', boxWidth: 10, boxHeight: 10,
+                              usePointStyle: true, pointStyle: 'rectRounded',
+                              font: { size: 11 } }
+                },
                 tooltip: {
                     backgroundColor: 'rgba(2,6,23,.94)',
                     borderColor: 'rgba(148,163,184,.3)', borderWidth: 1,
-                    padding: 10, displayColors: false,
+                    padding: 10,
                     callbacks: {
                         label: function (item) {
-                            return item.parsed.y + (item.parsed.y === 1 ? ' user' : ' users');
-                        }
+                            var v = item.parsed.y;
+                            return item.dataset.label + ': ' + v + (v === 1 ? ' user' : ' users');
+                        },
+                        afterBody: function () { return 'Click to list these users'; }
                     }
                 }
             },
@@ -291,6 +335,106 @@ window.__renderDailyChart = function () {
         }
     });
 };
+/* ===================== Users behind one bar =====================
+   A click hands the bar's slot index to the view, which sends back the
+   devices behind that period. The rows carry their own new/old flag, so the
+   filter chips only re-render the table and never re-request it. */
+window.__dailyUsersRows = [];
+window.__dailyUsersFilterValue = 'all';
+window.__duEsc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+};
+
+window.__openDailyUsers = function (index) {
+    var canvas = document.getElementById('dailyUsersChart');
+    var overlay = document.getElementById('dailyUsersModal');
+    if (!canvas || !overlay) { return; }
+    var base = canvas.getAttribute('data-list-url');
+    if (!base) { return; }
+    var label = '';
+    var labelsEl = document.getElementById('dailyUsersLabels');
+    if (labelsEl) {
+        try { label = (JSON.parse(labelsEl.textContent) || [])[index] || ''; } catch (e) {}
+    }
+    var periodEl = document.getElementById('dailyUsersPeriod');
+    if (periodEl) { periodEl.textContent = label || 'this period'; }
+    var listEl = document.getElementById('dailyUsersList');
+    if (listEl) { listEl.innerHTML = '<div class="sub p-3">Loading&hellip;</div>'; }
+    var sumEl = document.getElementById('dailyUsersSummary');
+    if (sumEl) { sumEl.textContent = ''; }
+    window.__dailyUsersFilterValue = 'all';
+    document.querySelectorAll('[data-du-filter]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-du-filter') === 'all');
+    });
+    overlay.classList.add('open');
+    fetch(base + '&slot=' + encodeURIComponent(index), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin'
+    }).then(function (r) { return r.json(); }).then(function (data) {
+        window.__dailyUsersRows = data.rows || [];
+        if (sumEl) {
+            sumEl.textContent = (data.total || 0) + ' users \u00b7 '
+                + (data.new || 0) + ' new \u00b7 ' + (data.old || 0) + ' returning';
+        }
+        window.__renderDailyUsers();
+    }).catch(function () {
+        if (listEl) { listEl.innerHTML = '<div class="sub p-3 text-danger">Could not load the user list.</div>'; }
+    });
+};
+
+window.__closeDailyUsers = function () {
+    var overlay = document.getElementById('dailyUsersModal');
+    if (overlay) { overlay.classList.remove('open'); }
+};
+
+window.__dailyUsersFilter = function (mode) {
+    window.__dailyUsersFilterValue = mode;
+    document.querySelectorAll('[data-du-filter]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-du-filter') === mode);
+    });
+    window.__renderDailyUsers();
+};
+
+window.__renderDailyUsers = function () {
+    var listEl = document.getElementById('dailyUsersList');
+    if (!listEl) { return; }
+    var mode = window.__dailyUsersFilterValue;
+    var rows = (window.__dailyUsersRows || []).filter(function (r) {
+        if (mode === 'new') { return r.is_new; }
+        if (mode === 'old') { return !r.is_new; }
+        return true;
+    });
+    if (!rows.length) {
+        listEl.innerHTML = '<div class="sub p-3">No users match this filter.</div>';
+        return;
+    }
+    var esc = window.__duEsc;
+    var html = '<table class="table table-dark table-sm align-middle mb-0"><thead><tr>'
+        + '<th>Device</th><th>Email</th><th>IP</th><th>Location</th><th>First seen</th><th></th>'
+        + '</tr></thead><tbody>';
+    rows.forEach(function (r) {
+        html += '<tr>'
+            + '<td class="text-white">' + esc(r.device)
+                + (r.os ? ' <span class="sub">\u00b7 Android ' + esc(r.os) + '</span>' : '') + '</td>'
+            + '<td>' + (r.email ? esc(r.email) : '<span class="sub">guest</span>') + '</td>'
+            + '<td class="sub">' + (r.ip ? esc(r.ip) : '&mdash;') + '</td>'
+            + '<td class="sub">' + (r.location ? esc(r.location) : '&mdash;') + '</td>'
+            + '<td class="sub">' + esc(r.first_seen) + '</td>'
+            + '<td>' + (r.is_new
+                ? '<span class="pill bg-info">new</span>'
+                : '<span class="pill bg-dark border border-secondary">old</span>') + '</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    listEl.innerHTML = html;
+};
+
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { window.__closeDailyUsers(); }
+});
+
 /* The page may already be on that tab. */
 document.addEventListener('DOMContentLoaded', function () { window.__renderDailyChart(); });
 </script>

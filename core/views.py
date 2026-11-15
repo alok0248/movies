@@ -4848,25 +4848,28 @@ def android_app_users_full(request, app_id):
         trunc = {'hourly': TruncHour, 'daily': TruncDate,
                  'monthly': TruncMonth, 'yearly': TruncYear}[gran]
 
-        if metric == 'new':
-            bucket_rows = (all_devices.annotate(b=trunc('first_seen_at'))
-                           .values('b').annotate(n=Count('id')).order_by())
-        else:
-            bucket_rows = (AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
-                           .annotate(b=trunc('visited_at'))
-                           .values('b')
-                           .annotate(n=Count('device', distinct=True)).order_by())
-
+        # Both series are always built now: the chart draws the period's active
+        # users and the new devices inside them side by side, so `mu` only
+        # decides which series the table's wording talks about.
         key_of = {
             'hourly': lambda b: (b.year, b.month, b.day, b.hour),
             'daily': lambda b: (b.year, b.month, b.day),
             'monthly': lambda b: (b.year, b.month),
             'yearly': lambda b: (b.year,),
         }[gran]
-        counts_by_bucket = {}
-        for row in bucket_rows:
+
+        active_by_bucket = {}
+        for row in (AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
+                    .annotate(b=trunc('visited_at')).values('b')
+                    .annotate(n=Count('device', distinct=True)).order_by()):
             if row['b'] is not None:
-                counts_by_bucket[key_of(row['b'])] = row['n']
+                active_by_bucket[key_of(row['b'])] = row['n']
+
+        new_by_bucket = {}
+        for row in (all_devices.annotate(b=trunc('first_seen_at')).values('b')
+                    .annotate(n=Count('id')).order_by()):
+            if row['b'] is not None:
+                new_by_bucket[key_of(row['b'])] = row['n']
 
         # ------------------------------------------------------------ the axis
         today = timezone.localdate()
@@ -4888,12 +4891,90 @@ def android_app_users_full(request, app_id):
                 slots.append((datetime.date(yy, mm0 + 1, 1).strftime('%b %Y'),
                               (yy, mm0 + 1)))
         else:
-            years = [k[0] for k in counts_by_bucket if k[0]] or [today.year]
+            years = [k[0] for k in list(active_by_bucket) + list(new_by_bucket) if k[0]] or [today.year]
             for yy in range(max(min(years), today.year - 9), today.year + 1):
                 slots.append((str(yy), (yy,)))
 
         labels = [label for label, _ in slots]
-        values = [counts_by_bucket.get(key, 0) for _, key in slots]
+        values = [active_by_bucket.get(key, 0) for _, key in slots]
+        new_values = [new_by_bucket.get(key, 0) for _, key in slots]
+
+        # ------------------------------------------------- one period's visitors
+        # Clicking a bar asks for this: the devices behind that period, with
+        # the address they came from and whether the app was seeing them for
+        # the first time then. The chart sends ?userlist=1&slot=<index>.
+        if request.GET.get('userlist') == '1':
+            from .geoip import cached_rows
+
+            def _window(key):
+                if gran == 'hourly':
+                    start = datetime.datetime(key[0], key[1], key[2], key[3])
+                    end = start + datetime.timedelta(hours=1)
+                elif gran == 'daily':
+                    start = datetime.datetime(key[0], key[1], key[2])
+                    end = start + datetime.timedelta(days=1)
+                elif gran == 'monthly':
+                    start = datetime.datetime(key[0], key[1], 1)
+                    end = (datetime.datetime(key[0] + 1, 1, 1) if key[1] == 12
+                           else datetime.datetime(key[0], key[1] + 1, 1))
+                else:
+                    start = datetime.datetime(key[0], 1, 1)
+                    end = datetime.datetime(key[0] + 1, 1, 1)
+                return timezone.make_aware(start), timezone.make_aware(end)
+
+            try:
+                slot_index = int(request.GET.get('slot') or 0)
+            except (TypeError, ValueError):
+                slot_index = 0
+            slot_index = max(0, min(len(slots) - 1, slot_index)) if slots else 0
+            start, end = _window(slots[slot_index][1]) if slots else (None, None)
+
+            device_ip = {}
+            if start is not None:
+                for v in (AndroidAppDeviceVisit.objects
+                          .filter(android_app=selected_app,
+                                  visited_at__gte=start, visited_at__lt=end)
+                          .order_by('-visited_at')):
+                    device_ip.setdefault(v.device_id, v.ip_address or '')
+
+            devices = {d.id: d for d in
+                       AndroidAppDevice.objects.filter(id__in=list(device_ip))}
+            geo = cached_rows(device_ip.values())
+            list_rows = []
+            for dev_id, ip in device_ip.items():
+                dev = devices.get(dev_id)
+                if dev is None:
+                    continue
+                place = geo.get(ip)
+                place_bits = [b for b in ((place.city if place else ''),
+                                          (place.country if place else '')) if b]
+                is_new = bool(start is not None
+                              and dev.first_seen_at and start <= dev.first_seen_at < end)
+                list_rows.append({
+                    'user_id': dev.user_id,
+                    'device': dev.device_model or 'Unknown device',
+                    'os': dev.os_version or '',
+                    'ip': ip or '',
+                    'location': ', '.join(place_bits),
+                    'email': (email_by_device.get(dev.user_id)
+                              or email_by_device.get(dev.account_key) or ''),
+                    'is_new': is_new,
+                    'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y %H:%M')
+                                  if dev.first_seen_at else '',
+                    'last_seen': timezone.localtime(dev.last_seen_at).strftime('%d %b %Y %H:%M')
+                                 if dev.last_seen_at else '',
+                })
+            # New devices first, then alphabetical, so the popup opens usefully.
+            list_rows.sort(key=lambda r: (not r['is_new'], r['device'].lower()))
+            return JsonResponse({
+                'label': slots[slot_index][0] if slots else '',
+                'bucket': gran,
+                'total': len(list_rows),
+                'new': sum(1 for r in list_rows if r['is_new']),
+                'old': sum(1 for r in list_rows if not r['is_new']),
+                'rows': list_rows[:500],
+                'truncated': len(list_rows) > 500,
+            })
 
         # ----------------------------------------------------------- the stats
         visits = AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
@@ -4912,6 +4993,7 @@ def android_app_users_full(request, app_id):
             rows.append({
                 'label': label,
                 'count': count,
+                'new': new_values[i],
                 'pct': round(count * 100.0 / max_value, 1),
                 'delta': (count - prev) if prev is not None else None,
                 'delta_pct': (round((count - prev) * 100.0 / prev) if prev else None),
@@ -4923,6 +5005,8 @@ def android_app_users_full(request, app_id):
             'daily_metric': metric,
             'daily_labels': labels,
             'daily_values': values,
+            'daily_values_new': new_values,
+            'daily_new_total': sum(new_values),
             'daily_rows': rows,
             'daily_word': {'hourly': 'hour', 'daily': 'day', 'monthly': 'month',
                            'yearly': 'year'}[gran],
