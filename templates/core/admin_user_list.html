@@ -15,9 +15,14 @@
             <h2 class="text-white mt-2 mb-0"><i class="fas fa-users-cog me-2"></i>User Management</h2>
             <div class="text-secondary small mt-1">Manage all users, subscriptions, and access</div>
         </div>
-        <a href="{% url 'admin_user_add' %}" class="adm-btn is-ok">
-            <i class="fas fa-plus me-1"></i> Add User
-        </a>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'admin_analytics' %}" class="adm-btn is-soft-blue">
+                <i class="fas fa-chart-line me-1"></i> User Analytics
+            </a>
+            <a href="{% url 'admin_user_add' %}" class="adm-btn is-ok">
+                <i class="fas fa-plus me-1"></i> Add User
+            </a>
+        </div>
     </div>
 
     <!-- Stats Row -->
