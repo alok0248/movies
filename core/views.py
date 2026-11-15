@@ -18664,10 +18664,19 @@ def admin_ip_geo_batch(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_ip_geo(request, ip):
-    """Cached ipwho.is lookup for one address; powers the Location column."""
+    """Cached ipwho.is lookup for one address; powers the Location column.
+
+    A geo chip is a convenience, so a failure here answers a small JSON error
+    instead of a 500: the record write already retries in ``geoip._store`` and
+    falls back to a background save, and this guard covers everything else.
+    """
     from . import geoip
 
-    data = geoip.lookup(ip, force=request.GET.get('refresh') == '1')
+    try:
+        data = geoip.lookup(ip, force=request.GET.get('refresh') == '1')
+    except Exception as exc:  # noqa: BLE001 - never 500 a location chip
+        logger.warning('ip geo lookup failed for %s: %s', ip, exc)
+        data = {'ok': False, 'ip': ip, 'error': 'Lookup unavailable right now.'}
     return JsonResponse(data)
 
 

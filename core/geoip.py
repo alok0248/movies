@@ -258,10 +258,20 @@ def row_summary(row):
     return summary
 
 
-def _store(ip, data):
+# SQLite allows one writer at a time, and this table is written while the app is
+# writing heartbeats and visits — so an admin looking up an address could land
+# exactly on another write and get "database is locked" (a 500 on the geo chip).
+# Four short attempts cover a momentary collision; anything longer is retried off
+# the request path, because the caller only needs the answer, not the row.
+STORE_RETRIES = 4
+STORE_BACKOFF = 0.05  # 50, 100, 200 ms — ~350 ms at worst, inline
+STORE_BACKGROUND_TRIES = 6
+STORE_BACKGROUND_BACKOFF = 1.0  # then 2, 4, 8, 16, 32 s in the background
+
+
+def _write_location_row(ip, summary, payload):
     from .models import IPLocation
 
-    summary = summarize(data)
     IPLocation.objects.update_or_create(
         ip=ip,
         defaults={
@@ -271,9 +281,68 @@ def _store(ip, data):
             'region': summary['region'],
             'city': summary['city'],
             'isp': summary['isp'],
-            'payload': json.dumps(data, ensure_ascii=False)[:20000],
+            'payload': payload,
         },
     )
+
+
+def _is_busy(exc):
+    text = str(exc).lower()
+    return 'locked' in text or 'busy' in text
+
+
+def _store_later(ip, summary, payload):
+    """Retry a write the request path gave up on, without holding a connection."""
+    def _retry():
+        try:
+            for attempt in range(STORE_BACKGROUND_TRIES):
+                try:
+                    _write_location_row(ip, summary, payload)
+                    logger.info('geoip: saved %s on background retry %d', ip, attempt + 1)
+                    return
+                except Exception as exc:  # noqa: BLE001 - retried or logged below
+                    if not _is_busy(exc):
+                        logger.warning('geoip: could not save %s: %s', ip, exc)
+                        return
+                    time.sleep(STORE_BACKGROUND_BACKOFF * (2 ** attempt))
+            logger.warning('geoip: gave up saving %s after %d retries',
+                           ip, STORE_BACKGROUND_TRIES)
+        finally:
+            try:
+                from django.db import connections
+                connections.close_all()
+            except Exception:
+                pass
+
+    try:
+        threading.Thread(target=_retry, name='geoip-store', daemon=True).start()
+    except Exception:
+        logger.debug('geoip: could not start the background save for %s', ip, exc_info=True)
+
+
+def _store(ip, data):
+    """Save one lookup, tolerating a busy database. Never raises.
+
+    The summary is returned either way: the admin asked where an address is, and
+    it is known — whether the row made it in on the first attempt is bookkeeping.
+    """
+    summary = summarize(data)
+    payload = json.dumps(data, ensure_ascii=False)[:20000]
+    last_exc = None
+
+    for attempt in range(STORE_RETRIES):
+        try:
+            _write_location_row(ip, summary, payload)
+            return summary
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if not _is_busy(exc):
+                logger.warning('geoip: could not store %s: %s', ip, exc)
+                return summary
+            time.sleep(STORE_BACKOFF * (2 ** attempt))
+
+    logger.info('geoip: %s still busy (%s) — queued for a background save', ip, last_exc)
+    _store_later(ip, summary, payload)
     return summary
 
 
