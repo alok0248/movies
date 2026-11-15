@@ -101,7 +101,14 @@ def challenge_needed(request):
 
 
 def _send_code(user, code):
-    """Mail the code. Returns (ok, error)."""
+    """Mail the code through the site's configured sender. Returns (ok, error).
+
+    Uses ``core.auth.send_configured_email`` rather than a bare ``send_mail``:
+    ``EMAIL_BACKEND`` is the console backend, so a bare send only prints the
+    message to the log. The configured sender is what resolves the admin's SMTP
+    address (EmailAddress rows, then SiteSettings) and actually delivers —
+    the same path every other site email already takes.
+    """
     body = (
         "Your administrator sign-in code is: {code}\n\n"
         "It expires in {minutes} minutes. Enter it on the verification screen to "
@@ -109,16 +116,18 @@ def _send_code(user, code):
         "If you did not try to sign in, change your password now.\n"
     ).format(code=code, minutes=10)
     try:
-        from django.core.mail import send_mail
-        send_mail(
-            'Your administrator sign-in code',
-            body,
-            getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@localhost'),
-            [user.email],
+        from .auth import send_configured_email
+        ok = send_configured_email(
+            subject='Your administrator sign-in code',
+            message=body,
+            recipient_list=[user.email],
+            purpose='verification',
             fail_silently=False,
         )
-        return True, ''
-    except Exception as exc:      # an SMTP outage must never crash a request
+        if ok:
+            return True, ''
+        return False, 'the mailer reported a delivery failure'
+    except Exception as exc:      # a mail problem must never crash a request
         logger.warning('Staff OTP: could not send the code to %s', user.email, exc_info=True)
         return False, str(exc)[:300]
 
