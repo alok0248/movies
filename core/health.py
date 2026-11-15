@@ -194,7 +194,7 @@ SCHEDULED_JOBS = [
     ('sync_verification', 'Verification sync', 8 * 24),
     ('verify_backup', 'Backup verification', 8 * 24),
     ('check_catalogue_links', 'Catalogue link check', 8 * 24),
-    ('rollup_request_log', 'Request log rollup', 26),
+    ('rollup_request_log', 'Request log rollup', 3),
     ('prune_app_data', 'Retention prune', 32 * 24),
     ('restore_drill', 'Restore drill', 32 * 24),
 ]
