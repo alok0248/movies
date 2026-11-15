@@ -3066,7 +3066,8 @@ def general_settings(request):
 def security_protection_settings(request):
     return _settings_section_view(
         request, SecurityProtectionForm, 'Protection',
-        description='Addresses that are never blocked, bot signatures, and browser protection.',
+        description='Addresses that are never blocked, bot signatures, browser protection, '
+                    'and whether a visitor must sign in.',
         sections=SECURITY_FIELD_SECTIONS,
     )
 
@@ -18251,7 +18252,7 @@ SETTINGS_HUB = {
         'subtitle': 'Who is never blocked, who is treated as a bot, and what the '
                     'site refuses to serve.',
         'tabs': [
-            ('protection', 'Protection', 'Trusted addresses, bot signatures, DevTools rule', 'security_protection_settings'),
+            ('protection', 'Protection', 'Trusted addresses, bot signatures, DevTools rule, sign-in gate', 'security_protection_settings'),
             ('blocking', 'URL blocking', 'Blocked URLs and redirects', 'url_blocking_settings'),
         ],
     },
