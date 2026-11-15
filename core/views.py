@@ -16824,7 +16824,14 @@ def admin_user_list(request):
     android_users = UserSession.objects.filter(source='android').values('user_id').distinct().count()
     web_users = UserSession.objects.filter(source='web').values('user_id').distinct().count()
 
+    # The "All Users & Devices" page is reached through an app, but its account
+    # list is global, so any app answers it. Link the first active one and fall
+    # back to whichever exists, so the button survives that app being removed.
+    app_users_app = (AndroidApp.objects.filter(is_active=True).order_by('id').first()
+                     or AndroidApp.objects.order_by('id').first())
+
     return render(request, 'core/admin_user_list.html', {
+        'app_users_app': app_users_app,
         'users': users,
         'total': total,
         'active': active,

@@ -19,6 +19,11 @@
             <a href="{% url 'admin_analytics' %}" class="adm-btn is-soft-blue">
                 <i class="fas fa-chart-line me-1"></i> User Analytics
             </a>
+            {% if app_users_app %}
+            <a href="{% url 'android_app_users_full' app_users_app.id %}?tab=accounts" class="adm-btn is-soft-violet">
+                <i class="fas fa-mobile-screen-button me-1"></i> App Users &amp; Devices
+            </a>
+            {% endif %}
             <a href="{% url 'admin_user_add' %}" class="adm-btn is-ok">
                 <i class="fas fa-plus me-1"></i> Add User
             </a>
