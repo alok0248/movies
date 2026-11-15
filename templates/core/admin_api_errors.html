@@ -64,6 +64,44 @@
         {% if q %}<a href="?" class="adm-chip">Clear search</a>{% endif %}
     </form>
 
+    <!-- Refusals that are counted, not logged: bot CSRF 403s and scanner 405s.
+         The numbers stay here so the list above can stay readable. -->
+    <details class="adm-card p-3 mb-3"{% if suppressed_today %} open{% endif %}>
+        <summary style="cursor:pointer;font-size:.86rem;font-weight:600;color:#94a3b8;">
+            <i class="fas fa-robot me-1"></i>Suppressed bot traffic
+            <span class="adm-badge ms-2" style="background:rgba(148,163,184,.15);color:#94a3b8;">{{ suppressed_today }} today</span>
+            <span class="adm-badge ms-1" style="background:rgba(148,163,184,.12);color:#94a3b8;">{{ suppressed_week }} in 7 days</span>
+            <span class="ms-2" style="font-weight:400;font-size:.74rem;color:#475569;">
+                403 CSRF refusals from crawlers and 405s from scanners — counted here instead of filling the list
+            </span>
+        </summary>
+        {% if suppressed_rows %}
+        <table class="adm-table mt-3 mb-0">
+            <thead>
+                <tr><th>Status</th><th>Who</th><th>Path</th><th class="num">Hits (7d)</th></tr>
+            </thead>
+            <tbody>
+                {% for row in suppressed_rows %}
+                <tr>
+                    <td><span class="adm-badge is-warn">{{ row.status_code }}</span></td>
+                    <td class="adm-sub">{{ row.family }}</td>
+                    <td class="adm-mono">{{ row.path }}</td>
+                    <td class="num">{{ row.n }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if suppressed_by_family %}
+        <div class="adm-sub mt-2">
+            By client:
+            {% for f in suppressed_by_family %}<span class="adm-badge is-off ms-1">{{ f.family }} {{ f.n }}</span>{% endfor %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="adm-sub mt-2">Nothing suppressed in the last 7 days.</div>
+        {% endif %}
+    </details>
+
     {% for rec in records %}
     <div class="adm-card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-start mb-2" style="gap:.75rem;">

@@ -3389,6 +3389,36 @@ class ErrorLog(models.Model):
         return f'[{self.status_code}] {self.method} {self.path}'
 
 
+class SuppressedRequest(models.Model):
+    """Machine refusals, counted instead of logged one row each.
+
+    A crawler POSTing to an Ajax endpoint without a CSRF token gets the 403 it
+    deserves, and a scanner poking the sync endpoint with GET gets a 405 — both
+    are the security working, not a fault. They used to land in ErrorLog like a
+    real exception, and at ~3,900 a day they buried the eight actual 500s.
+
+    Volume still matters (is someone hammering us?), so it is kept as one row
+    per day/status/family/path with a count rather than one row per request.
+    """
+
+    day = models.DateField(db_index=True)
+    status_code = models.PositiveIntegerField(default=403)
+    family = models.CharField(max_length=16, default='bot', db_index=True)
+    path = models.CharField(max_length=300, blank=True, default='')
+    hits = models.PositiveIntegerField(default=0)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('day', 'status_code', 'family', 'path')
+        ordering = ['-day', '-hits']
+        indexes = [models.Index(fields=['-day'], name='suppressed_day_idx')]
+        verbose_name = 'Suppressed request'
+        verbose_name_plural = 'Suppressed requests'
+
+    def __str__(self):
+        return '%s %s %s x%d' % (self.day, self.status_code, self.path, self.hits)
+
+
 class RequestLog(models.Model):
     """Every incoming request — page views, Ajax calls and Android API hits.
 

@@ -10939,6 +10939,23 @@ def api_error_log(request):
     except Exception:
         pass
 
+    # What was counted instead of logged: bot 403s and scanner 405s. Kept on
+    # the same page so "is anyone hammering us" still has an answer while the
+    # list above stays short enough to read.
+    from django.db.models import Sum
+    from datetime import timedelta
+    from .models import SuppressedRequest
+
+    week_start = timezone.localdate() - timedelta(days=6)
+    suppressed = SuppressedRequest.objects.filter(day__gte=week_start)
+    suppressed_today = (suppressed.filter(day=timezone.localdate())
+                        .aggregate(n=Sum('hits'))['n'] or 0)
+    suppressed_week = suppressed.aggregate(n=Sum('hits'))['n'] or 0
+    suppressed_rows = list(suppressed.values('status_code', 'family', 'path')
+                           .annotate(n=Sum('hits')).order_by('-n')[:10])
+    suppressed_by_family = list(suppressed.values('family')
+                                .annotate(n=Sum('hits')).order_by('-n'))
+
     return render(request, 'core/admin_api_errors.html', {
         'records': records,
         'page_obj': page_obj,
@@ -10948,6 +10965,10 @@ def api_error_log(request):
         'status': status,
         'q': q,
         'back_url': 'admin_dashboard',
+        'suppressed_today': suppressed_today,
+        'suppressed_week': suppressed_week,
+        'suppressed_rows': suppressed_rows,
+        'suppressed_by_family': suppressed_by_family,
     })
 
 

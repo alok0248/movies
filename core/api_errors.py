@@ -26,6 +26,103 @@ _writes_since_prune = [0]
 # Endpoints that are not worth recording (static assets, health probes).
 SKIP_PREFIXES = ('/static/', '/media/', '/admin-dashboard/health/')
 
+# A refusal from one of these is the security doing its job, not a fault. The
+# app's own user agent is checked first and always keeps its row.
+BOT_UA_MARKERS = (
+    'bot', 'crawler', 'spider', 'slurp', 'baidu', 'yandex', 'bing', 'duckduck',
+    'ahrefs', 'semrush', 'mj12', 'petal', 'headless', 'phantomjs', 'scrapy',
+    'python-requests', 'python-urllib', 'aiohttp', 'curl/', 'wget',
+    'go-http-client', 'libwww', 'java/', 'node-fetch', 'axios',
+)
+SCANNER_UA_MARKERS = ('okhttp', 'httpclient', 'apache-httpclient', 'dart:io', 'okgo')
+# Ajax endpoints a cached page or a service worker can replay without a token.
+CSRF_REPLAY_PREFIXES = ('/ajax/', '/sw-proxy')
+
+
+def user_agent_family(request):
+    """'app', 'scanner', 'bot', 'browser' or 'none'."""
+    try:
+        ua = (request.META.get('HTTP_USER_AGENT') or '').strip().lower()
+    except Exception:
+        return 'none'
+    if not ua:
+        return 'none'
+    if 'cinestream' in ua:
+        return 'app'
+    if any(marker in ua for marker in SCANNER_UA_MARKERS):
+        return 'scanner'
+    if any(marker in ua for marker in BOT_UA_MARKERS):
+        return 'bot'
+    if 'mozilla' in ua:
+        return 'browser'
+    return 'other'
+
+
+def is_suppressed_refusal(request, status_code):
+    """True for 403/405 refusals that should be counted, not logged.
+
+    The app keeps every 4xx it triggers: a phone being refused is worth seeing.
+    Everyone else's CSRF and method refusals are noise — thousands a day — and
+    are counted in SuppressedRequest instead.
+    """
+    try:
+        status_code = int(status_code or 0)
+    except Exception:
+        return False
+    if status_code not in (403, 405):
+        return False
+    family = user_agent_family(request)
+    if family == 'app':
+        return False
+    if status_code == 405:
+        # The app POSTs its endpoints; a GET is a scanner probing them.
+        return True
+    if family in ('bot', 'scanner', 'none', 'other'):
+        return True
+    # Browser + 403 is a stale page or a service worker replaying an Ajax call
+    # without a token. A signed-in browser being refused elsewhere (a real
+    # 403 from a view) still gets its row.
+    try:
+        path = request.path or ''
+        signed_in = getattr(getattr(request, 'user', None), 'is_authenticated', False)
+    except Exception:
+        return False
+    return (not signed_in) and path.startswith(CSRF_REPLAY_PREFIXES)
+
+
+def _count_suppressed(request, status_code):
+    """Increment today's counter for this refusal. Never raises."""
+    try:
+        from django.db import IntegrityError
+        from django.db.models import F
+        from django.utils import timezone
+        from .models import SuppressedRequest
+
+        day = timezone.localdate()
+        family = user_agent_family(request)
+        path = (getattr(request, 'path', '') or '')[:300]
+        key = {'day': day, 'status_code': int(status_code),
+               'family': family, 'path': path}
+        if not SuppressedRequest.objects.filter(**key).update(hits=F('hits') + 1):
+            try:
+                SuppressedRequest.objects.create(hits=1, **key)
+            except IntegrityError:
+                SuppressedRequest.objects.filter(**key).update(hits=F('hits') + 1)
+    except Exception:
+        logger.debug('SuppressedRequest: could not count %s', status_code, exc_info=True)
+
+
+def prune_suppressed(days=45):
+    """Drop counters older than the retention window."""
+    try:
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import SuppressedRequest
+        SuppressedRequest.objects.filter(
+            day__lt=timezone.localdate() - timedelta(days=days)).delete()
+    except Exception:
+        logger.debug('SuppressedRequest: prune failed', exc_info=True)
+
 
 def should_record(request):
     """False for paths we never want in the error log."""
@@ -80,6 +177,9 @@ def record_error(request, kind, status_code, view_name='', error_type='',
             pass
         if not should_record(request):
             return
+        if is_suppressed_refusal(request, status_code):
+            _count_suppressed(request, status_code)
+            return
         from .models import ErrorLog
         ErrorLog.objects.create(
             kind=kind,
@@ -125,6 +225,7 @@ def _maybe_prune():
         return
     _writes_since_prune[0] = 0
     prune()
+    prune_suppressed()
 
 
 def prune():
