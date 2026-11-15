@@ -1,12 +1,24 @@
 {% load custom_filters %}
     <!-- ============================ ACCOUNTS ============================ -->
     <div class="d-flex gap-2 flex-wrap mt-2 mb-1">
-        <a class="fbtn {% if view == 'all' %}active{% endif %}" href="?tab=accounts">All</a>
-        <a class="fbtn {% if view == 'online' %}active{% endif %}" href="?tab=accounts&f=online">Online now</a>
-        <a class="fbtn {% if view == 'blocked' %}active{% endif %}" href="?tab=accounts&f=blocked">Blocked</a>
-        <a class="fbtn {% if view == 'subscribed' %}active{% endif %}" href="?tab=accounts&f=subscribed">Subscribed</a>
-        <a class="fbtn {% if view == 'free' %}active{% endif %}" href="?tab=accounts&f=free">Free</a>
-        <a class="fbtn {% if view == 'never' %}active{% endif %}" href="?tab=accounts&f=never">Never online</a>
+        <a class="fbtn {% if view == 'all' %}active{% endif %}" href="?tab=accounts{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">All</a>
+        <a class="fbtn {% if view == 'online' %}active{% endif %}" href="?tab=accounts&f=online{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Online now</a>
+        <a class="fbtn {% if view == 'blocked' %}active{% endif %}" href="?tab=accounts&f=blocked{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Blocked</a>
+        <a class="fbtn {% if view == 'subscribed' %}active{% endif %}" href="?tab=accounts&f=subscribed{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Subscribed</a>
+        <a class="fbtn {% if view == 'free' %}active{% endif %}" href="?tab=accounts&f=free{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Free</a>
+        <a class="fbtn {% if view == 'never' %}active{% endif %}" href="?tab=accounts&f=never{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Never online</a>
+    </div>
+
+    <!-- Which app the account's install belongs to. Blocking itself stays per
+         account (it is what the app checks on its next heartbeat), so this
+         narrows the list rather than splitting the block. -->
+    <div class="d-flex gap-2 flex-wrap mt-1 mb-1 align-items-center">
+        <span class="sub me-1">App:</span>
+        <a class="fbtn {% if not app_filter %}active{% endif %}" href="?tab=accounts{% if view != 'all' %}&amp;f={{ view }}{% endif %}">All apps</a>
+        {% for a in app_choices %}
+            <a class="fbtn {% if app_filter == a.id %}active{% endif %}" href="?tab=accounts&amp;app={{ a.id }}{% if view != 'all' %}&amp;f={{ view }}{% endif %}">{{ a.name }}</a>
+        {% endfor %}
+        <span class="sub ms-2">Access changes land on the next heartbeat (&le;60s).</span>
     </div>
     <div class="adm-table-wrap mt-3">
         <table class="table table-dark table-hover mb-0">
@@ -74,6 +86,9 @@
                             <div class="sub">first seen {{ r.device.first_seen_at|date:'Y-m-d H:i' }}</div>
                         {% else %}
                             <div class="sub">No device record yet</div>
+                        {% endif %}
+                        {% if r.apps %}
+                            <div class="mt-1">{% for n in r.apps %}<span class="pill bg-dark border border-secondary me-1">{{ n }}</span>{% endfor %}</div>
                         {% endif %}
                     </td>
                     <td>

@@ -296,101 +296,42 @@
                         </div>
                     </div>
 
-                    <!-- Users & Blocking -->
+                    <!-- Users & Blocking: controls moved to the users page, where
+                         the same list also filters by app. Kept as a card so the
+                         #users-block link and the counts still work. -->
                     <div class="adm-card" id="users-block">
                         <div class="adm-card-head">
                             <div class="aad-head-titles">
                                 <span class="aad-icon"><i class="fas fa-user-shield"></i></span>
                                 <div>
                                     <div class="adm-card-title">Users &amp; blocking</div>
-                                    <p class="adm-card-sub">Access changes land on the next heartbeat (&le;60s).</p>
+                                    <p class="adm-card-sub">Managed on the users page, filtered by app. Access changes land on the next heartbeat (&le;60s).</p>
                                 </div>
                             </div>
                             <div class="adm-btn-group">
                                 <span class="adm-badge is-ok">Total {{ synced_total }}</span>
                                 <span class="adm-badge is-info">Subscribed {{ synced_subscribed }}</span>
                                 <span class="adm-badge is-warn">Free {{ synced_free }}</span>
-                                <a href="{% url 'android_app_users_full' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-expand"></i> Full list</a>
-                                <a href="{% url 'synced_users_list' %}" class="adm-btn is-sm"><i class="fas fa-users"></i> All users</a>
                             </div>
                         </div>
-                        <div class="adm-card-body flush">
-                            <div class="adm-table-wrap aad-table-scroll">
-                                <table class="adm-table align-middle mb-0" id="blockTable">
-                                    <thead>
-                                        <tr>
-                                            <th>User</th>
-                                            <th>Status</th>
-                                            <th>App / device</th>
-                                            <th>Plan</th>
-                                            <th>Access</th>
-                                            <th style="min-width:214px;">Block controls</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for u in synced_users %}
-                                        {% with hb=hb_map|get_item:u.email %}
-                                        <tr id="block-row-{{ u.id }}" data-email="{{ u.email }}">
-                                            <td onclick="window.location='{% url 'synced_user_detail' u.id %}'" style="cursor:pointer;">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <span class="aad-av">
-                                                        <span style="background:linear-gradient(135deg,{% if u.is_subscribed %}#22c55e,#16a34a{% else %}#64748b,#475569{% endif %});">{{ u.display_name|first|upper }}</span>
-                                                        {% if u.photo_url %}<img src="{{ u.photo_url }}" alt="" onerror="this.remove()">{% endif %}
-                                                    </span>
-                                                    <div>
-                                                        <div class="fw-semibold">{{ u.display_name|default:u.email }}</div>
-                                                        <div class="adm-muted" style="font-size:.7rem;">{{ u.email }}</div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td class="status-cell">
-                                                {% if hb and hb.is_online %}
-                                                    <span class="adm-badge is-ok">Online</span>
-                                                {% elif hb %}
-                                                    <span class="adm-badge is-off">Offline</span>
-                                                    {% if hb.last_seen_at %}<div class="adm-muted" style="font-size:.7rem;">{{ hb.last_seen_at|timesince }} ago</div>{% endif %}
-                                                {% else %}
-                                                    <span class="adm-badge is-off">Never</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                <div>{% if hb %}<i class="fab fa-android me-1" style="color:#34d399;"></i>{{ hb.device_model }}{% else %}{{ u.device_model|default:'-' }}{% endif %}</div>
-                                                <div class="adm-muted" style="font-size:.7rem;">{% if hb %}v{{ hb.app_version|default:'-' }} &middot; {{ hb.os_version }}{% else %}v{{ u.app_version|default:'-' }}{% endif %}</div>
-                                            </td>
-                                            <td>
-                                                {% if u.is_subscribed %}<span class="adm-badge is-ok"><i class="fas fa-check"></i>{{ u.plan|default:'VIP' }}</span>{% else %}<span class="adm-badge is-off">Free</span>{% endif %}
-                                            </td>
-                                            <td class="access-cell">
-                                                {% if u.block_mode %}
-                                                    <span class="adm-badge is-danger">{{ u.get_block_mode_display }}</span>
-                                                    {% if u.blocked_at %}<div class="adm-muted" style="font-size:.7rem;">{{ u.blocked_at|timesince }} ago</div>{% endif %}
-                                                {% else %}
-                                                    <span class="adm-badge is-ok">Active</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                <div class="adm-btn-group aad-blockbtns">
-                                                    <button type="button" class="adm-btn is-sm" title="Playback blocked — titles won't play" onclick="blockUser({{ u.id }}, 'play', this)"><i class="fas fa-volume-mute"></i>Play</button>
-                                                    <button type="button" class="adm-btn is-sm" title="App blocked — no data, app shows Server is Down" onclick="blockUser({{ u.id }}, 'app', this)"><i class="fas fa-wifi"></i>App</button>
-                                                    <button type="button" class="adm-btn is-sm is-danger" title="Stop all access — every API call refused" onclick="blockUser({{ u.id }}, 'full', this)"><i class="fas fa-ban"></i>Full</button>
-                                                    <button type="button" class="adm-btn is-sm is-ok" title="Restore normal access" onclick="blockUser({{ u.id }}, '', this)"><i class="fas fa-check"></i>Restore</button>
-                                                    <button type="button" class="adm-btn is-sm is-quiet" title="Delete this user's history and cloud data (asks first)" onclick="wipeUserData({{ u.id }}, this)"><i class="fas fa-trash-alt"></i>Data</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {% endwith %}
-                                        {% empty %}
-                                        <tr><td colspan="6"><div class="adm-empty"><i class="fas fa-inbox"></i>No synced users yet — they appear the first time the app syncs.</div></td></tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                        <div class="adm-card-body">
+                            <div class="aad-note mb-2">
+                                <strong>Full</strong> refuses every call (403) &middot;
+                                <strong>Play</strong> stops playback (403) &middot;
+                                <strong>App</strong> returns 503 so the app shows &ldquo;Server is Down&rdquo;.
                             </div>
-                            <div class="adm-card-foot" style="justify-content:space-between;">
-                                <div class="aad-note">
-                                    <strong>Full</strong> refuses every call (403) &middot; <strong>Play</strong> stops playback (403) &middot; <strong>App</strong> returns 503 so the app shows &ldquo;Server is Down&rdquo;.
-                                </div>
-                                <div id="blockStatus" class="small"></div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <a href="{% url 'android_app_users_full' selected_app.id %}?tab=accounts&amp;app={{ selected_app.id }}" class="adm-btn is-info">
+                                    <i class="fas fa-user-shield"></i> Block users on this app
+                                </a>
+                                <a href="{% url 'android_app_users_full' selected_app.id %}?tab=accounts" class="adm-btn is-sm">
+                                    <i class="fas fa-users"></i> All accounts
+                                </a>
+                                <a href="{% url 'synced_users_list' %}" class="adm-btn is-sm">
+                                    <i class="fas fa-address-book"></i> Account list
+                                </a>
                             </div>
+                            <div id="blockStatus" class="small pt-1"></div>
                             <div class="csrf-holder" hidden>{% csrf_token %}</div>
                         </div>
                     </div>

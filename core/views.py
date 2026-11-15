@@ -4399,6 +4399,14 @@ def android_app_users_full(request, app_id):
     q = (request.GET.get('q') or '').strip()
     view = (request.GET.get('f') or 'all').strip().lower()
 
+    # An account's app is whichever install carries its device id — or the
+    # account key the visit endpoint resolved for it — so "which app is this
+    # user on" is answered from the install rows, not from a column on the
+    # account.
+    app_filter = (request.GET.get('app') or '').strip()
+    app_filter_id = int(app_filter) if app_filter.isdigit() else None
+    app_choices = list(AndroidApp.objects.all().values('id', 'name').order_by('name'))
+
     users_qs = SyncedUser.objects.all().order_by('-last_synced_at')
     if q:
         users_qs = users_qs.filter(
@@ -4424,6 +4432,25 @@ def android_app_users_full(request, app_id):
             users_qs = users_qs.filter(email__in=list(online_emails)) if online_emails else users_qs.none()
         else:
             users_qs = users_qs.exclude(email__in=list(online_emails))
+
+    if app_filter_id:
+        # An install is keyed by the device id it reported and by the account key
+        # resolved at visit time, so an account matches on either of those, or on
+        # its email/auth user id when the app sent one of those as the key.
+        install_keys = set()
+        for dev_key, acct_key in AndroidAppDevice.objects.filter(
+                android_app_id=app_filter_id).values_list('user_id', 'account_key'):
+            if dev_key:
+                install_keys.add(dev_key)
+            if acct_key:
+                install_keys.add(acct_key)
+        if install_keys:
+            keys = list(install_keys)
+            users_qs = users_qs.filter(
+                Q(device_id__in=keys) | Q(email__in=keys)
+                | Q(user_id__in=[k for k in keys if k.isdigit()]))
+        else:
+            users_qs = users_qs.none()
 
     # ---------------------------------------------------------------- tabs
     # One list per tab. Only the open tab's rows are built and only its markup
@@ -4497,14 +4524,32 @@ def android_app_users_full(request, app_id):
         'q': q,
         'view': view,
         'counts': counts,
-        'active_tab': tab,
-        'email_by_device': email_by_device,
-    }
+            'active_tab': tab,
+            'email_by_device': email_by_device,
+            'app_choices': app_choices,
+            'app_filter': app_filter_id,
+        }
 
     if tab == 'accounts':
         # ------------------------------------------------------------- user rows
         paginator = Paginator(users_qs, 25)
         page_obj = paginator.get_page(request.GET.get('page') or 1)
+
+        # {device key: {app names}} over the whole install table, built once so
+        # the App column costs no query per row.
+        apps_by_device_key = {}
+        for dev_row in AndroidAppDevice.objects.values('user_id', 'account_key',
+                                                       'android_app__name'):
+            name = dev_row['android_app__name']
+            for key in (dev_row['user_id'], dev_row['account_key']):
+                if key and name:
+                    apps_by_device_key.setdefault(key, set()).add(name)
+
+        def _row_apps(u):
+            for key in (u.device_id, u.email, str(u.user_id or '')):
+                if key and key in apps_by_device_key:
+                    return sorted(apps_by_device_key[key])
+            return []
 
         page_ids = [u.user_id for u in page_obj.object_list if u.user_id]
         page_emails = [u.email for u in page_obj.object_list if u.email]
@@ -4552,6 +4597,9 @@ def android_app_users_full(request, app_id):
                 'hb': hb,
                 'account': acct,
                 'device': device_map.get(u.device_id),
+                # Which apps this account's installs belong to, for the App
+                # column and to make the app filter legible in each row.
+                'apps': _row_apps(u),
                 'history': history_counts.get(u.user_id, 0),
                 'watchlist': watchlist_counts.get(u.user_id, 0),
                 'activity': activity_counts.get(u.user_id, 0),
