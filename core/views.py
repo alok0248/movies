@@ -4829,6 +4829,10 @@ def android_app_users_full(request, app_id):
     selected_versions = [v.strip() for v in request.GET.getlist('versions') if v.strip()]
     version_facets = list(
         users_qs.exclude(app_version='')
+        # order_by() with no arguments clears the ordering users_qs carries
+        # (last_synced_at). An inherited ORDER BY joins the GROUP BY, which
+        # returned one row per user instead of one per version.
+        .order_by()
         .values('app_version')
         .annotate(n=Count('id'), b=_Max('build_number'))
     )
