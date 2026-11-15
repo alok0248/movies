@@ -40,6 +40,9 @@ EXEMPT_PREFIXES = (
     # The status page explains the gate, so it has to be readable before it is
     # passed — otherwise the only people who could read it never need to.
     '/security-status/',
+    # The admin second factor must be reachable before the human mark exists,
+    # or a staff member could not get past either gate on a fresh browser.
+    '/staff-otp/',
     '/static/',
     '/media/',
     '/admin/',

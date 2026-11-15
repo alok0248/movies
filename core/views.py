@@ -9558,7 +9558,7 @@ _PROXY_DNS_SERVERS = ['1.1.1.1', '8.8.8.8', '1.0.0.1', '8.8.4.4']
 @require_GET
 def health_view(request):
     """curl-able /api/health — reports server health and last Android API error."""
-    from .api_errors import recent_errors
+    from .api_errors import error_to_dict, error_total, recent_errors
     from django.db import connections
     import time
 
@@ -9567,7 +9567,7 @@ def health_view(request):
         'timestamp': time.time(),
         'databases': {},
         'last_api_error': None,
-        'api_error_count': len(recent_errors()),
+        'api_error_count': error_total(),
     }
 
     # DB connectivity check
@@ -9586,17 +9586,18 @@ def health_view(request):
                 'error': str(e)[:200],
             }
 
-    # Last API error from in-memory ring buffer
+    # Last API error — recent_errors() yields ErrorLog rows, so serialise with
+    # the same helper the JSON export uses instead of treating a row as a dict.
     errors = recent_errors(limit=1)
     if errors:
-        last = errors[0]
+        last = error_to_dict(errors[0])
         result['last_api_error'] = {
-            'time': last.get('time'),
-            'view': last.get('view'),
-            'method': last.get('method'),
-            'path': last.get('path'),
-            'error_type': last.get('error_type'),
-            'message': last.get('message', '')[:200],
+            'time': last['time'],
+            'view': last['view'],
+            'method': last['method'],
+            'path': last['path'],
+            'error_type': last['error_type'],
+            'message': (last.get('message') or '')[:200],
         }
 
     status_code = 200 if result['status'] == 'ok' else 503

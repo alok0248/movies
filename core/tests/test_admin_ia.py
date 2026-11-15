@@ -7,6 +7,8 @@ gained a command palette; a render test keeps it in place.
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
 
+from core.models import ErrorLog
+
 
 class LegacySettingsRedirectTest(TestCase):
     def setUp(self):
@@ -67,3 +69,16 @@ class AdminShellTest(TestCase):
                     '/admin-dashboard/settings/delivery/?tab=player'):
             with self.subTest(url=url):
                 self.assertEqual(200, self.client.get(url).status_code)
+
+
+class HealthViewTest(TestCase):
+    def test_health_serialises_an_error_row_instead_of_crashing(self):
+        # recent_errors() yields ErrorLog rows; treating one as a dict used to
+        # raise AttributeError and turn /api/health into a 500 whenever any
+        # error had ever been logged.
+        ErrorLog.objects.create(kind='api', status_code=500, message='boom')
+        response = self.client.get('/api/health')
+        self.assertIn(response.status_code, (200, 503))
+        payload = response.json()
+        self.assertGreaterEqual(payload['api_error_count'], 1)
+        self.assertEqual('boom', payload['last_api_error']['message'])

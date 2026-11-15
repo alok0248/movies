@@ -358,6 +358,9 @@ class EmailVerificationMiddleware:
         '/sw.js', '/service-worker.js',
         # The install page asks for no account at all.
         '/get-app/',
+        # The other gates' own screens: an unconfirmed account still has to be
+        # able to reach the human check and the admin second factor.
+        '/verify/', '/security-status/', '/staff-otp/',
     )
     # A page that asks for one of its own parts (the dashboard's tab strips and
     # other fragment loads) must not be answered with the full screen.
@@ -442,6 +445,10 @@ class LoginRequiredMiddleware:
         # (Settings → download page access, read through core/download_access),
         # so the site-wide gate must not second-guess it here.
         '/get-app/',
+        # The other gates' own screens must stay reachable or the gates
+        # deadlock: a locked visitor is sent to /verify/ by the human gate, and
+        # this gate must not then bounce /verify/ back to the sign-in prompt.
+        '/verify/', '/security-status/', '/staff-otp/',
     )
     # Query flags that mean "this request is the sign-in prompt".
     OPEN_FLAGS = ('login_required', 'register')

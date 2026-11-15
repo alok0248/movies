@@ -59,6 +59,17 @@ class LoginRequiredMiddlewareTest(TestCase):
         self.settings_row.save()
         self.assertEqual(200, self.client.get('/movies/').status_code)
 
+    def test_the_other_gates_own_screens_stay_reachable(self):
+        # The human gate sends a locked visitor to /verify/; if this gate then
+        # bounced /verify/ back to the sign-in prompt the two would deadlock and
+        # nobody could ever pass either. Each such screen must not be answered
+        # with the sign-in prompt.
+        for path in ('/verify/', '/security-status/', '/staff-otp/'):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertNotIn('login_required=true', response.get('Location', ''))
+        self.assertEqual(200, self.client.get('/security-status/').status_code)
+
     def test_the_prompt_says_why_a_login_is_needed(self):
         # Once on the page under the navbar, once inside the prompt itself,
         # because the prompt is a modal that covers the page.
