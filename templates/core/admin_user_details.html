@@ -157,7 +157,6 @@
                 <td>{{ r.views }}{% if r.total_time %}<div class="adm-sub">{{ r.total_time }}s</div>{% endif %}</td>
                 <td>
                     {% if r.ip %}<span class="ip-text">{{ r.ip }}</span> {% ip_geo_chip r.ip %}{% else %}—{% endif %}
-                    {% if r.ip in blocked_ips %}<button type="button" class="adm-btn is-sm on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')"><i class="fas fa-lock"></i>Blocked</button>{% elif r.ip %}<button type="button" class="adm-btn is-sm" onclick="rqBlockIP('{{ r.ip|escapejs }}')"><i class="fas fa-ban"></i>Block</button>{% endif %}
                     <div class="adm-sub">{{ r.ip_count }} IP{{ r.ip_count|pluralize }} · {{ r.device_count }} device{{ r.device_count|pluralize }}</div>
                 </td>
                 <td class="adm-sub">
@@ -185,7 +184,7 @@
                         <div class="col-md-4">
                             <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:.3rem;">IPs ({{ r.ip_count }})</div>
                             {% for ip in r.ips %}
-                                <span class="adm-badge is-off"><span class="ip-text">{{ ip }}</span>{% if ip in blocked_ips %} <i class="fas fa-lock" style="color:#34d399;"></i>{% endif %}</span>
+                                <span class="adm-badge is-off"><span class="ip-text">{{ ip }}</span></span>
                             {% empty %}<span class="adm-sub">No IPs on record.</span>{% endfor %}
                             <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:.6rem 0 .3rem;">Device signatures ({{ r.device_sigs|length }})</div>
                             {% for d in r.device_sigs %}<span class="adm-badge is-off">{{ d }}</span>

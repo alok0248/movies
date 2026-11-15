@@ -322,9 +322,6 @@ class SiteSettings(models.Model):
     footer_logo_tagline = models.CharField(max_length=255, default='')
     footer_copyright_text = models.CharField(max_length=255, default='')
     footer_disclaimer_text = models.CharField(max_length=255, default='')
-    enable_url_blocking = models.BooleanField(default=False, help_text="Enable URL blocking for non-admin pages")
-    blocked_urls = models.TextField(blank=True, null=True, help_text="List of URLs to block (one per line), or 'all' to block all except admin")
-    redirect_url = models.CharField(max_length=200, blank=True, null=True, default="/", help_text="URL to redirect blocked requests to")
     email_host = models.CharField(max_length=100, blank=True, null=True, default='smtp.gmail.com', help_text="Email host (e.g., smtp.gmail.com)")
     email_port = models.IntegerField(blank=True, null=True, default=587, help_text="Email port (e.g., 587 for TLS)")
     email_host_user = models.EmailField(blank=True, null=True, help_text="Email address (e.g., your@gmail.com)")
@@ -354,14 +351,6 @@ class SiteSettings(models.Model):
     # Bot Tracking
     bot_ips = models.TextField(blank=True, null=True, help_text="Comma-separated list of IP addresses for our bot (e.g., 192.168.1.1,10.0.0.1)")
 
-    # Trusted addresses — never blocked by the bot / probe / script / rate guards
-    allowed_ips = models.TextField(
-        blank=True, null=True,
-        help_text=("Comma, space or newline separated list of IP addresses that must never be "
-                   "blocked by the automatic bot / probe / script / rate watchers. Add your own "
-                   "address here so running a script or a test can never lock you out. "
-                   "Example: 152.59.143.58, 203.0.113.7"))
-    
     # Google AdSense
     adsense_verification_meta = models.CharField(max_length=200, blank=True, null=True, help_text="Google AdSense verification meta tag content (e.g., abcdef123456)")
     adsense_client_id = models.CharField(max_length=100, blank=True, null=True, help_text="Google AdSense client ID (e.g., ca-pub-1234567890123456)")
@@ -537,14 +526,6 @@ class SiteSettings(models.Model):
         cache.delete(self._SETTINGS_CACHE_KEY)
         cache.delete(self._LOGIN_GATE_CACHE_KEY)
         cache.delete(self._DOWNLOAD_ACCESS_CACHE_KEY)
-        # The allow-list is cached separately on the request path (it is read on
-        # every request by the IP guard), so drop that copy too — an address the
-        # operator just trusted must take effect at once.
-        try:
-            from .ip_block import reset_allowed_ips_cache
-            reset_allowed_ips_cache()
-        except Exception:
-            pass
 
     def delete(self, *args, **kwargs):
         from django.core.cache import cache
@@ -2289,6 +2270,80 @@ class AccountDeletionOTP(models.Model):
             return False
 
 
+class StaffLoginOTP(models.Model):
+    """Second factor for an admin (staff / superuser) sign-in.
+
+    The first factor is the password. Before any admin page opens, the account
+    has to type back a 6-digit code mailed to its own address, so a stolen or
+    guessed password alone is no longer enough to reach the dashboard.
+
+    Like every other code on the site the value is hashed at rest (a database
+    read must not hand out a working code), expires after ten minutes, and
+    counts failed attempts so the six digits cannot be brute-forced.
+    """
+    MAX_ATTEMPTS = 5
+    TTL_MINUTES = 10
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='staff_login_otps', db_constraint=False)
+    otp = models.CharField(max_length=128)
+    attempts = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Staff login code'
+        verbose_name_plural = 'Staff login codes'
+        indexes = [
+            models.Index(fields=['user', 'used', 'created_at']),
+        ]
+
+    def __str__(self):
+        try:
+            email = self.user.email
+        except Exception:
+            email = f'User #{self.user_id}'
+        return f"{email} - {'used' if self.used else 'pending'}"
+
+    @property
+    def is_expired(self):
+        from datetime import timedelta
+        return timezone.now() > self.created_at + timedelta(minutes=self.TTL_MINUTES)
+
+    @property
+    def too_many_attempts(self):
+        return self.attempts >= self.MAX_ATTEMPTS
+
+    @property
+    def is_valid(self):
+        return not self.used and not self.is_expired and not self.too_many_attempts
+
+    @staticmethod
+    def generate():
+        return f"{secrets.randbelow(1000000):06d}"
+
+    @staticmethod
+    def hash_code(code):
+        from django.contrib.auth.hashers import make_password
+        return make_password(str(code))
+
+    def verify_code(self, code):
+        stored = (self.otp or '').strip()
+        code = (code or '').strip()
+        if not stored or not code:
+            return False
+        from django.contrib.auth.hashers import check_password, identify_hasher
+        try:
+            identify_hasher(stored)
+        except Exception:
+            return secrets.compare_digest(stored, code)
+        try:
+            return check_password(code, stored)
+        except Exception:
+            return False
+
+
 class PlayHistory(models.Model):
     """Track play sessions for logged-in users."""
     MEDIA_TYPE_CHOICES = [
@@ -3769,85 +3824,6 @@ class RequestLogPreset(models.Model):
 
     def __str__(self):
         return self.name
-
-
-class BlockedIP(models.Model):
-    """One row per IP address the admin has blocked from the public site.
-
-    The row survives an unblock (``is_active`` goes False) so the history —
-    who blocked it, when, and what the address did while blocked — stays
-    available; re-blocking the same address reuses the row and resets
-    ``blocked_at``, which is the cut-off used to count the requests the IP made
-    *after* it was blocked. Blocked requests still answer 403 and are still
-    written to RequestLog, so those counts can be shown on the Blocked IPs page.
-    """
-
-    ip_address = models.CharField(max_length=64, unique=True)
-    reason = models.CharField(max_length=300, blank=True, default='')
-    blocked_by = models.CharField(max_length=150, blank=True, default='')
-    blocked_at = models.DateTimeField(default=timezone.now)
-    is_active = models.BooleanField(default=True)
-    unblocked_at = models.DateTimeField(blank=True, null=True)
-    unblocked_by = models.CharField(max_length=150, blank=True, default='')
-    # A blocked visitor is shown a sign-in / sign-up page: doing either lifts a
-    # normal block (that is the way out a real visitor has). A permanent block
-    # is never lifted that way — it is what a repeat offender gets.
-    is_permanent = models.BooleanField(default=False)
-    # How many times this address has been blocked, and whether the previous
-    # block was lifted by signing up (which is what the warning refers to).
-    offense_count = models.PositiveSmallIntegerField(default=1)
-    lifted_by_signup = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ['-blocked_at']
-        verbose_name = 'Blocked IP'
-        verbose_name_plural = 'Blocked IPs'
-
-    def __str__(self):
-        return f'{self.ip_address} ({"blocked" if self.is_active else "unblocked"})'
-
-
-class BlockedHeader(models.Model):
-    """A request header the site refuses, whatever address sends it.
-
-    An IP block answers one address; a header block answers the *program*, from
-    wherever it runs. That is what stops a crawler that announces itself in its
-    User-Agent — ClaudeBot, GPTBot and the rest — even when it moves to a new
-    address for every request.
-
-    ``value`` is matched case-insensitively anywhere inside the header, so
-    ``ClaudeBot`` covers ``ClaudeBot/1.0 (+https://claude.ai/...)`` and any
-    later version of it. Rows survive an unblock (``is_active`` goes False) so
-    the rule and its history stay, and ``robots_disallow`` publishes the rule in
-    robots.txt as well, which is the polite half of the same decision: the
-    crawlers that honour robots.txt stay away, and the ones that do not are
-    answered 403 by the rule.
-    """
-
-    header_name = models.CharField(max_length=100, default='User-Agent')
-    value = models.CharField(max_length=400)
-    reason = models.CharField(max_length=300, blank=True, default='')
-    blocked_by = models.CharField(max_length=150, blank=True, default='')
-    blocked_at = models.DateTimeField(default=timezone.now)
-    is_active = models.BooleanField(default=True)
-    unblocked_at = models.DateTimeField(blank=True, null=True)
-    unblocked_by = models.CharField(max_length=150, blank=True, default='')
-    # Also list this rule in robots.txt as ``User-agent: <token>`` / ``Disallow: /``.
-    robots_disallow = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ['-blocked_at']
-        constraints = [
-            models.UniqueConstraint(fields=['header_name', 'value'],
-                                    name='unique_blocked_header'),
-        ]
-        verbose_name = 'Blocked header'
-        verbose_name_plural = 'Blocked headers'
-
-    def __str__(self):
-        return f'{self.header_name}: {self.value} ({"blocked" if self.is_active else "off"})'
-
-
 class ApkDownload(models.Model):
     """One record per APK download, so the admin can see who took the app.
 
@@ -3892,14 +3868,12 @@ class ApkDownload(models.Model):
 class AdminAuditLog(models.Model):
     """One row per admin action, so the dashboard can show a single timeline.
 
-    Blocking an address, lifting a header rule, wiping a user's cloud data,
-    switching the bot profile on and changing settings each leave a row here:
-    who did it, what they did it to, when, and from which address. The page
-    built on it (core.audit) is the answer to "who changed this?" — before it
-    existed the history was spread across the BlockedIP / BlockedHeader rows
-    and their unblock columns, which only covered two of the action kinds.
+    Blocking a user, wiping a user's cloud data, switching the bot profile on
+    and changing settings each leave a row here: who did it, what they did it
+    to, when, and from which address. The page built on it (core.audit) is the
+    answer to "who changed this?" — one timeline for every admin action.
 
-    Rows live on the default (sqlite) database, like RequestLog and BlockedIP.
+    Rows live on the default (sqlite) database, like RequestLog.
     """
 
     created_at = models.DateTimeField(default=timezone.now, db_index=True)

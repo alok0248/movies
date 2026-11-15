@@ -41,321 +41,6 @@ def is_bot_request(request, client_ip, site_settings):
     return False
 
 
-class URLBlockMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        # Check if we should apply blocking
-        try:
-            site_settings = SiteSettings.get_settings()
-            if not site_settings.enable_url_blocking:
-                return self.get_response(request)
-        except Exception:
-            return self.get_response(request)
-
-        # Allow admin URLs always
-        if request.path.startswith('/admin'):
-            return self.get_response(request)
-
-        # Check if we should block all except admin
-        blocked_urls_text = site_settings.blocked_urls or ''
-        blocked_urls_list = [line.strip() for line in blocked_urls_text.splitlines() if line.strip()]
-
-        should_block = False
-        if 'all' in blocked_urls_list and not request.path == '/':
-            should_block = True
-        else:
-            for blocked_url in blocked_urls_list:
-                if blocked_url and (blocked_url in request.path or request.path.startswith(blocked_url)):
-                    should_block = True
-                    break
-
-        if should_block:
-            redirect_to = site_settings.redirect_url or '/'
-            if request.path != redirect_to:
-                return redirect(redirect_to)
-
-        return self.get_response(request)
-
-
-class IPBlockMiddleware:
-    """Deny every public request from an IP the admin has blocked.
-
-    Placed LAST in MIDDLEWARE — inside RequestLogMiddleware — so a blocked
-    request is still written to the request log. That is deliberate: it is what
-    lets the Blocked IPs page show how many requests an address kept making
-    after the block and which pages it kept asking for.
-
-    A blocked address is not sealed off completely: the block page shows only
-    the sign-in and registration forms, signing in or registering lifts a normal
-    block right away, the auth endpoints stay reachable so that is actually
-    possible, and staff plus the Django admin are exempt so a mistyped block can
-    never lock the operator out of the dashboard.
-
-    The same middleware also watches the request rate: an address that asks for
-    far more pages in a few minutes than a person could is treated as a bot and
-    blocked, permanently when it was signed in. Scraping again after being
-    warned by the block page escalates a block to permanent too.
-
-    Finally it enforces the header rules (see core.header_block): a request
-    whose User-Agent — or any other header — matches a rule the admin created is
-    refused whatever address it came from, which is what stops a crawler that
-    announces itself from scraping by simply changing address.
-    """
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    @staticmethod
-    def _hard_exempt(request):
-        """True for paths that stay reachable even from a blocked address.
-
-        The dashboard (so a mistyped block can never lock the operator out),
-        static and media files, and the site's own sign-in / registration
-        endpoints — the block page posts to those, so blocking them would close
-        the way out the page offers.
-        """
-        path = getattr(request, 'path', '') or ''
-        if path.startswith('/admin') or path.startswith('/static/') or path.startswith('/media/'):
-            return True
-        from .ip_block import is_auth_entry
-        return is_auth_entry(request)
-
-    @staticmethod
-    def _operator(request):
-        """True for staff / superuser traffic, which is never rate-watched."""
-        try:
-            user = getattr(request, 'user', None)
-            return bool(user is not None and user.is_authenticated
-                        and (user.is_staff or user.is_superuser))
-        except Exception:
-            return False
-
-    @staticmethod
-    def _signed_in(request):
-        try:
-            user = getattr(request, 'user', None)
-            return bool(user is not None and user.is_authenticated)
-        except Exception:
-            return False
-
-    @staticmethod
-    def _confirm_bot(request, client_ip):
-        """Confirm a program before blocking - a rate spike alone is not proof.
-
-        A person clicking hard can cross the rate too, so the block only happens
-        when the request identifies a bot: its address or User-Agent is listed as
-        a bot for this site, it sends no User-Agent, or it matches a known
-        scraping tool. Search-engine crawlers are left alone.
-        """
-        from .ip_block import bot_verdict
-        try:
-            site_settings = SiteSettings.get_settings()
-        except Exception:
-            site_settings = None
-        if site_settings is not None and is_bot_request(request, client_ip, site_settings):
-            return True, 'address or user agent is listed as a bot for this site'
-        configured_uas = []
-        try:
-            configured_uas = [v.lower() for v in _split_bot_config(site_settings.bot_user_agents)]
-        except Exception:
-            configured_uas = []
-        return bot_verdict(request.META.get('HTTP_USER_AGENT', ''),
-                           configured_bot_uas=configured_uas)
-
-    def __call__(self, request):
-        try:
-            response = self._check(request)
-        except Exception:
-            # Blocking must never break the site; on any doubt, serve the request.
-            return self.get_response(request)
-        try:
-            self._watch_unknown_pages(request, response)
-        except Exception:
-            logger.debug('IPBlock: unknown-page watch failed', exc_info=True)
-        try:
-            self._watch_page_load(request, response)
-        except Exception:
-            logger.debug('IPBlock: page-load watch failed', exc_info=True)
-        return response
-
-    @staticmethod
-    def _app_request(request):
-        """True for the Android app's own traffic (never page-gated)."""
-        from .ip_block import is_app_client_request
-        try:
-            return bool(is_app_client_request(request))
-        except Exception:
-            return False
-
-    def _watch_page_load(self, request, response):
-        """Remember a real page fetch, which clears an address's surface count.
-
-        Only a successful HTML answer to a page path counts: an asset, the app's
-        API, the dashboard or the block page itself is not evidence of a browser,
-        and the ajax surface never counts (that is the thing being watched).
-        """
-        if getattr(response, 'status_code', None) != 200:
-            return
-        try:
-            content_type = response.get('Content-Type', '') or ''
-        except Exception:
-            return
-        if 'text/html' not in content_type.lower():
-            return
-        from .ip_block import should_note_page_load, note_page_load
-        if not should_note_page_load(getattr(request, 'path', '') or ''):
-            return
-        ip = get_client_ip(request)
-        if ip:
-            note_page_load(ip)
-
-    def _watch_unknown_pages(self, request, response):
-        """Block an address that keeps asking for pages the site does not have.
-
-        Counted after the response, because only the response says whether the
-        page existed. One 404 is a typo; a stream of them is a script walking a
-        URL list. Such an address is blocked (auto:probe-watch) and sees the
-        block page, which asks it to sign in or register — and either one lifts
-        the block, so a lost visitor is not locked out.
-        """
-        if getattr(response, 'status_code', None) != 404:
-            return
-        if self._operator(request):
-            return
-        # A trusted (operator) address is never counted for the probe watch.
-        from .ip_block import is_ip_allowed
-        if is_ip_allowed(get_client_ip(request)):
-            return
-        # A signed-in person is a person. Someone who mistypes a URL or follows a
-        # broken link must never be auto-blocked for it, however many they hit.
-        if self._signed_in(request):
-            return
-        from .ip_block import (auto_block_probe, note_unknown_page,
-                               should_watch_unknown_pages)
-        path = getattr(request, 'path', '') or ''
-        if not should_watch_unknown_pages(path):
-            return
-        # Google walks old URLs on purpose; a 403 there costs the site its
-        # indexing, so its crawlers never add to the count.
-        from .ip_block import is_google_crawler
-        if is_google_crawler(request.META.get('HTTP_USER_AGENT', '')):
-            return
-        ip = get_client_ip(request)
-        if ip and note_unknown_page(ip):
-            auto_block_probe(ip, path=path)
-
-    def _check(self, request):
-        from .ip_block import (should_count_for_bot_rate, note_request,
-                               auto_block_bot, blocked_ip_for, blocked_response,
-                               is_bot_block, is_ip_allowed)
-        client_ip = get_client_ip(request)
-        signed_in = self._signed_in(request)
-        operator = self._operator(request)
-        # A trusted address (SiteSettings.allowed_ips) is the operator's own
-        # machine: it is never rate-watched, never judged a script, never
-        # probe-watched, and an existing block row is not enforced for it. This
-        # is what stops a `curl` smoke test from locking the operator out.
-        if client_ip and is_ip_allowed(client_ip):
-            return self.get_response(request)
-        # Watch the request rate *before* the exemptions, so a signed-in
-        # scraper is caught too. should_count_for_bot_rate() keeps the app's own
-        # user-data polling, assets and the dashboard out of the count, and staff
-        # traffic is skipped outright.
-        if client_ip and not operator:
-            if should_count_for_bot_rate(getattr(request, 'path', '') or ''):
-                if note_request(client_ip):
-                    # Only block a confirmed bot. A human who clicks a lot must
-                    # never lose access, so the spike is logged and served.
-                    is_bot, verdict = self._confirm_bot(request, client_ip)
-                    if is_bot:
-                        auto_block_bot(client_ip, signed_in=signed_in, reason=verdict)
-                    else:
-                        logger.warning(
-                            'IPBlock: %s crossed the request rate but looks human '
-                            '(%s) - not blocked', client_ip, verdict)
-        # A request that announces itself as a program — curl, python-requests,
-        # a headless browser, a scanner — is not a visitor. It is refused at
-        # once with the block page instead of being waited on. The app's API and
-        # the dashboard are never inspected here.
-        if client_ip and not operator:
-            from .ip_block import (SCRIPT_BLOCK_EXEMPT_PREFIXES, auto_block_script,
-                                   is_script_agent)
-            path = getattr(request, 'path', '') or ''
-            user_agent = request.META.get('HTTP_USER_AGENT', '') or ''
-            if (not path.startswith(SCRIPT_BLOCK_EXEMPT_PREFIXES)
-                    and is_script_agent(user_agent)):
-                auto_block_script(client_ip, user_agent)
-                return blocked_response(request, client_ip,
-                                        blocked_ip_for(client_ip))
-        # The page gate: a client that only ever asks for the ajax/player surface,
-        # without once fetching a page, is a script. No browser does that, which
-        # is what makes this safe for real visitors however they browse. Staff,
-        # signed-in people, the Android app and the allow-list are never counted
-        # here (the first three are people or an app; the last is the operator).
-        if client_ip and not operator and not signed_in and not self._app_request(request):
-            from .ip_block import (auto_block_page_gate, blocked_ip_for,
-                                   has_page_load, is_friendly_crawler,
-                                   note_page_load, note_surface_request,
-                                   page_load_in_log, should_count_for_surface_gate)
-            # A search engine is never page-gated, whatever it asks for.
-            if (should_count_for_surface_gate(getattr(request, 'path', '') or '')
-                    and not is_friendly_crawler(
-                        request.META.get('HTTP_USER_AGENT', ''))):
-                if has_page_load(client_ip):
-                    pass
-                elif page_load_in_log(client_ip):
-                    # This worker never saw the page fetch; the log did. Spare the
-                    # address and remember it so the next check is free.
-                    note_page_load(client_ip)
-                elif note_surface_request(client_ip):
-                    auto_block_page_gate(client_ip)
-                    return blocked_response(request, client_ip,
-                                            blocked_ip_for(client_ip))
-
-        if self._hard_exempt(request):
-            return self.get_response(request)
-        # A header rule names a program, not a person, so it is enforced for
-        # every non-staff request whatever the address is — even a signed-in one
-        # that an IP block would let through. The app's own account endpoints
-        # are left out so a rule can never take the mobile app down.
-        if not operator:
-            from .header_block import rule_for_request, normalize_path
-            if normalize_path(request):
-                rule = rule_for_request(request)
-                if rule is not None:
-                    return blocked_response(request, client_ip, None,
-                                            header_rule=rule)
-        if not client_ip:
-            return self.get_response(request)
-        row = blocked_ip_for(client_ip)
-        if row is None:
-            return self.get_response(request)
-        # The Android app is never shown the block page. Its traffic shares
-        # carrier addresses with thousands of other users, so an address block
-        # meant for one scraper would otherwise take the app down for everyone
-        # behind it. Only app-identifying requests on app paths are let through;
-        # a browser or a script on the same address still gets the block.
-        from .ip_block import is_app_client_request, APP_CLIENT_PATH_PREFIXES
-        path = getattr(request, 'path', '') or ''
-        if path.startswith(APP_CLIENT_PATH_PREFIXES) and is_app_client_request(request):
-            return self.get_response(request)
-        # A signed-in visitor already followed the block page's way out, so a
-        # hand-made block does not stop them — but a bot block, or a permanent
-        # one, is not something holding a session gets to bypass. The operator
-        # is the exception: the automatic watchers fire on unsigned work from
-        # their own machine (a curl, a smoke test, a script), and that must
-        # never lock staff out of the site they are checking. A hand-made
-        # block still applies to everyone, so an address can still be blocked
-        # on purpose; the trusted list (SiteSettings.allowed_ips) remains the
-        # way to keep an operator address out of the watchers entirely.
-        auto_block = is_bot_block(row)
-        if signed_in and ((operator and auto_block) or not (row.is_permanent or auto_block)):
-            return self.get_response(request)
-        return blocked_response(request, client_ip, row)
-
-
 class EmailSettingsMiddleware:
     """Apply email settings from SiteSettings, but only update Django's global
     settings when values actually change to avoid unnecessary global-state
@@ -411,16 +96,6 @@ class WebsiteVisitorTrackingMiddleware:
 
         client_ip = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
-
-        # A blocked address still gets served (it will be denied a 403 further
-        # down the stack) but is kept out of the visitor tables so it cannot
-        # inflate the Active Users list.
-        try:
-            from .ip_block import is_ip_blocked
-            if client_ip and is_ip_blocked(client_ip):
-                return self.get_response(request)
-        except Exception:
-            pass
 
         # Determine bot status once and early-exit for bots
         is_bot = False
@@ -585,53 +260,68 @@ class ContentSecurityPolicyMiddleware:
         return response
 
 
-class AdminLoginThrottleMiddleware:
-    """Throttle password guesses against Django's own admin sign-in form.
+class HumanVerificationMiddleware:
+    """Layer 1: hold every HTML visitor until they solve the Turnstile challenge.
 
-    The site's public login endpoints count failed attempts, but /admin/login/
-    was accepting unlimited guesses. Only failures are counted and a successful
-    sign-in clears the counter, so a correct password is never punished for
-    earlier typos beyond the (short) lockout an attacker causes for itself.
+    Sits immediately after SessionMiddleware, so the solved-challenge mark is
+    available and nothing later in the stack has run.
+
+    What gets through untouched:
+
+    * anything while the gate is unconfigured — no keys, no gate, so a deploy
+      that lands before the keys are added cannot lock the site;
+    * a session that solved the challenge within the last 24 hours;
+    * the challenge page itself, static and media files, Django's admin, and the
+      whole ``/api/`` surface plus ``/apps/download/`` — the Android app and the
+      API clients never see a redirect they cannot follow;
+    * Google's crawlers, because losing search indexing is not an acceptable
+      side effect. Every other crawler has to solve the challenge, which a
+      crawler cannot, so only Google is indexed.
+
+    An unverified browser is redirected to ``/verify/?next=<path>``; an
+    unverified state-changing request (POST/PUT/PATCH/DELETE) on a non-API route
+    is refused with 403 instead, because silently redirecting a POST would lose
+    the body.
     """
 
-    ADMIN_LOGIN_PATH = '/admin/login/'
-    MAX_ATTEMPTS = 15
+    SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        is_admin_login = (
-            request.method == 'POST'
-            and request.path.rstrip('/') + '/' == self.ADMIN_LOGIN_PATH
-        )
-        if not is_admin_login:
+        from .human_verification import (is_app_request, is_configured,
+                                         is_google_crawler, is_human, skip_path)
+
+        if not is_configured() or is_human(request):
+            return self.get_response(request)
+        if skip_path(request) or is_app_request(request):
+            return self.get_response(request)
+        if is_google_crawler(request.META.get('HTTP_USER_AGENT', '')):
             return self.get_response(request)
 
-        from django.http import HttpResponse
+        if request.method in self.SAFE_METHODS:
+            from django.utils.http import urlencode
+            return redirect('/verify/?' + urlencode({'next': request.get_full_path()}))
 
-        from .auth import check_rate_limit, record_rate_limit_attempt, reset_rate_limit
+        # A POST cannot be answered with a redirect without losing its body, so
+        # it is refused. AJAX callers get JSON so the page's own error handling
+        # can show it instead of choking on HTML.
+        from django.http import HttpResponse, JsonResponse
 
-        client_ip = get_client_ip(request) or 'unknown'
-        allowed, _remaining, retry_after = check_rate_limit(
-            client_ip, 'admin_login', max_attempts=self.MAX_ATTEMPTS
-        )
-        if not allowed:
-            response = HttpResponse(
-                'Too many failed sign-in attempts from this address. '
-                'Please try again later.',
-                status=429,
-                content_type='text/plain; charset=utf-8',
-            )
-            response['Retry-After'] = str(retry_after or 60)
-            return response
-
-        response = self.get_response(request)
-        if getattr(request.user, 'is_authenticated', False) and response.status_code in (302, 303):
-            reset_rate_limit(client_ip, 'admin_login')
-        else:
-            record_rate_limit_attempt(client_ip, 'admin_login')
-        return response
+        path = getattr(request, 'path', '') or ''
+        if path.startswith('/ajax/') or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': False,
+                'code': 'human_verification_required',
+                'message': 'Please complete the verification challenge and try again.',
+            }, status=403)
+        return HttpResponse(
+            '<!doctype html><meta charset="utf-8">'
+            '<title>Verification required</title>'
+            '<p>Please complete the verification challenge before continuing.</p>'
+            '<p><a href="/verify/">Open the verification page</a></p>',
+            status=403, content_type='text/html; charset=utf-8')
 
 
 class EmailVerificationMiddleware:
@@ -697,6 +387,32 @@ class EmailVerificationMiddleware:
 
         from django.shortcuts import render
         return render(request, 'core/verification_required.html', status=403)
+
+
+class StaffOtpMiddleware:
+    """Layer 2 of the admin hardening: an emailed code before the dashboard.
+
+    The password alone is no longer enough for a staff/superuser account. Until
+    the second factor is satisfied, every ``/admin-dashboard/`` and ``/admin/``
+    request is sent to ``/staff-otp/`` to enter the code mailed to the account's
+    own address.
+
+    Off unless ``settings.STAFF_OTP_REQUIRED`` is on (the test runner forces it
+    off), and it never touches public pages or ``/api/``. A staff row with no
+    email, or an SMTP outage with fail-open on, is let through rather than
+    stranded — see core.staff_mfa.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from .staff_mfa import challenge_needed
+
+        if challenge_needed(request):
+            from django.utils.http import urlencode
+            return redirect('/staff-otp/?' + urlencode({'next': request.get_full_path()}))
+        return self.get_response(request)
 
 
 class LoginRequiredMiddleware:

@@ -37,29 +37,12 @@
                 <i class="fas fa-id-card"></i> User Details
                 {% if panel == 'details' and summary.total_users %}<span class="adm-badge">{{ summary.total_users }}</span>{% endif %}
             </a>
-            <a class="adm-chip {% if panel != 'users' and panel != 'details' and panel != 'journeys' %}on{% endif %}" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
+            <a class="adm-chip" href="{% url 'request_log' %}?tab=log" title="Raw request log — one row per HTTP request">
                 <i class="fas fa-network-wired"></i> Request Log
                 {% if panel != 'users' and panel != 'details' and panel != 'journeys' and matched %}<span class="adm-badge">{{ matched }}</span>{% endif %}
             </a>
-            <a class="adm-chip" href="{% url 'blocked_ips' %}" title="Every blocked IP, with the requests it kept making after the block">
-                <i class="fas fa-shield-alt"></i> Blocked IPs
-                {% if blocked_total %}<span class="adm-badge">{{ blocked_total }}</span>{% endif %}
-            </a>
-            <a class="adm-chip" href="{% url 'probes' %}" title="Which IP is asking for pages that are not on the website">
-                <i class="fas fa-user-secret"></i> Probes &amp; Bots
-            </a>
         </div>
     </div>
-
-    {% comment %}One shared POST form for the per-row Block / Unblock buttons in
-    both panels. Kept outside the panels so it never nests inside a filter form.{% endcomment %}
-    <form id="rq-block-form" method="post" action="{% url 'ip_block_action' %}" style="display:none;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="">
-        <input type="hidden" name="ip" value="">
-        <input type="hidden" name="reason" value="">
-        <input type="hidden" name="next" value="">
-    </form>
 
     {% if panel == 'users' %}
         {% include 'core/admin_active_users.html' %}
@@ -71,32 +54,4 @@
         {% include 'core/admin_request_log.html' %}
     {% endif %}
 </div>
-
-<script>
-    // Block / unblock an IP straight from the list, then land back on the exact
-    // filtered view so the surrounding context is not lost.
-    function rqSubmitBlock(action, ip, reason) {
-        var f = document.getElementById('rq-block-form');
-        if (!f) return;
-        f.querySelector('input[name="action"]').value = action;
-        f.querySelector('input[name="ip"]').value = ip;
-        f.querySelector('input[name="reason"]').value = reason || '';
-        f.querySelector('input[name="next"]').value =
-            window.location.pathname + window.location.search;
-        f.submit();
-    }
-    function rqBlockIP(ip) {
-        if (!ip) return;
-        var ok = confirm('Block IP ' + ip + '?\n\n' +
-            'Every request from this address will get a 403. The attempts are ' +
-            'still logged, so the Blocked IPs page can show what it tries next.');
-        if (ok) rqSubmitBlock('block', ip);
-    }
-    function rqUnblockIP(ip) {
-        if (!ip) return;
-        if (confirm('Unblock IP ' + ip + '?\n\nRequests from it will be served again.')) {
-            rqSubmitBlock('unblock', ip);
-        }
-    }
-</script>
 {% endblock %}

@@ -175,7 +175,7 @@
                         </span>
                     </td>
                     <td class="adm-mono">
-                        {% if r.ip %}<span class="ip-text">{{ r.ip }}</span>{% if r.ip in blocked_ips %}<button type="button" class="adm-btn is-sm on" onclick="rqUnblockIP('{{ r.ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="adm-btn is-sm" onclick="rqBlockIP('{{ r.ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
+                        {% if r.ip %}<span class="ip-text">{{ r.ip }}</span>{% else %}—{% endif %}
                         {% if r.ips|length > 1 %}<div class="adm-sub" title="{{ r.ips|join:', ' }}">+{{ r.ips|length|add:"-1" }} more IPs</div>{% endif %}
                     </td>
                     <td>{% ip_geo_chip r.ip %}</td>

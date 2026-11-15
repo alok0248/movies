@@ -202,18 +202,12 @@ def admin_badges(request):
     except Exception:
         return {}
 
-    badges = {'blocked': 0, 'blocked_today': 0, 'api_errors': 0, 'alerts': 0,
+    badges = {'blocked_today': 0, 'api_errors': 0, 'alerts': 0,
               'waiting_messages': 0, 'overdue_messages': 0}
     try:
         from django.core.cache import cache
         from django.utils import timezone
-        from .models import BlockedIP, ErrorLog, SyncedUser
-
-        blocked = cache.get('admin_badge_blocked')
-        if blocked is None:
-            blocked = BlockedIP.objects.filter(is_active=True).count()
-            cache.set('admin_badge_blocked', blocked, 60)
-        badges['blocked'] = int(blocked)
+        from .models import ErrorLog, SyncedUser
 
         today = cache.get('admin_badge_blocked_today')
         if today is None:

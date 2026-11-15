@@ -211,7 +211,7 @@
                     <td><span class="adm-badge is-{% if rec.category == 'api' %}warn{% elif rec.category == 'admin' %}violet{% else %}primary{% endif %}">{{ rec.get_category_display }}</span></td>
                     <td class="adm-mono adm-trunc" title="{{ rec.path }}">{% if rec.path %}<a class="adm-info-link" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% else %}—{% endif %}</td>
                     <td class="adm-mono adm-trunc" title="{{ rec.query }}">{{ rec.query|default:"" }}</td>
-                    <td class="adm-mono">{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="adm-btn is-sm on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="adm-btn is-sm" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}</td>
+                    <td class="adm-mono">{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% else %}—{% endif %}</td>
                     <td>{% if rec.client_ip %}{% ip_geo_chip rec.client_ip %}{% else %}—{% endif %}</td>
                     <td>{{ rec.username|default:"" }}</td>
                     <td class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }}</td>
@@ -308,7 +308,7 @@
             {% if rec.path %}<a class="adm-mono adm-info-link" href="{{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %}" target="_blank" rel="noopener noreferrer" title="Open {{ rec.path }}{% if rec.query %}?{{ rec.query }}{% endif %} in a new tab">{{ rec.path }} <i class="fas fa-external-link-alt"></i></a>{% if rec.query %}<span class="adm-mono" style="color:#64748b;">?{{ rec.query }}</span>{% endif %}{% else %}—{% endif %}
         </div>
         <div class="adm-sub">
-            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% if rec.client_ip in blocked_ips %}<button type="button" class="adm-btn is-sm on" onclick="rqUnblockIP('{{ rec.client_ip|escapejs }}')" title="This IP is blocked — click to unblock"><i class="fas fa-lock"></i>Blocked</button>{% else %}<button type="button" class="adm-btn is-sm" onclick="rqBlockIP('{{ rec.client_ip|escapejs }}')" title="Block this IP — it will get a 403, and its requests stay logged"><i class="fas fa-ban"></i>Block</button>{% endif %}{% else %}—{% endif %}
+            <i class="fas fa-network-wired"></i>{% if rec.client_ip %}<span class="ip-text">{{ rec.client_ip }}</span>{% else %}—{% endif %}
             {% if rec.client_ip %}<span class="ms-3"><i class="fas fa-location-dot"></i>{% ip_geo_chip rec.client_ip %}</span>{% endif %}
             <span class="ms-3"><i class="fas fa-clock"></i><span class="{% if rec.duration_ms >= 1000 %}rl-slow{% endif %}">{{ rec.duration_ms }} ms</span></span>
             {% if rec.response_size %}<span class="ms-3"><i class="fas fa-download"></i>{{ rec.response_size }} B</span>{% endif %}

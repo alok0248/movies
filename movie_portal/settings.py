@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -62,6 +63,10 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'core.middleware.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Layer 1 of the bot protection: every HTML visitor must solve the
+    # Turnstile challenge once per session. Immediately after SessionMiddleware
+    # so the solved-challenge mark is readable and nothing else has run yet.
+    'core.middleware.HumanVerificationMiddleware',
     # "Login as" previews: a session key in the URL serves /preview/<key>/...
     # as that user. Sits before AuthenticationMiddleware (which then reads the
     # preview session) and before CommonMiddleware (so APPEND_SLASH sees the
@@ -70,25 +75,20 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    # Counts failed Django-admin sign-ins (needs request.user, so it sits
-    # after AuthenticationMiddleware).
-    'core.middleware.AdminLoginThrottleMiddleware',
     # Show an unconfirmed account only the confirmation screen. Must sit before
     # the browse gate below, which is about anonymous visitors.
     'core.middleware.EmailVerificationMiddleware',
+    # Second factor for staff: the emailed code before any admin page opens.
+    'core.middleware.StaffOtpMiddleware',
     # Site-wide "sign in to browse" gate (off unless an admin turns it on).
     'core.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.EmailSettingsMiddleware',
-    'core.middleware.URLBlockMiddleware',
     'core.middleware.WebsiteVisitorTrackingMiddleware',
     'core.browser_cache.BrowserCacheMiddleware',
     'core.error_monitor.ErrorMonitoringMiddleware',
     'core.middleware.RequestLogMiddleware',
-    # Last on purpose: it runs *inside* RequestLogMiddleware, so a request from
-    # a blocked IP is denied (403) but still recorded in the request log.
-    'core.middleware.IPBlockMiddleware',
 ]
 
 ROOT_URLCONF = 'movie_portal.urls'
@@ -281,6 +281,56 @@ def _env_flag(name, default):
 # players, ads and third-party iframes keep working.
 X_FRAME_OPTIONS = os.environ.get('DJANGO_X_FRAME_OPTIONS', 'SAMEORIGIN')
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# ---------------------------------------------------------------------------
+# Cloudflare Turnstile — layer 1 of the bot protection (the human gate)
+# ---------------------------------------------------------------------------
+# Read from .env at import time so the keys never live in the repository. While
+# either value is empty or still the placeholder, core.human_verification treats
+# the gate as switched off: deploying before the keys are added can never lock
+# every visitor out.
+TURNSTILE_SITE_KEY = os.environ.get('TURNSTILE_SITE_KEY', 'YOUR_SITE_KEY').strip()
+TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY', 'YOUR_SECRET_KEY').strip()
+# The official siteverify endpoint. Overridable so the tests can point at a mock.
+TURNSTILE_VERIFY_URL = os.environ.get(
+    'TURNSTILE_VERIFY_URL',
+    'https://challenges.cloudflare.com/turnstile/v0/siteverify').strip()
+# Hard ceiling on the siteverify call.
+TURNSTILE_TIMEOUT_SECONDS = float(os.environ.get('TURNSTILE_TIMEOUT_SECONDS', '5'))
+# How long a solved challenge is trusted before the visitor has to solve another.
+HUMAN_VERIFICATION_TTL_SECONDS = int(
+    os.environ.get('HUMAN_VERIFICATION_TTL_SECONDS', str(24 * 60 * 60)))
+
+# Under the test runner the gate starts switched off, so the suite is not
+# redirected to /verify/ by a check it is not testing. The tests that do
+# exercise it override these with override_settings(), which is also how they
+# point TURNSTILE_VERIFY_URL at a mock instead of Cloudflare.
+if 'test' in sys.argv:
+    TURNSTILE_SITE_KEY = 'YOUR_SITE_KEY'
+    TURNSTILE_SECRET_KEY = 'YOUR_SECRET_KEY'
+
+# ---------------------------------------------------------------------------
+# Staff sign-in second factor (email OTP)
+# ---------------------------------------------------------------------------
+# A staff/superuser account must type back an emailed code before any admin page
+# opens — see core.staff_mfa. On by default; set DJANGO_STAFF_OTP=0 to disable.
+# STAFF_OTP_FAIL_OPEN lets an administrator in when the code cannot be mailed,
+# so an SMTP outage never locks everyone out of the dashboard.
+def _env_bool(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+STAFF_OTP_REQUIRED = _env_bool('DJANGO_STAFF_OTP', True)
+STAFF_OTP_FAIL_OPEN = _env_bool('DJANGO_STAFF_OTP_FAIL_OPEN', True)
+STAFF_OTP_TTL_SECONDS = int(os.environ.get('STAFF_OTP_TTL_SECONDS', str(12 * 60 * 60)))
+
+# The test runner turns the second factor off so the existing suite is not
+# redirected to /staff-otp/; the MFA tests turn it back on with override_settings.
+if 'test' in sys.argv:
+    STAFF_OTP_REQUIRED = False
 
 if ENV == 'prod':
     # nginx forwards X-Forwarded-Proto (proxy_params), and SECURE_PROXY_SSL_HEADER

@@ -1,7 +1,7 @@
 """Fill in the country for every address already stored without one.
 
-Addresses come from every place one is stored: the request log, the device/IP
-history and the blocked-address list. Anything already answered is left alone
+Addresses come from every place one is stored: the request log and the device/IP
+history. Anything already answered is left alone
 unless --force is passed, and an address that failed before is asked again.
 Lookups are spaced out (--delay, one second by default) so the free API does not
 rate-limit the run.
@@ -17,7 +17,7 @@ import time
 from django.core.management.base import BaseCommand
 
 from core import geoip
-from core.models import BlockedIP, DeviceIPHistory, IPLocation, RequestLog
+from core.models import DeviceIPHistory, IPLocation, RequestLog
 
 
 class Command(BaseCommand):
@@ -53,9 +53,6 @@ class Command(BaseCommand):
         )
         addresses.update(
             ip for ip in DeviceIPHistory.objects.values_list('ip', flat=True).distinct() if ip
-        )
-        addresses.update(
-            ip for ip in BlockedIP.objects.values_list('ip_address', flat=True).distinct() if ip
         )
 
         skipped_private = sorted(ip for ip in addresses if not geoip.is_public(ip))

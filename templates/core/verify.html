@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Verify you are human — {{ site_settings.brand_name|default:"NewMovies" }}</title>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <style>
+        :root {
+            --brand: {{ site_settings.brand_color|default:"#e50914" }};
+            --ink: #eef1f6;
+            --muted: #9aa0a6;
+            --panel: rgba(255, 255, 255, .05);
+            --line: rgba(255, 255, 255, .12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.25rem;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(900px 420px at 12% -10%, rgba(229, 9, 20, .30), transparent 62%),
+                linear-gradient(160deg, #14161c, #0a0b0f 60%);
+        }
+        .card {
+            width: 100%;
+            max-width: 460px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 2rem 1.75rem;
+            text-align: center;
+            box-shadow: 0 22px 60px rgba(0, 0, 0, .45);
+        }
+        .icon {
+            width: 60px; height: 60px;
+            margin: 0 auto 1rem;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(229, 9, 20, .14);
+            color: var(--brand);
+            font-size: 1.55rem; font-weight: 700;
+        }
+        h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+        p.lead { color: var(--muted); font-size: .93rem; line-height: 1.6; margin: 0 0 1.4rem; }
+        .widget {
+            display: flex;
+            justify-content: center;
+            margin: 0 0 1.1rem;
+            min-height: 65px;
+        }
+        .alert {
+            margin: 0 0 1rem;
+            padding: .7rem .9rem;
+            border-radius: 10px;
+            font-size: .87rem;
+            line-height: 1.5;
+            background: rgba(229, 9, 20, .14);
+            border: 1px solid rgba(229, 9, 20, .3);
+            color: #ffb4b4;
+        }
+        button {
+            width: 100%;
+            padding: .85rem 1rem;
+            border: 0;
+            border-radius: 12px;
+            background: var(--brand);
+            color: #fff;
+            font-size: .98rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        button:disabled { opacity: .55; cursor: default; }
+        .fine { margin-top: 1.1rem; font-size: .78rem; color: var(--muted); line-height: 1.5; }
+        .fine a { color: var(--brand); text-decoration: none; }
+        @media (max-width: 420px) {
+            .card { padding: 1.5rem 1.15rem; border-radius: 14px; }
+            h1 { font-size: 1.15rem; }
+        }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <div class="icon" aria-hidden="true">&#10003;</div>
+        <h1>Verify you are human</h1>
+        <p class="lead">
+            Our server is seeing automated traffic, so we ask each visitor to complete one quick check.
+            This takes a few seconds and is remembered for 24 hours on this device.
+        </p>
+
+        {% if message %}
+        <div class="alert" role="alert">{{ message }}</div>
+        {% endif %}
+
+        <form method="post" action="/verify/" id="verifyForm" autocomplete="off">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <div class="widget">
+                <div class="cf-turnstile"
+                     data-sitekey="{{ site_key }}"
+                     data-theme="dark"
+                     data-size="normal"></div>
+            </div>
+            <button type="submit" id="verifySubmit">Continue</button>
+        </form>
+
+        <noscript>
+            <p class="fine">This check needs JavaScript. Please enable it and reload the page.</p>
+        </noscript>
+        <p class="fine">
+            After the check you will be taken to the page you asked for.
+            If it keeps failing, try a different browser or disable blockers for this site.
+        </p>
+    </main>
+
+    <script>
+        (function () {
+            var form = document.getElementById('verifyForm');
+            var button = document.getElementById('verifySubmit');
+            if (form && button) {
+                form.addEventListener('submit', function () {
+                    // Stop a double submit while Cloudflare validates.
+                    setTimeout(function () { button.disabled = true; }, 0);
+                });
+            }
+            // A Turnstile token is single-use, so after a failed attempt the
+            // widget has to be reset or the retry submits a spent token.
+            {% if message %}
+            window.addEventListener('load', function () {
+                if (window.turnstile) { try { window.turnstile.reset(); } catch (e) {} }
+            });
+            {% endif %}
+        })();
+    </script>
+</body>
+</html>

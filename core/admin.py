@@ -136,7 +136,7 @@ class ContentRowAdmin(admin.ModelAdmin):
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
-    list_display = ('data_source', 'brand_name', 'brand_color', 'enable_url_blocking')
+    list_display = ('data_source', 'brand_name', 'brand_color')
     fieldsets = (
         (None, {
             'fields': ('data_source',)
@@ -149,9 +149,6 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         }),
         ('Ad Tile Settings', {
             'fields': ('tile_ad_every_n', 'enable_tile_click_gating', 'tile_ad_source', 'tile_gating_source'),
-        }),
-        ('URL Blocking', {
-            'fields': ('enable_url_blocking', 'blocked_urls', 'redirect_url'),
         }),
         ('Email Configuration', {
             'fields': ('email_host', 'email_port', 'email_host_user', 'email_host_password', 'email_use_tls'),

@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Security status{% endblock %}
+
+{% block content %}
+<style>
+    .sec-wrap { max-width: 760px; margin: 2rem auto 4rem; padding: 0 1rem; }
+    .sec-card {
+        background: rgba(255, 255, 255, .045);
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 16px;
+        padding: 1.5rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .sec-badge {
+        display: inline-flex; align-items: center; gap: .4rem;
+        font-size: .78rem; font-weight: 700;
+        padding: .32rem .75rem; border-radius: 999px;
+    }
+    .sec-badge.ok { color: #6ee7a8; background: rgba(46, 204, 113, .14); border: 1px solid rgba(46, 204, 113, .3); }
+    .sec-badge.warn { color: #fbbf24; background: rgba(251, 191, 36, .14); border: 1px solid rgba(251, 191, 36, .3); }
+    .sec-badge.off { color: #94a3b8; background: rgba(148, 163, 184, .14); border: 1px solid rgba(148, 163, 184, .3); }
+    .sec-card h2 { font-size: 1.1rem; font-weight: 700; margin: 0 0 .35rem; }
+    .sec-card p { color: var(--text-muted, #9aa0a6); font-size: .9rem; line-height: 1.6; margin: 0 0 .6rem; }
+    .sec-layer { display: flex; gap: .85rem; padding: .85rem 0; border-top: 1px solid rgba(255,255,255,.07); }
+    .sec-layer:first-of-type { border-top: 0; }
+    .sec-num {
+        flex: 0 0 30px; height: 30px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(229, 9, 20, .14); color: var(--brand, #e50914);
+        font-weight: 700; font-size: .82rem;
+    }
+    .sec-layer h3 { font-size: .92rem; font-weight: 700; margin: 0 0 .15rem; }
+    .sec-layer p { margin: 0; font-size: .85rem; }
+    .sec-btn {
+        display: inline-block; margin-top: .8rem;
+        padding: .7rem 1.2rem; border-radius: 10px;
+        background: var(--brand, #e50914); color: #fff;
+        font-weight: 600; text-decoration: none;
+    }
+</style>
+
+<div class="sec-wrap">
+
+    <div class="sec-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+            <div>
+                <h2>Your verification status</h2>
+                <p style="margin:0;">This is the state of <b>this browser session</b> only.</p>
+            </div>
+            {% if not configured %}
+            <span class="sec-badge off"><i class="fas fa-toggle-off"></i> Check disabled</span>
+            {% elif verified %}
+            <span class="sec-badge ok"><i class="fas fa-circle-check"></i> Verified</span>
+            {% else %}
+            <span class="sec-badge warn"><i class="fas fa-hourglass-half"></i> Not verified</span>
+            {% endif %}
+        </div>
+
+        <div style="margin-top:1rem;font-size:.88rem;line-height:1.6;color:var(--text-muted,#9aa0a6);">
+            {% if not configured %}
+                The human check is switched off on this site right now, so every visitor is treated as
+                verified. Nothing is required from you.
+            {% elif verified %}
+                You completed the check. This browser stays verified for about
+                {{ ttl_minutes }} more minute{{ ttl_minutes|pluralize }} ({{ ttl_hours }} hours in total),
+                after which you will be asked once more.
+            {% else %}
+                This browser has not completed the check yet. Opening any protected page will ask you
+                once; it takes a few seconds and is remembered for {{ ttl_hours }} hours.
+                <br>
+                <a class="sec-btn" href="{{ verify_url }}">Verify now</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="sec-card">
+        <h2>How this site is protected</h2>
+        <p>Three independent layers. Each one stops a different kind of automated traffic, so a request
+           has to get past all three to reach the catalogue.</p>
+
+        <div class="sec-layer">
+            <div class="sec-num">1</div>
+            <div>
+                <h3>Human check (Cloudflare Turnstile)</h3>
+                <p>Every browser answers one quick challenge, once per session. The answer is verified on
+                   our server, not in the browser, and a token issued for another website is refused.</p>
+            </div>
+        </div>
+        <div class="sec-layer">
+            <div class="sec-num">2</div>
+            <div>
+                <h3>Edge filtering and rate limiting</h3>
+                <p>Our web server drops known scraper and headless-browser clients before they reach the
+                   application, and limits how many requests one address may make per second.</p>
+            </div>
+        </div>
+        <div class="sec-layer">
+            <div class="sec-num">3</div>
+            <div>
+                <h3>Automatic banning</h3>
+                <p>An address that keeps probing — repeated errors or floods — is blocked for an hour
+                   automatically. Ordinary browsing never triggers it.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="sec-card">
+        <h2>What is not affected</h2>
+        <p>The mobile app and the public API are not asked to solve a challenge, so they keep working
+           exactly as before. Search engines other than Google are not given access, by design. If you
+           are a person using a normal browser, you should never notice any of this beyond the one
+           check.</p>
+    </div>
+
+</div>
+{% endblock %}

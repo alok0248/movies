@@ -57,10 +57,10 @@
             <div class="v">{{ android.conn_today }}</div>
             <div class="n">{{ android.conn_week }} in 7 days</div>
         </a>
-        <a class="adm-kpi" href="{% url 'traffic_control' %}">
+        <a class="adm-kpi" href="{% url 'request_log' %}">
             <div class="k">Refused today (403)</div>
             <div class="v {% if traffic_totals.blocked_today_hits %}is-warn{% endif %}">{{ traffic_totals.blocked_today_hits }}</div>
-            <div class="n">{{ blocked_now }} address{{ blocked_now|pluralize }} blocked now</div>
+            <div class="n">from the request log</div>
         </a>
         <a class="adm-kpi" href="{% url 'api_error_log' %}">
             <div class="k">API errors (24h)</div>
@@ -242,8 +242,8 @@
         <div class="adm-card-head">
             <div class="adm-card-title"><i class="fas fa-chart-area"></i>Traffic, last 14 days</div>
             <div class="adm-btn-group ms-auto">
-                <span class="adm-sub">Web {{ traffic_totals.web_14 }} &middot; Android {{ traffic_totals.android_14 }} &middot; {{ traffic_totals.blocked_headers }} header rule{{ traffic_totals.blocked_headers|pluralize }}</span>
-                <a class="adm-btn is-quiet is-sm" href="{% url 'traffic_control' %}" aria-label="Open traffic control"><i class="fas fa-arrow-right"></i></a>
+                <span class="adm-sub">Web {{ traffic_totals.web_14 }} &middot; Android {{ traffic_totals.android_14 }}</span>
+                <a class="adm-btn is-quiet is-sm" href="{% url 'request_log' %}" aria-label="Open the request log"><i class="fas fa-arrow-right"></i></a>
             </div>
         </div>
         <div class="adm-card-body tight">

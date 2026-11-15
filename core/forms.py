@@ -1,115 +1,6 @@
 from django import forms
 from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdsterraLink
 import json
-
-
-class SiteSettingsForm(forms.ModelForm):
-    class Meta:
-        model = SiteSettings
-        fields = [
-            'data_source',
-            'items_per_row',
-            'card_size',
-            'title_size',
-            'text_size',
-            'theme_style',
-            'font_family',
-            'brand_name',
-            'brand_tagline',
-            'brand_color',
-            'enable_url_blocking',
-            'blocked_urls',
-            'redirect_url',
-            'email_host',
-            'email_port',
-            'email_host_user',
-            'email_host_password',
-            'email_use_tls',
-            'curated_top_movie_ids',
-            'curated_top_series_ids',
-            'active_movie_player',
-            'active_tv_player',
-            'watch_region',
-            'url_format',
-            'tmdb_db_host',
-            'tmdb_db_port',
-            'tmdb_db_name',
-            'tmdb_db_user',
-            'tmdb_db_password',
-            'hide_live_tv',
-            'bot_ips',
-            'bot_user_agents',
-            'adsense_verification_meta',
-            'adsense_client_id',
-            'google_analytics_id',
-            'google_login_enabled',
-            'google_login_client_id',
-            'google_login_allowed_domains',
-            'auto_click_every_clicks',
-            'default_clicks_required',
-            'require_ad_consent',
-            'ad_consent_message',
-            'max_ad_load_retries',
-            'idm_visibility',
-            'tile_ad_every_n',
-            'enable_tile_click_gating',
-            'tile_ad_source',
-            'tile_gating_source',
-            'dev_mode_protection',
-        ]
-        widgets = {
-            'blocked_urls': forms.Textarea(attrs={'rows': 6, 'cols': 80, 'class': 'form-control', 'title': 'List of URLs to block (one per line), or "all" to block everything except admin pages'}),
-            'bot_ips': forms.Textarea(attrs={'rows': 4, 'cols': 80, 'class': 'form-control', 'placeholder': '192.168.1.10, 10.0.0.5', 'title': 'Comma-separated or line-separated bot IP addresses to classify as bot traffic'}),
-            'bot_user_agents': forms.Textarea(attrs={'rows': 4, 'cols': 80, 'class': 'form-control', 'placeholder': 'Googlebot, MyCustomCrawler', 'title': 'Comma-separated or line-separated user-agent fragments to classify as bot traffic'}),
-            'email_host_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP password or app-specific password'}),
-            'curated_top_movie_ids': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'placeholder': 'Comma-separated TMDB IDs, e.g., 123,456,789,987,654', 'class': 'form-control', 'title': 'Manually select which movies appear at the top of the homepage (comma-separated TMDB IDs)'}),
-            'curated_top_series_ids': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'placeholder': 'Comma-separated TMDB IDs, e.g., 123,456,789,987,654', 'class': 'form-control', 'title': 'Manually select which TV shows appear at the top of the homepage (comma-separated TMDB IDs)'}),
-            'brand_color': forms.TextInput(attrs={'type': 'color', 'class': 'form-control form-control-color', 'title': 'Choose the primary brand color for your site (buttons, links, etc.)'}),
-            'brand_name': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter your site\'s brand name (appears in the navbar, etc.)'}),
-            'brand_tagline': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter a short tagline for your site'}),
-            'data_source': forms.Select(attrs={'class': 'form-select', 'title': 'Select where your movie/TV data comes from (TMDB API, local database, etc.)'}),
-            'items_per_row': forms.Select(attrs={'class': 'form-select', 'title': 'Select how many movie/TV cards to display in each row on the homepage'}),
-            'card_size': forms.Select(attrs={'class': 'form-select', 'title': 'Select the size of movie/TV cards on the homepage'}),
-            'title_size': forms.Select(attrs={'class': 'form-select', 'title': 'Select the size of section titles on the homepage'}),
-            'text_size': forms.Select(attrs={'class': 'form-select', 'title': 'Select the size of general text on the site'}),
-            'theme_style': forms.Select(attrs={'class': 'form-select', 'title': 'Select a pre-defined theme style for your site'}),
-            'font_family': forms.Select(attrs={'class': 'form-select', 'title': 'Select the font family to use across the site'}),
-            'dev_mode_protection': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Block users with DevTools/Inspector open by showing a 404 page with ads'}),
-            'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to enable URL blocking for non-admin pages'}),
-            'redirect_url': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter the URL to redirect blocked requests to'}),
-            'email_host': forms.TextInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMTP server (e.g., smtp.gmail.com)'}),
-            'email_port': forms.NumberInput(attrs={'class': 'form-control', 'title': 'Enter your email provider\'s SMDB port (e.g., 587 for Gmail TLS)'}),
-            'email_host_user': forms.EmailInput(attrs={'class': 'form-control', 'title': 'Enter the email address to send from (e.g., yourname@gmail.com)'}),
-            'email_use_tls': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to use TLS encryption for SMTP (recommended)'}),
-            'active_movie_player': forms.Select(attrs={'class': 'form-select', 'title': 'Select the default player to use for movies'}),
-            'active_tv_player': forms.Select(attrs={'class': 'form-select', 'title': 'Select the default player to use for TV shows'}),
-            'watch_region': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., US, GB, IN', 'title': 'Enter your region for watch provider information'}),
-            'url_format': forms.Select(attrs={'class': 'form-select', 'title': 'Choose whether to use title slugs or TMDB IDs in movie/series detail page URLs'}),
-            'tmdb_db_host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'localhost'}),
-            'tmdb_db_port': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '5432'}),
-            'tmdb_db_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
-            'tmdb_db_user': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tmdb'}),
-            'tmdb_db_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control', 'placeholder': 'tmdb123!'}),
-            'hide_live_tv': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Check this box to hide Live TV from navigation'}),
-            'adsense_verification_meta': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'googlea1b2c3d4e5f6a7b8', 'title': 'Enter the Google AdSense verification meta tag content (the value of the "content" attribute)'}),
-            'adsense_client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ca-pub-1234567890123456', 'title': 'Enter your Google AdSense client ID'}),
-            'google_analytics_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'G-XXXXXXXXXX', 'title': 'Enter your Google Analytics 4 measurement ID (starts with G-). Leave blank to disable analytics.'}),
-            'google_login_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Show "Continue with Google" in the site sign-in and sign-up popup. When off, only password logins are accepted.'}),
-            'google_login_client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '1234567890-abc123.apps.googleusercontent.com', 'title': 'Google OAuth Web client ID used by the browser. Leave blank to use the server default (GOOGLE_OAUTH_CLIENT_ID).'}),
-            'google_login_allowed_domains': forms.Textarea(attrs={'rows': 2, 'cols': 80, 'class': 'form-control', 'placeholder': 'yourschool.edu, mycompany.com', 'title': 'Optional. Only allow Google accounts on these email domains. Leave blank to allow every Google account.'}),
-            'auto_click_every_clicks': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'step': '1', 'placeholder': 'e.g., 10', 'title': 'Number of user clicks between ad auto-opens. After N clicks the NEXT click triggers the ad. Set 1 for every click.'}),
-            'default_clicks_required': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1', 'placeholder': 'e.g., 2', 'title': 'Default click threshold that must be reached before ANY ad content loads on page. Applied to ads whose clicks_required=0. Set 0 to only use per-Ad values.'}),
-            'require_ad_consent': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Require explicit user consent (GDPR/CCPA) before loading any ad assets or scripts. Shows consent banner until user responds.'}),
-            'ad_consent_message': forms.Textarea(attrs={'rows': 3, 'cols': 80, 'class': 'form-control', 'title': 'Copy shown in the consent banner when require_ad_consent is enabled.'}),
-            'max_ad_load_retries': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1', 'placeholder': 'e.g., 3', 'title': 'Maximum automatic retries for failed ad network script/asset loads before the slot is marked failed.'}),
-            'idm_visibility': forms.Select(attrs={'class': 'form-select', 'title': 'Choose who can see and use the IDM Auto-Extract feature on movie and TV detail pages.'}),
-            'tile_ad_every_n': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1', 'placeholder': 'e.g., 10', 'title': 'Insert an in-grid ad tile every N movie/series cards. Set 0 to disable. Example: 10 means one ad tile after every 10 cards.'}),
-            'enable_tile_click_gating': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'If enabled, the first click on any movie/series card opens an ad in a new tab; the second click on the same card navigates to the detail page.'}),
-            'tile_ad_source': forms.Select(attrs={'class': 'form-select', 'title': 'Choose where the in-grid ad tile content comes from — individual Tile-position Ad records, or the Amazon Affiliate Product list.'}),
-            'tile_gating_source': forms.Select(attrs={'class': 'form-select', 'title': 'Choose where the first-click-gating ad URL comes from — the global autoclick pool, or the Amazon Affiliate Product list.'}),
-        }
-
-
 class BrandingSettingsForm(forms.ModelForm):
     class Meta:
         model = SiteSettings
@@ -218,20 +109,6 @@ class PlayerSettingsForm(forms.ModelForm):
             'active_tv_player': forms.Select(attrs={'class': 'form-select'}),
             'player_ui_style': forms.Select(attrs={'class': 'form-select'}),
         }
-
-
-class URLBlockingSettingsForm(forms.ModelForm):
-    class Meta:
-        model = SiteSettings
-        fields = ['enable_url_blocking', 'blocked_urls', 'redirect_url']
-        widgets = {
-            'dev_mode_protection': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Block users with DevTools/Inspector open by showing a 404 page with ads'}),
-            'enable_url_blocking': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'blocked_urls': forms.Textarea(attrs={'rows': 6, 'class': 'form-control'}),
-            'redirect_url': forms.TextInput(attrs={'class': 'form-control'}),
-        }
-
-
 class EmailSettingsForm(forms.ModelForm):
     class Meta:
         model = SiteSettings
@@ -695,16 +572,13 @@ class GeneralSettingsForm(forms.ModelForm):
 
 
 class SecurityProtectionForm(forms.ModelForm):
-    """Who is never blocked, who is treated as a bot, and browser protection."""
+    """Which traffic the site treats as its own bot, and browser protection."""
 
     class Meta:
         model = SiteSettings
-        fields = ['allowed_ips', 'bot_ips', 'bot_user_agents', 'dev_mode_protection',
+        fields = ['bot_ips', 'bot_user_agents', 'dev_mode_protection',
                   'require_login_to_browse']
         widgets = {
-            'allowed_ips': forms.Textarea(attrs={
-                'class': 'form-control', 'rows': 4,
-                'placeholder': '152.59.143.58, 203.0.113.7'}),
             'bot_ips': forms.Textarea(attrs={
                 'class': 'form-control', 'rows': 3, 'placeholder': '192.168.1.10, 10.0.0.5'}),
             'bot_user_agents': forms.Textarea(attrs={
@@ -729,9 +603,9 @@ GENERAL_FIELD_SECTIONS = [
 ]
 
 SECURITY_FIELD_SECTIONS = [
-    ('Trusted & bot addresses',
-     'Addresses that are never blocked, and the traffic this site treats as its own bot.',
-     ['allowed_ips', 'bot_ips', 'bot_user_agents']),
+    ('Bot signatures',
+     'The addresses and user-agent fragments this site treats as its own bot.',
+     ['bot_ips', 'bot_user_agents']),
     ('Browser protection', 'Extra checks applied to visitors, not to staff.',
      ['dev_mode_protection']),
     ('Access control', 'Whether a visitor has to sign in before any page opens.',

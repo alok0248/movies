@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 from .forms import (
     ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, URLBlockingSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm,
+    PlayerSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm,
     AdSwitchesForm, GeneralSettingsForm, SecurityProtectionForm,
     GENERAL_FIELD_SECTIONS, SECURITY_FIELD_SECTIONS
 )
@@ -1029,7 +1029,7 @@ def _dashboard_status(today):
     from django.utils import timezone
 
     findings, open_incidents, recent_audit = [], [], []
-    blocked_now = blocked_today = api_errors_day = 0
+    blocked_today = api_errors_day = 0
     five_xx_pct, five_xx_failed, five_xx_total = 0.0, 0, 0
     builds, gate_rejections = [], 0
 
@@ -1056,8 +1056,7 @@ def _dashboard_status(today):
         logger.debug('dashboard: could not read the audit log', exc_info=True)
 
     try:
-        from .models import BlockedIP, ErrorLog, SyncedUser
-        blocked_now = BlockedIP.objects.filter(is_active=True).count()
+        from .models import ErrorLog, SyncedUser
         blocked_today = SyncedUser.objects.filter(
             block_mode__gt='', blocked_at__date=today).count()
         api_errors_day = ErrorLog.objects.filter(
@@ -1091,32 +1090,31 @@ def _dashboard_status(today):
         logger.debug('dashboard: could not read the build logs', exc_info=True)
 
     return {'findings': findings, 'open_incidents': open_incidents,
-            'recent_audit': recent_audit, 'blocked_now': blocked_now,
+            'recent_audit': recent_audit,
             'blocked_today': blocked_today, 'api_errors_day': api_errors_day,
             'five_xx_pct': five_xx_pct, 'five_xx_failed': five_xx_failed,
             'five_xx_total': five_xx_total, 'builds': builds,
             'gate_rejections': gate_rejections}
 
 
-def _dashboard_traffic(today, blocked_now):
+def _dashboard_traffic(today):
     """Who is actually connected, and what are we refusing.
 
-    Web and Android connections per day for the last two weeks, plus the blocks
-    standing right now and the refusals served each day.
+    Web and Android connections per day for the last two weeks, plus the
+    refusals served each day.
     """
     from django.utils import timezone
 
     traffic = {'labels': [], 'web': [], 'android': [], 'blocked_hits': []}
     traffic_totals = {
         'web_today': 0, 'android_today': 0, 'web_14': 0, 'android_14': 0,
-        'blocked_now': blocked_now, 'blocked_headers': 0, 'blocked_today_hits': 0,
-        'permanent': 0, 'new_today': 0, 'top_bots': [],
+        'blocked_today_hits': 0, 'top_bots': [],
     }
     try:
         from datetime import timedelta as _td2
         from django.db.models import Count, Sum
-        from .models import (AndroidAppAccessLog, BlockedHeader, BlockedIP,
-                             RequestLog, WebsiteVisitorVisit)
+        from .models import (AndroidAppAccessLog, RequestLog,
+                             WebsiteVisitorVisit)
         start = today - _td2(days=13)
         day_list = [start + _td2(days=i) for i in range(14)]
         traffic['labels'] = [d.strftime('%d %b') for d in day_list]
@@ -1156,12 +1154,6 @@ def _dashboard_traffic(today, blocked_now):
         traffic_totals['web_14'] = sum(traffic['web'])
         traffic_totals['android_14'] = sum(traffic['android'])
         traffic_totals['blocked_today_hits'] = traffic['blocked_hits'][-1]
-        traffic_totals['blocked_headers'] = BlockedHeader.objects.filter(
-            is_active=True).count()
-        traffic_totals['new_today'] = BlockedIP.objects.filter(
-            is_active=True, blocked_at__date=today).count()
-        traffic_totals['permanent'] = BlockedIP.objects.filter(
-            is_active=True, is_permanent=True).count()
         # Which programs the 403s came from, so a repeating bot is visible
         # without opening the log.
         top_bots = (RequestLog.objects
@@ -1359,7 +1351,7 @@ def admin_dashboard(request):
     failing = [f for f in findings if f.get('ok') is False]
     unknown = [f for f in findings if f.get('ok') is None]
 
-    traffic, traffic_totals = _dashboard_traffic(today, status['blocked_now'])
+    traffic, traffic_totals = _dashboard_traffic(today)
 
     android = _dashboard_android(today, now)
 
@@ -1471,6 +1463,145 @@ def app_download_page(request):
         'download_state': state,
         'download_state_label': label(state),
         'download_state_explanation': explanation(state),
+    })
+
+
+def verify_human(request):
+    """GET/POST /verify/ — the Cloudflare Turnstile challenge.
+
+    The only page an unverified visitor can reach. A GET shows the widget; a
+    POST carries the ``cf-turnstile-response`` token to Cloudflare's siteverify
+    endpoint and, on success, marks the session human for 24 hours and forwards
+    the visitor to the page they originally asked for.
+
+    With no keys configured the page lets the visitor straight through rather
+    than trapping them here — see core.human_verification.is_configured.
+
+    Failures never raise: a timeout, an unreachable Cloudflare or a refused
+    token all re-render the page with a retryable message.
+    """
+    from . import human_verification as hv
+
+    host = request.get_host()
+    next_url = hv.safe_next(request.POST.get('next') or request.GET.get('next'), host)
+
+    if not hv.is_configured():
+        hv.mark_human(request)
+        return redirect(next_url)
+
+    message = ''
+    if request.method == 'POST':
+        from .middleware import get_client_ip
+
+        ok, reason, detail = hv.verify_turnstile(
+            request.POST.get('cf-turnstile-response', ''),
+            remote_ip=get_client_ip(request) or '',
+            expected_host=host,
+        )
+        if ok:
+            hv.mark_human(request)
+            # A fresh session id after crossing a trust boundary, so a session
+            # fixed before verification cannot be reused afterwards.
+            try:
+                request.session.cycle_key()
+            except Exception:
+                pass
+            return redirect(next_url)
+        logger.info('human verification failed (%s) for %s', reason, request.path)
+        message = detail
+
+    return render(request, 'core/verify.html', {
+        'site_key': hv.site_key(),
+        'next': next_url,
+        'message': message,
+    })
+
+
+def staff_otp(request):
+    """GET/POST /staff-otp/ — the emailed second factor for admin sign-in.
+
+    Shown to a signed-in staff/superuser account before any admin page opens.
+    A GET mails a code once (a live one is reused rather than re-sent); a POST
+    checks the typed code and, on success, marks the session for the configured
+    TTL and forwards to the page that was originally asked for.
+
+    If the code cannot be mailed and ``STAFF_OTP_FAIL_OPEN`` is on, the visitor
+    is let through with a warning rather than locked out by an SMTP outage.
+    """
+    from . import human_verification as hv
+    from . import staff_mfa
+
+    user = request.user
+    if not staff_mfa.is_staff_account(user):
+        return redirect('/')
+    if staff_mfa.passed(request):
+        return redirect('/admin-dashboard/')
+
+    host = request.get_host()
+    next_url = hv.safe_next(request.POST.get('next') or request.GET.get('next'), host)
+    if not next_url.startswith('/admin'):
+        next_url = '/admin-dashboard/'
+
+    message = ''
+    if request.method == 'POST':
+        if request.POST.get('action') == 'resend':
+            ok, _err = staff_mfa.issue(user)
+            message = 'A new code has been sent.' if ok else 'Could not send a code. Please try again later.'
+        else:
+            if staff_mfa.verify(user, request.POST.get('code') or ''):
+                staff_mfa.mark_passed(request)
+                try:
+                    request.session.cycle_key()
+                except Exception:
+                    pass
+                return redirect(next_url)
+            message = 'That code is incorrect or has expired. Request a new one and try again.'
+    else:
+        # Mail one code on arrival, but never spam: reuse a code still valid.
+        if not staff_mfa.has_live_code(user):
+            ok, _err = staff_mfa.issue(user)
+            if not ok and staff_mfa.fail_open_enabled():
+                logger.warning('Staff OTP: mail unavailable, letting %s through', user.pk)
+                staff_mfa.mark_passed(request)
+                return redirect(next_url)
+            if not ok:
+                message = 'Could not send a code. Please contact another administrator.'
+
+    return render(request, 'core/staff_otp.html', {
+        'email': user.email,
+        'next': next_url,
+        'message': message,
+    })
+
+
+def security_status(request):
+    """GET /security-status/ — what the protection does and whether you passed it.
+
+    Exempt from the gate on purpose: it has to be readable by a visitor who has
+    not been verified yet, otherwise the only people who can read it are the
+    ones who no longer need it. It shows this session's own state, never another
+    visitor's, and nothing that would help someone get around the gate.
+    """
+    import time
+
+    from django.conf import settings
+
+    from . import human_verification as hv
+
+    verified = hv.is_human(request)
+    ttl = int(getattr(settings, 'HUMAN_VERIFICATION_TTL_SECONDS', 24 * 60 * 60))
+    remaining = 0
+    if verified:
+        stamped = float(request.session.get(hv.SESSION_HUMAN_AT_KEY) or 0)
+        if stamped:
+            remaining = max(0, int(ttl - (time.time() - stamped)))
+
+    return render(request, 'core/security_status.html', {
+        'configured': hv.is_configured(),
+        'verified': verified,
+        'ttl_minutes': remaining // 60,
+        'ttl_hours': max(1, ttl // 3600),
+        'verify_url': '/verify/?next=' + request.get_full_path(),
     })
 
 
@@ -3137,12 +3268,6 @@ def player_settings(request):
     return _settings_section_view(request, PlayerSettingsForm, 'Player Settings')
 
 
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def url_blocking_settings(request):
-    return _settings_section_view(request, URLBlockingSettingsForm, 'URL Blocking Settings')
-
-
 def _safe_smtp_port(raw_value, default=587):
     """Parse an SMTP port from POST data; fall back to default on empty/garbage."""
     try:
@@ -3152,7 +3277,6 @@ def _safe_smtp_port(raw_value, default=587):
     if port < 1 or port > 65535:
         return default
     return port
-
 
 
 @login_required
@@ -3847,7 +3971,6 @@ def content_row_delete(request, row_id):
         'object_name': content_row.title,
         'cancel_url_name': 'content_row_list',
     })
-
 
 
 @login_required
@@ -6478,7 +6601,6 @@ def ajax_login(request):
             _auth_rate_limit_reset(request, 'web_login', identifier)
             login(request, user)
             _record_session(user, 'web', request)
-            _lift_block_after_auth(request)
             return JsonResponse({'success': True, 'message': 'Login successful'})
         # ModelBackend refuses an inactive account *before* it looks at the
         # password, so an unconfirmed account produces the same blank answer as
@@ -6507,7 +6629,6 @@ def ajax_login(request):
                         _auth_rate_limit_reset(request, 'web_login', identifier)
                         login(request, user)
                         _record_session(user, 'web', request)
-                        _lift_block_after_auth(request)
                         return JsonResponse({'success': True, 'message': 'Password set and login successful'})
                     return JsonResponse({
                         'success': False,
@@ -6647,7 +6768,6 @@ def ajax_register(request):
                 existing_user.save()
                 _auth_rate_limit_record(request, 'web_register', email)
                 _issue_verification_email(existing_user, request, display_name=username)
-                _lift_block_after_auth(request)
                 return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
         
         if User.objects.filter(username=username).exists():
@@ -6659,7 +6779,6 @@ def ajax_register(request):
         user.save()
         _auth_rate_limit_record(request, 'web_register', email)
         _issue_verification_email(user, request, display_name=username)
-        _lift_block_after_auth(request)
 
         return JsonResponse({'success': True, 'message': 'Verification code sent. Please check your inbox.', 'requires_verification': True})
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
@@ -8303,8 +8422,6 @@ def download_proxy(request):
         return HttpResponse(f'Download failed: {e}', status=500)
 
 
-
-
 # ===== Vidking SpeedRacelight API source fetching + decryption =====
 _VIDKING_SERVERS = {
     'Yoru': 'cdn/sources-with-title',
@@ -9111,7 +9228,26 @@ def ajax_toggle_navbar_item(request):
         return JsonResponse({'success': True, 'is_active': navbar_item.is_active})
 
 
+_WEB_DASH_CACHE_KEY = 'web_dashboard_payload_v1'
+_WEB_DASH_CACHE_SECONDS = 30
+
+
 def _get_web_management_dashboard_payload():
+    """Short-lived cache around the payload builder.
+
+    The builder scans up to 5000 request-log rows and runs several aggregates,
+    and the page refreshes itself over AJAX, so a 30-second cache removes the
+    repeated cost without hiding anything an operator would act on.
+    """
+    from django.core.cache import cache
+    payload = cache.get(_WEB_DASH_CACHE_KEY)
+    if payload is None:
+        payload = _build_web_management_dashboard_payload()
+        cache.set(_WEB_DASH_CACHE_KEY, payload, _WEB_DASH_CACHE_SECONDS)
+    return payload
+
+
+def _build_web_management_dashboard_payload():
     today = timezone.localdate()
     now = timezone.now()
     one_hour_ago = now - datetime.timedelta(hours=1)
@@ -9131,11 +9267,11 @@ def _get_web_management_dashboard_payload():
     # Bots: the visitor tracker never records bot visits (the middleware
     # skips them to keep the visitor tables human-only), so counting
     # WebsiteVisitorVisit rows with is_bot=True would always show 0. The
-    # request log is the real source, and its scraper signals are the same
-    # ones the Probes & Bots page uses, so every admin page agrees.
+    # request log is the real source, and its scraper signals are the shared
+    # classifier used across the admin, so every admin page agrees.
     from collections import Counter
-    from .models import BlockedIP, RequestLog
-    from .probes import is_probe_path, is_scraper_agent
+    from .models import RequestLog
+    from .human_verification import is_probe_path, is_scraper_agent
 
     one_day_ago = now - datetime.timedelta(hours=24)
     bot_total_visits = bot_visits_today = bot_visits_last_hour = 0
@@ -9172,12 +9308,6 @@ def _get_web_management_dashboard_payload():
         for ip, count in sorted(bot_ip_counts.items(),
                                 key=lambda item: (-item[1], item[0]))[:10]
     )
-
-    # Blocking totals — the same numbers the Blocked IPs page cards show.
-    from .ip_block import is_bot_block
-    active_block_rows = BlockedIP.objects.filter(is_active=True)
-    active_blocks = active_block_rows.count()
-    bot_blocks = sum(1 for row in active_block_rows if is_bot_block(row))
 
     daily_visits = (
         human_visits
@@ -9223,8 +9353,6 @@ def _get_web_management_dashboard_payload():
             'bot_visits_today': bot_visits_today,
             'bot_visits_last_hour': bot_visits_last_hour,
             'bot_unique_ip_count': len(bot_unique_ips),
-            'bot_blocks': bot_blocks,
-            'active_blocks': active_blocks,
             'blocked_responses_24h': blocked_responses_24h,
             'probe_requests_24h': probe_requests_24h,
         },
@@ -9259,8 +9387,6 @@ def web_management_dashboard(request):
         'bot_visits_today': dashboard['metrics']['bot_visits_today'],
         'bot_visits_last_hour': dashboard['metrics']['bot_visits_last_hour'],
         'bot_unique_ip_count': dashboard['metrics']['bot_unique_ip_count'],
-        'bot_blocks': dashboard['metrics']['bot_blocks'],
-        'active_blocks': dashboard['metrics']['active_blocks'],
         'blocked_responses_24h': dashboard['metrics']['blocked_responses_24h'],
         'probe_requests_24h': dashboard['metrics']['probe_requests_24h'],
         'chart_labels_json': json.dumps(dashboard['charts']['labels']),
@@ -10494,7 +10620,6 @@ def ajax_send_email(request):
         return JsonResponse({'ok': False, 'message': f'Error sending email: {str(e)}'})
 
 
-
 # ===== Ad verification file management =====
 import os
 
@@ -10645,21 +10770,10 @@ def serve_robots_txt(request):
     Google can crawl and index every movie, series, and public content page.
     """
     from django.http import HttpResponse
-    from .header_block import robots_disallow_lines
     lines = [
         'User-agent: *',
         'Allow: /',
         '',
-    ]
-    # The rules the admin chose to publish: an address block is invisible to a
-    # crawler that reads robots.txt, but a header rule can be published, and the
-    # ones that ignore the file are then read by the same rule and refused.
-    published = robots_disallow_lines()
-    if published:
-        lines += [
-            '# Crawlers the site blocks (Blocked headers in the dashboard)',
-        ] + published
-    lines += [
         'Sitemap: ' + SEO_SITE_URL + '/sitemap.xml',
         '',
     ]
@@ -11016,7 +11130,6 @@ FREE_SUBSCRIPTION = {
 }
 
 
-
 def _record_session(user, source, request, device_model='', os_version='', app_version=''):
     """Record a login session for tracking logins, active sessions, and source."""
     from .models import UserSession
@@ -11031,21 +11144,6 @@ def _record_session(user, source, request, device_model='', os_version='', app_v
         os_version=os_version,
         app_version=app_version,
     )
-
-
-def _lift_block_after_auth(request):
-    """Lift a normal IP block once a blocked visitor signs in or registers.
-
-    The block page a blocked address receives shows only the login and
-    registration forms and promises that either one removes the block; this is
-    where that promise is kept. A permanent block is never lifted here, and a
-    failure is swallowed so it can never break a login or a registration.
-    """
-    try:
-        from .ip_block import note_auth_success
-        note_auth_success(request)
-    except Exception:
-        logger.warning('IPBlock: could not lift the block after auth', exc_info=True)
 
 
 def _require_post(view_func):
@@ -11922,14 +12020,9 @@ def admin_user_details(request):
             ])
         return response
 
-    from .ip_block import active_blocked_ips
-    blocked = active_blocked_ips()
-
     return render(request, 'core/admin_requests.html', {
         'panel': 'details',
         'rows': displayed,
-        'blocked_ips': blocked,
-        'blocked_total': len(blocked),
         'shown': len(displayed),
         'row_total': len(filtered),
         'max_display': max_display,
@@ -12088,9 +12181,6 @@ def _request_log_tab(request):
             ])
         return response
 
-    from .ip_block import active_blocked_ips
-    blocked = active_blocked_ips()
-
     view_mode = 'table' if request.GET.get('view') == 'table' else 'cards'
     # Traffic shape for the last 24 h: which endpoints are slowest and whether
     # errors are climbing. Computed here (two grouped queries) rather than in the
@@ -12141,9 +12231,6 @@ def _request_log_tab(request):
         'matched': page_obj.paginator.count if page_obj else len(records),
         'page_obj': page_obj,
         'total': request_total(),
-        # Every currently blocked address, so each row can offer Block or Unblock.
-        'blocked_ips': blocked,
-        'blocked_total': len(blocked),
         'view_mode': view_mode,
         'filters': filters,
         'options': options,
@@ -12271,7 +12358,6 @@ def api_user_register(request):
     # Send verification email with link token + 6-digit OTP (app can verify via OTP)
     _auth_rate_limit_record(request, 'api_register', email)
     _token, otp = _issue_verification_email(django_user, request, display_name=display_name)
-    _lift_block_after_auth(request)
 
     resp = {
         'status': 'success',
@@ -12390,7 +12476,6 @@ def api_user_login(request):
         user_obj.save()
 
     _record_session(auth_user, 'android', request, device_model=body.get('deviceModel', ''), os_version=body.get('osVersion', ''), app_version=body.get('appVersion', ''))
-    _lift_block_after_auth(request)
 
     # Admin access control: a full/app block refuses login outright.
     block_err = _enforce_user_block(email, app_match)
@@ -13735,7 +13820,6 @@ def api_user_google_login(request):
                     device_model=body.get('deviceModel', ''),
                     os_version=body.get('osVersion', ''),
                     app_version=body.get('appVersion', ''))
-    _lift_block_after_auth(request)
 
     return JsonResponse(_build_user_response(django_user, user_obj, {
         'message': 'Signed in with Google',
@@ -13863,7 +13947,6 @@ def ajax_google_login(request):
 
     login(request, django_user, backend='django.contrib.auth.backends.ModelBackend')
     _record_session(django_user, 'web', request)
-    _lift_block_after_auth(request)
 
     logger.info('Google web sign-in for %s (%s)', django_user.username, 'new account' if created else 'existing account')
     return JsonResponse({
@@ -15802,10 +15885,10 @@ def _au_int_param(request, name, default, low, high):
 
 
 # Signatures of scanners, crawlers and command-line clients that hammer the
-# site without ever being a real visitor. Single source of truth shared with the
-# Probes & Bots page (a scanner should be classified the same in both places).
-from .probes import (SCRAPER_UA_MARKERS as _AU_BOT_UA_MARKERS,
-                     PROBE_PATH_MARKERS as _AU_BOT_PATH_MARKERS)
+# site without ever being a real visitor. Single source of truth, shared with
+# the rest of the admin so a scanner is classified the same everywhere.
+from .human_verification import (SCRAPER_UA_MARKERS as _AU_BOT_UA_MARKERS,
+                                 PROBE_PATH_MARKERS as _AU_BOT_PATH_MARKERS)
 
 
 def _au_looks_like_bot(row):
@@ -16205,9 +16288,7 @@ def admin_active_users(request):
             ])
         return response
 
-    from .ip_block import active_blocked_ips
     from . import geoip
-    blocked = active_blocked_ips()
 
     # Countries are resolved from the ipwho.is cache before rendering, so the
     # column is filled in the first paint instead of after a round trip.
@@ -16216,8 +16297,6 @@ def admin_active_users(request):
     return render(request, 'core/admin_requests.html', {
         'panel': 'users',
         'rows': displayed,
-        'blocked_ips': blocked,
-        'blocked_total': len(blocked),
         'shown': len(displayed),
         'row_total': len(filtered),
         'max_display': max_display,
@@ -16244,453 +16323,6 @@ def admin_active_users(request):
         'now': now,
         'since': since,
     })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@require_POST
-def ip_block_action(request):
-    """Block or unblock one IP, then return to the view the admin came from.
-
-    One endpoint serves both the Requests & Users page (per-row button) and the
-    Blocked IPs page (unblock / add): ``action`` is ``block`` or ``unblock``,
-    ``ip`` the address and ``reason`` an optional note. ``next`` is honoured
-    only when it is a local path, so a crafted form cannot bounce elsewhere.
-    """
-    from .ip_block import block_ip, unblock_ip, normalize_ip, set_permanent
-
-    action = (request.POST.get('action') or '').strip()
-    raw_ip = (request.POST.get('ip') or '').strip()
-    ip = normalize_ip(raw_ip)
-    reason = (request.POST.get('reason') or '').strip()[:300]
-    who = (request.user.username or '')[:150]
-    permanent = (request.POST.get('permanent') or '').strip().lower() in ('1', 'on', 'true', 'yes')
-
-    if not raw_ip:
-        messages.error(request, 'No IP address given.')
-    elif not ip:
-        messages.error(request, f'“{raw_ip[:64]}” is not a valid IP address — '
-                                'use a single IPv4 or IPv6 address.')
-    elif action == 'unblock':
-        if unblock_ip(ip, who) is not None:
-            messages.success(request, f'Unblocked {ip}. Requests from it are served again.')
-        else:
-            messages.warning(request, f'{ip} was not blocked.')
-    elif action == 'block':
-        row, created = block_ip(ip, who, reason, permanent=permanent)
-        if row is not None and row.is_permanent:
-            messages.success(request,
-                             f'Blocked {ip} permanently. It gets the block page on every '
-                             'request and signing in or registering will not lift it.')
-        elif created:
-            messages.success(request,
-                             f'Blocked {ip}. It now sees only the sign-in / register page — '
-                             'and its requests are still logged, so you can see what it tries next.')
-        else:
-            messages.success(request, f'Re-blocked {ip}. Its block clock was reset.')
-    elif action == 'permanent':
-        if set_permanent(ip, True, who) is not None:
-            messages.success(request,
-                             f'{ip} is now blocked permanently — signing in or registering '
-                             'will not lift it.')
-        else:
-            messages.warning(request, f'{ip} is not blocked, so it cannot be made permanent.')
-    elif action == 'temporary':
-        if set_permanent(ip, False, who) is not None:
-            messages.success(request,
-                             f'{ip} is a normal block again — signing in or registering '
-                             'will lift it.')
-        else:
-            messages.warning(request, f'{ip} is not blocked.')
-    else:
-        messages.error(request, 'Unknown action.')
-
-    # One timeline entry per block/lift, for the Audit log page.
-    if ip:
-        from .audit import log_action
-        log_action(request, 'block_ip' if action in ('block', 'permanent') else 'unblock_ip',
-                   ip, 'action=%s permanent=%s reason=%s' % (action, permanent, reason))
-
-    nxt = (request.POST.get('next') or '').strip()
-    if not (nxt.startswith('/') and not nxt.startswith('//')):
-        nxt = reverse('blocked_ips')
-    return redirect(nxt)
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@require_POST
-def trusted_ip_action(request):
-    """Add or remove an address on the trusted (never-block) allow-list.
-
-    The automatic guards — bot rate, unknown-page probes, script User-Agents —
-    are all evidence-based, and a wrong call locks out a real person. The
-    operator's own address is the one that must never be guessed wrong: running
-    a script, a smoke test or a ``curl`` from it is normal work. Addresses listed
-    here are skipped by every watch and by the block decision itself.
-
-    ``action`` is ``add`` (default) or ``remove``; ``ip`` is one address. The
-    list is stored on ``SiteSettings.allowed_ips`` as comma-separated text so it
-    stays editable straight from the settings form as well.
-    """
-    from .ip_block import normalize_ip, parse_allowed_ips, reset_allowed_ips_cache, unblock_ip
-    from .models import SiteSettings
-
-    action = (request.POST.get('action') or 'add').strip().lower()
-    raw_ip = (request.POST.get('ip') or '').strip()
-    ip = normalize_ip(raw_ip)
-    who = (request.user.username or '')[:150]
-
-    if not raw_ip:
-        messages.error(request, 'No IP address given.')
-    elif not ip:
-        messages.error(request, f'“{raw_ip[:64]}” is not a valid IP address — '
-                                'use a single IPv4 or IPv6 address.')
-    else:
-        conf = SiteSettings.get_settings()
-        current = parse_allowed_ips(conf.allowed_ips)
-        if action == 'remove':
-            if ip in current:
-                current = [entry for entry in current if entry != ip]
-                conf.allowed_ips = ', '.join(current)
-                conf.save(update_fields=['allowed_ips'])
-                reset_allowed_ips_cache()
-                messages.success(request,
-                                 f'Removed {ip} from the trusted list — the automatic '
-                                 'guards apply to it again.')
-            else:
-                messages.warning(request, f'{ip} was not on the trusted list.')
-        elif action == 'add':
-            if ip in current:
-                messages.info(request, f'{ip} is already trusted.')
-            else:
-                current.append(ip)
-                conf.allowed_ips = ', '.join(current)
-                conf.save(update_fields=['allowed_ips'])
-                reset_allowed_ips_cache()
-                messages.success(request,
-                                 f'{ip} is trusted now — the bot, probe and script '
-                                 'watchers will never block it.')
-            # A trusted address that is currently blocked would otherwise keep
-            # getting the block page, because the row still exists. Lift it.
-            if unblock_ip(ip, who) is not None:
-                messages.success(request, f'The existing block on {ip} was lifted as well.')
-        else:
-            messages.error(request, 'Unknown action.')
-
-        from .audit import log_action
-        log_action(request, 'trust_ip' if action == 'add' else 'untrust_ip', ip,
-                   'action=%s' % action)
-
-    nxt = (request.POST.get('next') or '').strip()
-    if not (nxt.startswith('/') and not nxt.startswith('//')):
-        nxt = reverse('traffic_control')
-    return redirect(nxt)
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def admin_blocked_ips(request):
-    """Blocked IPs — every address the site refuses, and what it tried anyway.
-
-    A blocked address answers 403 on every public request, but the request is
-    still recorded: this page counts the requests it has made and the requests
-    that kept arriving *after* the block, and lists the pages it asked for. A
-    block can be added or lifted straight from here.
-    """
-    import csv
-    from django.http import HttpResponse
-    from .ip_block import blocked_ip_report
-
-    show_all = (request.GET.get('show') or 'active') == 'all'
-    search = (request.GET.get('q') or '').strip()[:64]
-    rows, totals = blocked_ip_report(include_unblocked=show_all, search=search)
-
-    if request.GET.get('format') == 'csv':
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="blocked_ips.csv"'
-        # BOM so Excel opens the UTF-8 file without mangling accented data.
-        response.write('\ufeff')
-        writer = csv.writer(response)
-        writer.writerow([
-            'IP', 'Status', 'Permanent', 'Blocked times', 'Auto-bot',
-            'Lifted by signup', 'Blocked at', 'Blocked by', 'Reason',
-            'Unblocked at', 'Unblocked by', 'Requests (total)',
-            'Requests after block', '403s served', 'Pages after block',
-            'Distinct pages', 'First seen', 'Last seen',
-            'Last seen after block', 'Users', 'User agent',
-        ])
-
-        def _stamp(value):
-            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else ''
-
-        for r in rows:
-            writer.writerow([
-                r['ip'], 'Blocked' if r['is_active'] else 'Unblocked',
-                'Yes' if r['is_permanent'] else 'No', r['offense_count'],
-                'Yes' if r['is_bot'] else 'No',
-                'Yes' if r['lifted_by_signup'] else 'No',
-                _stamp(r['blocked_at']), r['blocked_by'], r['reason'],
-                _stamp(r['unblocked_at']), r['unblocked_by'], r['total'],
-                r['after'], r['after_403'],
-                ' | '.join(f"{p['path']} x{p['count']}" for p in r['paths']),
-                r['path_total'], _stamp(r['first_seen']), _stamp(r['last_seen']),
-                _stamp(r['last_after']), ', '.join(r['top_users']), r['user_agent'],
-            ])
-        return response
-
-    from .request_log import request_total
-    from .header_block import active_rules, rule_for_value
-
-    # Each row's recorded User-Agent can be blocked as a header rule from right
-    # here, and a row already covered by one is marked instead of offered twice.
-    for row in rows:
-        row['header_rule'] = rule_for_value(row['user_agent'])
-
-    from . import geoip
-    geoip.attach(rows, 'ip')
-
-    return render(request, 'core/admin_blocked_ips.html', {
-        'rows': rows,
-        'totals': totals,
-        'show_all': show_all,
-        'q': search,
-        # Counts on this page are derived from the retained request log, so say
-        # how big that window currently is.
-        'total_stored': request_total(),
-        'header_rules_total': len(active_rules()),
-    })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@require_POST
-def header_block_action(request):
-    """Block, lift, publish or delete one header rule, then return where we came from.
-
-    One endpoint serves every page that shows a header: ``block`` takes the
-    ``value`` (plus an optional ``header_name`` and ``reason``) and refuses every
-    request carrying that text, whatever the address; ``unblock`` switches a rule
-    off, ``delete`` removes it, and ``robots`` / ``no-robots`` publish it in
-    robots.txt. ``next`` is honoured only when it is a local path.
-    """
-    from .header_block import (MIN_VALUE_LENGTH, block_header, delete_header_rule,
-                               set_robots_disallow, unblock_header)
-
-    action = (request.POST.get('action') or '').strip()
-    who = (request.user.username or '')[:150]
-    header_name = (request.POST.get('header_name') or 'User-Agent').strip()
-    raw_value = (request.POST.get('value') or '').strip()
-    reason = (request.POST.get('reason') or '').strip()[:300]
-    robots = (request.POST.get('robots') or '').strip().lower() in ('1', 'on', 'true', 'yes')
-    try:
-        rule_id = int(request.POST.get('id') or 0)
-    except (TypeError, ValueError):
-        rule_id = 0
-
-    if action == 'bots':
-        # One click for "block every bot except Google": the whole profile of
-        # known crawlers and scraper clients becomes a set of User-Agent rules.
-        # Each one is an ordinary rule in the table below, so the admin can lift
-        # a single bot (Bing, for instance) without touching the rest.
-        from .header_block import block_known_bots
-        created, already, skipped = block_known_bots(
-            who, reason or 'bot profile: every known bot except Google')
-        parts = [f'{created} new bot rule{"s" if created != 1 else ""} added']
-        if already:
-            parts.append(f'{already} already in place')
-        message = 'Bot block is on — ' + ', '.join(parts) + '. Google crawlers stay allowed.'
-        if skipped:
-            message += ' Skipped (would also match Google): ' + ', '.join(skipped) + '.'
-        messages.success(request, message)
-    elif action == 'block':
-        if not raw_value:
-            messages.error(request, 'Enter the header text to block — for example ClaudeBot.')
-        else:
-            row, created = block_header(raw_value, header_name, who, reason,
-                                        robots_disallow=robots)
-            if row is None:
-                messages.error(
-                    request,
-                    f'“{raw_value[:60]}” is too short or unusable as a rule — it needs at '
-                    f'least {MIN_VALUE_LENGTH} characters, otherwise it would match everything.')
-            elif created:
-                extra = ' It is published in robots.txt as well.' if row.robots_disallow else ''
-                messages.success(
-                    request,
-                    f'Blocked every request whose {row.header_name} contains '
-                    f'“{row.value}”, whatever address it comes from.{extra}')
-            else:
-                messages.success(request, f'The rule for {row.header_name} “{row.value}” is on.')
-    elif action == 'unblock':
-        row = unblock_header(rule_id, who)
-        if row is not None:
-            messages.success(request, f'Lifted the rule on “{row.value}” — requests carrying it are served again.')
-        else:
-            messages.warning(request, 'That rule was not switched on.')
-    elif action == 'delete':
-        if delete_header_rule(rule_id):
-            messages.success(request, 'Rule deleted.')
-        else:
-            messages.warning(request, 'That rule no longer exists.')
-    elif action in ('robots', 'no-robots'):
-        row = set_robots_disallow(rule_id, action == 'robots', who)
-        if row is None:
-            messages.warning(request, 'That rule no longer exists.')
-        elif action == 'robots':
-            messages.success(request, f'“{row.value}” is now listed in robots.txt as well.')
-        else:
-            messages.success(request, f'“{row.value}” is no longer listed in robots.txt.')
-    else:
-        messages.error(request, 'Unknown action.')
-
-    # One timeline entry per rule change, for the Audit log page.
-    from .audit import log_action
-    audit_action = {
-        'bots': 'bot_profile', 'block': 'block_header', 'unblock': 'unblock_header',
-        'delete': 'delete_header', 'robots': 'robots_header',
-        'no-robots': 'robots_header',
-    }.get(action, '')
-    if audit_action:
-        target = ('bot profile (every rule)' if action == 'bots'
-                  else '%s: %s' % (header_name, raw_value))
-        log_action(request, audit_action, target,
-                   'action=%s%s' % (action, (' reason=' + reason) if reason else ''))
-
-    nxt = (request.POST.get('next') or '').strip()
-    if not (nxt.startswith('/') and not nxt.startswith('//')):
-        nxt = reverse('blocked_headers')
-    return redirect(nxt)
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def admin_blocked_headers(request):
-    """Blocked headers — the header rules every request is read against.
-
-    An IP block answers one address. A rule here answers the program, so a
-    crawler that announces itself in its User-Agent is refused from any address,
-    including one that has never been seen. A rule can also be published in
-    robots.txt, which is the polite half of the same decision.
-    """
-    import csv
-    from django.http import HttpResponse
-    from .header_block import (BOT_BLOCK_PROFILE, COMMON_HEADERS, MIN_VALUE_LENGTH,
-                               SUGGESTED_RULES, blocked_header_report)
-
-    show_all = (request.GET.get('show') or 'active') == 'all'
-    search = (request.GET.get('q') or '').strip()[:100]
-    rows, totals = blocked_header_report(include_inactive=show_all, search=search)
-
-    if request.GET.get('format') == 'csv':
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="blocked_headers.csv"'
-        response.write('\ufeff')
-        writer = csv.writer(response)
-        writer.writerow([
-            'Header', 'Value', 'Status', 'In robots.txt', 'Requests refused',
-            'Counted', 'First refused', 'Last refused', 'Addresses seen',
-            'Top addresses', 'Top pages', 'Blocked at', 'Blocked by', 'Reason',
-            'Switched off at', 'Switched off by',
-        ])
-
-        def _stamp(value):
-            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else ''
-
-        for r in rows:
-            writer.writerow([
-                r['header_name'], r['value'],
-                'Blocked' if r['is_active'] else 'Off',
-                'Yes' if (r['robots_disallow'] and r['robots_token']) else 'No',
-                r['refused'] if r['counted'] else '',
-                'Yes' if r['counted'] else 'No', _stamp(r['first_refused']),
-                _stamp(r['last_refused']), r['ip_total'],
-                ', '.join(r['top_ips']), ' | '.join(r['top_paths']),
-                _stamp(r['blocked_at']), r['blocked_by'], r['reason'],
-                _stamp(r['unblocked_at']), r['unblocked_by'],
-            ])
-        return response
-
-    from .request_log import request_total
-
-    return render(request, 'core/admin_blocked_headers.html', {
-        'rows': rows,
-        'totals': totals,
-        'show_all': show_all,
-        'q': search,
-        'common_headers': COMMON_HEADERS,
-        'suggested': SUGGESTED_RULES,
-        'min_value_length': MIN_VALUE_LENGTH,
-        'bot_profile': BOT_BLOCK_PROFILE,
-        'bot_profile_count': len(BOT_BLOCK_PROFILE),
-        # The rule counts come from the retained request log, so say how big
-        # that window currently is.
-        'total_stored': request_total(),
-    })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def admin_probes(request):
-    """Probes & Bots — who is asking for pages that are not on the website.
-
-    One row per address: how many unknown pages it asked for (404s and scanner
-    paths), exactly which ones, its request rate, and the signals that make it
-    look automated. Every row can be blocked straight from here, and the bottom
-    table shows which non-existent pages are being hunted for most.
-    """
-    import csv
-    from django.http import HttpResponse
-    from .probes import probe_report
-    from .request_log import request_total
-
-    hours = _au_int_param(request, 'hours', 24, 1, 720)
-    min_hits = _au_int_param(request, 'min_hits', 1, 1, 100000)
-    hide_blocked = request.GET.get('hide_blocked') == '1'
-    search = (request.GET.get('q') or '').strip()[:64]
-    rows, totals, top_paths = probe_report(
-        hours=hours, min_hits=min_hits, hide_blocked=hide_blocked, search=search,
-    )
-
-    if request.GET.get('format') == 'csv':
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="probes.csv"'
-        response.write('\ufeff')
-        writer = csv.writer(response)
-        writer.writerow([
-            'IP', 'Blocked', 'Unknown pages', 'Distinct unknown pages',
-            'Scanner paths', '404s', 'Requests in window', 'Per hour',
-            'Signals', 'First seen', 'Last seen', 'User agent', 'Pages requested',
-        ])
-
-        def _stamp(value):
-            return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else ''
-
-        for r in rows:
-            writer.writerow([
-                r['ip'], 'Yes' if r['blocked'] else 'No', r['unknown'],
-                r['path_total'], r['probes'], r['not_found'], r['requests'],
-                r['per_hour'], ', '.join(r['signals']), _stamp(r['first_seen']),
-                _stamp(r['last_seen']), r['user_agent'],
-                ' | '.join(f"{p['path']} x{p['count']}" for p in r['paths']),
-            ])
-        return response
-
-    from . import geoip
-    geoip.attach(rows, 'ip')
-
-    return render(request, 'core/admin_probes.html', {
-        'rows': rows,
-        'totals': totals,
-        'top_paths': top_paths,
-        'hours': hours,
-        'min_hits': min_hits,
-        'hide_blocked': hide_blocked,
-        'q': search,
-        'total_stored': request_total(),
-    })
-
-
 # ---------------------------------------------------------------------------
 # Visitor journeys — one history per visitor, page by page
 # ---------------------------------------------------------------------------
@@ -18253,7 +17885,7 @@ def _settings_health():
         return 'ok' if value else 'warn'
 
     active_keys = TMDBApiKey.objects.filter(is_active=True).count()
-    allowed = [ip for ip in (ss.allowed_ips or '').replace(',', ' ').split() if ip]
+    bot_signatures = len([v for v in (ss.bot_user_agents or '').replace('\n', ',').split(',') if v.strip()])
     rows = [
         {'group': 'Site', 'label': 'General', 'url': hub('site', 'general'),
          'detail': ('Analytics ' + ss.google_analytics_id) if ss.google_analytics_id else 'No analytics ID',
@@ -18272,12 +17904,9 @@ def _settings_health():
         {'group': 'Delivery', 'label': 'Player', 'url': hub('delivery', 'player'),
          'detail': ss.active_movie_player or 'No player chosen', 'state': state(ss.active_movie_player)},
         {'group': 'Security', 'label': 'Protection', 'url': hub('security', 'protection'),
-         'detail': (f'{len(allowed)} trusted address{"" if len(allowed) == 1 else "es"}'
-                    if allowed else 'No trusted addresses'),
-         'state': state(allowed)},
-        {'group': 'Security', 'label': 'URL blocking', 'url': hub('security', 'blocking'),
-         'detail': 'Blocking on' if ss.enable_url_blocking else 'Blocking off',
-         'state': 'ok'},
+         'detail': (f'{bot_signatures} bot signature{"" if bot_signatures == 1 else "s"}'
+                    if bot_signatures else 'No bot signatures'),
+         'state': state(bot_signatures)},
     ]
     return rows
 
@@ -18303,7 +17932,7 @@ def _overview_context():
     them is the one expensive read on this page, so the result is held for
     ``SETTINGS_OVERVIEW_CACHE_SECONDS`` rather than paid on every open.
     """
-    from .models import (TMDBMovie, TMDBTV, Subscriber, BlockedIP, TMDBApiKey,
+    from .models import (TMDBMovie, TMDBTV, Subscriber, TMDBApiKey,
                          DataSourceUsageLog, UserPageView, RequestLog, ErrorLog,
                          UserHeartbeat)
 
@@ -18349,7 +17978,6 @@ def _overview_context():
             {'label': 'Page views / 7d', 'value': week_views, 'icon': 'fa-eye'},
             {'label': 'Requests / 7d', 'value': week_requests, 'icon': 'fa-bolt'},
             {'label': 'Errors / 7d', 'value': week_errors, 'icon': 'fa-triangle-exclamation'},
-            {'label': 'Active blocks', 'value': BlockedIP.objects.filter(is_active=True).count(), 'icon': 'fa-ban'},
             {'label': 'Active API keys', 'value': TMDBApiKey.objects.filter(is_active=True).count(), 'icon': 'fa-key'},
             {'label': 'Subscribers', 'value': Subscriber.objects.count(), 'icon': 'fa-envelope'},
             {'label': 'Silent mid-play',
@@ -18423,11 +18051,10 @@ SETTINGS_HUB = {
     },
     'security': {
         'title': 'Security',
-        'subtitle': 'Who is never blocked, who is treated as a bot, and what the '
-                    'site refuses to serve.',
+        'subtitle': 'Which traffic is treated as a bot, and how visitors are '
+                    'protected.',
         'tabs': [
-            ('protection', 'Protection', 'Trusted addresses, bot signatures, DevTools rule, sign-in gate', 'security_protection_settings'),
-            ('blocking', 'URL blocking', 'Blocked URLs and redirects', 'url_blocking_settings'),
+            ('protection', 'Protection', 'Bot signatures, DevTools rule, sign-in gate', 'security_protection_settings'),
         ],
     },
 }
@@ -18457,6 +18084,27 @@ def _settings_redirect(request, fallback):
 def settings_root(request):
     """Bare /settings/ opens the overview, which links to every group."""
     return redirect(reverse('settings_hub', args=['overview']))
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def settings_tab_redirect(request, group='site', tab='general'):
+    """A legacy one-panel settings URL now lands on the matching hub tab.
+
+    The panel views themselves are unchanged — the hub still calls them to
+    render the embedded panel — but the old standalone URLs are consolidated
+    into the hub, so the interface has one page per group instead of thirteen
+    near-identical pages. Bookmarks to the old URLs keep working (via this
+    redirect) rather than 404ing.
+    """
+    return redirect(reverse('settings_hub', args=[group]) + '?tab=' + tab)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def settings_bare_redirect(request):
+    """A retired settings page with no hub equivalent → the settings home."""
+    return redirect(reverse('settings_root'))
 
 
 @login_required
@@ -18518,7 +18166,6 @@ def settings_hub(request, group):
         'tab_url': tab_url,
         'panel': mark_safe(body),
     })
-
 
 
 @login_required
@@ -19142,84 +18789,6 @@ def admin_ip_geo(request, ip):
         logger.warning('ip geo lookup failed for %s: %s', ip, exc)
         data = {'ok': False, 'ip': ip, 'error': 'Lookup unavailable right now.'}
     return JsonResponse(data)
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def traffic_control(request):
-    """One page for everything that answers "who is hitting us and what is blocked".
-
-    The dashboard used to spread this over three pages — Blocked IPs, Blocked
-    Headers and Probes & Bots — which answered the same question separately.
-    Here the three sit together: the bot profile as a checklist you can switch
-    per program, the blocked addresses, the probes, and one queue of every
-    active block with a single Lift button each. The actions still post to the
-    existing endpoints (``ip_block_action``, ``header_block_action``), so the
-    history and validation of each are unchanged.
-    """
-    from .header_block import BOT_BLOCK_PROFILE, blocked_header_report
-    from .health import five_xx_rate
-    from .ip_block import allowed_ip_list, blocked_ip_report, client_ip_of
-    from .models import BlockedHeader
-    from .probes import probe_report
-    from .request_log import request_total
-
-    rule_ids = {r.value.lower(): r.id for r in BlockedHeader.objects.filter(is_active=True)}
-
-    groups, by_name = [], {}
-    for token, label in BOT_BLOCK_PROFILE:
-        category = (label.split(':')[0] or 'other').strip().title()
-        if category not in by_name:
-            by_name[category] = {'name': category, 'items': []}
-            groups.append(by_name[category])
-        by_name[category]['items'].append({
-            'token': token, 'label': label,
-            'on': token.lower() in rule_ids,
-            'rule_id': rule_ids.get(token.lower(), 0),
-        })
-
-    ip_rows, ip_totals = blocked_ip_report()
-    header_rows, header_totals = blocked_header_report()
-    probe_rows, probe_totals, top_paths = probe_report(hours=24, min_hits=1)
-
-    queue = []
-    for row in ip_rows:
-        queue.append({'kind': 'ip', 'target': row['ip'], 'reason': row['reason'],
-                      'since': row['blocked_at'], 'by': row['blocked_by']})
-    for row in header_rows:
-        queue.append({
-            'kind': 'header',
-            'rule_id': row['id'],
-            'target': '%s: %s' % (row['header_name'], row['value']),
-            'reason': row['reason'], 'since': row['blocked_at'],
-            'by': row['blocked_by'],
-        })
-    queue.sort(key=lambda entry: entry['since'] or timezone.now(), reverse=True)
-
-    pct5, bad5, total5 = five_xx_rate(60)
-    trusted = allowed_ip_list()
-    return render(request, 'core/admin_traffic_control.html', {
-        'bot_groups': groups,
-        'bot_on': sum(1 for g in groups for i in g['items'] if i['on']),
-        'bot_total': len(BOT_BLOCK_PROFILE),
-        'ip_rows': ip_rows,
-        'ip_totals': ip_totals,
-        'header_rows': header_rows[:80],
-        'header_totals': header_totals,
-        'probe_rows': probe_rows[:40],
-        'probe_totals': probe_totals,
-        'top_paths': top_paths[:8],
-        'queue': queue[:150],
-        'five_xx_pct': pct5,
-        'five_xx_bad': bad5,
-        'five_xx_total': total5,
-        'total_stored': request_total(),
-        'trusted_ips': trusted,
-        'request_ip': client_ip_of(request),
-        'request_ip_trusted': bool(client_ip_of(request)) and client_ip_of(request) in trusted,
-    })
-
-
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_audit_log(request):
@@ -19501,7 +19070,6 @@ def admin_alerts(request):
     })
 
 
-
 def _admin_hhmm(value):
     """A 24h HH:MM string, or '' when the input is not a valid time."""
     value = (value or '').strip()
@@ -19682,30 +19250,4 @@ def synced_user_peek(request, user_id):
         'u': u,
         'heartbeat': heartbeat,
         'cloud': cloud,
-    })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def blocked_ip_peek(request, ip):
-    """Drawer fragment: one blocked address and what it did."""
-    from .models import BlockedIP, RequestLog
-    row = BlockedIP.objects.filter(ip_address=ip).first()
-    if row is None:
-        raise Http404('No block for that address')
-
-    try:
-        after = RequestLog.objects.filter(client_ip=ip, created_at__gte=row.blocked_at).count()
-    except Exception:
-        after = 0
-    try:
-        recent = list(RequestLog.objects.filter(client_ip=ip).order_by('-created_at')[:10])
-    except Exception:
-        recent = []
-
-    return render(request, 'core/_peek_blocked_ip.html', {
-        'row': row,
-        'ip': ip,
-        'after_block': after,
-        'recent': recent,
     })

@@ -1350,10 +1350,6 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             <a href="{% url 'devices_ips' %}" class="sb-item {% if 'admin-dashboard/devices' in request.path %}active{% endif %}">
                 <i class="fas fa-phone-flip"></i> Devices &amp; IPs
             </a>
-            <a href="{% url 'traffic_control' %}" class="sb-item {% if 'admin-dashboard/traffic-control' in request.path %}active{% endif %}">
-                <i class="fas fa-shield-halved"></i> Traffic Control
-                {% if admin_badges.blocked %}<span class="sb-badge" title="{{ admin_badges.blocked }} address{{ admin_badges.blocked|pluralize }} blocked">{{ admin_badges.blocked }}</span>{% endif %}
-            </a>
             <a href="{% url 'api_error_log' %}" class="sb-item {% if 'api-errors' in request.path %}active{% endif %}">
                 <i class="fas fa-bug"></i> API Errors
                 {% if admin_badges.api_errors %}<span class="sb-badge info" title="{{ admin_badges.api_errors }} new error{{ admin_badges.api_errors|pluralize }} since you last looked">{{ admin_badges.api_errors }}</span>{% endif %}
@@ -1509,12 +1505,110 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
 
 <script src="{% static 'js/admin-drawer.js' %}"></script>
 <script src="{% static 'js/typed-confirm.js' %}"></script>
+<div id="adminPalette" class="ap-overlay" hidden>
+    <div class="ap-box" role="dialog" aria-modal="true" aria-label="Jump to an admin page">
+        <input id="adminPaletteInput" class="ap-input" type="search" autocomplete="off"
+               placeholder="Jump to a page… type a name and press Enter">
+        <div id="adminPaletteList" class="ap-list" role="listbox"></div>
+        <div class="ap-hint">Press <kbd>Esc</kbd> to close · <kbd>Enter</kbd> to open the first match</div>
+    </div>
+</div>
+<style>
+    .ap-overlay { position: fixed; inset: 0; z-index: 4000; background: rgba(4, 6, 12, .62);
+        backdrop-filter: blur(2px); display: flex; align-items: flex-start; justify-content: center;
+        padding-top: 12vh; }
+    .ap-box { width: 100%; max-width: 560px; background: #12141b; border: 1px solid rgba(255,255,255,.14);
+        border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; }
+    .ap-input { width: 100%; box-sizing: border-box; padding: 1rem 1.1rem; border: 0; outline: 0;
+        background: transparent; color: #eef1f6; font-size: 1rem; }
+    .ap-list { max-height: 48vh; overflow-y: auto; border-top: 1px solid rgba(255,255,255,.08); }
+    .ap-item { display: flex; align-items: center; gap: .6rem; padding: .7rem 1.1rem;
+        color: #cfd4dd; text-decoration: none; cursor: pointer; font-size: .92rem; }
+    .ap-item i { width: 18px; text-align: center; opacity: .6; font-size: .82rem; }
+    .ap-item:hover, .ap-item.is-active { background: rgba(99,102,241,.18); color: #fff; }
+    .ap-empty { padding: 1rem 1.1rem; color: #9aa0a6; font-size: .88rem; }
+    .ap-hint { padding: .55rem 1.1rem; border-top: 1px solid rgba(255,255,255,.08);
+        color: #7c8494; font-size: .74rem; }
+    .ap-hint kbd { background: rgba(255,255,255,.1); border-radius: 4px; padding: 0 .3rem; }
+</style>
 <script>
 // Sidebar toggle
 function toggleSidebar() {
     var sb = document.getElementById('adminSidebar');
     sb.classList.toggle('open');
 }
+
+// Command palette: Ctrl/Alt+K (or focusing the sidebar filter) opens a jump box
+// built from the sidebar links, so every admin page is one search away.
+(function () {
+    var overlay = document.getElementById('adminPalette');
+    if (!overlay) { return; }
+    var input = document.getElementById('adminPaletteInput');
+    var list = document.getElementById('adminPaletteList');
+    var links = [];
+    function collect() {
+        links = [];
+        document.querySelectorAll('#adminSidebar .sb-item').forEach(function (a) {
+            var label = (a.textContent || '').trim().replace(/\s+/g, ' ');
+            var icon = a.querySelector('i');
+            links.push({
+                label: label,
+                href: a.getAttribute('href'),
+                icon: icon ? icon.className : ''
+            });
+        });
+    }
+    function render(query) {
+        var needle = (query || '').trim().toLowerCase();
+        list.innerHTML = '';
+        var shown = 0;
+        links.forEach(function (item) {
+            if (needle && item.label.toLowerCase().indexOf(needle) === -1) { return; }
+            var a = document.createElement('a');
+            a.className = 'ap-item';
+            a.href = item.href;
+            if (item.icon) {
+                var i = document.createElement('i');
+                i.className = item.icon;
+                a.appendChild(i);
+            }
+            a.appendChild(document.createTextNode(item.label));
+            list.appendChild(a);
+            shown++;
+            if (shown === 1) { a.classList.add('is-active'); }
+        });
+        if (!shown) {
+            var empty = document.createElement('div');
+            empty.className = 'ap-empty';
+            empty.textContent = 'No page matches.';
+            list.appendChild(empty);
+        }
+    }
+    function open() { collect(); render(''); input.value = ''; overlay.hidden = false; input.focus(); }
+    function close() { overlay.hidden = true; }
+    function go() {
+        var first = list.querySelector('.ap-item');
+        if (first) { window.location.href = first.getAttribute('href'); }
+    }
+    input.addEventListener('input', function () { render(input.value); });
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); go(); }
+        else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) { close(); } });
+    document.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey || e.altKey) && (e.key === 'k' || e.key === 'K')) {
+            e.preventDefault();
+            open();
+        } else if (e.key === 'Escape' && !overlay.hidden) {
+            close();
+        }
+    });
+    var trigger = document.getElementById('sbSearch');
+    if (trigger) {
+        trigger.addEventListener('focus', function (e) { e.target.blur(); open(); });
+    }
+})();
 
 // Sidebar filter: hides items that do not match, and the section headings that
 // end up empty. Purely visual -- every link keeps working when the box is cleared.

@@ -19,7 +19,7 @@ urlpatterns = [
     path('upcoming/', views.upcoming, name='upcoming'),
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('ajax/dashboard-stats/', views.ajax_dashboard_stats, name='ajax_dashboard_stats'),
-    path('admin-dashboard/edit-settings/', views.edit_settings, name='edit_settings'),
+    path('admin-dashboard/edit-settings/', views.settings_root, name='edit_settings'),
     # The thirteen settings pages are grouped into three, each showing one panel
     # at a time (?tab=). The old per-page URLs above stay, so bookmarks work —
     # hence the explicit group names here rather than a catch-all slug, which
@@ -28,47 +28,42 @@ urlpatterns = [
     path('admin-dashboard/settings/', views.settings_root, name='settings_root'),
     re_path(r'^admin-dashboard/settings/(?P<group>overview|site|data|delivery|security)/$',
             views.settings_hub, name='settings_hub'),
-    path('admin-dashboard/settings/general/', views.general_settings, name='general_settings'),
-    path('admin-dashboard/settings/security-protection/', views.security_protection_settings,
-         name='security_protection_settings'),
-    path('admin-dashboard/settings/branding/', views.branding_settings, name='branding_settings'),
-    path('admin-dashboard/settings/display/', views.display_settings, name='display_settings'),
-    path('admin-dashboard/settings/data-source/', views.data_source_settings, name='data_source_settings'),
-    path('admin-dashboard/settings/footer/', views.footer_settings, name='footer_settings'),
-    path('admin-dashboard/settings/data-source-config/', views.data_source_config, name='data_source_config'),
-    path('admin-dashboard/settings/data-source-usage-stats/', views.data_source_usage_stats, name='data_source_usage_stats'),
-    path('admin-dashboard/settings/tmdb-db/', views.tmdb_db_settings, name='tmdb_db_settings'),
-    path('admin-dashboard/settings/player/', views.player_settings, name='player_settings'),
-    path('admin-dashboard/settings/url-blocking/', views.url_blocking_settings, name='url_blocking_settings'),
-    path('admin-dashboard/settings/email/', views.email_settings, name='email_settings'),
+    # Consolidated into the hubs: each legacy URL redirects to its panel tab,
+    # so the interface has no duplicate page but old bookmarks still resolve.
+    path('admin-dashboard/settings/general/', views.settings_tab_redirect,
+         {'group': 'site', 'tab': 'general'}, name='general_settings'),
+    path('admin-dashboard/settings/security-protection/', views.settings_tab_redirect,
+         {'group': 'security', 'tab': 'protection'}, name='security_protection_settings'),
+    path('admin-dashboard/settings/branding/', views.settings_tab_redirect,
+         {'group': 'site', 'tab': 'branding'}, name='branding_settings'),
+    path('admin-dashboard/settings/display/', views.settings_tab_redirect,
+         {'group': 'site', 'tab': 'display'}, name='display_settings'),
+    path('admin-dashboard/settings/data-source/', views.settings_tab_redirect,
+         {'group': 'data', 'tab': 'source'}, name='data_source_settings'),
+    path('admin-dashboard/settings/footer/', views.settings_tab_redirect,
+         {'group': 'site', 'tab': 'footer'}, name='footer_settings'),
+    path('admin-dashboard/settings/data-source-config/', views.settings_tab_redirect,
+         {'group': 'data', 'tab': 'keys'}, name='data_source_config'),
+    path('admin-dashboard/settings/data-source-usage-stats/', views.settings_tab_redirect,
+         {'group': 'data', 'tab': 'usage'}, name='data_source_usage_stats'),
+    path('admin-dashboard/settings/tmdb-db/', views.settings_tab_redirect,
+         {'group': 'data', 'tab': 'tmdb'}, name='tmdb_db_settings'),
+    path('admin-dashboard/settings/player/', views.settings_tab_redirect,
+         {'group': 'delivery', 'tab': 'player'}, name='player_settings'),
+    path('admin-dashboard/settings/email/', views.settings_tab_redirect,
+         {'group': 'delivery', 'tab': 'email'}, name='email_settings'),
     path('admin-dashboard/settings/email/logs/', views.ajax_email_logs, name='ajax_email_logs'),
     path('admin-dashboard/api-errors/', views.api_error_log, name='api_error_log'),
     # Requests & Users: ?tab=log (raw request log, default) or ?tab=users (visitors).
     path('admin-dashboard/requests/', views.admin_requests, name='request_log'),
-    # Block/unblock one IP (POST) — used by the Requests & Users and Blocked IPs pages.
-    path('admin-dashboard/requests/block-ip/', views.ip_block_action, name='ip_block_action'),
     path('admin-dashboard/ip-geo/', views.admin_ip_geo_batch, name='admin_ip_geo_batch'),
     path('admin-dashboard/ip-geo/<str:ip>/', views.admin_ip_geo, name='admin_ip_geo'),
-    # Trust / untrust one IP (POST) — the never-block allow-list on Traffic Control.
-    path('admin-dashboard/traffic-control/trusted-ip/', views.trusted_ip_action, name='trusted_ip_action'),
-    # Every blocked IP, with the requests it made after the block.
-    path('admin-dashboard/blocked-ips/', views.admin_blocked_ips, name='blocked_ips'),
     path('admin-dashboard/requests/<int:pk>/peek/', views.request_peek, name='request_peek'),
     path('admin-dashboard/synced-users/<int:user_id>/peek/', views.synced_user_peek, name='synced_user_peek'),
-    path('admin-dashboard/blocked-ips/<str:ip>/peek/', views.blocked_ip_peek, name='blocked_ip_peek'),
-    # Blocked addresses, blocked headers and probes on one page.
-    path('admin-dashboard/traffic-control/', views.traffic_control, name='traffic_control'),
     # Who blocked / lifted / wiped / changed what, and when.
     path('admin-dashboard/audit-log/', views.admin_audit_log, name='admin_audit_log'),
-    # Health checks and the addresses they alert.
     path('admin-dashboard/alerts/', views.admin_alerts, name='admin_alerts'),
     path('admin-dashboard/data-volume/', views.admin_data_volume, name='admin_data_volume'),
-    # Header rules (User-Agent and friends) that refuse a whole kind of traffic.
-    path('admin-dashboard/blocked-headers/', views.admin_blocked_headers, name='blocked_headers'),
-    # Block / lift / publish one header rule (POST).
-    path('admin-dashboard/blocked-headers/action/', views.header_block_action, name='header_block_action'),
-    # Who is asking for pages that are not on the website (404s and scanner paths).
-    path('admin-dashboard/probes/', views.admin_probes, name='probes'),
     path('admin-dashboard/content-rows/', views.content_row_list, name='content_row_list'),
     path('admin-dashboard/content-rows/create/', views.content_row_create, name='content_row_create'),
     path('admin-dashboard/content-rows/<int:row_id>/edit/', views.content_row_edit, name='content_row_edit'),
@@ -327,6 +322,13 @@ urlpatterns = [
     path('privacy/', TemplateView.as_view(template_name='core/privacy.html'), name='privacy'),
     path('app/', views.app_page, name='app_page'),
     path('get-app/', views.app_download_page, name='get_app'),
+    # Layer 1 of the bot protection: the Cloudflare Turnstile challenge. Public
+    # by definition — it is where an unverified visitor is sent.
+    path('verify/', views.verify_human, name='verify_human'),
+    # Second factor for admin sign-in: the emailed 6-digit code.
+    path('staff-otp/', views.staff_otp, name='staff_otp'),
+    # Readable before verification, which is the point of it.
+    path('security-status/', views.security_status, name='security_status'),
     path('terms/', TemplateView.as_view(template_name='core/terms.html'), name='terms'),
     path('sw.js', views.serve_sw_js, name='serve_sw_js'),
     path('sw-proxy.js', views.serve_sw_proxy_js, name='serve_sw_proxy_js'),
@@ -367,9 +369,11 @@ urlpatterns = [
     path('admin-dashboard/content/<str:content_type>/<int:content_id>/delete/', views.admin_content_delete, name='admin_content_delete'),
     path('admin-dashboard/users/<int:user_id>/resend-verification/', views.admin_user_resend_verification, name='admin_user_resend_verification'),
     path('admin-dashboard/users/<int:user_id>/subscription/', views.admin_user_subscription, name='admin_user_subscription'),
-    path('admin-dashboard/settings/db-connections/', views.db_connection_settings, name='db_connection_settings'),
+    path('admin-dashboard/settings/db-connections/', views.settings_tab_redirect,
+         {'group': 'data', 'tab': 'db'}, name='db_connection_settings'),
     path('admin-dashboard/settings/db-connections/<int:pk>/', views.db_connection_detail, name='db_connection_detail'),
-    path('admin-dashboard/settings/db-routing/', views.db_routing_settings, name='db_routing_settings'),
+    path('admin-dashboard/settings/db-routing/', views.settings_tab_redirect,
+         {'group': 'data', 'tab': 'routing'}, name='db_routing_settings'),
     path('admin-dashboard/settings/db-dashboard/', views.db_dashboard, name='db_dashboard'),
     path('ajax/test-db-connection-new/', views.ajax_test_db_connection, name='ajax_test_db_connection_new'),
     path('ajax/write-db-config/', views.ajax_write_db_config, name='ajax_write_db_config'),
