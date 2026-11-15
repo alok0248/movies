@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}Download page closed{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:3rem auto 4rem;padding:0 1rem;">
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:2rem 1.75rem;text-align:center;">
+        <div style="width:64px;height:64px;margin:0 auto 1rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:#f59e0b;background:rgba(245,158,11,.14);">
+            <i class="fas fa-lock"></i>
+        </div>
+        <h1 style="font-size:1.3rem;font-weight:700;margin-bottom:.5rem;">The app download page is closed</h1>
+        <p style="color:var(--text-muted,#9aa0a6);font-size:.93rem;line-height:1.6;margin-bottom:1.25rem;">
+            This page has been switched off by the site operator, so it is not available to
+            anyone right now — signed in or not. Please try again later.
+        </p>
+        <a href="/" style="display:inline-block;padding:.7rem 1.3rem;border-radius:10px;background:var(--brand,#e50914);color:#fff;font-weight:600;text-decoration:none;">
+            Go to the homepage
+        </a>
+    </div>
+</div>
+{% endblock %}

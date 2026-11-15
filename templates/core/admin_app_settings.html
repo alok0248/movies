@@ -86,10 +86,131 @@
                 </label>
             </div>
 
+            <div class="as-sect mt-4 mb-1"><i class="fas fa-shield-halved text-danger"></i> Device checks on API traffic</div>
+            <div class="as-sub mb-2">
+                These decide which requests are accepted as coming from the official app. They are
+                checked on <b>every</b> API request and every refusal is written to the validation log below.
+                Nothing is refused until <b>Enforce these checks</b> is ticked, so you can watch a trial run
+                first. Every signal except the app credential is a header the app writes, so treat this as a
+                bar-raiser: the only real attestation is Google Play Integrity.
+            </div>
+            <div class="d-flex flex-wrap gap-3 mt-2">
+                <label class="as-check">
+                    <input type="checkbox" name="strict_client_validation" {% if selected_app.strict_client_validation %}checked{% endif %}>
+                    <span><b>Enforce these checks</b> — refuse requests that fail them
+                        {% if not selected_app.strict_client_validation %}
+                        <span style="color:#fbbf24;">(currently observe-only)</span>
+                        {% endif %}</span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="require_android_platform" {% if selected_app.require_android_platform %}checked{% endif %}>
+                    <span>Require <span class="as-mono">X-Android-Platform: android</span></span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="block_emulators" {% if selected_app.block_emulators %}checked{% endif %}>
+                    <span>Refuse emulators</span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="block_debug_builds" {% if selected_app.block_debug_builds %}checked{% endif %}>
+                    <span>Refuse debuggable builds</span>
+                </label>
+                <label class="as-check">
+                    <input type="checkbox" name="block_rooted_devices" {% if selected_app.block_rooted_devices %}checked{% endif %}>
+                    <span>Refuse rooted devices</span>
+                </label>
+            </div>
+
+            <div class="as-grid mt-3">
+                <div class="adm-field">
+                    <label for="allowed_package_names">Allowed package names</label>
+                    <textarea id="allowed_package_names" name="allowed_package_names" rows="2"
+                              placeholder="com.aistudio.cinestream.vqdpmr">{{ selected_app.allowed_package_names }}</textarea>
+                    <div class="as-sub">One per line, or comma separated. Empty = not checked.</div>
+                </div>
+                <div class="adm-field">
+                    <label for="allowed_installers">Allowed installers</label>
+                    <textarea id="allowed_installers" name="allowed_installers" rows="2"
+                              placeholder="com.android.vending&#10;com.google.android.packageinstaller">{{ selected_app.allowed_installers }}</textarea>
+                    <div class="as-sub">Where the app may have been installed from. <span class="as-mono">com.android.vending</span>
+                        is Google Play; <span class="as-mono">com.google.android.packageinstaller</span> is a
+                        sideloaded official APK. Empty = not checked.</div>
+                </div>
+                <div class="adm-field">
+                    <label for="allowed_signing_cert_sha256">Allowed signing certificate SHA-256</label>
+                    <textarea id="allowed_signing_cert_sha256" name="allowed_signing_cert_sha256" rows="2"
+                              placeholder="AA:BB:CC:… or AABBCC…">{{ selected_app.allowed_signing_cert_sha256 }}</textarea>
+                    <div class="as-sub">Hex, colons optional. A value that is not valid hex is refused on save.
+                        Empty = not checked.</div>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-3 align-items-end mt-3">
+                <label class="as-check">
+                    <input type="checkbox" name="require_request_signature" {% if selected_app.require_request_signature %}checked{% endif %}>
+                    <span>Require an HMAC request signature
+                        <span class="as-mono">X-Android-Signature</span></span>
+                </label>
+                <div class="adm-field" style="min-width:280px;">
+                    <label for="request_signing_secret">Request signing secret
+                        {% if has_request_signing_secret %}
+                        <span style="color:#34d399;">(a secret is set)</span>
+                        {% else %}
+                        <span style="color:#94a3b8;">(none set)</span>
+                        {% endif %}
+                    </label>
+                    <input id="request_signing_secret" type="password" name="request_signing_secret"
+                           autocomplete="new-password" placeholder="leave blank to keep the current secret">
+                    <div class="as-sub">Needs app support. Leave signing off until the shipped build signs
+                        its requests, or every request is refused.</div>
+                </div>
+            </div>
+
             <div class="mt-3">
                 <button class="adm-btn is-ok" type="submit"><i class="fas fa-check"></i> Save app settings</button>
             </div>
         </form>
+    </div>
+
+    <div class="adm-card mb-3">
+        <div class="as-sect mb-1"><i class="fas fa-clipboard-check text-info"></i> Recent validation decisions</div>
+        <div class="as-sub mb-3">
+            The last 15 decisions for this app. {{ blocked_count }} refusal{{ blocked_count|pluralize }} recorded in
+            total. Refusals are always kept; successful requests are kept too once enforcement is on.
+        </div>
+        <div class="adm-table-wrap">
+            <table class="adm-table">
+                <thead>
+                    <tr>
+                        <th>When</th><th>Decision</th><th>Reason</th><th>Path</th>
+                        <th>Platform</th><th>Package</th><th>Installer</th><th>IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in recent_decisions %}
+                    <tr>
+                        <td class="as-mono">{{ row.created_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>
+                            {% if row.decision == 'reject' %}
+                            <span class="adm-badge" style="background:rgba(239,68,68,.15);color:#fca5a5;">rejected</span>
+                            {% elif row.would_block %}
+                            <span class="adm-badge" style="background:rgba(251,191,36,.15);color:#fbbf24;">would block</span>
+                            {% else %}
+                            <span class="adm-badge" style="background:rgba(52,211,153,.15);color:#34d399;">allowed</span>
+                            {% endif %}
+                        </td>
+                        <td class="as-mono">{{ row.reason_code|default:"—" }}</td>
+                        <td class="as-mono">{{ row.method }} {{ row.path }}</td>
+                        <td class="as-mono">{{ row.platform|default:"—" }}</td>
+                        <td class="as-mono">{{ row.package_name|default:"—" }}</td>
+                        <td class="as-mono">{{ row.installer|default:"—" }}</td>
+                        <td class="as-mono">{{ row.ip_address|default:"—" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" style="color:#94a3b8;">No decisions recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <div class="adm-card">

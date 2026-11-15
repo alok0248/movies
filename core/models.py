@@ -251,6 +251,7 @@ class SiteSettings(models.Model):
     # short cache: long enough to stay off the database, short enough that
     # flipping the switch in one worker is not ignored by the others.
     _LOGIN_GATE_CACHE_KEY = 'sitesettings_login_gate_v1'
+    _DOWNLOAD_ACCESS_CACHE_KEY = 'sitesettings_download_access_v1'
 
     DATA_SOURCE_CHOICES = [
         ('tmdb', 'TMDB API'),
@@ -477,6 +478,24 @@ class SiteSettings(models.Model):
         help_text="If enabled, every public page needs a signed-in account. The sign-in and "
                   "password-reset pages, static files and the app's /api/ endpoints stay open."
     )
+    # Who may open the Android app download page (/get-app/). Two independent
+    # switches, on purpose:
+    #   public_access   — anyone at all, signed in or not
+    #   login_required  — only signed-in accounts
+    # Public access wins when both are on, so turning the login switch on never
+    # takes the page away from the people who already had it. With both off the
+    # page is closed to everyone, which is what an operator wants during an
+    # incident. The answer is read through core/download_access.py, which keeps
+    # its own short cache so a change here applies within seconds.
+    app_download_public_access = models.BooleanField(
+        default=True,
+        help_text="Anyone may open the Android app download page, signed in or not."
+    )
+    app_download_login_required = models.BooleanField(
+        default=False,
+        help_text="Only signed-in visitors may open the Android app download page. "
+                  "Ignored while public access is on."
+    )
 
     # Request-log retention (read by core/request_log.py at prune time). The
     # defaults reproduce the values that used to be hard-coded, so leaving these
@@ -517,6 +536,7 @@ class SiteSettings(models.Model):
         from django.core.cache import cache
         cache.delete(self._SETTINGS_CACHE_KEY)
         cache.delete(self._LOGIN_GATE_CACHE_KEY)
+        cache.delete(self._DOWNLOAD_ACCESS_CACHE_KEY)
         # The allow-list is cached separately on the request path (it is read on
         # every request by the IP guard), so drop that copy too — an address the
         # operator just trusted must take effect at once.
@@ -1306,6 +1326,62 @@ class AndroidApp(models.Model):
         help_text=("Last day requests WITHOUT a per-user token (X-User-Token) are accepted from this app. "
                    "After it, users of token-less builds must update; empty means no deadline set.")
     )
+    # --- Client (device) checks on this app's API traffic ------------------
+    # These are evaluated on every API request and written to the validation
+    # log, but nothing is refused until strict_client_validation is switched
+    # on. That ordering is deliberate: the checks look at signals an older
+    # build does not send yet, so turning them on is an operator's decision
+    # made once the app in the store reports them — never something a deploy
+    # switches on behind their back. See core/client_validation.py, which also
+    # documents plainly that these headers are asserted by the client and are
+    # therefore a bar-raiser, not cryptographic proof of the app's identity.
+    strict_client_validation = models.BooleanField(
+        default=False,
+        help_text="Refuse API requests that fail the checks below. Off = the checks "
+                  "are recorded in the validation log but nothing is blocked."
+    )
+    require_android_platform = models.BooleanField(
+        default=True,
+        help_text="Refuse requests that do not declare X-Android-Platform: android."
+    )
+    allowed_package_names = models.TextField(
+        blank=True, default='',
+        help_text="Comma or newline separated package names accepted from this app, e.g. "
+                  "com.aistudio.cinestream.vqdpmr. Empty means the header is not checked."
+    )
+    allowed_signing_cert_sha256 = models.TextField(
+        blank=True, default='',
+        help_text="Comma or newline separated SHA-256 fingerprints of the APK signing "
+                  "certificate (hex, colons allowed). Empty means not checked."
+    )
+    allowed_installers = models.TextField(
+        blank=True, default='',
+        help_text="Comma or newline separated installer packages accepted, e.g. "
+                  "com.android.vending for Google Play. Empty means not checked."
+    )
+    block_emulators = models.BooleanField(
+        default=True,
+        help_text="Refuse devices that report themselves as emulators."
+    )
+    block_rooted_devices = models.BooleanField(
+        default=False,
+        help_text="Refuse devices that report themselves as rooted. Off by default: "
+                  "plenty of ordinary users have a rooted device."
+    )
+    block_debug_builds = models.BooleanField(
+        default=True,
+        help_text="Refuse requests from a debuggable build."
+    )
+    require_request_signature = models.BooleanField(
+        default=False,
+        help_text="Require an HMAC request signature (X-Android-Signature). Needs app "
+                  "support, so leave off until the shipped build signs its requests."
+    )
+    request_signing_secret = models.CharField(
+        max_length=128, blank=True, default='',
+        help_text="Shared secret used to check X-Android-Signature. Only read when "
+                  "request signing is required."
+    )
     log_retention_days = models.PositiveIntegerField(
         default=30,
         help_text="Number of days to retain AndroidAppLog entries. Older logs are automatically deleted by the clean_analytics command."
@@ -1333,6 +1409,32 @@ class AndroidApp(models.Model):
             self.slug = slug
         super().save(*args, **kwargs)
 
+    @staticmethod
+    def _split_allow_list(raw):
+        """Comma or newline separated values, trimmed, blanks dropped, de-duped."""
+        values = []
+        for chunk in (raw or '').replace('\r', '\n').replace(',', '\n').split('\n'):
+            value = chunk.strip()
+            if value and value not in values:
+                values.append(value)
+        return values
+
+    @property
+    def allowed_package_list(self):
+        return self._split_allow_list(self.allowed_package_names)
+
+    @property
+    def allowed_installer_list(self):
+        return self._split_allow_list(self.allowed_installers)
+
+    @property
+    def allowed_signature_list(self):
+        """Fingerprints as bare uppercase hex, so colons and case do not matter."""
+        return [
+            value.replace(':', '').replace(' ', '').upper()
+            for value in self._split_allow_list(self.allowed_signing_cert_sha256)
+        ]
+
     def clean_old_analytics_data(self):
         """Delete analytics logs older than their respective retention settings."""
         from datetime import timedelta
@@ -1356,6 +1458,9 @@ class AndroidApp(models.Model):
             ).delete()[0],
             'app_logs': AndroidAppLog.objects.filter(
                 android_app=self, timestamp__date__lt=log_cutoff
+            ).delete()[0],
+            'client_validation_logs': AppClientValidationLog.objects.filter(
+                android_app=self, created_at__date__lt=analytics_cutoff
             ).delete()[0],
         }
         return deleted_counts
@@ -1423,6 +1528,65 @@ class AndroidAppFailedAttempt(models.Model):
     def __str__(self):
         app_name = self.android_app.name if self.android_app else self.app_slug or 'Unknown'
         return f"{app_name} - {self.get_failure_reason_display()} - {self.attempted_at}"
+
+
+class AppClientValidationLog(models.Model):
+    """One row per client-validation decision on this app's API traffic.
+
+    Every refusal is kept, with the exact reason code, so the operator can see
+    who was turned away and why. Once an app has strict validation switched on,
+    every *allow* is kept as well, so the good traffic is visible next to the
+    bad instead of only the exceptions.
+
+    The row records what the client claimed (platform, package, installer,
+    signature fingerprint, build) next to what the server concluded. Those
+    claims come from headers the client writes, so the table is evidence about
+    the request, not proof of the app's identity — see core/client_validation.py.
+
+    Pruned by the same retention window as the app's other analytics
+    (AndroidApp.clean_old_analytics_data).
+    """
+
+    DECISION_CHOICES = [('allow', 'Allowed'), ('reject', 'Rejected')]
+
+    android_app = models.ForeignKey(AndroidApp, on_delete=models.CASCADE,
+                                    related_name='client_validation_logs',
+                                    blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decision = models.CharField(max_length=10, choices=DECISION_CHOICES)
+    reason_code = models.CharField(max_length=64, blank=True, default='')
+    reason = models.CharField(max_length=300, blank=True, default='')
+    path = models.CharField(max_length=255, blank=True, default='')
+    method = models.CharField(max_length=10, blank=True, default='')
+    ip_address = models.CharField(max_length=64, blank=True, default='')
+    user_agent = models.CharField(max_length=300, blank=True, default='')
+    platform = models.CharField(max_length=32, blank=True, default='')
+    package_name = models.CharField(max_length=255, blank=True, default='')
+    installer = models.CharField(max_length=255, blank=True, default='')
+    signature_sha256 = models.CharField(max_length=128, blank=True, default='')
+    build_identifier = models.CharField(max_length=120, blank=True, default='')
+    device_model = models.CharField(max_length=120, blank=True, default='')
+    os_version = models.CharField(max_length=40, blank=True, default='')
+    # True when this request would have been refused had strict validation been
+    # on. In observe mode a would-be refusal is stored with decision='allow'
+    # and this flag set, which is what makes a quiet trial run possible.
+    would_block = models.BooleanField(default=False)
+    strict = models.BooleanField(default=False)
+    details = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'App Client Validation Log'
+        verbose_name_plural = 'App Client Validation Logs'
+        indexes = [
+            models.Index(fields=['-created_at'], name='core_acvl_created_idx'),
+            models.Index(fields=['decision', '-created_at'], name='core_acvl_decision_idx'),
+            models.Index(fields=['reason_code', '-created_at'], name='core_acvl_reason_idx'),
+        ]
+
+    def __str__(self):
+        app_name = self.android_app.name if self.android_app else 'Unknown'
+        return f'{app_name} - {self.decision} - {self.reason_code or "ok"}'
 
 
 class AndroidAppDevice(models.Model):

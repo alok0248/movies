@@ -26,6 +26,80 @@
         </div>
     </div>
 
+    <div class="adm-card mb-4" style="border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.05);">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <div>
+                <div style="font-size:.95rem;font-weight:700;color:#e2e8f0;">
+                    <i class="fas fa-lock me-2" style="color:#60a5fa;"></i>Download page access
+                </div>
+                <div style="color:#94a3b8;font-size:.78rem;">
+                    Who may open the Android install page (the Google Play page at
+                    <span class="adl-mono">/get-app/</span>).
+                </div>
+            </div>
+            <span style="font-size:.74rem;font-weight:700;padding:.3rem .7rem;border-radius:999px;
+                {% if download_state == 'public' %}color:#6ee7a8;background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.35);
+                {% elif download_state == 'login' %}color:#93c5fd;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.35);
+                {% else %}color:#fca5a5;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);{% endif %}">
+                Current: {{ download_state_label }}
+            </span>
+        </div>
+        <div style="font-size:.8rem;color:#94a3b8;line-height:1.6;">{{ download_state_explanation }}</div>
+
+        <form method="post" class="mt-3">
+            {% csrf_token %}
+            <div class="d-flex flex-wrap gap-4">
+                <label style="display:flex;align-items:flex-start;gap:.5rem;font-size:.8rem;color:#cbd5e1;cursor:pointer;">
+                    <input type="checkbox" name="app_download_public_access" id="dlPublic"
+                           {% if app_download_public_access %}checked{% endif %}>
+                    <span><b>Public access</b> — anyone may view it, signed in or not</span>
+                </label>
+                <label style="display:flex;align-items:flex-start;gap:.5rem;font-size:.8rem;color:#cbd5e1;cursor:pointer;">
+                    <input type="checkbox" name="app_download_login_required" id="dlLogin"
+                           {% if app_download_login_required %}checked{% endif %}>
+                    <span><b>Login required</b> — only signed-in visitors may view it</span>
+                </label>
+            </div>
+            <div id="dlPreview" class="mt-2" style="font-size:.78rem;color:#94a3b8;"></div>
+            <div class="mt-3 d-flex gap-2 flex-wrap align-items-center">
+                <button type="submit" class="adm-btn is-ok"><i class="fas fa-check me-1"></i>Save access</button>
+                <a href="{% url 'get_app' %}" target="_blank" rel="noopener" class="adm-btn is-sm"
+                   style="color:#60a5fa;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);border-radius:8px;">
+                    <i class="fas fa-up-right-from-square me-1"></i>Open the page
+                </a>
+                <span style="font-size:.74rem;color:#64748b;">Changes apply on the next request — no restart needed.</span>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        (function () {
+            var pub = document.getElementById('dlPublic');
+            var login = document.getElementById('dlLogin');
+            var out = document.getElementById('dlPreview');
+            function refresh() {
+                var text, color;
+                if (pub.checked) {
+                    text = 'Result: public — anyone can open the page, signed in or not.';
+                    color = '#6ee7a8';
+                } else if (login.checked) {
+                    text = 'Result: sign-in required — signed-out visitors are sent to the sign-in screen.';
+                    color = '#93c5fd';
+                } else {
+                    text = 'Result: closed — nobody can open the page until one of these is ticked.';
+                    color = '#fca5a5';
+                }
+                out.textContent = text;
+                out.style.color = color;
+            }
+            if (pub && login && out) {
+                pub.addEventListener('change', refresh);
+                login.addEventListener('change', refresh);
+                refresh();
+            }
+        })();
+    </script>
+
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
             <div class="adm-card adm-stat">

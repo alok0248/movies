@@ -326,7 +326,7 @@ urlpatterns = [
     path('contact/', TemplateView.as_view(template_name='core/contact.html'), name='contact'),
     path('privacy/', TemplateView.as_view(template_name='core/privacy.html'), name='privacy'),
     path('app/', views.app_page, name='app_page'),
-    path('get-app/', TemplateView.as_view(template_name='core/install_app.html'), name='get_app'),
+    path('get-app/', views.app_download_page, name='get_app'),
     path('terms/', TemplateView.as_view(template_name='core/terms.html'), name='terms'),
     path('sw.js', views.serve_sw_js, name='serve_sw_js'),
     path('sw-proxy.js', views.serve_sw_proxy_js, name='serve_sw_proxy_js'),

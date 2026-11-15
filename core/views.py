@@ -41,7 +41,7 @@ from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
 import platform
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, AmazonAffiliateProduct, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, AmazonAffiliateProduct, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -1437,6 +1437,41 @@ def app_page(request):
         'window_start': since,
     }
     return render(request, 'core/app_dashboard.html', context)
+
+
+def app_download_page(request):
+    """GET /get-app/ — the Android install page, with its access rule applied.
+
+    Who may see it is decided by the two switches on Settings: public access
+    (anyone) and the login requirement (signed-in accounts only). Public access
+    wins when both are on; with both off the page is closed to everybody. The
+    site-wide browse gate deliberately leaves this path alone (see
+    LoginRequiredMiddleware) so it can never override the answer these two
+    switches give.
+
+    A visitor who is not allowed in is not simply told "no": an anonymous one is
+    sent to the sign-in prompt carrying the way back, and a signed-in one sees a
+    short page saying the download page is switched off.
+    """
+    from django.utils.http import urlencode
+
+    from .download_access import LOGIN, explanation, label, may_view
+
+    allowed, state = may_view(request.user)
+    if not allowed:
+        if state == LOGIN:
+            return redirect('/?' + urlencode({
+                'login_required': 'true', 'next': request.get_full_path()}))
+        from .audit import log_action
+        # Both switches are off: the page is off the air, on purpose.
+        log_action(request, 'download_page_blocked', '/get-app/', 'page closed')
+        return render(request, 'core/download_closed.html', status=403)
+
+    return render(request, 'core/install_app.html', {
+        'download_state': state,
+        'download_state_label': label(state),
+        'download_state_explanation': explanation(state),
+    })
 
 
 @login_required
@@ -4089,12 +4124,62 @@ def apk_download(request, app_id):
     return response
 
 
+def _save_app_download_access(request):
+    """Save the two switches that decide who may open /get-app/.
+
+    Only a real on/off state is stored: a posted value outside the accepted set
+    refuses the whole save rather than guessing at it, so a mangled request can
+    never quietly leave the download page in a state the operator did not pick.
+    """
+    from .audit import log_action
+    from .download_access import InvalidToggle, parse_toggle
+
+    fields = ('app_download_public_access', 'app_download_login_required')
+    parsed = {}
+    invalid = []
+    for field in fields:
+        try:
+            parsed[field] = parse_toggle(request.POST.get(field))
+        except InvalidToggle:
+            invalid.append(field)
+    if invalid:
+        messages.error(
+            request,
+            'Those switches only accept an on/off state, so nothing was saved: %s.'
+            % ', '.join(invalid))
+        return redirect('android_app_downloads')
+
+    site = SiteSettings.get_settings()
+    changed = []
+    for field, value in parsed.items():
+        if getattr(site, field) != value:
+            setattr(site, field, value)
+            changed.append('%s=%s' % (field, value))
+    if changed:
+        site.save()
+        log_action(request, 'app_download_access', '/get-app/', ', '.join(changed))
+        messages.success(request, 'Download page access saved.')
+    else:
+        messages.info(request, 'Download page access was already set that way.')
+    return redirect('android_app_downloads')
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def android_app_downloads(request):
-    """Admin page: APK downloads with IP, app-opened match and date-wise totals."""
+    """Admin page: APK downloads with IP, app-opened match and date-wise totals.
+
+    It also carries the two switches that decide who may open the Android app
+    download page (/get-app/): public access, and the login requirement. They
+    are site-wide, not per app, because the download page itself is.
+    """
     import csv
     from django.http import HttpResponse
+
+    if request.method == 'POST':
+        return _save_app_download_access(request)
+
+    from .download_access import explanation, label, download_access_state
 
     apps = AndroidApp.objects.all().order_by('name')
 
@@ -4176,6 +4261,8 @@ def android_app_downloads(request):
             ])
         return response
 
+    site = SiteSettings.get_settings()
+    state = download_access_state()
     return render(request, 'core/android_app_downloads.html', {
         'apps': apps,
         'records': records,
@@ -4184,6 +4271,11 @@ def android_app_downloads(request):
         'opened': opened,
         'unique_ips': unique_ips,
         'conversion': conversion,
+        'download_state': state,
+        'download_state_label': label(state),
+        'download_state_explanation': explanation(state),
+        'app_download_public_access': site.app_download_public_access,
+        'app_download_login_required': site.app_download_login_required,
         'filters': {
             'app': app_id, 'status': status, 'q': q,
             'date_from': date_from, 'date_to': date_to,
@@ -6074,6 +6166,14 @@ def android_app_endpoint(request, app_slug):
     if username != android_app.access_username or password != android_app.access_password:
         log_failed_attempt('auth_invalid_creds', android_app_obj=android_app)
         return HttpResponseForbidden('Invalid credentials')
+
+    # Device and app checks, the same chain the /api/user/ endpoints run. The
+    # verdict is logged either way; the request is only refused once this app
+    # has strict validation switched on.
+    from .client_validation import enforce_app_client
+    refusal = enforce_app_client(request, android_app)
+    if refusal is not None:
+        return refusal
 
     request_identity = (
         request.headers.get('X-Android-App')
@@ -11032,6 +11132,16 @@ def _validate_android_auth(request):
     app_match = _app_from_request(request, candidates)
     if not app_match:
         return None, JsonResponse({'status': 'error', 'message': 'Invalid credentials'}, status=403)
+    # Device and app checks (platform, package, installer, signing certificate,
+    # tamper/emulator/root flags, optional HMAC signature). Every request is
+    # checked and the verdict is written to the validation log; the request is
+    # only refused when this app has strict validation switched on, so a new
+    # check can be watched before it is allowed to break anything. See
+    # core/client_validation.py.
+    from .client_validation import enforce_app_client
+    refusal = enforce_app_client(request, app_match)
+    if refusal is not None:
+        return None, refusal
     return app_match, None
 
 
@@ -18898,6 +19008,25 @@ def _admin_int(value, default=0, low=0, high=1000000):
     return max(low, min(high, number))
 
 
+def _invalid_fingerprints(raw):
+    """Signing-certificate fingerprints that are not SHA-256 hex.
+
+    Accepts newline or comma separated values, with or without colons and in
+    any case. Returns the offending entries so the save can be refused with a
+    message — a fingerprint that is not hex would never match anything, so
+    saving it would only produce a lock-out the first time strict mode bit.
+    """
+    invalid = []
+    for chunk in (raw or '').replace('\r', '\n').replace(',', '\n').split('\n'):
+        value = chunk.strip()
+        if not value:
+            continue
+        bare = ''.join(ch for ch in value if ch not in ' :')
+        if len(bare) != 64 or any(ch not in '0123456789abcdefABCDEF' for ch in bare):
+            invalid.append(value)
+    return invalid
+
+
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def devices_ips(request):
@@ -19167,19 +19296,59 @@ def android_app_settings(request, app_id):
             app_obj.is_active = request.POST.get('is_active') == 'on'
             app_obj.allowed_endpoint = (request.POST.get('allowed_endpoint') or '').strip()[:500]
             app_obj.allowed_build_id = (request.POST.get('allowed_build_id') or '').strip()[:255]
+
+            # --- Device checks on this app's API traffic --------------------
+            # A fingerprint that is not hex would silently never match and lock
+            # the app out the moment strict mode went on, so it is refused here
+            # rather than saved.
+            signatures = (request.POST.get('allowed_signing_cert_sha256') or '')
+            bad_fingerprints = _invalid_fingerprints(signatures)
+            if bad_fingerprints:
+                messages.error(
+                    request,
+                    'These signing fingerprints are not valid SHA-256 hex, so nothing was '
+                    'saved: %s' % ', '.join(bad_fingerprints[:5]))
+                return redirect('android_app_settings', app_id=app_obj.id)
+
+            app_obj.strict_client_validation = request.POST.get('strict_client_validation') == 'on'
+            app_obj.require_android_platform = request.POST.get('require_android_platform') == 'on'
+            app_obj.allowed_package_names = (request.POST.get('allowed_package_names') or '').strip()[:2000]
+            app_obj.allowed_signing_cert_sha256 = signatures.strip()[:2000]
+            app_obj.allowed_installers = (request.POST.get('allowed_installers') or '').strip()[:2000]
+            app_obj.block_emulators = request.POST.get('block_emulators') == 'on'
+            app_obj.block_rooted_devices = request.POST.get('block_rooted_devices') == 'on'
+            app_obj.block_debug_builds = request.POST.get('block_debug_builds') == 'on'
+            app_obj.require_request_signature = request.POST.get('require_request_signature') == 'on'
+            # A blank box keeps the stored secret: the value is never shown back
+            # in the form, so an empty submit must not wipe it.
+            submitted_secret = (request.POST.get('request_signing_secret') or '').strip()
+            if submitted_secret:
+                app_obj.request_signing_secret = submitted_secret[:128]
+
             app_obj.save()
             log_action(request, 'app_settings', app_obj.name,
-                       'retention=%sd/%sd sync=%ss,%s/%smin active=%s builds=%s' % (
+                       'retention=%sd/%sd sync=%ss,%s/%smin active=%s builds=%s '
+                       'strict_client_checks=%s' % (
                            app_obj.data_retention_days, app_obj.log_retention_days,
                            app_obj.sync_min_interval_seconds, app_obj.sync_max_per_minute,
                            app_obj.sync_ip_max_per_minute, app_obj.is_active,
-                           app_obj.allowed_build_id or 'any'))
+                           app_obj.allowed_build_id or 'any',
+                           app_obj.strict_client_validation))
             messages.success(request, 'App settings saved.')
         return redirect('android_app_settings', app_id=app_obj.id)
+
+    recent_decisions = list(
+        AppClientValidationLog.objects.filter(android_app=app_obj)
+        .order_by('-created_at')[:15])
+    blocked_count = AppClientValidationLog.objects.filter(
+        android_app=app_obj, decision='reject').count()
 
     return render(request, 'core/admin_app_settings.html', {
         'selected_app': app_obj,
         'site': site,
+        'recent_decisions': recent_decisions,
+        'blocked_count': blocked_count,
+        'has_request_signing_secret': bool(app_obj.request_signing_secret),
     })
 
 @login_required

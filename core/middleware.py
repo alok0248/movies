@@ -722,8 +722,9 @@ class LoginRequiredMiddleware:
         '/api/', '/admin/', '/static/', '/media/',
         '/sw.js', '/robots.txt', '/sitemap.xml', '/favicon.ico',
         '/manifest.json', '/service-worker.js',
-        # The Android app's install page is deliberately public: the app has to
-        # be clickable to be installed, and nobody signs in to read about it.
+        # The Android app's install page has its own pair of switches
+        # (Settings → download page access, read through core/download_access),
+        # so the site-wide gate must not second-guess it here.
         '/get-app/',
     )
     # Query flags that mean "this request is the sign-in prompt".
