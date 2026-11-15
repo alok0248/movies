@@ -5,6 +5,7 @@ that flag. The authoritative signal already exists: the Django account's
 ``is_active``, which the verification flow sets. This rewrites the flag from it
 (reporting first), and can be scheduled so the two cannot drift again.
 """
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
 from core.models import SyncedUser
@@ -21,7 +22,12 @@ class Command(BaseCommand):
         for profile in SyncedUser.objects.filter(is_email_verified=False).iterator():
             if not profile.user_id:
                 continue
-            active = getattr(profile.user, 'is_active', False)
+            try:
+                active = profile.user.is_active
+            except User.DoesNotExist:
+                # The login account was deleted; the link is dangling, so there
+                # is nothing to read the flag from. Skip instead of aborting.
+                continue
             if not active:
                 continue
             changed += 1
