@@ -138,8 +138,33 @@
         .aad-stack .adm-empty { padding: 1.7rem 1rem; }
         /* Notification panel: the timestamp never wraps, the title carries the
            link to the delivery detail, and the numbers stay right-aligned. */
-        .aad-nt-when { white-space: nowrap; width: 1%; }
-        .aad-nt-title { font-weight: 600; }
+        /* Notifications: one fixed-height row per message, however long the
+           title or body is. Nothing here is allowed to grow the card. */
+        .aad-nt-table { table-layout: fixed; width: 100%; }
+        .aad-nt-table th, .aad-nt-table td { vertical-align: middle; }
+        .aad-nt-table tbody tr { height: 56px; }
+        .aad-nt-table tbody td { overflow: hidden; }
+        .aad-nt-when { white-space: nowrap; }
+        .aad-nt-cell { min-width: 0; }
+        .aad-nt-title {
+            display: block; max-width: 100%; font-weight: 600; color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .aad-nt-title:hover { color: var(--brand); }
+        .aad-nt-meta {
+            display: block; max-width: 100%; font-size: .7rem; color: var(--text-3);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: .12rem;
+        }
+        .aad-nt-open {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 8px; color: var(--text-3);
+            box-shadow: inset 0 0 0 1px rgba(148,163,184,.24);
+            transition: color .2s var(--adm-ease), box-shadow .2s var(--adm-ease);
+        }
+        .aad-nt-open:hover {
+            color: var(--brand);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 42%, transparent);
+        }
         .aad-nt-table .adm-sub { font-size: .7rem; }
         /* A message switched off keeps its row, dimmed, so it can be turned
            back on without hunting for it in the composer. */
@@ -274,8 +299,11 @@
                                 <span class="aad-icon is-info"><i class="fas fa-bell"></i></span>
                                 <div>
                                     <div class="adm-card-title">Notifications</div>
-                                    <p class="adm-card-sub">What this endpoint's users are sent, newest first. Every row opens its delivery detail.</p>
+                                    <p class="adm-card-sub">What this endpoint's users are sent, newest first. Open a row for the full message, who received it and who read it.</p>
                                 </div>
+                            </div>
+                            <div class="adm-btn-group">
+                                <a href="{% url 'notifications_admin' %}" class="adm-btn is-sm"><i class="fas fa-bell"></i> All notifications</a>
                             </div>
                         </div>
                         {% if app_notifications %}
@@ -283,19 +311,26 @@
                             <table class="adm-table aad-nt-table">
                                 <thead>
                                     <tr>
-                                        <th class="aad-nt-when">Sent</th><th>Message</th>
-                                        <th class="num">Sent to</th><th class="num aad-nt-num">Delivered</th><th class="num aad-nt-num">Read</th>
-                                        <th class="num">In app</th>
+                                        <th class="aad-nt-when" style="width:78px;">Sent</th>
+                                        <th>Message</th>
+                                        <th class="num" style="width:66px;">Sent to</th>
+                                        <th class="num aad-nt-num" style="width:82px;">Delivered</th>
+                                        <th class="num aad-nt-num" style="width:62px;">Read</th>
+                                        <th class="num" style="width:104px;">In app</th>
+                                        <th style="width:46px;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for note in app_notifications %}
                                     <tr{% if not note.is_active %} class="aad-nt-inactive"{% endif %}>
                                         <td class="adm-sub aad-nt-when">{{ note.sent_at|date:"M j" }}<br>{{ note.sent_at|date:"H:i" }}</td>
-                                        <td>
-                                            <a class="aad-nt-title" href="{% url 'notification_detail' note.id %}">{{ note.title }}</a>
-                                            {% if not note.is_active %}<span class="adm-badge is-off">Off</span>{% endif %}
-                                            <div class="adm-sub">{{ note.get_audience_display }}{% if not note.app %} &middot; all apps{% endif %}</div>
+                                        <td class="aad-nt-cell">
+                                            <a class="aad-nt-title" href="{% url 'notification_detail' note.id %}" title="{{ note.title }}">{{ note.title }}</a>
+                                            <span class="aad-nt-meta">
+                                                {{ note.get_audience_display }}{% if not note.app %} &middot; all apps{% endif %}
+                                                {% if not note.is_active %} &middot; off{% endif %}
+                                                {% if note.body %} &middot; {{ note.body|truncatechars:72 }}{% endif %}
+                                            </span>
                                         </td>
                                         <td class="num">{{ note.recipients_total }}</td>
                                         <td class="num aad-nt-num">{{ note.delivered_n }}</td>
@@ -309,6 +344,12 @@
                                                     {% if note.is_active %}Turn off{% else %}Turn on{% endif %}
                                                 </button>
                                             </form>
+                                        </td>
+                                        <td class="num">
+                                            <a class="aad-nt-open" href="{% url 'notification_detail' note.id %}"
+                                               title="Open this notification: full message, recipients, read state, CSV">
+                                                <i class="fas fa-arrow-up-right-from-square"></i>
+                                            </a>
                                         </td>
                                     </tr>
                                     {% endfor %}

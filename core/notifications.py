@@ -20,7 +20,7 @@ from urllib.parse import quote
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -171,14 +171,24 @@ def notification_detail(request, notification_id):
                 row.read_count))
         return response
 
+    sent_total = note.recipients.count()
+    delivered_total = note.recipients.exclude(delivered_at=None).count()
+    read_total = note.recipients.exclude(read_at=None).count()
     return render(request, 'core/admin_notification_detail.html', {
         'note': note,
         'page': Paginator(rows, 100).get_page(request.GET.get('page')),
         'state': state,
         'q': q,
-        'sent_total': note.recipients.count(),
-        'delivered_total': note.recipients.exclude(delivered_at=None).count(),
-        'read_total': note.recipients.exclude(read_at=None).count(),
+        'sent_total': sent_total,
+        'delivered_total': delivered_total,
+        'read_total': read_total,
+        # Opens is the sum of every device's read count, which is not the same
+        # as read_total: one account reading on two devices opens twice.
+        'opens_total': note.recipients.aggregate(n=Sum('read_count'))['n'] or 0,
+        'unread_total': sent_total - read_total,
+        'undelivered_total': sent_total - delivered_total,
+        'delivery_rate': round(100.0 * delivered_total / sent_total, 1) if sent_total else 0,
+        'read_rate': round(100.0 * read_total / sent_total, 1) if sent_total else 0,
     })
 
 
@@ -201,6 +211,13 @@ def notification_toggle(request, notification_id):
                'active=%s' % note.is_active)
     messages.success(request, '"%s" is now %s in the app.' % (
         note.title[:60], 'on' if note.is_active else 'off'))
+
+    # Pages other than the dashboard (the notification detail page) ask to be
+    # returned to. Relative paths only, so a crafted form cannot bounce an
+    # admin off-site.
+    nxt = (request.POST.get('next') or '').strip()
+    if nxt.startswith('/') and not nxt.startswith('//'):
+        return redirect(nxt)
 
     app_id = (request.POST.get('app') or '').strip()
     if app_id.isdigit() and request.POST.get('from') != 'composer':
