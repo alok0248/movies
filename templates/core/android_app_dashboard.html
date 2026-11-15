@@ -46,10 +46,61 @@
         html[data-theme="light"] .aad-ep-del:hover { color: #b91c1c; }
         .aad-stack { display: flex; flex-direction: column; gap: var(--adm-gap); }
         .aad-tabs { margin-bottom: var(--adm-gap); }
-        .aad-kpis { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
-        .aad-kpis .adm-kpi { background: var(--bg-2); box-shadow: 0 1px 2px rgba(15,23,42,.05); }
-        html[data-theme="dark"] .aad-kpis .adm-kpi { box-shadow: none; }
-        .aad-kpis .adm-kpi .v { font-size: 1.42rem; letter-spacing: -.01em; }
+        /* Headline row: four numbers, nothing competing with them. */
+        .aad-kpis { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+        .aad-kpi {
+            position: relative; overflow: hidden; padding: 1rem 1.1rem 1.05rem;
+            border-radius: 14px; background: var(--bg-2);
+            box-shadow: inset 0 0 0 1px rgba(148,163,184,.16);
+            transition: transform .3s var(--adm-ease), box-shadow .3s var(--adm-ease);
+        }
+        .aad-kpi:hover {
+            transform: translateY(-1px);
+            box-shadow: inset 0 0 0 1px rgba(148,163,184,.3), 0 10px 26px -18px rgba(15,23,42,.7);
+        }
+        .aad-kpi::after {
+            content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 3px;
+            background: var(--aad-accent, var(--brand)); opacity: .9;
+        }
+        .aad-kpi.is-new { --aad-accent: #f59e0b; }
+        .aad-kpi.is-total { --aad-accent: #3b82f6; }
+        .aad-kpi.is-regnew { --aad-accent: #22c55e; }
+        .aad-kpi.is-regtotal { --aad-accent: #a855f7; }
+        .aad-kpi .k {
+            font-size: .66rem; font-weight: 700; letter-spacing: .12em;
+            text-transform: uppercase; color: var(--text-3);
+        }
+        .aad-kpi .v {
+            font-size: 2rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.15;
+            font-variant-numeric: tabular-nums; color: var(--text); margin-top: .3rem;
+        }
+        .aad-kpi .v small { font-size: .8rem; font-weight: 600; color: var(--text-3); margin-left: .2rem; }
+        .aad-kpi .n { font-size: .71rem; color: var(--text-3); margin-top: .45rem; line-height: 1.45; }
+        .aad-kpi .d {
+            display: inline-flex; align-items: center; gap: .28rem; margin-top: .5rem;
+            font-size: .68rem; font-weight: 650; padding: .13rem .45rem; border-radius: 999px;
+            background: rgba(148,163,184,.14); color: var(--text-3);
+        }
+        .aad-kpi .d.is-up { background: rgba(34,197,94,.15); color: #15803d; }
+        .aad-kpi .d.is-down { background: rgba(239,68,68,.15); color: #b91c1c; }
+        html[data-theme="dark"] .aad-kpi .d.is-up { color: #4ade80; }
+        html[data-theme="dark"] .aad-kpi .d.is-down { color: #f87171; }
+        .aad-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+        .aad-hero-title { font-size: 1.32rem; font-weight: 700; letter-spacing: -.02em; margin: .1rem 0 .25rem; color: var(--text); }
+        .aad-hero-sub { font-size: .74rem; color: var(--text-3); max-width: 62ch; }
+        .aad-glance {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+            background: var(--bg-2); border-radius: 12px;
+            box-shadow: inset 0 0 0 1px rgba(148,163,184,.16); overflow: hidden;
+        }
+        .aad-glance-item { padding: .7rem .85rem; border-left: 1px solid rgba(148,163,184,.13); }
+        .aad-glance-item:first-child { border-left: 0; }
+        .aad-glance-k { font-size: .61rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); font-weight: 700; }
+        .aad-glance-v { font-size: .98rem; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; margin-top: .15rem; }
+        .aad-glance-v.is-warn { color: #d97706; }
+        .aad-glance-v.is-bad { color: #dc2626; }
+        html[data-theme="dark"] .aad-glance-v.is-warn { color: #fbbf24; }
+        html[data-theme="dark"] .aad-glance-v.is-bad { color: #f87171; }
         /* avatar with a graceful fallback when the provider photo 404s */
         .aad-av { position: relative; width: 30px; height: 30px; flex: 0 0 auto; }
         .aad-av > span {
@@ -154,27 +205,67 @@
 
             <div class="aad-stack">
                 <section id="overview" class="aad-stack">
+                    <div class="aad-hero">
+                        <div>
+                            <div class="aad-eyebrow">Overview</div>
+                            <h1 class="aad-hero-title">{{ selected_app.name|default:selected_app.slug }}</h1>
+                            <div class="aad-hero-sub">
+                                New and total visitors, new and total registered &middot; last 7 days vs the 7 before
+                                {% if selected_app.last_accessed_at %}&middot; last request {{ selected_app.last_accessed_at|timesince }} ago{% endif %}
+                            </div>
+                        </div>
+                        <div class="adm-btn-group">
+                            <a href="{% url 'android_app_users_full' selected_app.id %}?tab=dailyusers" class="adm-btn is-sm"><i class="fas fa-chart-column"></i> Users per day</a>
+                            <a href="{% url 'android_app_users_full' selected_app.id %}?tab=accounts" class="adm-btn is-sm"><i class="fas fa-user-shield"></i> Users &amp; blocking</a>
+                            <a href="{% url 'android_app_logs_page' selected_app.id %}" class="adm-btn is-sm"><i class="fas fa-scroll"></i> Logs</a>
+                        </div>
+                    </div>
+
+                    <!-- Four numbers only: new vs total, visitors vs registered. -->
                     <div class="adm-grid aad-kpis">
-                        <div class="adm-kpi">
-                            <div class="k">Connections</div>
-                            <div class="v" id="kpiConnections">{{ selected_app.total_connections }}</div>
-                            <div class="n">Requests seen on this endpoint</div>
+                        <div class="aad-kpi is-new">
+                            <div class="k">Users visited &middot; new</div>
+                            <div class="v">{{ kpi.new_visitors }}</div>
+                            <div class="d {% if kpi.new_visitors_chg > 0 %}is-up{% elif kpi.new_visitors_chg < 0 %}is-down{% endif %}">
+                                {% if kpi.new_visitors_chg > 0 %}<i class="fas fa-arrow-up"></i>+{{ kpi.new_visitors_chg }}
+                                {% elif kpi.new_visitors_chg < 0 %}<i class="fas fa-arrow-down"></i>{{ kpi.new_visitors_chg }}
+                                {% else %}<i class="fas fa-minus"></i>no change{% endif %}
+                                vs previous week
+                            </div>
+                            <div class="n">Installs seen for the first time in the last 7 days</div>
                         </div>
-                        <div class="adm-kpi">
-                            <div class="k">Unique visitors</div>
-                            <div class="v" id="kpiVisitors">{{ total_unique_visitors }}</div>
-                            <div class="n">Distinct devices</div>
+                        <div class="aad-kpi is-total">
+                            <div class="k">Users visited &middot; total</div>
+                            <div class="v" id="kpiVisitors">{{ kpi.total_visitors }}</div>
+                            <div class="n">Distinct devices that have ever reached this endpoint</div>
                         </div>
-                        <div class="adm-kpi">
-                            <div class="k">Builds seen</div>
-                            <div class="v">{{ build_summary|length }}</div>
-                            <div class="n">Distinct build IDs</div>
+                        <div class="aad-kpi is-regnew">
+                            <div class="k">Registered &middot; new</div>
+                            <div class="v">{{ kpi.new_registered }}</div>
+                            <div class="d {% if kpi.new_registered_chg > 0 %}is-up{% elif kpi.new_registered_chg < 0 %}is-down{% endif %}">
+                                {% if kpi.new_registered_chg > 0 %}<i class="fas fa-arrow-up"></i>+{{ kpi.new_registered_chg }}
+                                {% elif kpi.new_registered_chg < 0 %}<i class="fas fa-arrow-down"></i>{{ kpi.new_registered_chg }}
+                                {% else %}<i class="fas fa-minus"></i>no change{% endif %}
+                                vs previous week
+                            </div>
+                            <div class="n">Devices that created an account in the last 7 days</div>
                         </div>
-                        <div class="adm-kpi">
-                            <div class="k">Synced users</div>
-                            <div class="v">{{ synced_total }}</div>
-                            <div class="n">{{ synced_subscribed }} subscribed &middot; {{ synced_free }} free</div>
+                        <div class="aad-kpi is-regtotal">
+                            <div class="k">Registered &middot; total</div>
+                            <div class="v">{{ kpi.total_registered }}<small>/ {{ kpi.total_visitors }}</small></div>
+                            <div class="n">Conversion {{ kpi.conversion }}% of every install seen</div>
                         </div>
+                    </div>
+
+                    <!-- The app-specific extras: what is happening right now. -->
+                    <div class="aad-glance">
+                        <div class="aad-glance-item"><div class="aad-glance-k">Active 24h</div><div class="aad-glance-v">{{ kpi.active_24h }}</div></div>
+                        <div class="aad-glance-item"><div class="aad-glance-k">Silent 7d+</div><div class="aad-glance-v{% if kpi.silent_7d %} is-warn{% endif %}">{{ kpi.silent_7d }}</div></div>
+                        <div class="aad-glance-item"><div class="aad-glance-k">Blocked</div><div class="aad-glance-v{% if kpi.blocked %} is-bad{% endif %}">{{ kpi.blocked }}</div></div>
+                        <div class="aad-glance-item"><div class="aad-glance-k">Requests 7d</div><div class="aad-glance-v">{{ kpi.requests_7d }}</div></div>
+                        <div class="aad-glance-item"><div class="aad-glance-k">Visits / device</div><div class="aad-glance-v">{{ kpi.visits_per_device }}</div></div>
+                        <div class="aad-glance-item"><div class="aad-glance-k">Builds seen</div><div class="aad-glance-v">{{ kpi.builds }}</div></div>
+                        <div class="aad-glance-item"><div class="aad-glance-k">Accounts</div><div class="aad-glance-v">{{ kpi.accounts }}</div></div>
                     </div>
 
                     <div class="adm-card">

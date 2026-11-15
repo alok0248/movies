@@ -4320,6 +4320,49 @@ def android_app_dashboard(request, app_id=None):
         except Exception:
             logger.debug('build health: could not read the build split', exc_info=True)
 
+    # ---- Headline numbers ------------------------------------------------
+    # Four figures only: is the app reaching new people, and how many of those
+    # become accounts. Deltas compare the last seven days with the seven before,
+    # which is the shortest window that survives a quiet weekend.
+    kpi = {
+        'new_visitors': 0, 'new_visitors_prev': 0, 'new_visitors_chg': 0,
+        'total_visitors': 0, 'new_registered': 0, 'new_registered_prev': 0,
+        'new_registered_chg': 0, 'total_registered': 0, 'conversion': 0,
+        'active_24h': 0, 'silent_7d': 0, 'blocked': 0, 'requests_7d': 0,
+        'visits_per_device': 0, 'builds': 0, 'accounts': 0,
+    }
+    if selected_app is not None:
+        from datetime import timedelta as _td
+        now = timezone.now()
+        week_ago = now - _td(days=7)
+        fortnight_ago = now - _td(days=14)
+        devs = selected_app.devices
+
+        kpi['total_visitors'] = total_unique_visitors
+        kpi['new_visitors'] = devs.filter(first_seen_at__gte=week_ago).count()
+        kpi['new_visitors_prev'] = devs.filter(first_seen_at__gte=fortnight_ago,
+                                               first_seen_at__lt=week_ago).count()
+        kpi['new_visitors_chg'] = kpi['new_visitors'] - kpi['new_visitors_prev']
+
+        kpi['total_registered'] = devs.filter(registered_at__isnull=False).count()
+        kpi['new_registered'] = devs.filter(registered_at__gte=week_ago).count()
+        kpi['new_registered_prev'] = devs.filter(registered_at__gte=fortnight_ago,
+                                                 registered_at__lt=week_ago).count()
+        kpi['new_registered_chg'] = kpi['new_registered'] - kpi['new_registered_prev']
+
+        kpi['active_24h'] = devs.filter(last_seen_at__gte=now - _td(hours=24)).count()
+        kpi['silent_7d'] = devs.filter(last_seen_at__lt=week_ago).count()
+        kpi['blocked'] = devs.exclude(block_mode='').count()
+        kpi['builds'] = len(build_summary)
+        kpi['accounts'] = synced_total
+        kpi['requests_7d'] = (selected_app.access_logs
+                              .filter(access_date__gte=timezone.localdate() - _td(days=6))
+                              .aggregate(n=Sum('connection_count'))['n'] or 0)
+        visits = devs.aggregate(n=Sum('total_visits'))['n'] or 0
+        if kpi['total_visitors']:
+            kpi['conversion'] = round(100.0 * kpi['total_registered'] / kpi['total_visitors'], 1)
+            kpi['visits_per_device'] = round(visits / float(kpi['total_visitors']), 1)
+
     # Notifications that reach this endpoint's users: the ones sent for this app
     # plus the all-app messages. The panel next to the send button reads from it.
     app_notifications = []
@@ -4363,6 +4406,7 @@ def android_app_dashboard(request, app_id=None):
         'build_health': build_health,
         'oldest_build': oldest_build,
         'oldest_share': oldest_share,
+        'kpi': kpi,
     })
 
 
