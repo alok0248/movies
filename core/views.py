@@ -4860,6 +4860,39 @@ def android_app_users_full(request, app_id):
         trunc = {'hourly': TruncHour, 'daily': TruncDate,
                  'monthly': TruncMonth, 'yearly': TruncYear}[gran]
 
+        # ------------------------------------------- one device's own timeline
+        # Asked for when a popup row is expanded: where this install has been
+        # seen and which build it reported each time. No date window — the
+        # point is the whole life of the device.
+        if request.GET.get('devicelog'):
+            try:
+                dev_pk = int(request.GET.get('devicelog'))
+            except (TypeError, ValueError):
+                return JsonResponse({'visits': []})
+            dev = AndroidAppDevice.objects.filter(
+                id=dev_pk, android_app=selected_app).first()
+            if dev is None:
+                return JsonResponse({'visits': []})
+            seen_builds = []
+            for v in dev.visits.order_by('-visited_at')[:25]:
+                seen_builds.append({
+                    'at': timezone.localtime(v.visited_at).strftime('%d %b %Y %H:%M'),
+                    'ip': v.ip_address or '',
+                    'build': v.build_identifier or '',
+                    'model': v.device_model or '',
+                })
+            return JsonResponse({
+                'device': dev.device_model or dev.user_id,
+                'user_id': dev.user_id,
+                'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y %H:%M')
+                              if dev.first_seen_at else '',
+                'last_seen': timezone.localtime(dev.last_seen_at).strftime('%d %b %Y %H:%M')
+                             if dev.last_seen_at else '',
+                'total_visits': dev.total_visits,
+                'block_mode': dev.block_mode,
+                'visits': seen_builds,
+            })
+
         # Both series are always built now: the chart draws the period's active
         # users and the new devices inside them side by side, so `mu` only
         # decides which series the table's wording talks about.
@@ -4916,7 +4949,7 @@ def android_app_users_full(request, app_id):
         # the address they came from and whether the app was seeing them for
         # the first time then. The chart sends ?userlist=1&slot=<index>.
         if request.GET.get('userlist') == '1':
-            from .geoip import cached_rows
+            from .geoip import cached_rows, lookup as geo_lookup
 
             def _window(key):
                 if gran == 'hourly':
@@ -4951,7 +4984,33 @@ def android_app_users_full(request, app_id):
 
             devices = {d.id: d for d in
                        AndroidAppDevice.objects.filter(id__in=list(device_ip))}
+
+            # Location is read from the geo cache. Addresses it has never seen
+            # would show as blank, which reads as broken rather than uncached,
+            # so a handful are looked up now and the rest fill in as they are
+            # seen in traffic. Capped: this runs inside a request.
             geo = cached_rows(device_ip.values())
+            missing = [ip for ip in set(device_ip.values()) if ip and ip not in geo]
+            for ip in missing[:8]:
+                try:
+                    geo_lookup(ip)
+                except Exception:
+                    pass
+            if missing:
+                geo = cached_rows(device_ip.values())
+
+            # Did any of these devices draw an auth/identity refusal in the
+            # period? Matched by address, because that is what a failed attempt
+            # records — it never reaches the device row.
+            from collections import Counter as _Counter
+            period_ips = [ip for ip in set(device_ip.values()) if ip]
+            err_by_ip = _Counter()
+            if period_ips:
+                err_by_ip.update(AndroidAppFailedAttempt.objects
+                                 .filter(attempted_at__gte=start, attempted_at__lt=end,
+                                         ip_address__in=period_ips)
+                                 .values_list('ip_address', flat=True))
+
             list_rows = []
             for dev_id, ip in device_ip.items():
                 dev = devices.get(dev_id)
@@ -4965,16 +5024,24 @@ def android_app_users_full(request, app_id):
                 email = (email_by_device.get(dev.user_id)
                          or email_by_device.get(dev.account_key) or '')
                 list_rows.append({
+                    'device_pk': dev.id,
                     'user_id': dev.user_id,
                     'device': dev.device_model or 'Unknown device',
                     'os': dev.os_version or '',
                     'ip': ip or '',
                     'location': ', '.join(place_bits),
                     'email': email,
-                    # A device with an email has an account behind it; the rest
-                    # are installs the app never signed in for.
-                    'registered': bool(email),
+                    # Registration is the stored date, not today's email links:
+                    # a guest who signs in later must not rewrite old periods.
+                    # The email fallback only covers rows written before the
+                    # column existed.
+                    'registered': bool(dev.registered_at) or bool(email),
+                    'registered_at': (timezone.localtime(dev.registered_at).strftime('%d %b %Y')
+                                      if dev.registered_at else ''),
                     'is_new': is_new,
+                    'errors': err_by_ip.get(ip, 0),
+                    'block_mode': dev.block_mode or '',
+                    'visits': dev.total_visits,
                     'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y %H:%M')
                                   if dev.first_seen_at else '',
                     'last_seen': timezone.localtime(dev.last_seen_at).strftime('%d %b %Y %H:%M')
@@ -4990,6 +5057,7 @@ def android_app_users_full(request, app_id):
                 'old': sum(1 for r in list_rows if not r['is_new']),
                 'registered': sum(1 for r in list_rows if r['registered']),
                 'guest': sum(1 for r in list_rows if not r['registered']),
+                'with_errors': sum(1 for r in list_rows if r['errors']),
                 'rows': list_rows[:500],
                 'truncated': len(list_rows) > 500,
             })
@@ -5004,6 +5072,27 @@ def android_app_users_full(request, app_id):
         best = max(range(len(values)), key=lambda i: values[i]) if values else 0
         max_value = max(values) if values and max(values) else 1
 
+        # Share of each period's users that had an account, and how many
+        # devices registered inside the period. Two filtered aggregates rather
+        # than a query per bar.
+        registered_by_bucket = {}
+        for row in (AndroidAppDeviceVisit.objects.filter(android_app=selected_app)
+                    .annotate(b=trunc('visited_at')).values('b')
+                    .annotate(n=Count('device', distinct=True,
+                                      filter=Q(device__registered_at__isnull=False)))
+                    .order_by()):
+            if row['b'] is not None:
+                registered_by_bucket[key_of(row['b'])] = row['n']
+        registered_values = [registered_by_bucket.get(key, 0) for _, key in slots]
+
+        conversions_by_bucket = {}
+        for row in (all_devices.filter(registered_at__isnull=False)
+                    .annotate(b=trunc('registered_at')).values('b')
+                    .annotate(n=Count('id')).order_by()):
+            if row['b'] is not None:
+                conversions_by_bucket[key_of(row['b'])] = row['n']
+        conversion_values = [conversions_by_bucket.get(key, 0) for _, key in slots]
+
         rows = []
         for i, (label, _) in enumerate(slots):
             count = values[i]
@@ -5012,11 +5101,96 @@ def android_app_users_full(request, app_id):
                 'label': label,
                 'count': count,
                 'new': new_values[i],
+                'registered': registered_values[i],
+                'converted': conversion_values[i],
+                'registered_pct': (round(registered_values[i] * 100.0 / count)
+                                   if count else 0),
                 'pct': round(count * 100.0 / max_value, 1),
                 'delta': (count - prev) if prev is not None else None,
                 'delta_pct': (round((count - prev) * 100.0 / prev) if prev else None),
             })
         rows.reverse()  # newest period first in the table
+
+        # ------------------------------------------------------------ cohorts
+        # Of the devices that first appeared in a week, how many came back in
+        # each later week. Counted in Python from one visits query, because the
+        # alternative is a query per cell.
+        week_start = today - datetime.timedelta(days=today.weekday())
+        cohort_starts = [week_start - datetime.timedelta(weeks=i) for i in range(5, -1, -1)]
+        horizon = 5
+        window_start = timezone.make_aware(
+            datetime.datetime.combine(cohort_starts[0], datetime.time.min))
+        first_week = {}
+        for dev_row in (all_devices.filter(first_seen_at__gte=window_start)
+                        .values('id', 'first_seen_at')):
+            fw = timezone.localtime(dev_row['first_seen_at']).date()
+            fw -= datetime.timedelta(days=fw.weekday())
+            first_week.setdefault(fw, set()).add(dev_row['id'])
+        weeks_seen = {}
+        for dev_id, seen_at in (AndroidAppDeviceVisit.objects
+                                .filter(android_app=selected_app,
+                                        visited_at__gte=window_start)
+                                .values_list('device_id', 'visited_at')):
+            dd = timezone.localtime(seen_at).date()
+            weeks_seen.setdefault(dev_id, set()).add(
+                dd - datetime.timedelta(days=dd.weekday()))
+        cohorts = []
+        for cohort_start in cohort_starts:
+            members = first_week.get(cohort_start, set())
+            cells = []
+            for step in range(horizon + 1):
+                target = cohort_start + datetime.timedelta(weeks=step)
+                if target > week_start:
+                    break
+                came_back = sum(1 for m in members if target in weeks_seen.get(m, ()))
+                cells.append({
+                    'week': step,
+                    'label': target.strftime('%d %b'),
+                    'count': came_back,
+                    'pct': round(came_back * 100.0 / len(members)) if members else 0,
+                })
+            # Padded so every row has the same number of columns: a cohort newer
+            # than the horizon has fewer weeks to show, not missing data.
+            cohorts.append({'start': cohort_start.strftime('%d %b'),
+                            'size': len(members), 'cells': cells,
+                            'pad': range(horizon + 1 - len(cells))})
+
+        # ------------------------------------------------------------ warnings
+        # Shape problems worth a look, computed on read rather than by a
+        # background job: a sudden drop or spike against the recent average, a
+        # day that is almost all guests, and one address carrying many devices.
+        from collections import Counter as _Counter
+        dormant_installs = all_devices.filter(total_visits=0).count()
+        warnings = []
+        if len(values) >= 8:
+            prior = values[-8:-1]
+            prior_avg = sum(prior) / len(prior) if prior else 0
+            latest = values[-1]
+            if prior_avg >= 5 and latest < prior_avg * 0.5:
+                warnings.append({'kind': 'drop',
+                                 'text': f'Active users fell to {latest} in {labels[-1]}, '
+                                         f'under half the recent average of {prior_avg:.0f}.'})
+            elif prior_avg >= 5 and latest > prior_avg * 2:
+                warnings.append({'kind': 'spike',
+                                 'text': f'Active users jumped to {latest} in {labels[-1]}, '
+                                         f'double the recent average of {prior_avg:.0f}.'})
+        if active_today >= 10 and registered_values[-1] == 0:
+            warnings.append({'kind': 'guests',
+                             'text': f'Every one of today\'s {active_today} active devices is '
+                                     f'unregistered — no signed-in users at all.'})
+        ip_counts = _Counter(AndroidAppDeviceVisit.objects
+                             .filter(android_app=selected_app, visited_at__gte=day_start)
+                             .values_list('ip_address', flat=True))
+        if ip_counts:
+            busy_ip, busy_n = ip_counts.most_common(1)[0]
+            if busy_ip and busy_n >= 15:
+                warnings.append({'kind': 'ip',
+                                 'text': f'{busy_n} devices shared the address {busy_ip} in '
+                                         f'the last 24 hours — possible device farming.'})
+        if dormant_installs:
+            warnings.append({'kind': 'dormant',
+                             'text': f'{dormant_installs} installs have never reported a visit, '
+                                     f'so they sit inside “new” without ever counting as active.'})
 
         ctx.update({
             'daily_gran': gran,
@@ -5024,8 +5198,12 @@ def android_app_users_full(request, app_id):
             'daily_labels': labels,
             'daily_values': values,
             'daily_values_new': new_values,
+            'daily_values_registered': registered_values,
             'daily_new_total': sum(new_values),
+            'daily_conversions': sum(conversion_values),
             'daily_rows': rows,
+            'cohorts': cohorts,
+            'warnings': warnings,
             'daily_word': {'hourly': 'hour', 'daily': 'day', 'monthly': 'month',
                            'yearly': 'year'}[gran],
             'daily_window': {'hourly': 'Last 24 hours', 'daily': 'Last 30 days',
@@ -5756,6 +5934,25 @@ def android_app_endpoint(request, app_slug):
             android_app=android_app,
             user_id=user_id
         )
+
+        # A device the admin blocked behaves like an account block: 'full'
+        # refuses every call, 'app' answers as if the server were unreachable so
+        # the app falls back to its downloaded-only mode. Checked here because
+        # every app session passes through this endpoint, including the guest
+        # installs that have no account for an email-keyed block to reach.
+        if device.block_mode:
+            if device.block_mode == 'app':
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Server is unreachable. Downloaded items remain available.'
+                }, status=503)
+            return JsonResponse({
+                'status': 'error', 'code': 'access_blocked',
+                'blockMode': device.block_mode,
+                'message': 'Your access has been restricted. '
+                           + (device.blocked_reason or 'Contact the administrator for details.')
+            }, status=403)
+
         # Update device model and os version if they changed or are new
         if device_model and device.device_model != device_model:
             device.device_model = device_model
@@ -5773,6 +5970,11 @@ def android_app_endpoint(request, app_slug):
         if account_key and device.account_key != account_key:
             device.account_key = account_key
             device.save(update_fields=['account_key', 'last_seen_at'])
+        # First time this install is seen with an account behind it: remember
+        # when, so the new/registered split stays true for past periods.
+        if account_key and device.registered_at is None:
+            device.registered_at = timezone.now()
+            device.save(update_fields=['registered_at'])
         
         # Build full request details for debugging
         full_request_data = {
@@ -13809,6 +14011,49 @@ def synced_user_resend_verification(request, user_id):
     else:
         messages.error(request, msg)
     return redirect('synced_user_detail', user_id=user_obj.id)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def android_app_device_block(request, app_id, device_id):
+    """Admin: block or restore one install from the users-per-period popup.
+
+    POST block_mode = '' | 'full' | 'app'
+
+    Guests have no SyncedUser, so an email-keyed block cannot reach them; this
+    sets the same flag on the install itself, which the app's connection
+    endpoint enforces. When the install is linked to an account the account is
+    blocked too, so every other email-keyed endpoint refuses it as well.
+    """
+    device = get_object_or_404(AndroidAppDevice, id=device_id, android_app_id=app_id)
+    mode = (request.POST.get('block_mode') or '').strip().lower()
+    if mode not in ('', 'full', 'app'):
+        return JsonResponse({'success': False, 'error': 'Invalid block mode.'}, status=400)
+
+    device.block_mode = mode
+    device.blocked_reason = (request.POST.get('reason') or '').strip()[:255] if mode else ''
+    device.blocked_at = timezone.now() if mode else None
+    device.save(update_fields=['block_mode', 'blocked_reason', 'blocked_at'])
+
+    # Mirror onto the account this install belongs to, when there is one.
+    mirrored = 0
+    if device.account_key:
+        for prof in SyncedUser.objects.filter(device_id=device.account_key):
+            prof.block_mode = mode
+            prof.blocked_reason = device.blocked_reason
+            prof.blocked_at = device.blocked_at
+            prof.save(update_fields=['block_mode', 'blocked_reason', 'blocked_at'])
+            mirrored += 1
+
+    return JsonResponse({
+        'success': True,
+        'block_mode': mode,
+        'device': device.user_id,
+        'mirrored_accounts': mirrored,
+        'label': {'': 'Device restored', 'full': 'Device fully blocked',
+                  'app': 'Device app-blocked'}[mode],
+    })
 
 
 @login_required

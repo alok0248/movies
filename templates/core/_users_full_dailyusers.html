@@ -3,30 +3,43 @@
          How many users the app saw in each period, as a chart and as a table. A
          "user" here is a device the app registered, because that is what the
          server can count: Active counts the devices behind the period's visits
-         (distinct per period, so a month is not the sum of its days) and New
-         counts the devices that appeared for the first time in it. The chips are
-         links, so switching metric or granularity works with and without JS —
-         the tab bar fetches this panel as a fragment and the chart redraws
-         itself from the JSON data islands at the bottom. -->
-    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mt-3 mb-1">
+         (distinct per period, so a month is not the sum of its days), New counts
+         the devices that appeared for the first time in it, and Registered the
+         ones that had an account. The chips are links, so switching granularity
+         works with or without JS — the tab bar fetches this panel as a fragment
+         and the chart redraws itself from the JSON data islands at the bottom. -->
+    <div class="du-head">
         <div>
             <div class="sect-title"><i class="fas fa-users-viewfinder text-success me-2"></i>Users per {{ daily_word }}</div>
             <div class="sub">
                 {{ daily_window }} &middot; a user is a device the app registered.
-                <strong>Active</strong> counts the devices that used the app in the {{ daily_word }}, <strong>New</strong> the ones it saw for the first time then.
-                Click a bar to see the devices behind it.
+                <strong>Active</strong> counts the devices that used the app in the {{ daily_word }},
+                <strong>New</strong> the ones it saw for the first time then, and
+                <strong>Registered</strong> the ones with an account behind them.
+                Click a bar to see and act on the devices behind it.
             </div>
         </div>
-        <div class="d-flex gap-2 flex-wrap align-items-center">
+        <div class="du-head-pills">
             <span class="pill bg-dark border border-secondary">{{ daily_stats.total }} users all time</span>
             <span class="pill bg-success">{{ daily_stats.today }} active today</span>
             {% if daily_stats.new30 %}
                 <span class="pill bg-info">{{ daily_stats.new30 }} new &le;30d</span>
             {% endif %}
+            <span class="pill bg-dark border border-secondary">{{ daily_conversions }} registered &le;{{ daily_word }}s</span>
         </div>
     </div>
 
-    <div class="d-flex gap-2 flex-wrap mb-2 align-items-center">
+    {% if warnings %}
+    <div class="du-warn-wrap">
+        {% for w in warnings %}
+            <div class="du-warn is-{{ w.kind }}">
+                <i class="fas {% if w.kind == 'drop' %}fa-arrow-trend-down{% elif w.kind == 'spike' %}fa-arrow-trend-up{% elif w.kind == 'ip' %}fa-network-wired{% elif w.kind == 'dormant' %}fa-plug-circle-xmark{% else %}fa-user-slash{% endif %} me-2"></i>{{ w.text }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="du-bar-row">
         <span class="sub me-1">Show by:</span>
         <a class="fbtn {% if daily_gran == 'hourly' %}active{% endif %}" href="?tab=dailyusers&amp;g=hourly">Hourly</a>
         <a class="fbtn {% if daily_gran == 'daily' %}active{% endif %}" href="?tab=dailyusers&amp;g=daily">Daily</a>
@@ -59,15 +72,58 @@
 
     <div class="du-card">
         <div class="du-card-head">
-            <span class="du-card-title"><i class="fas fa-chart-column text-success me-2"></i>Active and new users per {{ daily_word }}</span>
+            <span class="du-card-title"><i class="fas fa-chart-column text-success me-2"></i>Active, new and registered per {{ daily_word }}</span>
             <span class="sub">{{ daily_window }} &middot; click a bar for the device list</span>
         </div>
         <div class="du-chart-box">
             <canvas id="dailyUsersChart" role="img"
-                    aria-label="Active and new users per {{ daily_word }}"
-                    data-list-url="{% url 'android_app_users_full' selected_app.id %}?tab=dailyusers&amp;g={{ daily_gran }}&amp;userlist=1"></canvas>
+                    aria-label="Active, new and registered users per {{ daily_word }}"
+                    data-list-url="{% url 'android_app_users_full' selected_app.id %}?tab=dailyusers&amp;g={{ daily_gran }}&amp;userlist=1"
+                    data-block-base="{% url 'android_app_device_block' selected_app.id 0 %}"
+                    data-log-base="{% url 'android_device_logs' selected_app.id 0 %}"></canvas>
         </div>
     </div>
+
+    {% if cohorts %}
+    <div class="du-card du-cohort-card">
+        <div class="du-card-head">
+            <span class="du-card-title"><i class="fas fa-people-arrows text-info me-2"></i>Do the new users come back?</span>
+            <span class="sub">each row is the week a device first appeared; the cells are how many of them were seen again, week by week</span>
+        </div>
+        <div class="adm-table-wrap">
+            <table class="table table-dark table-sm align-middle mb-0 du-cohort">
+                <thead>
+                    <tr>
+                        <th>First seen</th>
+                        <th>Devices</th>
+                        <th class="text-center">Week 0</th>
+                        <th class="text-center">+1</th>
+                        <th class="text-center">+2</th>
+                        <th class="text-center">+3</th>
+                        <th class="text-center">+4</th>
+                        <th class="text-center">+5</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in cohorts %}
+                    <tr>
+                        <td class="text-white">{{ c.start }}</td>
+                        <td class="text-white"><strong>{{ c.size }}</strong></td>
+                        {% for cell in c.cells %}
+                        <td class="text-center du-cohort-cell" style="--pct:{{ cell.pct }}%;" title="{{ cell.count }} of {{ c.size }} devices back in week {{ cell.week }}">
+                            {% if c.size %}<span>{{ cell.pct }}%</span><span class="sub d-block">{{ cell.count }}</span>{% else %}<span class="sub">&mdash;</span>{% endif %}
+                        </td>
+                        {% endfor %}
+                        {% for _ in c.pad %}
+                        <td class="text-center sub">&mdash;</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="adm-table-wrap mt-3">
         <table class="table table-dark table-hover mb-0 align-middle">
@@ -76,7 +132,9 @@
                     <th>{{ daily_word|capfirst }}</th>
                     <th>Active</th>
                     <th>New</th>
-                    <th style="width:30%;">Share of the peak</th>
+                    <th>Registered</th>
+                    <th class="d-none d-md-table-cell">Converted</th>
+                    <th style="width:22%;" class="d-none d-md-table-cell">Share of the peak</th>
                     <th>Change</th>
                 </tr>
             </thead>
@@ -88,8 +146,17 @@
                         {% if forloop.first %}<span class="pill bg-success ms-1">latest</span>{% endif %}
                     </td>
                     <td class="text-white"><strong>{{ r.count }}</strong></td>
-                    <td>{% if r.new %}<span class="text-info"><i class="fas fa-user-plus me-1"></i>{{ r.new }}</span>{% else %}<span class="sub">0</span>{% endif %}</td>
+                    <td>{% if r.new %}<span class="text-warning"><i class="fas fa-user-plus me-1"></i>{{ r.new }}</span>{% else %}<span class="sub">0</span>{% endif %}</td>
                     <td>
+                        {% if r.registered %}
+                            <span class="text-info">{{ r.registered }}</span>
+                            <span class="sub">{{ r.registered_pct }}%</span>
+                        {% else %}<span class="sub">0</span>{% endif %}
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                        {% if r.converted %}<span class="text-success"><i class="fas fa-right-to-bracket me-1"></i>{{ r.converted }}</span>{% else %}<span class="sub">&mdash;</span>{% endif %}
+                    </td>
+                    <td class="d-none d-md-table-cell">
                         <div class="du-bar" title="{{ r.count }} of {{ daily_stats.peak.count }}"><span style="width:{{ r.pct }}%;"></span></div>
                     </td>
                     <td>
@@ -105,7 +172,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="5" class="text-center text-secondary py-4"><i class="fas fa-chart-column fa-2x mb-2 d-block"></i>No period data for this app yet.</td></tr>
+                <tr><td colspan="7" class="text-center text-secondary py-4"><i class="fas fa-chart-column fa-2x mb-2 d-block"></i>No period data for this app yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -113,7 +180,7 @@
 
     <!-- Device list for one bar: the chart fills this in when a bar is clicked. -->
     <div class="ucm-overlay" id="dailyUsersModal" role="dialog" aria-modal="true" aria-labelledby="dailyUsersModalTitle">
-        <div class="ucm-dialog">
+        <div class="ucm-dialog du-modal">
             <div class="ucm-dialog-head">
                 <div class="ucm-dialog-title" id="dailyUsersModalTitle">
                     <i class="fas fa-users me-2 text-success"></i>Users in <span id="dailyUsersPeriod">this period</span>
@@ -121,13 +188,13 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.__closeDailyUsers()" aria-label="Close"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="ucm-dialog-body">
-                <div class="d-flex gap-2 flex-wrap align-items-center mb-1">
+                <div class="du-filter-row">
                     <span class="sub me-1">Age:</span>
                     <button type="button" class="fbtn active" data-du-filter="all" onclick="window.__dailyUsersFilter('all')">All</button>
                     <button type="button" class="fbtn" data-du-filter="new" onclick="window.__dailyUsersFilter('new')"><i class="fas fa-user-plus me-1"></i>New</button>
                     <button type="button" class="fbtn" data-du-filter="old" onclick="window.__dailyUsersFilter('old')">Old</button>
                 </div>
-                <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <div class="du-filter-row">
                     <span class="sub me-1">Account:</span>
                     <button type="button" class="fbtn active" data-du-acct="all" onclick="window.__dailyUsersAcct('all')">All</button>
                     <button type="button" class="fbtn" data-du-acct="registered" onclick="window.__dailyUsersAcct('registered')"><i class="fas fa-id-badge me-1"></i>Registered</button>
@@ -142,3 +209,4 @@
     {{ daily_labels|json_script:"dailyUsersLabels" }}
     {{ daily_values|json_script:"dailyUsersValues" }}
     {{ daily_values_new|json_script:"dailyUsersValuesNew" }}
+    {{ daily_values_registered|json_script:"dailyUsersValuesRegistered" }}

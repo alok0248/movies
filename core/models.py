@@ -1374,12 +1374,28 @@ class AndroidAppDevice(models.Model):
     # the visit IP resolves to one account, and backfilled by
     # `manage.py link_devices`.
     account_key = models.CharField(max_length=100, blank=True, default='', db_index=True)
-    
+    # When this install became known to belong to an account. Stored rather than
+    # derived from today's email links, because those links keep changing: a
+    # guest who signs in tomorrow would otherwise retroactively turn every past
+    # row for that device into "registered" and rewrite the history.
+    registered_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Per-device access block, for installs with no account behind them: an
+    # email-keyed block cannot reach a guest, which is exactly who abuses an
+    # open endpoint. '' | 'app' | 'full' (same meaning as SyncedUser.block_mode).
+    block_mode = models.CharField(max_length=10, blank=True, default='')
+    blocked_reason = models.CharField(max_length=255, blank=True, default='')
+    blocked_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         unique_together = ('android_app', 'user_id')
         ordering = ['-last_seen_at']
         verbose_name = 'Android App Device'
         verbose_name_plural = 'Android App Devices'
+
+    @property
+    def is_registered(self):
+        """Registered means an account owned this install at some point."""
+        return self.registered_at is not None
     
     def __str__(self):
         return f"{self.android_app.name} - {self.user_id}"

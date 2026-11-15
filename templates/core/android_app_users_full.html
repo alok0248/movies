@@ -156,6 +156,56 @@
     .ucm-alert { font-size: .74rem; border-radius: 8px; padding: .35rem .55rem; margin-top: .5rem; }
     .ucm-alert.ok { background: rgba(22, 101, 52, .25); border: 1px solid rgba(34, 197, 94, .35); color: #dcfce7; }
     .ucm-alert.bad { background: rgba(127, 29, 29, .25); border: 1px solid rgba(248, 113, 113, .35); color: #fee2e2; }
+
+    /* ----- Users per period: header, warnings, cohorts, popup ----- */
+    .du-head {
+        display: flex; justify-content: space-between; align-items: flex-start;
+        gap: .8rem; flex-wrap: wrap; margin: .9rem 0 .4rem;
+    }
+    .du-head-pills { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+    .du-head-pills .pill { padding: .22rem .55rem; border-radius: 999px; font-size: .68rem; }
+    .du-warn-wrap { display: flex; flex-direction: column; gap: .35rem; margin: .4rem 0 .6rem; }
+    .du-warn {
+        font-size: .74rem; border-radius: 10px; padding: .45rem .65rem;
+        background: rgba(30, 41, 59, .65); border: 1px solid rgba(148, 163, 184, .25);
+        color: #e2e8f0;
+    }
+    .du-warn.is-drop, .du-warn.is-guests { border-color: rgba(248, 113, 113, .45); background: rgba(127, 29, 29, .22); }
+    .du-warn.is-spike { border-color: rgba(251, 191, 36, .45); background: rgba(120, 53, 15, .22); }
+    .du-warn.is-ip { border-color: rgba(168, 85, 247, .45); background: rgba(59, 7, 100, .25); }
+    .du-warn.is-dormant { border-color: rgba(56, 189, 248, .35); background: rgba(8, 47, 73, .3); }
+    .du-bar-row { display: flex; gap: .35rem; flex-wrap: wrap; align-items: center; margin: .5rem 0 .7rem; }
+
+    .du-cohort-card .adm-table-wrap { overflow-x: auto; }
+    .du-cohort th { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
+    .du-cohort td { padding: .35rem .4rem; font-size: .74rem; }
+    .du-cohort-cell {
+        background:
+            linear-gradient(rgba(56, 189, 248, calc(var(--pct) / 100 * .55)), rgba(56, 189, 248, calc(var(--pct) / 100 * .55)));
+        border-radius: 6px; min-width: 56px;
+    }
+
+    /* Popup: stays usable on a phone — head pinned, body scrolls. */
+    .du-modal { max-width: 1180px; display: flex; flex-direction: column; max-height: 92vh; }
+    .du-modal .ucm-dialog-head { position: sticky; top: 0; background: #0b1220; z-index: 2; border-radius: 14px 14px 0 0; }
+    .du-modal .ucm-dialog-body { overflow-y: auto; }
+    .du-filter-row { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; margin-bottom: .35rem; }
+    .du-popup-table { font-size: .76rem; }
+    .du-popup-table thead th {
+        position: sticky; top: 0; background: #0b1220; z-index: 1;
+        font-size: .66rem; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .du-actions { white-space: nowrap; }
+    .du-actions .btn { padding: .1rem .35rem; line-height: 1.1; }
+    .du-row.is-blocked { background: rgba(127, 29, 29, .16); }
+    .du-history { background: rgba(2, 6, 23, .55); padding: .5rem .7rem !important; }
+    .du-timeline { display: flex; flex-direction: column; gap: .2rem; margin-top: .35rem; }
+    .du-tl-item { display: flex; align-items: baseline; gap: .4rem; font-size: .72rem; }
+    .du-tl-dot { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; flex: 0 0 auto; margin-top: .3rem; }
+    @media (max-width: 767px) {
+        .du-popup-table { font-size: .7rem; }
+        .du-modal { max-height: 96vh; }
+    }
 </style>
 
 <div class="full-users-wrap">
@@ -231,12 +281,14 @@ window.__renderDailyChart = function () {
     var labelsEl = document.getElementById('dailyUsersLabels');
     var valuesEl = document.getElementById('dailyUsersValues');
     var newEl = document.getElementById('dailyUsersValuesNew');
+    var regEl = document.getElementById('dailyUsersValuesRegistered');
     if (!canvas || !labelsEl || !valuesEl || typeof Chart === 'undefined') return;
-    var labels, values, newValues;
+    var labels, values, newValues, regValues;
     try {
         labels = JSON.parse(labelsEl.textContent);
         values = JSON.parse(valuesEl.textContent);
         newValues = newEl ? JSON.parse(newEl.textContent) : [];
+        regValues = regEl ? JSON.parse(regEl.textContent) : [];
     } catch (e) { return; }
 
     function greenFill(c) {
@@ -289,6 +341,18 @@ window.__renderDailyChart = function () {
                 /* The rounded cap belongs to whichever slice is on top. */
                 borderRadius: { topLeft: 5, topRight: 5, bottomLeft: 0, bottomRight: 0 },
                 borderSkipped: false, maxBarThickness: 30
+            }, {
+                /* Registered users ride on the same axis as a line: they are a
+                   subset of the active bar, so stacking them would double the
+                   height, while a line reads as "how much of the bar is
+                   signed in" straight across the periods. */
+                type: 'line',
+                label: 'Registered',
+                data: regValues,
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56,189,248,.14)',
+                borderWidth: 2, tension: 0.35, pointRadius: 2, fill: false,
+                stack: undefined
             }]
         },
         options: {
@@ -329,7 +393,10 @@ window.__renderDailyChart = function () {
                         footer: function (items) {
                             if (!items || !items.length) { return ''; }
                             var i = items[0].dataIndex;
-                            return 'Total active: ' + ((values[i] || 0)) + '\nClick to list these users';
+                            var reg = regValues[i] || 0;
+                            var share = values[i] ? Math.round(reg * 100 / values[i]) : 0;
+                            return 'Total active: ' + (values[i] || 0) + '  (' + share + '% registered)'
+                                 + '\nClick to list these users';
                         }
                     }
                 }
@@ -398,7 +465,8 @@ window.__openDailyUsers = function (index) {
             sumEl.textContent = (data.total || 0) + ' users \u00b7 '
                 + (data.new || 0) + ' new \u00b7 ' + (data.old || 0) + ' returning \u00b7 '
                 + (data.registered || 0) + ' registered \u00b7 '
-                + (data.guest || 0) + ' unregistered';
+                + (data.guest || 0) + ' unregistered'
+                + (data.with_errors ? ' \u00b7 ' + data.with_errors + ' with errors' : '');
         }
         window.__renderDailyUsers();
     }).catch(function () {
@@ -427,6 +495,103 @@ window.__dailyUsersAcct = function (mode) {
     window.__renderDailyUsers();
 };
 
+/* One row, plus the hidden row its history expands into. Actions are the same
+   three the accounts list offers — app block, full block, restore — but keyed
+   to the install, so they also reach a guest with no account behind it. */
+window.__duRow = function (r) {
+    var esc = window.__duEsc;
+    var blocked = !!r.block_mode;
+    var html = '<tr class="du-row' + (blocked ? ' is-blocked' : '') + '">'
+        + '<td class="text-white"><span class="du-dev">' + esc(r.device) + '</span>'
+            + (r.os ? ' <span class="sub">\u00b7 Android ' + esc(r.os) + '</span>' : '')
+            + ' <span class="sub">\u00b7 ' + esc(r.visits) + ' visits</span>'
+            + (blocked ? ' <span class="pill bg-danger">' + esc(r.block_mode) + ' block</span>' : '')
+            + '</td>'
+        + '<td>' + (r.registered
+            ? esc(r.email || 'account linked')
+            : '<span class="sub">unregistered</span>') + '</td>'
+        + '<td class="sub">' + (r.ip ? esc(r.ip) : '&mdash;') + '</td>'
+        + '<td class="sub">' + (r.location ? esc(r.location) : '&mdash;') + '</td>'
+        + '<td class="sub">' + esc(r.first_seen) + '</td>'
+        + '<td>' + (r.is_new
+            ? '<span class="pill bg-info">new</span>'
+            : '<span class="pill bg-dark border border-secondary">old</span>')
+            + (r.errors ? ' <span class="pill bg-warning text-dark" title="auth/identity refusals from this address in the period">' + esc(r.errors) + ' err</span>' : '')
+            + '</td>'
+        + '<td class="du-actions">'
+            + '<button type="button" class="btn btn-sm btn-outline-secondary" title="History" onclick="window.__duHistory(' + r.device_pk + ', this)"><i class="fas fa-clock-rotate-left"></i></button> '
+            + '<button type="button" class="btn btn-sm btn-outline-info" title="Request log" onclick="window.open(\'' + window.__duLogUrl(r.user_id) + '\', \'_blank\')"><i class="fas fa-terminal"></i></button> '
+            + (blocked
+                ? '<button type="button" class="btn btn-sm btn-outline-success" title="Restore access" onclick="window.__duBlock(' + r.device_pk + ', \'\', this)"><i class="fas fa-check"></i></button>'
+                : '<button type="button" class="btn btn-sm btn-outline-warning" title="App block (server unreachable)" onclick="window.__duBlock(' + r.device_pk + ', \'app\', this)"><i class="fas fa-wifi"></i></button> '
+                  + '<button type="button" class="btn btn-sm btn-outline-danger" title="Full block" onclick="window.__duBlock(' + r.device_pk + ', \'full\', this)"><i class="fas fa-ban"></i></button>')
+            + '</td>'
+        + '</tr>'
+        + '<tr class="du-history-row" id="du-hist-' + r.device_pk + '" style="display:none;">'
+        + '<td colspan="7" class="du-history"><span class="sub">Loading\u2026</span></td></tr>';
+    return html;
+};
+
+window.__duLogUrl = function (user_id) {
+    var canvas = document.getElementById('dailyUsersChart');
+    var base = canvas ? canvas.getAttribute('data-log-base') : '';
+    if (!base) { return '#'; }
+    return base.replace('/0/logs/', '/' + encodeURIComponent(user_id) + '/logs/');
+};
+
+window.__duBlock = function (pk, mode, btn) {
+    var canvas = document.getElementById('dailyUsersChart');
+    var base = canvas ? canvas.getAttribute('data-block-base') : '';
+    if (!base) { return; }
+    if (mode && !confirm(mode === 'full'
+        ? 'Fully block this device? Every API call from it will be refused.'
+        : 'App-block this device? It will see the server as unreachable.')) { return; }
+    var url = base.replace('/0/block/', '/' + pk + '/block/');
+    var body = new URLSearchParams();
+    body.set('block_mode', mode);
+    fetch(url, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': _csrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: body
+    }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res.success) { alert(res.error || 'Could not change the block.'); return; }
+        (window.__dailyUsersRows || []).forEach(function (row) {
+            if (row.device_pk === pk) { row.block_mode = res.block_mode; }
+        });
+        window.__renderDailyUsers();
+    }).catch(function () { alert('Request failed.'); });
+};
+
+window.__duHistory = function (pk, btn) {
+    var row = document.getElementById('du-hist-' + pk);
+    if (!row) { return; }
+    if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+    row.style.display = '';
+    var cell = row.firstElementChild;
+    if (row.getAttribute('data-loaded') === '1') { return; }
+    fetch('?tab=dailyusers&devicelog=' + pk, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin'
+    }).then(function (r) { return r.json(); }).then(function (data) {
+        var esc = window.__duEsc;
+        var head = '<div class="sub mb-1">First seen ' + esc(data.first_seen)
+            + ' \u00b7 last seen ' + esc(data.last_seen)
+            + ' \u00b7 ' + esc(data.total_visits) + ' recorded visits</div>';
+        if (!data.visits || !data.visits.length) {
+            cell.innerHTML = head + '<div class="sub">No visits recorded.</div>';
+        } else {
+            cell.innerHTML = head + '<div class="du-timeline">'
+                + data.visits.map(function (v) {
+                    return '<div class="du-tl-item"><span class="du-tl-dot"></span>'
+                        + '<span class="text-white">' + esc(v.at) + '</span>'
+                        + '<span class="sub"> ' + (v.ip ? esc(v.ip) : 'no ip')
+                        + (v.build ? ' \u00b7 ' + esc(v.build) : '')
+                        + (v.model ? ' \u00b7 ' + esc(v.model) : '') + '</span></div>';
+                }).join('') + '</div>';
+        }
+        row.setAttribute('data-loaded', '1');
+    }).catch(function () { cell.innerHTML = '<span class="sub text-danger">Could not load the history.</span>'; });
+};
+
 window.__renderDailyUsers = function () {
     var listEl = document.getElementById('dailyUsersList');
     if (!listEl) { return; }
@@ -443,26 +608,11 @@ window.__renderDailyUsers = function () {
         listEl.innerHTML = '<div class="sub p-3">No users match these filters.</div>';
         return;
     }
-    var esc = window.__duEsc;
-    var html = '<table class="table table-dark table-sm align-middle mb-0"><thead><tr>'
-        + '<th>Device</th><th>Email</th><th>IP</th><th>Location</th><th>First seen</th><th></th>'
-        + '</tr></thead><tbody>';
-    rows.forEach(function (r) {
-        html += '<tr>'
-            + '<td class="text-white">' + esc(r.device)
-                + (r.os ? ' <span class="sub">\u00b7 Android ' + esc(r.os) + '</span>' : '') + '</td>'
-            + '<td>' + (r.registered
-                ? esc(r.email)
-                : '<span class="sub">unregistered</span>') + '</td>'
-            + '<td class="sub">' + (r.ip ? esc(r.ip) : '&mdash;') + '</td>'
-            + '<td class="sub">' + (r.location ? esc(r.location) : '&mdash;') + '</td>'
-            + '<td class="sub">' + esc(r.first_seen) + '</td>'
-            + '<td>' + (r.is_new
-                ? '<span class="pill bg-info">new</span>'
-                : '<span class="pill bg-dark border border-secondary">old</span>') + '</td>'
-            + '</tr>';
-    });
-    html += '</tbody></table>';
+    var html = '<table class="table table-dark table-sm align-middle mb-0 du-popup-table"><thead><tr>'
+        + '<th>Device</th><th>Account</th><th>IP</th><th>Location</th><th>First seen</th><th></th><th></th>'
+        + '</tr></thead><tbody>'
+        + rows.map(window.__duRow).join('')
+        + '</tbody></table>';
     listEl.innerHTML = html;
 };
 
