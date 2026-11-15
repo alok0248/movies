@@ -1382,8 +1382,12 @@ class AndroidAppDevice(models.Model):
     # Per-device access block, for installs with no account behind them: an
     # email-keyed block cannot reach a guest, which is exactly who abuses an
     # open endpoint. '' | 'app' | 'full' (same meaning as SyncedUser.block_mode).
-    block_mode = models.CharField(max_length=10, blank=True, default='')
-    blocked_reason = models.CharField(max_length=255, blank=True, default='')
+    # db_default matters, not just default: during a deploy the migration lands
+    # before the workers restart, so the still-old code inserts devices without
+    # naming these columns. Without a DB-level default that insert is a NOT NULL
+    # violation and the app endpoint answers 500 for every request in the gap.
+    block_mode = models.CharField(max_length=10, blank=True, default='', db_default='')
+    blocked_reason = models.CharField(max_length=255, blank=True, default='', db_default='')
     blocked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
