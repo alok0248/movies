@@ -215,6 +215,48 @@
         .du-popup-table { font-size: .7rem; }
         .du-modal { max-height: 96vh; }
     }
+
+    /* App-version filter: a dropdown of every version the scope has reported,
+       each row a tick box. Built on <details> so it opens without JS — the tab
+       panels are swapped in with innerHTML, and scripts inside fetched markup
+       do not run. */
+    .vf-dd { position: relative; display: inline-block; }
+    .vf-summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .35rem; }
+    .vf-summary::-webkit-details-marker { display: none; }
+    .vf-caret { transition: transform .15s ease; font-size: .6rem; }
+    .vf-dd[open] .vf-caret { transform: rotate(180deg); }
+    .vf-panel {
+        position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+        min-width: 270px; max-height: 330px; overflow-y: auto;
+        background: #0f172a; border: 1px solid rgba(148,163,184,.35);
+        border-radius: 10px; padding: .35rem;
+        box-shadow: 0 18px 40px rgba(0,0,0,.55);
+    }
+    .vf-opt {
+        display: flex; align-items: center; gap: .5rem; margin: 0;
+        padding: .3rem .45rem; border-radius: 7px; cursor: pointer;
+        font-size: .76rem; color: #cbd5e1;
+    }
+    .vf-opt:hover { background: rgba(30,41,59,.85); color: #fff; }
+    .vf-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .vf-tick {
+        width: 15px; height: 15px; border-radius: 4px; flex: 0 0 auto;
+        display: grid; place-items: center; font-size: .55rem;
+        border: 1px solid rgba(148,163,184,.5); background: rgba(15,23,42,.7);
+        color: transparent;
+    }
+    .vf-opt input:checked + .vf-tick { background: #22c55e; border-color: #22c55e; color: #052e16; }
+    .vf-opt input:focus-visible + .vf-tick { outline: 2px solid #22c55e; outline-offset: 2px; }
+    .vf-name { flex: 1 1 auto; }
+    .vf-count {
+        color: #94a3b8; font-size: .7rem; padding: .05rem .4rem; border-radius: 999px;
+        background: rgba(15,23,42,.85); border: 1px solid rgba(148,163,184,.3);
+    }
+    .vf-empty { padding: .5rem; }
+    .vf-actions {
+        display: flex; gap: .4rem; padding: .4rem .45rem .2rem; margin-top: .3rem;
+        border-top: 1px solid rgba(148,163,184,.2);
+    }
 </style>
 
 <div class="full-users-wrap">
@@ -232,6 +274,7 @@
             <form class="d-flex gap-2 flex-wrap" method="get" action="">
                 <input type="hidden" name="f" value="{{ view }}">
                 <input type="hidden" name="tab" value="{{ active_tab }}">
+                {% for v in selected_versions %}<input type="hidden" name="versions" value="{{ v }}">{% endfor %}
                 <input class="form-control form-control-sm" style="width:230px;background:rgba(15,23,42,.8);border-color:rgba(148,163,184,.3);color:#e2e8f0;"
                        type="search" name="q" value="{{ q }}" placeholder="Search email, name, device, plan…">
                 <button aria-label="Search" class="btn btn-sm btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
@@ -245,6 +288,7 @@
              reload, the other lists simply disappear). -->
         <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
             <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill chip-count ms-1">{{ counts.total }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'versions' %}active{% endif %}" data-tab="versions" href="?tab=versions{% if app_filter %}&amp;app={{ app_filter }}{% endif %}" role="tab" aria-selected="{% if active_tab == 'versions' %}true{% else %}false{% endif %}" title="Filter the user list by the app version each install reports"><i class="fas fa-code-branch me-1"></i>App version<span class="pill chip-count ms-1">{{ counts.versions }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'inactive' %}active{% endif %}" data-tab="inactive" href="?tab=inactive" role="tab" aria-selected="{% if active_tab == 'inactive' %}true{% else %}false{% endif %}" title="Installs the app has not seen for a while, with bulk delete"><i class="fas fa-moon me-1"></i>Inactive devices</a>
             <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill chip-count ms-1">{{ counts.signed_out }}</span></a>

@@ -4810,7 +4810,8 @@ def android_app_users_full(request, app_id):
     # signed-out list at the same time, which is what made it heavy. The tab
     # bar asks for ?partial=1 when the admin switches, so that swap needs no
     # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'uniquedevices', 'inactive', 'signedout', 'visits', 'dailyusers')
+    TABS = ('accounts', 'versions', 'uniquedevices', 'inactive', 'signedout',
+            'visits', 'dailyusers')
     tab = (request.GET.get('tab') or '').strip().lower()
     legacy_devices = tab == 'devices'
     if legacy_devices:
@@ -4819,6 +4820,21 @@ def android_app_users_full(request, app_id):
         tab = 'accounts'
     partial = request.GET.get('partial') == '1'
 
+    # ---------------------------------------------------------- version filter
+    # Every app version the current scope has reported, deduped and ordered by
+    # build number (newest first), with how many accounts sit on each. The
+    # facet list is built BEFORE the version filter is applied so the dropdown
+    # keeps offering every version, including the ones already ticked.
+    from django.db.models import Max as _Max
+    selected_versions = [v.strip() for v in request.GET.getlist('versions') if v.strip()]
+    version_facets = list(
+        users_qs.exclude(app_version='')
+        .values('app_version')
+        .annotate(n=Count('id'), b=_Max('build_number'))
+        .order_by('-b', '-n', 'app_version')
+    )
+    if tab == 'versions' and selected_versions:
+        users_qs = users_qs.filter(app_version__in=selected_versions)
 
     # ------------------------------------------------------------ headline counts
     all_users = SyncedUser.objects.all()
@@ -4828,6 +4844,7 @@ def android_app_users_full(request, app_id):
         'blocked': all_users.filter(block_mode__gt='').count(),
         'subscribed': all_users.filter(is_subscribed=True).count(),
         'free': all_users.filter(is_subscribed=False).count(),
+        'versions': len(version_facets),
     }
 
     # ---------------------------------------------------------- shared bits
@@ -4879,9 +4896,11 @@ def android_app_users_full(request, app_id):
             'email_by_device': email_by_device,
             'app_choices': app_choices,
             'app_filter': app_filter_id,
+            'version_facets': version_facets,
+            'selected_versions': selected_versions,
         }
 
-    if tab == 'accounts':
+    if tab in ('accounts', 'versions'):
         # ------------------------------------------------------------- user rows
         paginator = Paginator(users_qs, 25)
         page_obj = paginator.get_page(request.GET.get('page') or 1)
