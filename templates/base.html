@@ -1424,6 +1424,85 @@
                 transform: none !important;
             }
         }
+
+        /* ═══ MOTION SYSTEM ═══════════════════════════════════════════════════
+           One motion vocabulary for the whole public site. Every rule animates
+           transform or opacity only — never layout or a large repaint — so it
+           runs on the compositor, cannot shift layout (CLS) and stays clear of
+           the main thread. The entire layer is switched off for anyone whose
+           system asks for reduced motion (see the block at the end). */
+        :root {
+            --motion-fast: .16s;
+            --motion-base: .3s;
+            --motion-slow: .55s;
+        }
+
+        @keyframes uiFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes uiFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes uiPopIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+
+        /* Content arriving: a home row settles as it loads, and grid cards rise
+           as the infinite scroll appends them. fill-mode "backwards" keeps an
+           element hidden through any delay but hands it back once the animation
+           ends, so the existing :hover lift and its transition still work. */
+        .home-row { animation: uiFadeUp var(--motion-slow) var(--ease-glide) backwards; }
+        .card-wrapper { animation: uiFadeUp .4s var(--ease-glide) backwards; }
+
+        /* Interactive surfaces: a light lift on hover, a clear settle on press.
+           The press uses the fast duration so a tap feels immediate. */
+        .btn:hover { transform: translateY(-1px); }
+        .movie-card:active, .home-card:active, .top-card:active,
+        .card-wrapper:active, .catalog-grid .card-wrapper:active {
+            transform: scale(.985);
+            transition-duration: var(--motion-fast);
+        }
+
+        /* Inline links and tabs respond in colour, never in layout. */
+        .filter-tab, .home-row-see-all, .nav-link, .dropdown-item, .mb-set-link {
+            transition: color var(--motion-base) var(--ease-spring),
+                        background-color var(--motion-base) var(--ease-spring),
+                        border-color var(--motion-base) var(--ease-spring);
+        }
+
+        /* Navbar gains a soft shadow the moment the page is scrolled. */
+        .navbar {
+            transition: box-shadow var(--motion-base) var(--ease-glide),
+                        background-color var(--motion-base) var(--ease-glide);
+        }
+        .navbar.is-scrolled { box-shadow: 0 12px 34px -22px rgba(0,0,0,.85); }
+        html[data-theme="light"] .navbar.is-scrolled { box-shadow: 0 12px 30px -22px rgba(16,24,40,.35); }
+
+        /* Transient UI arrives instead of blinking in. */
+        .alert, .toast, .adm-flash > * { animation: uiFadeUp .28s var(--ease-glide) backwards; }
+        .dropdown-menu.show, .mb-settings-panel.open { animation: uiPopIn .2s var(--ease-glide); }
+
+        /* Touch devices have no hover: keep the press feedback, drop the lift,
+           so a tapped card never stays stuck in its hovered state. */
+        @media (hover: none) {
+            .btn:hover { transform: none; }
+            .home-card:hover, .top-card:hover, .card-wrapper:hover { transform: none; }
+        }
+
+        /* Accessibility: honour the system "reduce motion" setting. Everything
+           collapses to nothing and content is shown in place, so a motion-
+           sensitive visitor still sees every element. */
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto !important; }
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                animation-delay: 0s !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .01ms !important;
+                transition-delay: 0s !important;
+                scroll-behavior: auto !important;
+            }
+            .reveal-on-scroll, .reveal-stagger > *, .section-reveal,
+            .home-row, .card-wrapper, .home-card, .top-card {
+                opacity: 1 !important;
+                transform: none !important;
+                animation: none !important;
+            }
+        }
     </style>
 
     <!-- Google Identity Services — only loaded when the site offers Google sign-in -->
@@ -4883,8 +4962,9 @@
 
     /* ===== Page transition on navigation ===== */
     (function() {
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var content = document.querySelector('.content-wrapper') || document.querySelector('main') || document.body;
-        content.classList.add('page-transition');
+        if (!reduce) content.classList.add('page-transition');
         document.addEventListener('click', function(e) {
             var link = e.target.closest('a[href]');
             if (!link) return;
@@ -4894,6 +4974,9 @@
                the current tab: those belong to ads, not to site navigation. */
             if (href.charAt(0) === '/' && href.charAt(1) === '/') return;
             if (href.indexOf(window.location.origin) === -1 && href.indexOf('/') !== 0) return;
+            /* Reduced motion: no exit animation and no artificial delay — hand
+               the click straight back to the browser. */
+            if (reduce) return;
             e.preventDefault();
             content.classList.remove('page-transition');
             content.classList.add('page-exit');
@@ -4948,6 +5031,31 @@
         var v = document.cookie.match('(^|;)\\s*' + name + '=([^;]*)');
         return v ? decodeURIComponent(v[2]) : '';
     }
+    </script>
+
+    <script>
+    /* ===== Motion helpers: navbar elevation + reliable press feedback ===== */
+    (function () {
+        /* Navbar gains its scrolled shadow via a rAF-throttled scroll listener,
+           so the handler never performs layout work per scroll event. */
+        var nav = document.querySelector('.navbar');
+        if (nav) {
+            var ticking = false;
+            var apply = function () {
+                nav.classList.toggle('is-scrolled', window.scrollY > 8);
+                ticking = false;
+            };
+            window.addEventListener('scroll', function () {
+                if (!ticking) { ticking = true; window.requestAnimationFrame(apply); }
+            }, { passive: true });
+            apply();
+        }
+
+        /* iOS Safari only applies :active to non-button elements once a touch
+           listener exists. A single passive no-op listener enables the CSS
+           press states above without adding any work per tap. */
+        document.addEventListener('touchstart', function () {}, { passive: true });
+    })();
     </script>
 
     <script>
