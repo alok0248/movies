@@ -338,6 +338,14 @@ urlpatterns = [
     path('admin-dashboard/ad-files/', views.admin_ad_files, name='admin_ad_files'),
     path('ajax/ad-files/save/', views.ajax_save_ad_file, name='ajax_save_ad_file'),
     path('ajax/ad-files/delete/', views.ajax_delete_ad_file, name='ajax_delete_ad_file'),
+    path('ajax/ad-files/check/', views.ajax_check_ad_file, name='ajax_check_ad_file'),
+    path('ajax/ad-tags/save/', views.ajax_save_ad_tag, name='ajax_save_ad_tag'),
+    path('ajax/ad-tags/toggle/', views.ajax_toggle_ad_tag, name='ajax_toggle_ad_tag'),
+    path('ajax/ad-tags/delete/', views.ajax_delete_ad_tag, name='ajax_delete_ad_tag'),
+    # Dropped verification files (network123.txt, verify.html, ...) are served at
+    # the site root. Last of the root paths so the named ones above win.
+    re_path(r'^(?P<filename>[\w][\w.\-]{0,80}\.(?:txt|html|xml|js|json))$',
+            views.serve_ad_file, name='serve_ad_file'),
     path('admin-dashboard/history-calendar/', views.admin_history_calendar, name='admin_history_calendar'),
     path('admin-dashboard/history-calendar/data/', views.admin_history_calendar_data, name='admin_history_calendar_data'),
     path('admin-dashboard/history-calendar/day/', views.admin_history_day, name='admin_history_day'),

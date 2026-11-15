@@ -551,6 +551,48 @@ class Ad(models.Model):
         return self.name
 
 
+class AdNetworkTag(models.Model):
+    """A snippet pasted from an ad network: site verification or the ad itself.
+
+    Networks hand out two kinds of tag. A *verification* snippet (a meta tag, a
+    script or a file) has to be present on the site before they will serve ads
+    for it, and an *ad* snippet is what actually renders a unit. Keeping both
+    here means the snippet is pasted once and injected by the base template,
+    instead of editing templates per network.
+    """
+
+    KIND_CHOICES = [
+        ('verify', 'Site verification'),
+        ('ad', 'Ad tag'),
+    ]
+    PLACEMENT_CHOICES = [
+        ('head', 'Head (all pages)'),
+        ('body_start', 'Start of the page'),
+        ('body_end', 'End of the page'),
+    ]
+
+    name = models.CharField(max_length=150, blank=True, default='',
+                            help_text='Label, e.g. Adsterra verification')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='verify')
+    placement = models.CharField(max_length=16, choices=PLACEMENT_CHOICES, default='head',
+                                 help_text='Verification tags always go in the head.')
+    code = models.TextField(help_text='The exact HTML/JS the network gave you.')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+        verbose_name = 'Ad network tag'
+        verbose_name_plural = 'Ad network tags'
+
+    def __str__(self):
+        return self.name or '%s tag #%s' % (self.kind, self.pk)
+
+    @property
+    def effective_placement(self):
+        return 'head' if self.kind == 'verify' else self.placement
+
+
 class AdsterraLink(models.Model):
     """A saved Adsterra direct link shown/opened from the Adsterra admin page.
 

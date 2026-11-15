@@ -10348,6 +10348,48 @@ def serve_sw_proxy_js(request):
     resp['Service-Worker-Allowed'] = '/'
     return resp
 
+# Extensions an ad network's verification file can use. Anything else is not
+# served from here — this route is a convenience for dropped files, not a
+# second static root.
+AD_FILE_TYPES = {
+    'txt': 'text/plain; charset=utf-8',
+    'html': 'text/html; charset=utf-8',
+    'xml': 'application/xml; charset=utf-8',
+    'js': 'application/javascript; charset=utf-8',
+    'json': 'application/json; charset=utf-8',
+}
+
+
+def serve_ad_file(request, filename):
+    """Serve a file the admin dropped on the ad-files page at the site root.
+
+    Networks verify a site by fetching something like ``/network123.txt`` and
+    checking what comes back, so the file has to be reachable at the root path.
+    Only files in the ad-files directory with a verification extension are
+    served, so this cannot become a way to read the project tree.
+    """
+    from django.http import Http404, HttpResponse
+
+    filename = os.path.basename(filename or '')
+    if not filename or filename.startswith('.') or '..' in filename:
+        raise Http404('No such file')
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if ext not in AD_FILE_TYPES:
+        raise Http404('No such file')
+    path = os.path.join(AD_FILES_DIR, filename)
+    if not os.path.isfile(path):
+        raise Http404('No such file')
+    try:
+        with open(path, 'rb') as fh:
+            body = fh.read(512 * 1024)
+    except OSError:
+        raise Http404('No such file')
+    response = HttpResponse(body, content_type=AD_FILE_TYPES[ext])
+    response['Cache-Control'] = 'public, max-age=300'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
 def serve_ads_txt(request):
     content = _read_ad_file('ads.txt')
     from django.http import HttpResponse
@@ -10537,12 +10579,137 @@ def serve_google_verification(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_ad_files(request):
+    """Ad files and network tags: what the networks came to check, in one place."""
     if not request.user.is_staff:
         return redirect('/admin/')
+    from .models import AdNetworkTag
+
     files = _list_ad_files()
+    site_root = request.build_absolute_uri('/')
+    for item in files:
+        item['url'] = site_root + item['name']
+        item['extension'] = item['name'].rsplit('.', 1)[-1].lower() if '.' in item['name'] else ''
+        item['publishable'] = item['extension'] in AD_FILE_TYPES
     return render(request, 'core/admin_ad_files.html', {
         'files': files,
+        'tags': AdNetworkTag.objects.all(),
+        'tag_kinds': AdNetworkTag.KIND_CHOICES,
+        'tag_placements': AdNetworkTag.PLACEMENT_CHOICES,
+        'site_root': site_root,
     })
+
+
+def ajax_check_ad_file(request):
+    """Fetch one ad file from the site's own public URL and report what came back.
+
+    This is the check an ad network performs: the address has to answer 200 with
+    the file's own body. ``?refresh=1`` is added to dodge a cached copy.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'ok': False, 'message': 'Invalid request'}, status=400)
+    filename = os.path.basename((data.get('filename') or '').strip())
+    if not filename or filename.startswith('.'):
+        return JsonResponse({'ok': False, 'message': 'Filename required'}, status=400)
+
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request as UrlRequest, urlopen
+    import time as _time
+
+    url = request.build_absolute_uri('/' + filename) + '?check=%d' % int(_time.time())
+    result = {'ok': False, 'filename': filename, 'url': url}
+    try:
+        req = UrlRequest(url, headers={'User-Agent': 'CineStream-admin-verify/1.0',
+                                       'Cache-Control': 'no-cache'})
+        with urlopen(req, timeout=6) as resp:
+            body = resp.read(2048)
+            result.update({
+                'ok': 200 <= resp.status < 300,
+                'status': resp.status,
+                'content_type': resp.headers.get('Content-Type', ''),
+                'bytes': len(body),
+                'preview': body[:300].decode('utf-8', 'replace'),
+            })
+    except HTTPError as exc:
+        result.update({'status': exc.code,
+                       'message': 'The server answered %s for /%s.' % (exc.code, filename)})
+    except (URLError, OSError) as exc:
+        result.update({'message': 'Could not fetch /%s: %s' % (filename, exc)})
+    return JsonResponse(result)
+
+
+def ajax_save_ad_tag(request):
+    """Add or update one network tag (verification snippet or ad tag)."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
+    from django.core.cache import cache
+    from .models import AdNetworkTag
+
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'ok': False, 'message': 'Invalid request'}, status=400)
+
+    kind = (data.get('kind') or 'verify').strip()
+    placement = (data.get('placement') or 'head').strip()
+    code = (data.get('code') or '').strip()
+    name = (data.get('name') or '').strip()[:150]
+    if kind not in dict(AdNetworkTag.KIND_CHOICES):
+        return JsonResponse({'ok': False, 'message': 'Unknown tag type'}, status=400)
+    if placement not in dict(AdNetworkTag.PLACEMENT_CHOICES):
+        return JsonResponse({'ok': False, 'message': 'Unknown placement'}, status=400)
+    if not code:
+        return JsonResponse({'ok': False, 'message': 'Paste the tag code first'}, status=400)
+
+    tag = AdNetworkTag.objects.create(name=name, kind=kind, placement=placement, code=code)
+    cache.delete('ad_network_tags_v1')
+    return JsonResponse({'ok': True, 'id': tag.id,
+                         'message': '%s saved and live on public pages.' % (name or 'Tag')})
+
+
+def ajax_toggle_ad_tag(request):
+    """Switch one network tag off or back on."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
+    from django.core.cache import cache
+    from .models import AdNetworkTag
+
+    try:
+        data = json.loads(request.body or '{}')
+        tag = AdNetworkTag.objects.get(id=int(data.get('id')))
+    except (ValueError, TypeError, AdNetworkTag.DoesNotExist):
+        return JsonResponse({'ok': False, 'message': 'Tag not found'}, status=404)
+    tag.is_active = not tag.is_active
+    tag.save(update_fields=['is_active'])
+    cache.delete('ad_network_tags_v1')
+    return JsonResponse({'ok': True, 'is_active': tag.is_active,
+                         'message': 'Tag %s.' % ('on' if tag.is_active else 'off')})
+
+
+def ajax_delete_ad_tag(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
+    from django.core.cache import cache
+    from .models import AdNetworkTag
+
+    try:
+        data = json.loads(request.body or '{}')
+        AdNetworkTag.objects.filter(id=int(data.get('id'))).delete()
+    except (ValueError, TypeError):
+        return JsonResponse({'ok': False, 'message': 'Tag not found'}, status=404)
+    cache.delete('ad_network_tags_v1')
+    return JsonResponse({'ok': True, 'message': 'Tag deleted.'})
 
 def ajax_save_ad_file(request):
     if request.method != 'POST':
@@ -10555,10 +10722,15 @@ def ajax_save_ad_file(request):
         content = data.get('content', '')
         if not filename:
             return JsonResponse({'ok': False, 'message': 'Filename required'})
-        # Sanitize filename
-        filename = os.path.basename(filename)
-        if '/' in filename or '' in filename:
-            return JsonResponse({'ok': False, 'message': 'Invalid filename'})
+        # A plain name only. (The old check tested `'' in filename`, which is
+        # always true, so this endpoint rejected every upload.)
+        raw = filename.replace('\\', '/')
+        filename = os.path.basename(raw)
+        if (not filename or raw != filename or filename.startswith('.') or '..' in filename
+                or ' ' in filename):
+            return JsonResponse({'ok': False, 'message': 'Use a plain filename, e.g. network123.txt'})
+        if '.' not in filename:
+            return JsonResponse({'ok': False, 'message': 'Include the file extension, e.g. network123.txt'})
         _write_ad_file(filename, content)
         return JsonResponse({'ok': True, 'message': f'{filename} saved'})
     except Exception as e:

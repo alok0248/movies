@@ -1431,8 +1431,13 @@
     }
     </script>
 
+    <!-- Ad-network tags: verification snippets from the ad admin page. -->
+    {% for tag_code in ad_verify_tags %}{{ tag_code|safe }}
+    {% endfor %}
 </head>
 <body class="{% if '/admin-dashboard/' in request.path %}admin-page{% endif %}">
+    {% for tag_code in ad_body_start_tags %}{{ tag_code|safe }}
+    {% endfor %}
     {% if request.session.preview_by %}
     <!-- "Login as" preview: this window is a session minted for one user, so
          every page says whose eyes it is in and offers the way out. -->
@@ -5075,5 +5080,7 @@
 </script>
 {% endif %}
 
+    {% for tag_code in ad_body_end_tags %}{{ tag_code|safe }}
+    {% endfor %}
 </body>
 </html>

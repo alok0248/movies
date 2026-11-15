@@ -84,6 +84,19 @@
         cursor: pointer;
     }
     .af-empty { text-align: center; padding: 2rem; color: var(--text-2); }
+    .af-drop {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: .3rem; padding: 1.6rem 1rem; border-radius: 12px; cursor: pointer;
+        border: 1.5px dashed var(--border); background: var(--bg);
+        color: var(--text-2); font-size: .85rem; text-align: center;
+        transition: border-color .2s, background .2s;
+    }
+    .af-drop i { font-size: 1.5rem; color: var(--brand); }
+    .af-drop:hover, .af-drop:focus-visible { border-color: var(--brand); background: var(--surface-hover); outline: none; }
+    .af-drop.is-over { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+    .af-drop.is-ok { border-color: #22c55e; }
+    .af-check-ok { color: #16a34a; font-size: .72rem; }
+    .af-check-bad { color: #dc2626; font-size: .72rem; }
     /* Light theme: brand red needs darkening on light surfaces */
     html[data-theme="light"] .af-back,
     html[data-theme="light"] .af-link { color: #b1060f; }
@@ -124,8 +137,20 @@
         <a href="/admin-dashboard/" class="af-back">Back to Dashboard</a>
     </div>
     <div class="af-card">
-        <h2>Upload New File</h2>
-        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+        <h2>Drop a verification file</h2>
+        <p class="af-meta" style="margin-bottom:.7rem;">
+            The file an ad network asks for (for example <code>network123.txt</code>) goes live at
+            <code>{{ site_root }}filename</code> as soon as it is saved — that is the address the network fetches.
+            Drag it onto the box, or click to pick it; .txt, .html, .xml, .js and .json are publishable.
+        </p>
+        <div id="dropZone" class="af-drop" tabindex="0" role="button"
+             aria-label="Drop a verification file here, or press Enter to choose one">
+            <i class="fas fa-cloud-arrow-up"></i>
+            <div><strong>Drop the file here</strong> or click to choose</div>
+            <div class="af-meta" id="dropHint">Anything else can be pasted below.</div>
+            <input type="file" id="filePicker" hidden accept=".txt,.html,.htm,.xml,.js,.json">
+        </div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;margin-top:1rem;">
             <div class="af-field">
                 <label class="af-label">Filename (e.g. ads.txt, sw.js)</label>
                 <input type="text" id="newFilename" class="af-input" placeholder="filename.txt">
@@ -136,6 +161,63 @@
             </div>
             <button onclick="saveNewFile()" class="af-btn-primary">Save File</button>
         </div>
+    </div>
+
+    <div class="af-card">
+        <h2>Ad tags — verification and display</h2>
+        <p class="af-meta" style="margin-bottom:.7rem;">
+            Paste the snippet the network gave you. A <strong>verification</strong> tag is injected into
+            <code>&lt;head&gt;</code> on every public page; an <strong>ad tag</strong> is injected where you place it,
+            and that is what shows the ads to visitors. Changes go live on the next page load (60 s cache).
+        </p>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end;">
+            <div class="af-field">
+                <label class="af-label">Label</label>
+                <input type="text" id="tagName" class="af-input" placeholder="Adsterra verification">
+            </div>
+            <div class="af-field">
+                <label class="af-label">Type</label>
+                <select id="tagKind" class="af-input" onchange="tagKindChanged()">
+                    {% for value, label in tag_kinds %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="af-field" id="tagPlacementWrap" style="display:none;">
+                <label class="af-label">Show it</label>
+                <select id="tagPlacement" class="af-input">
+                    {% for value, label in tag_placements %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="margin-top:.8rem;">
+            <label class="af-label">Tag code</label>
+            <textarea id="tagCode" rows="6" class="af-input"
+                      placeholder="&lt;script src=&quot;https://...&quot;&gt;&lt;/script&gt;  or  &lt;meta name=&quot;...&quot; content=&quot;...&quot;&gt;"></textarea>
+        </div>
+        <div style="display:flex;gap:.8rem;align-items:center;margin-top:.8rem;">
+            <button onclick="saveTag()" class="af-btn-primary">Save tag</button>
+            <span id="tagStatus" class="af-meta"></span>
+        </div>
+        {% if tags %}
+        <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:1rem;">
+            {% for tag in tags %}
+            <div class="af-row">
+                <div style="flex:1;min-width:0;">
+                    <div class="af-name">{{ tag.name|default:"Untitled tag" }}
+                        {% if not tag.is_active %}<span class="af-meta">(off)</span>{% endif %}
+                    </div>
+                    <div class="af-meta">
+                        {{ tag.get_kind_display }} &middot; {{ tag.get_placement_display }}
+                        &middot; {{ tag.code|truncatechars:70 }}
+                    </div>
+                </div>
+                <button onclick="toggleTag({{ tag.id }}, this)" class="af-btn-sm">{% if tag.is_active %}Turn off{% else %}Turn on{% endif %}</button>
+                <button onclick="deleteTag({{ tag.id }})" class="af-btn-danger">Delete</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="af-empty" style="padding:1rem;">No tags saved yet. Verification snippets must be live before a network will serve ads.</div>
+        {% endif %}
     </div>
     <div class="af-card">
         <h2>Existing Files</h2>
@@ -148,6 +230,8 @@
                     <div class="af-meta">{{ file.size }} bytes{% if file.in_root %} (root){% endif %}</div>
                 </div>
                 <a href="/{{ file.name }}" target="_blank" class="af-link">View</a>
+                <button onclick="checkFile('{{ file.name }}', this)" class="af-btn-sm"
+                        title="Fetch it from its public URL, the way the ad network does">Check</button>
                 <button onclick="editFile('{{ file.name }}')" class="af-btn-sm">Edit</button>
                 <button onclick="deleteFile('{{ file.name }}')" class="af-btn-danger">Delete</button>
             </div>
@@ -225,6 +309,118 @@ function saveEditFile() {
     });
 }
 function closeEditModal() { document.getElementById("editModal").style.display = "none"; }
+
+/* ---- drop a verification file ---- */
+var dropZone = document.getElementById("dropZone");
+var filePicker = document.getElementById("filePicker");
+var dropHint = document.getElementById("dropHint");
+
+function loadDroppedFile(file) {
+    if (!file) { return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+        document.getElementById("newFilename").value = file.name;
+        document.getElementById("newFileContent").value = reader.result;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        var ok = ['txt', 'html', 'htm', 'xml', 'js', 'json'].indexOf(ext) > -1;
+        dropZone.classList.toggle('is-ok', ok);
+        dropHint.textContent = file.name + ' — ' + file.size + ' bytes' +
+            (ok ? ', will be served at the site root' : ', this type will not be published at the root');
+    };
+    reader.readAsText(file);
+}
+
+if (dropZone) {
+    dropZone.addEventListener('click', function () { filePicker.click(); });
+    dropZone.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); filePicker.click(); }
+    });
+    filePicker.addEventListener('change', function () { loadDroppedFile(filePicker.files[0]); });
+    ['dragenter', 'dragover'].forEach(function (name) {
+        dropZone.addEventListener(name, function (e) { e.preventDefault(); dropZone.classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (name) {
+        dropZone.addEventListener(name, function (e) { e.preventDefault(); dropZone.classList.remove('is-over'); });
+    });
+    dropZone.addEventListener('drop', function (e) {
+        if (e.dataTransfer && e.dataTransfer.files.length) { loadDroppedFile(e.dataTransfer.files[0]); }
+    });
+}
+
+/* ---- verify a file the way the network does ---- */
+function checkFile(name, btn) {
+    var original = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = 'Checking…'; btn.disabled = true; }
+    fetch("/ajax/ad-files/check/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
+        body: JSON.stringify({filename: name})
+    }).then(readJson).then(function (res) {
+        var d = res.data || {};
+        if (btn) { btn.textContent = original; btn.disabled = false; }
+        if (d.ok) {
+            alert('OK — ' + d.url + ' answered ' + d.status + ' (' + (d.content_type || 'no content-type') +
+                  ', ' + d.bytes + ' bytes read).\n\nFirst bytes:\n' + (d.preview || ''));
+        } else {
+            alert('Not reachable: ' + (d.message || ('status ' + (d.status || '?'))) + '\n' + (d.url || ''));
+        }
+    }).catch(function () {
+        if (btn) { btn.textContent = original; btn.disabled = false; }
+        alert('The check request failed.');
+    });
+}
+
+/* ---- ad network tags ---- */
+function tagKindChanged() {
+    var kind = document.getElementById("tagKind").value;
+    document.getElementById("tagPlacementWrap").style.display = (kind === 'ad') ? '' : 'none';
+}
+
+function saveTag() {
+    var payload = {
+        name: document.getElementById("tagName").value.trim(),
+        kind: document.getElementById("tagKind").value,
+        placement: document.getElementById("tagPlacement").value,
+        code: document.getElementById("tagCode").value
+    };
+    if (!payload.code.trim()) { alert('Paste the tag code first.'); return; }
+    var status = document.getElementById("tagStatus");
+    status.textContent = 'Saving…';
+    fetch("/ajax/ad-tags/save/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
+        body: JSON.stringify(payload)
+    }).then(readJson).then(function (res) {
+        var d = res.data || {};
+        if (d.ok) { location.reload(); }
+        else { status.textContent = d.message || 'Could not save the tag.'; }
+    }).catch(function () { status.textContent = 'The save request failed.'; });
+}
+
+function toggleTag(id, btn) {
+    fetch("/ajax/ad-tags/toggle/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
+        body: JSON.stringify({id: id})
+    }).then(readJson).then(function (res) {
+        var d = res.data || {};
+        if (d.ok) { location.reload(); } else { alert(d.message || 'Could not change the tag.'); }
+    });
+}
+
+function deleteTag(id) {
+    if (!confirm('Delete this tag? Public pages stop rendering it immediately.')) return;
+    fetch("/ajax/ad-tags/delete/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
+        body: JSON.stringify({id: id})
+    }).then(readJson).then(function (res) {
+        var d = res.data || {};
+        if (d.ok) { location.reload(); } else { alert(d.message || 'Could not delete the tag.'); }
+    });
+}
+
+tagKindChanged();
 function deleteFile(name) {
     if (!confirm("Delete " + name + "?")) return;
     fetch("/ajax/ad-files/delete/", {

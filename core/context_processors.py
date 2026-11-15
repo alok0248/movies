@@ -271,6 +271,41 @@ def admin_badges(request):
     return {'admin_badges': badges}
 
 
+def ad_network_tags(request):
+    """Snippets pasted from an ad network, ready for the base template.
+
+    Verification tags go in <head> so a crawler finds them; ad tags render at
+    the placement they were given. Only public pages get them — an admin page
+    has no business loading a third-party ad script.
+    """
+    from django.core.cache import cache
+    from .models import AdNetworkTag
+
+    path = getattr(request, 'path', '') or ''
+    if path.startswith(('/admin-dashboard/', '/api/', '/ajax/')):
+        return {}
+    tags = cache.get('ad_network_tags_v1')
+    if tags is None:
+        try:
+            tags = list(AdNetworkTag.objects.filter(is_active=True)
+                        .values_list('kind', 'placement', 'code'))
+        except Exception:      # an ad tag is never worth a broken page
+            tags = []
+        cache.set('ad_network_tags_v1', tags, 60)
+
+    buckets = {'head': [], 'body_start': [], 'body_end': []}
+    for kind, placement, code in tags:
+        if not code:
+            continue
+        where = 'head' if kind == 'verify' else placement
+        buckets.setdefault(where, []).append(code)
+    return {
+        'ad_verify_tags': buckets['head'],
+        'ad_body_start_tags': buckets['body_start'],
+        'ad_body_end_tags': buckets['body_end'],
+    }
+
+
 """Values the admin chrome needs on every page."""
 
 from django.core.cache import cache
