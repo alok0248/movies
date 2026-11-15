@@ -222,6 +222,8 @@ urlpatterns = [
     path('admin-dashboard/synced-users/<int:user_id>/block/', views.synced_user_block, name='synced_user_block'),
     path('admin-dashboard/android-apps/<int:app_id>/devices/<int:device_id>/block/',
          views.android_app_device_block, name='android_app_device_block'),
+    path('admin-dashboard/android-apps/<int:app_id>/devices/delete/',
+         views.android_app_devices_delete, name='android_app_devices_delete'),
     # "Delete data" — wipes history/cloud data for one user, account stays.
     path('admin-dashboard/synced-users/<int:user_id>/wipe-data/', views.synced_user_wipe_data, name='synced_user_wipe_data'),
     path('admin-dashboard/user-dashboard/', views.user_dashboard, name='user_dashboard'),

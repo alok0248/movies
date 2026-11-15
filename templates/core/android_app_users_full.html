@@ -195,6 +195,15 @@
         position: sticky; top: 0; background: #0b1220; z-index: 1;
         font-size: .66rem; text-transform: uppercase; letter-spacing: .04em;
     }
+    /* ----- Inactive devices: selection toolbar ----- */
+    .inactive-toolbar {
+        display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+        background: rgba(15, 23, 42, .72);
+        border: 1px solid rgba(148, 163, 184, .22); border-radius: 10px;
+        padding: .45rem .65rem; margin-bottom: .55rem;
+    }
+    .inactive-all { display: flex; align-items: center; gap: .45rem; margin: 0; font-size: .76rem; color: #e2e8f0; }
+    .inactive-pick, .inactive-all input { accent-color: #22c55e; }
     .du-actions { white-space: nowrap; }
     .du-actions .btn { padding: .1rem .35rem; line-height: 1.1; }
     .du-row.is-blocked { background: rgba(127, 29, 29, .16); }
@@ -237,6 +246,7 @@
         <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
             <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill chip-count ms-1">{{ counts.total }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'inactive' %}active{% endif %}" data-tab="inactive" href="?tab=inactive" role="tab" aria-selected="{% if active_tab == 'inactive' %}true{% else %}false{% endif %}" title="Installs the app has not seen for a while, with bulk delete"><i class="fas fa-moon me-1"></i>Inactive devices</a>
             <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill chip-count ms-1">{{ counts.signed_out }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill chip-count ms-1">{{ counts.visits }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'dailyusers' %}active{% endif %}" data-tab="dailyusers" href="?tab=dailyusers" role="tab" aria-selected="{% if active_tab == 'dailyusers' %}true{% else %}false{% endif %}" title="How many users the app saw each day, month and year"><i class="fas fa-chart-column me-1"></i>Users per day</a>
@@ -461,6 +471,74 @@ window.__renderDailyChart = function () {
 window.__dailyUsersRows = [];
 window.__dailyUsersFilterValue = 'all';
 window.__dailyUsersAcctValue = 'all';
+/* ----- Inactive device list: tick rows, select all, delete in bulk ----- */
+window.__inactiveSelected = function () {
+    return Array.prototype.slice.call(
+        document.querySelectorAll('.inactive-pick:checked'));
+};
+
+window.__inactiveCount = function () {
+    var picked = window.__inactiveSelected();
+    var boxes = document.querySelectorAll('.inactive-pick');
+    var label = document.getElementById('inactivePicked');
+    var btn = document.getElementById('inactiveDeleteBtn');
+    var all = document.getElementById('inactiveAll');
+    if (label) {
+        label.textContent = picked.length
+            ? picked.length + ' of ' + boxes.length + ' selected'
+            : 'none selected';
+    }
+    if (btn) { btn.disabled = picked.length === 0; }
+    if (all) {
+        all.checked = boxes.length > 0 && picked.length === boxes.length;
+        all.indeterminate = picked.length > 0 && picked.length < boxes.length;
+    }
+};
+
+window.__inactiveToggleAll = function (box) {
+    document.querySelectorAll('.inactive-pick').forEach(function (b) { b.checked = box.checked; });
+    window.__inactiveCount();
+};
+
+window.__inactiveDelete = function () {
+    var picked = window.__inactiveSelected();
+    if (!picked.length) { return; }
+    var names = picked.slice(0, 3).map(function (b) {
+        return b.getAttribute('data-label');
+    }).join(', ');
+    var msg = 'Delete ' + picked.length + ' device' + (picked.length === 1 ? '' : 's')
+        + ' and all of their visit history?\n\n' + names
+        + (picked.length > 3 ? ', \u2026' : '') + '\n\nThis cannot be undone.';
+    if (!confirm(msg)) { return; }
+
+    var wrap = document.querySelector('.inactive-toolbar');
+    var url = wrap ? wrap.getAttribute('data-delete-url') : '';
+    if (!url) { return; }
+    var body = new URLSearchParams();
+    body.set('ids', picked.map(function (b) { return b.value; }).join(','));
+
+    var btn = document.getElementById('inactiveDeleteBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting\u2026';
+    }
+    fetch(url, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': _csrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: body
+    }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res.success) { alert(res.error || 'Could not delete these devices.'); return; }
+        _status('Deleted ' + res.deleted_devices + ' device(s) and '
+                + res.deleted_visits + ' visit(s).', 'text-success');
+        picked.forEach(function (b) {
+            var tr = b.closest('tr');
+            if (tr) { tr.remove(); }
+        });
+        window.__inactiveCount();
+        setTimeout(function () { window.location.reload(); }, 900);
+    }).catch(function () { alert('Delete request failed.'); });
+};
+
 window.__duEsc = function (s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];

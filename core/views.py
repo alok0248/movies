@@ -4432,7 +4432,7 @@ def android_app_users_full(request, app_id):
     # signed-out list at the same time, which is what made it heavy. The tab
     # bar asks for ?partial=1 when the admin switches, so that swap needs no
     # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'uniquedevices', 'signedout', 'visits', 'dailyusers')
+    TABS = ('accounts', 'uniquedevices', 'inactive', 'signedout', 'visits', 'dailyusers')
     tab = (request.GET.get('tab') or '').strip().lower()
     legacy_devices = tab == 'devices'
     if legacy_devices:
@@ -5228,6 +5228,62 @@ def android_app_users_full(request, app_id):
                 'average': round(sum(values) / len(values), 1) if values else 0,
                 'shown': sum(values),
             },
+        })
+
+    elif tab == 'inactive':
+        # ------------------------------------------------------- devices gone quiet
+        # The cleanup list: installs the app has not seen for N days. Buckets are
+        # cumulative ("3 days" means three or more), because that is the question
+        # an operator asks — how much dead weight is there — and a device that has
+        # been silent for a month belongs in every bucket. Deleting one removes
+        # its visits too; the panel says so before the button is pressed.
+        try:
+            inactive_days = int(request.GET.get('d') or 3)
+        except (TypeError, ValueError):
+            inactive_days = 3
+        inactive_days = max(1, min(365, inactive_days))
+        cutoff = timezone.now() - datetime.timedelta(days=inactive_days)
+
+        inactive_qs = (all_devices.filter(last_seen_at__lt=cutoff)
+                       .order_by('-last_seen_at'))
+        if q:
+            inactive_qs = inactive_qs.filter(
+                Q(user_id__icontains=q) | Q(device_model__icontains=q)
+                | Q(os_version__icontains=q))
+        inactive_page = Paginator(inactive_qs, 50).get_page(request.GET.get('ipage') or 1)
+
+        inactive_rows = []
+        now = timezone.now()
+        for dev in inactive_page.object_list:
+            email = (email_by_device.get(dev.user_id)
+                     or email_by_device.get(dev.account_key) or '')
+            inactive_rows.append({
+                'dev': dev,
+                'email': email,
+                'registered': dev.registered_at is not None or bool(email),
+                'days': (now - dev.last_seen_at).days,
+                'last_seen': timezone.localtime(dev.last_seen_at).strftime('%d %b %Y'),
+                'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y')
+                              if dev.first_seen_at else '',
+                'block_mode': dev.block_mode or '',
+            })
+
+        inactive_chips = []
+        for n in (1, 2, 3, 7, 14, 30, 60):
+            inactive_chips.append({
+                'days': n,
+                'count': all_devices.filter(
+                    last_seen_at__lt=timezone.now() - datetime.timedelta(days=n)).count(),
+            })
+
+        ctx.update({
+            'inactive_days': inactive_days,
+            'inactive_rows': inactive_rows,
+            'inactive_page': inactive_page,
+            'inactive_total': inactive_qs.count(),
+            'inactive_chips': inactive_chips,
+            'inactive_all_devices': all_devices.count(),
+            'online_window_min': getattr(UserHeartbeat, 'ONLINE_WINDOW_SECONDS', 300) // 60,
         })
 
     elif tab == 'visits':
@@ -14015,6 +14071,39 @@ def synced_user_resend_verification(request, user_id):
     else:
         messages.error(request, msg)
     return redirect('synced_user_detail', user_id=user_obj.id)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def android_app_devices_delete(request, app_id):
+    """Admin: delete the installs ticked in the inactive list.
+
+    POST ids = repeated or comma separated device ids.
+
+    Deleting an install takes its visit history with it (the visits hang off
+    the device row), which is why the panel says so before the request. The
+    account itself is untouched: an account whose device is gone simply shows
+    up as having no install next time it syncs.
+    """
+    app_obj = get_object_or_404(AndroidApp, id=app_id)
+    raw = request.POST.getlist('ids')
+    ids = []
+    for chunk in raw:
+        for bit in str(chunk).split(','):
+            bit = bit.strip()
+            if bit.isdigit():
+                ids.append(int(bit))
+    ids = list(dict.fromkeys(ids))[:1000]
+    if not ids:
+        return JsonResponse({'success': False, 'error': 'No devices selected.'}, status=400)
+
+    qs = AndroidAppDevice.objects.filter(android_app=app_obj, id__in=ids)
+    devices = qs.count()
+    visits = AndroidAppDeviceVisit.objects.filter(device__in=qs).count()
+    qs.delete()
+    return JsonResponse({'success': True, 'deleted_devices': devices,
+                         'deleted_visits': visits})
 
 
 @login_required
