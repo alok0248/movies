@@ -6,9 +6,10 @@ lookback window, groups the rows by category and path, and writes one
 ``RequestLogRollup`` row per group with the hit count, the error count (4xx/5xx)
 and the average / 95th-percentile latency.
 
-The current hour is never touched — it is still being written to. Re-running
-the command is safe: buckets are upserted on their unique key, so a re-run
-simply refreshes the same rows rather than duplicating them.
+The current hour is never touched — it is still being written to, so every hour
+this looks at is already final. A bucket is therefore written once and never
+rewritten: re-deriving it later would count only the raw rows that survived
+pruning and quietly shrink a correct figure.
 """
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -58,7 +59,7 @@ class Command(BaseCommand):
 
         written = 0
         for (bucket, category, path), entry in buckets.items():
-            RequestLogRollup.objects.update_or_create(
+            _row, created = RequestLogRollup.objects.get_or_create(
                 bucket_start=bucket, category=category, path=path,
                 defaults={
                     'hits': entry['hits'],
@@ -67,10 +68,10 @@ class Command(BaseCommand):
                     'p95_ms': _p95(entry['ms']),
                 },
             )
-            written += 1
+            written += 1 if created else 0
 
-        self.stdout.write('  buckets written: %d (from %s to %s)'
-                          % (written, oldest.strftime('%Y-%m-%d %H:%M'),
+        self.stdout.write('  buckets written: %d of %d scanned (from %s to %s)'
+                          % (written, len(buckets), oldest.strftime('%Y-%m-%d %H:%M'),
                              newest.strftime('%Y-%m-%d %H:%M')))
 
         if options['prune']:
