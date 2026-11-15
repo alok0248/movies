@@ -52,6 +52,13 @@ class LoginRequiredMiddlewareTest(TestCase):
         response = self.client.get('/movies/')
         self.assertEqual(200, response.status_code)
 
+    def test_turning_the_switch_off_takes_effect_at_once(self):
+        # The gate keeps a short cache of its own; a save has to clear it or
+        # the page would keep asking for a sign-in after the admin turned it off.
+        self.settings_row.require_login_to_browse = False
+        self.settings_row.save()
+        self.assertEqual(200, self.client.get('/movies/').status_code)
+
 
 class LoginRequiredOffTest(TestCase):
     def test_pages_stay_public_while_the_switch_is_off(self):

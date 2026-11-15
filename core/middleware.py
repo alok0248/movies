@@ -660,15 +660,27 @@ class LoginRequiredMiddleware:
     )
     # Query flags that mean "this request is the sign-in prompt".
     OPEN_FLAGS = ('login_required', 'register')
+    # How long a worker may reuse the flag before it has to look again. The
+    # settings row itself is cached for a minute, which is far too long here:
+    # turning the gate on would look broken on every worker that did not
+    # handle the save.
+    LOCK_CACHE_SECONDS = 5
 
     def __init__(self, get_response):
         self.get_response = get_response
+
+    def _is_locked(self):
+        locked = cache.get(SiteSettings._LOGIN_GATE_CACHE_KEY)
+        if locked is None:
+            locked = bool(SiteSettings.get_settings().require_login_to_browse)
+            cache.set(SiteSettings._LOGIN_GATE_CACHE_KEY, locked, self.LOCK_CACHE_SECONDS)
+        return locked
 
     def __call__(self, request):
         if getattr(request.user, 'is_authenticated', False):
             return self.get_response(request)
         try:
-            locked = SiteSettings.get_settings().require_login_to_browse
+            locked = self._is_locked()
         except Exception:
             # A settings row that cannot be read must never lock the site out.
             logger.debug('login-required: could not read the setting', exc_info=True)

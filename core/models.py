@@ -247,6 +247,10 @@ class ContentRow(models.Model):
 class SiteSettings(models.Model):
 
     _SETTINGS_CACHE_KEY = 'sitesettings_row_v1'
+    # The sign-in gate is re-read on every request, so it keeps its own very
+    # short cache: long enough to stay off the database, short enough that
+    # flipping the switch in one worker is not ignored by the others.
+    _LOGIN_GATE_CACHE_KEY = 'sitesettings_login_gate_v1'
 
     DATA_SOURCE_CHOICES = [
         ('tmdb', 'TMDB API'),
@@ -512,6 +516,7 @@ class SiteSettings(models.Model):
         super().save(*args, **kwargs)
         from django.core.cache import cache
         cache.delete(self._SETTINGS_CACHE_KEY)
+        cache.delete(self._LOGIN_GATE_CACHE_KEY)
         # The allow-list is cached separately on the request path (it is read on
         # every request by the IP guard), so drop that copy too — an address the
         # operator just trusted must take effect at once.
