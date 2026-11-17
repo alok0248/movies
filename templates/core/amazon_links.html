@@ -1,0 +1,149 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Amazon affiliate links{% endblock %}
+
+{% block admin_content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <div>
+            <h1 class="mb-1">Amazon affiliate links</h1>
+            <p class="text-muted mb-0">Add as many affiliate links as you like in one go, then switch any of them on or off.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'ad_links' %}" class="adm-btn is-sm">All ad links</a>
+            <a href="{% url 'ad_list' %}" class="adm-btn is-sm">&larr; Back to Ads</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'info' %}info{% else %}success{% endif %} py-2">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-7">
+            <div class="adm-card h-100">
+                <div class="adm-card-body">
+                    <h2 class="h6 text-uppercase text-muted mb-2">Add several links at once</h2>
+                    <p class="text-muted small mb-2">
+                        One link per line. A title is optional: put it either side of a pipe —
+                        <code>Wireless earbuds | https://www.amazon.com/dp/B08XYZ/?tag=yourtag-20</code>
+                        or <code>https://www.amazon.com/dp/B08XYZ/?tag=yourtag-20 | Wireless earbuds</code>.
+                        Lines starting with <code>#</code> are ignored, links already saved are skipped.
+                    </p>
+                    <form method="post" action="{% url 'admin_amazon_links' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="bulk">
+                        <textarea name="links" class="form-control" rows="9" required
+                                  style="font-family: monospace; font-size: .85rem;"
+                                  placeholder="https://www.amazon.com/dp/B08XYZ/?tag=yourtag-20&#10;Wireless earbuds | https://www.amazon.com/dp/B09ABC/?tag=yourtag-20&#10;https://www.amazon.in/dp/B07DEF/?tag=yourtag-21 | Power bank"></textarea>
+                        <button type="submit" class="adm-btn is-primary is-sm mt-2">Add these links</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="adm-card h-100">
+                <div class="adm-card-body">
+                    <h2 class="h6 text-uppercase text-muted mb-2">Add one link</h2>
+                    <form method="post" action="{% url 'admin_amazon_links' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="single">
+                        <div class="mb-2">
+                            <label class="adm-label" for="affiliate_url">Affiliate URL</label>
+                            <input type="url" class="form-control" id="affiliate_url" name="affiliate_url"
+                                   placeholder="https://www.amazon.com/dp/B08XYZ/?tag=yourtag-20" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="adm-label" for="title">Title (optional)</label>
+                            <input type="text" class="form-control" id="title" name="title" maxlength="500"
+                                   placeholder="Wireless earbuds">
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-7">
+                                <label class="adm-label" for="image_url">Image URL (optional)</label>
+                                <input type="url" class="form-control" id="image_url" name="image_url"
+                                       placeholder="https://m.media-amazon.com/…">
+                            </div>
+                            <div class="col-5">
+                                <label class="adm-label" for="price">Price (optional)</label>
+                                <input type="text" class="form-control" id="price" name="price" maxlength="100"
+                                       placeholder="$29.99">
+                            </div>
+                        </div>
+                        <button type="submit" class="adm-btn is-primary is-sm">Add link</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        <span class="badge bg-secondary">{{ link_count }} link{{ link_count|pluralize }}</span>
+        <span class="badge {% if active_count %}bg-success{% else %}bg-secondary{% endif %}">{{ active_count }} enabled</span>
+    </div>
+
+    <div class="adm-table-wrap">
+        <table class="adm-table align-middle">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Product / link</th>
+                    <th>Price</th>
+                    <th>Added</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in links %}
+                <tr>
+                    <td class="small text-muted">{{ row.order }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if row.image_url %}
+                                <img src="{{ row.image_url }}" alt="" width="40" height="40"
+                                     style="object-fit: cover; border-radius: 6px;" loading="lazy">
+                            {% endif %}
+                            <div>
+                                <div>{{ row.title|default:'Amazon product' }}</div>
+                                <a class="small" href="{{ row.affiliate_url }}" target="_blank"
+                                   rel="noopener noreferrer" title="{{ row.affiliate_url }}">{{ row.affiliate_url|truncatechars:64 }}</a>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="small">{{ row.price|default:'—' }}</td>
+                    <td class="small text-muted">{{ row.created_at|date:'Y-m-d H:i' }}</td>
+                    <td>
+                        {% if row.is_active %}<span class="adm-badge is-ok">Enabled</span>{% else %}<span class="adm-badge is-off">Disabled</span>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        <form method="post" action="{% url 'ad_toggle_any' 'amazon' row.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ this_url }}">
+                            <button type="submit" class="adm-btn is-sm {% if row.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                {% if row.is_active %}Disable{% else %}Enable{% endif %}
+                            </button>
+                        </form>
+                        <form method="post" action="{% url 'admin_amazon_links' %}" style="display: inline;"
+                              onsubmit="return confirm('Delete this Amazon link?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="id" value="{{ row.id }}">
+                            <button type="submit" class="adm-btn is-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        No Amazon links yet — paste a list above and press “Add these links”.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

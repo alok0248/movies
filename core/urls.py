@@ -79,6 +79,7 @@ urlpatterns = [
     path('admin-dashboard/ads/', views.ad_list, name='ad_list'),
     path('admin-dashboard/ads/create/', views.ad_create, name='ad_create'),
     path('admin-dashboard/ads/links/', views.ad_links, name='ad_links'),
+    path('admin-dashboard/ads/amazon/', views.admin_amazon_links, name='admin_amazon_links'),
     path('admin-dashboard/ads/adsterra/', views.admin_adsterra, name='admin_adsterra'),
     path('admin-dashboard/ads/adsterra/<int:link_id>/toggle/', views.admin_adsterra_link_toggle, name='admin_adsterra_link_toggle'),
     path('admin-dashboard/ads/adsterra/<int:link_id>/delete/', views.admin_adsterra_link_delete, name='admin_adsterra_link_delete'),

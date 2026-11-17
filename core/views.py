@@ -33,6 +33,7 @@ import json
 import logging
 import datetime
 import csv
+import re
 import requests
 import calendar
 import base64
@@ -1984,6 +1985,117 @@ def ad_links(request):
         'link_count': len(links),
         'active_count': len([row for row in links if row['is_active']]),
         'this_url': reverse('ad_links'),
+    })
+
+
+def _clean_amazon_url(value):
+    """A saved Amazon link, or '' when the value is not a full http(s) URL."""
+    url = (value or '').strip()
+    if not url or len(url) > 1000:
+        return ''
+    if not re.match(r'^https?://\S+$', url, re.I):
+        return ''
+    return url
+
+
+def _parse_amazon_bulk(text):
+    """Read the bulk box: one link per line, with an optional title.
+
+    ``<url>``, ``<title> | <url>`` and ``<url> | <title>`` all work - whichever
+    side of the pipe starts with http:// is the link. Lines starting with # are
+    comments. Returns ``(rows, rejected)`` where rows are ``(title, url)``.
+    """
+    rows, rejected = [], []
+    for raw in (text or '').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        title, url = '', line
+        if '|' in line:
+            left, right = [part.strip() for part in line.split('|', 1)]
+            if left.lower().startswith(('http://', 'https://')):
+                url, title = left, right
+            else:
+                title, url = left, right
+        url = _clean_amazon_url(url)
+        if not url:
+            rejected.append(line)
+            continue
+        rows.append((title[:500], url))
+    return rows, rejected
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def admin_amazon_links(request):
+    """Add many Amazon affiliate links at once, and manage the saved ones.
+
+    The bulk box takes a pasted list (one link per line, optional title), skips
+    links that are already saved and reports any line that is not a full URL, so
+    a network's export can be dropped in whole instead of one field at a time.
+    """
+    if request.method == 'POST':
+        action = request.POST.get('action') or 'single'
+        existing = {(url or '').strip().lower()
+                    for url in AmazonAffiliateProduct.objects
+                    .values_list('affiliate_url', flat=True)}
+        next_order = (AmazonAffiliateProduct.objects.order_by('-order')
+                      .values_list('order', flat=True).first() or 0)
+
+        if action == 'delete':
+            product = get_object_or_404(AmazonAffiliateProduct,
+                                        id=request.POST.get('id'))
+            product.delete()
+            messages.success(request, 'Amazon link deleted.')
+            return redirect('admin_amazon_links')
+
+        if action == 'bulk':
+            rows, rejected = _parse_amazon_bulk(request.POST.get('links'))
+            added = skipped = 0
+            for title, url in rows:
+                if url.lower() in existing:
+                    skipped += 1
+                    continue
+                next_order += 1
+                AmazonAffiliateProduct.objects.create(
+                    affiliate_url=url, title=title, is_active=True,
+                    order=next_order)
+                existing.add(url.lower())
+                added += 1
+            if added:
+                messages.success(request, 'Added %d Amazon link%s.' % (
+                    added, '' if added == 1 else 's'))
+            if skipped:
+                messages.info(request, '%d already saved, skipped.' % skipped)
+            if rejected:
+                messages.error(request, '%d line%s not a full http(s) link: %s' % (
+                    len(rejected), '' if len(rejected) == 1 else 's',
+                    ' / '.join(rejected[:3])))
+            if not (added or skipped or rejected):
+                messages.error(request, 'Nothing to add: paste at least one link.')
+            return redirect('admin_amazon_links')
+
+        # One link from the row of fields above the bulk box.
+        url = _clean_amazon_url(request.POST.get('affiliate_url'))
+        if not url:
+            messages.error(request, 'Enter a full http(s) Amazon affiliate link.')
+        elif url.lower() in existing:
+            messages.error(request, 'That link is already saved.')
+        else:
+            AmazonAffiliateProduct.objects.create(
+                affiliate_url=url,
+                title=(request.POST.get('title') or '').strip()[:500],
+                image_url=_clean_amazon_url(request.POST.get('image_url')),
+                price=(request.POST.get('price') or '').strip()[:100],
+                order=next_order + 1)
+            messages.success(request, 'Amazon link added.')
+        return redirect('admin_amazon_links')
+
+    return render(request, 'core/amazon_links.html', {
+        'links': AmazonAffiliateProduct.objects.all().order_by('order', '-id'),
+        'link_count': AmazonAffiliateProduct.objects.count(),
+        'active_count': AmazonAffiliateProduct.objects.filter(is_active=True).count(),
+        'this_url': reverse('admin_amazon_links'),
     })
 
 
