@@ -43,6 +43,7 @@ from .middleware import get_client_ip
 from bs4 import BeautifulSoup
 import psutil
 import platform
+from . import amazon_links
 from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, AmazonAffiliateProduct, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
@@ -2000,38 +2001,12 @@ def _clean_amazon_url(value):
 
 def _amazon_affiliate_urls():
     """The Amazon links the app should open, in the order saved on the page."""
-    urls, seen = [], set()
-    for url in (AmazonAffiliateProduct.objects.filter(is_active=True)
-                .order_by('order', 'id')
-                .values_list('affiliate_url', flat=True)):
-        url = (url or '').strip()
-        if not url or url.lower() in seen:
-            continue
-        seen.add(url.lower())
-        urls.append(url)
-    return urls
+    return amazon_links.active_urls()
 
 
 def _attach_amazon_links(payload):
-    """Fill ``ads1.amazon1.url`` with the links saved on the Amazon page.
-
-    The block's tracking tag stays the one already saved in the payload (that
-    is what the app builds its own links with); only the list is replaced, so
-    adding a link on the page is enough and nothing has to be pasted into the
-    JSON by hand. Payloads without that block are returned untouched.
-    """
-    if not isinstance(payload, dict):
-        return payload
-    ads1 = payload.get('ads1')
-    if not isinstance(ads1, dict) or not isinstance(ads1.get('amazon1'), dict):
-        return payload
-    amazon1 = dict(ads1['amazon1'])
-    amazon1['url'] = _amazon_affiliate_urls()
-    ads1 = dict(ads1)
-    ads1['amazon1'] = amazon1
-    payload = dict(payload)
-    payload['ads1'] = ads1
-    return payload
+    """Fill ``ads1.amazon1.url`` with the links saved on the Amazon page."""
+    return amazon_links.with_links(payload)
 
 
 def _parse_amazon_bulk(text):

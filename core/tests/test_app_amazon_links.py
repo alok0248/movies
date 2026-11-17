@@ -100,3 +100,71 @@ class AmazonPayloadTestCase(TestCase):
                                  HTTP_AUTHORIZATION=self._auth())
         self.assertEqual([URL_A, URL_B],
                          json.loads(second.content)['ads1']['amazon1']['url'])
+
+    # The same list is written into the stored payload, so the app's JSON on the
+    # admin page is not an empty list while the endpoint serves a full one.
+
+    def test_a_saved_link_is_written_into_the_stored_payload(self):
+        AmazonAffiliateProduct.objects.create(affiliate_url=URL_A, order=1)
+
+        served = AndroidApp.objects.get(pk=self.app.pk).json_payload
+
+        self.assertEqual([URL_A], served['ads1']['amazon1']['url'])
+        self.assertEqual('headhuntrr0c-21', served['ads1']['amazon1']['tag'])
+        self.assertEqual(50, served['ads1']['click'])
+        self.assertEqual(0, served['login_required'])
+        self.assertEqual(300, served['sync'])
+
+    def test_switching_a_link_off_takes_it_out_of_the_stored_payload(self):
+        AmazonAffiliateProduct.objects.create(affiliate_url=URL_A, order=1)
+        link = AmazonAffiliateProduct.objects.create(affiliate_url=URL_B, order=2)
+
+        link.is_active = False
+        link.save()
+
+        served = AndroidApp.objects.get(pk=self.app.pk).json_payload
+        self.assertEqual([URL_A], served['ads1']['amazon1']['url'])
+
+    def test_deleting_a_link_takes_it_out_of_the_stored_payload(self):
+        link = AmazonAffiliateProduct.objects.create(affiliate_url=URL_A, order=1)
+
+        link.delete()
+
+        served = AndroidApp.objects.get(pk=self.app.pk).json_payload
+        self.assertEqual([], served['ads1']['amazon1']['url'])
+
+    def test_an_app_without_the_amazon_block_keeps_its_payload(self):
+        other = AndroidApp.objects.create(
+            name='Saavn', slug='saavn', access_username='u2', access_password='p2',
+            json_payload={'login_required': 1, 'ads1': None},
+        )
+
+        AmazonAffiliateProduct.objects.create(affiliate_url=URL_A, order=1)
+
+        self.assertEqual({'login_required': 1, 'ads1': None},
+                         AndroidApp.objects.get(pk=other.pk).json_payload)
+
+    def test_the_bulk_page_syncs_the_payload(self):
+        self.client.force_login(self._staff())
+
+        self.client.post(reverse('admin_amazon_links'),
+                         {'action': 'bulk', 'links': URL_A + '\n' + URL_B})
+
+        served = AndroidApp.objects.get(pk=self.app.pk).json_payload
+        self.assertEqual([URL_A, URL_B], served['ads1']['amazon1']['url'])
+
+    def _staff(self):
+        from django.contrib.auth.models import User
+
+        return User.objects.create_user('amazon-admin', 'a@example.com', 'pw',
+                                        is_staff=True, is_superuser=True)
+
+    def test_the_cache_is_dropped_when_a_link_changes(self):
+        self.client.get(reverse('android_app_endpoint', args=['cinestream']),
+                        HTTP_AUTHORIZATION=self._auth())
+        key = 'android_endpoint_payload_cinestream'
+        self.assertIsNotNone(cache.get(key))
+
+        AmazonAffiliateProduct.objects.create(affiliate_url=URL_A, order=1)
+
+        self.assertIsNone(cache.get(key))

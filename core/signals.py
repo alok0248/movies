@@ -2,7 +2,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 
-from .models import AmazonAffiliateProduct, AndroidApp
+from .models import AmazonAffiliateProduct
 
 
 @receiver(post_save, sender=User)
@@ -11,25 +11,24 @@ def create_user_profile(sender, instance, created, **kwargs):
     pass
 
 
-def _clear_app_config_cache(sender, **kwargs):
-    """Drop the cached app configs, which carry the Amazon affiliate links.
+def _sync_amazon_links(sender, **kwargs):
+    """Keep every app's Amazon block and the cached configs in step.
 
-    The config is cached per app for a few minutes; a link added, switched off
-    or deleted on the Amazon links page should not have to wait that out before
-    the app sees it.
+    A link added, switched off or deleted on the Amazon links page is written
+    into the app payloads straight away and the cached configs are dropped, so
+    the app and the admin page never disagree about the list.
     """
     try:
-        from django.core.cache import cache
+        from . import amazon_links
 
-        for slug in AndroidApp.objects.values_list('slug', flat=True):
-            cache.delete('android_endpoint_payload_%s' % slug)
+        amazon_links.sync_app_payloads()
     except Exception:
         pass
 
 
-post_save.connect(_clear_app_config_cache, sender=AmazonAffiliateProduct,
+post_save.connect(_sync_amazon_links, sender=AmazonAffiliateProduct,
                   dispatch_uid='core_amazon_link_saved')
-post_delete.connect(_clear_app_config_cache, sender=AmazonAffiliateProduct,
+post_delete.connect(_sync_amazon_links, sender=AmazonAffiliateProduct,
                     dispatch_uid='core_amazon_link_deleted')
 
 
