@@ -5,7 +5,8 @@ from django.http import (JsonResponse, HttpResponse, HttpResponseForbidden, Http
                          HttpResponseRedirect, StreamingHttpResponse, Http404)
 from django.http.request import UnreadablePostError
 from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.http import (url_has_allowed_host_and_scheme,
+                                urlsafe_base64_decode, urlsafe_base64_encode)
 from .user_auth import authenticate_user
 from django.template.loader import render_to_string
 from django.contrib.auth import authenticate, login, logout
@@ -1940,6 +1941,54 @@ def ad_list(request):
 
 @login_required
 @user_passes_test(is_staff_or_superuser)
+def ad_links(request):
+    """Every ad link added on the site, newest first.
+
+    The Ads page opens this list: one row per link across the sources that store
+    one (an Adsterra direct link / smartlink, an Amazon affiliate product), with
+    when it was added, how many clicks it has served and a button that flips it
+    on or off. Ad units that are markup rather than links stay on the Ads page.
+    """
+    links = []
+    for link in AdsterraLink.objects.all().order_by('-created_at', '-id'):
+        links.append({
+            'kind': 'adsterra',
+            'id': link.id,
+            'service': 'Adsterra',
+            'name': link.name or link.ad_type or 'Adsterra unit',
+            'format': link.ad_type or link.kind_label,
+            'url': link.url or '',
+            'has_code': bool((link.code or '').strip()),
+            'is_active': link.is_active,
+            'clicks': link.click_count,
+            'created_at': link.created_at,
+        })
+    for product in AmazonAffiliateProduct.objects.all().order_by('-created_at', '-id'):
+        links.append({
+            'kind': 'amazon',
+            'id': product.id,
+            'service': 'Amazon',
+            'name': product.title or 'Amazon product',
+            'format': product.price or 'Affiliate product',
+            'url': product.affiliate_url or '',
+            'has_code': False,
+            'is_active': product.is_active,
+            # Amazon links are opened by the public site, which keeps no
+            # per-link counter, so there is no number to show rather than a 0.
+            'clicks': None,
+            'created_at': product.created_at,
+        })
+    links.sort(key=lambda row: row['created_at'], reverse=True)
+    return render(request, 'core/ad_links.html', {
+        'links': links,
+        'link_count': len(links),
+        'active_count': len([row for row in links if row['is_active']]),
+        'this_url': reverse('ad_links'),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
 def ad_toggle_any(request, kind, obj_id):
     """Enable/disable one ad unit of any source from the Ads control centre."""
     sources = {
@@ -1958,6 +2007,12 @@ def ad_toggle_any(request, kind, obj_id):
     obj.save()
     messages.success(request, '%s "%s" is now %s.' % (
         label, str(obj)[:80], 'enabled' if obj.is_active else 'disabled'))
+    # A page other than the Ads page can host the same button; only a local
+    # address is followed, so the form cannot be used to bounce elsewhere.
+    target = request.POST.get('next') or ''
+    if target and url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return redirect(target)
     return HttpResponseRedirect(reverse('ad_list') + '#ad-control')
 
 

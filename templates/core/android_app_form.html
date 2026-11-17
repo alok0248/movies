@@ -81,6 +81,51 @@
                     </div>
 
                     <div class="col-12">
+                        <div class="p-3 rounded-3 border border-secondary-subtle bg-black bg-opacity-25">
+                            <div class="mb-3">
+                                <div class="fw-semibold text-white"><i class="fas fa-sliders me-2 text-info"></i>App behaviour</div>
+                                <div class="form-text text-secondary mb-0">
+                                    These write <code>login_required</code>, <code>subscription</code>, <code>without_server</code>
+                                    (1 = enabled, 0 = disabled) and <code>sync</code> (seconds) into the JSON payload below,
+                                    which is what the app receives on its first request.
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-4">
+                                    <div class="form-check form-switch">
+                                        {{ form.login_required }}
+                                        <label class="form-check-label text-white" for="{{ form.login_required.id_for_label }}">Login required</label>
+                                    </div>
+                                    <div class="form-text text-secondary">{{ form.login_required.help_text }}</div>
+                                    {% if form.login_required.errors %}<div class="text-danger small">{{ form.login_required.errors|join:', ' }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <div class="form-check form-switch">
+                                        {{ form.subscription }}
+                                        <label class="form-check-label text-white" for="{{ form.subscription.id_for_label }}">Subscription</label>
+                                    </div>
+                                    <div class="form-text text-secondary">{{ form.subscription.help_text }}</div>
+                                    {% if form.subscription.errors %}<div class="text-danger small">{{ form.subscription.errors|join:', ' }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <div class="form-check form-switch">
+                                        {{ form.without_server }}
+                                        <label class="form-check-label text-white" for="{{ form.without_server.id_for_label }}">Work without the server</label>
+                                    </div>
+                                    <div class="form-text text-secondary">{{ form.without_server.help_text }}</div>
+                                    {% if form.without_server.errors %}<div class="text-danger small">{{ form.without_server.errors|join:', ' }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <label class="adm-label text-white" for="{{ form.sync.id_for_label }}">Sync timer (seconds)</label>
+                                    {{ form.sync }}
+                                    <div class="form-text text-secondary">{{ form.sync.help_text }}</div>
+                                    {% if form.sync.errors %}<div class="text-danger small mt-1">{{ form.sync.errors|join:', ' }}</div>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
                         <label class="adm-label text-white">{{ form.json_payload_input.label }}</label>
                         {{ form.json_payload_input }}
                         <div class="form-text text-secondary">{{ form.json_payload_input.help_text }}</div>

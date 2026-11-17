@@ -1,4 +1,5 @@
 from django import forms
+from django.core.cache import cache
 from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdsterraLink
 import json
 class BrandingSettingsForm(forms.ModelForm):
@@ -222,7 +223,36 @@ class PlayerConfigurationForm(forms.ModelForm):
         }
 
 
+def _payload_flag(value):
+    """Read one of the app's 0/1 switches out of a saved JSON payload."""
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return bool(value)
+
+
 class AndroidAppForm(forms.ModelForm):
+    # The four values the app reads from the top of its config response. They
+    # live inside json_payload, but a slider is easier (and safer) to use than
+    # editing the JSON by hand, so the form carries them and writes them back
+    # into the payload on save.
+    login_required = forms.BooleanField(
+        label='Login required', required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text='1 asks the app to sign the user in before it shows content; 0 opens on the content.')
+    subscription = forms.BooleanField(
+        label='Subscription', required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text='1 turns the app\'s subscription gate on; 0 leaves the app free to browse.')
+    without_server = forms.BooleanField(
+        label='Work without the server', required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text='1 lets the app keep working when this server is unreachable.')
+    sync = forms.IntegerField(
+        label='Sync timer (seconds)', required=False, min_value=30, max_value=86400,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 30, 'max': 86400, 'step': 1,
+                                        'placeholder': '300'}),
+        help_text='How often, in seconds, the app re-reads this configuration ("sync": 300).')
+
     json_payload_input = forms.CharField(
         label='JSON Data',
         required=False,
@@ -253,6 +283,13 @@ class AndroidAppForm(forms.ModelForm):
             self.fields['json_payload_input'].initial = json.dumps(self.instance.json_payload, indent=2)
         else:
             self.fields['json_payload_input'].initial = '{\n}'
+        # The switches are only readable from an object payload; anything else
+        # leaves them off and the raw JSON editor stays the way to edit it.
+        payload = self.instance.json_payload if isinstance(self.instance.json_payload, dict) else {}
+        for key in ('login_required', 'subscription', 'without_server'):
+            self.fields[key].initial = _payload_flag(payload.get(key))
+        sync_value = payload.get('sync')
+        self.fields['sync'].initial = sync_value if sync_value not in (None, '') else 300
 
     def clean_json_payload_input(self):
         value = self.cleaned_data.get('json_payload_input', '')
@@ -269,11 +306,36 @@ class AndroidAppForm(forms.ModelForm):
         self.cleaned_data['parsed_json_payload'] = parsed
         return value
 
+    def clean(self):
+        cleaned = super().clean()
+        payload = cleaned.get('parsed_json_payload')
+        if payload is None:
+            return cleaned
+        if not isinstance(payload, dict):
+            # The switches are keys of the object, so an array payload cannot
+            # carry them. Say so instead of saving sliders that do nothing.
+            self.add_error('json_payload_input',
+                           'The payload must be a JSON object to use the app switches.')
+            return cleaned
+        for key in ('login_required', 'subscription', 'without_server'):
+            payload[key] = 1 if cleaned.get(key) else 0
+        if cleaned.get('sync') is not None:
+            payload['sync'] = cleaned['sync']
+        elif 'sync' not in payload:
+            payload['sync'] = 300
+        cleaned['parsed_json_payload'] = payload
+        return cleaned
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.json_payload = self.cleaned_data['parsed_json_payload']
         if commit:
             instance.save()
+            # The app endpoint caches its answer for five minutes. Saving here
+            # has to drop that copy, or a flipped switch would keep reaching
+            # the app as its old value. Same key as the endpoint builds.
+            if instance.slug:
+                cache.delete('android_endpoint_payload_%s' % instance.slug)
         return instance
 
 
