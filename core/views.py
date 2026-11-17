@@ -7774,6 +7774,25 @@ def live_tv(request):
         {"name": "ACCNX USA", "watch_link": "https://sports.codespecters.com/watch/dl:tv.json:242"}
     ]
 
+    # One card per channel. The lineup is assembled from several sources and the
+    # same station arrives more than once — repeated by case or spacing, and the
+    # same stream listed under two labels. The first entry wins, so the link that
+    # is already known to work is the one that stays, and the pagination below
+    # counts the unique list (nothing repeats across a page boundary).
+    unique_channels = []
+    seen_names, seen_links = set(), set()
+    for channel in all_channels:
+        name = re.sub(r'\s+', ' ', channel.get('name') or '').strip()
+        link = (channel.get('watch_link') or '').strip()
+        name_key = name.casefold()
+        if not name or name_key in seen_names or (link and link in seen_links):
+            continue
+        seen_names.add(name_key)
+        if link:
+            seen_links.add(link)
+        unique_channels.append({'name': name, 'watch_link': link})
+    all_channels = unique_channels
+
     # Pagination
     items_per_page = site_settings.items_per_row * 4  # Assume 4 rows
     start = (page - 1) * items_per_page
@@ -7801,6 +7820,42 @@ def live_tv(request):
         'has_next': has_next,
         'col_class': col_class,
         'image_height': image_height
+    })
+
+
+@login_required
+def user_notifications(request):
+    """The visitor's own messages — what the admin sent to their address.
+
+    The app inbox and this page read the same rows (``AppNotification`` plus a
+    ``AppNotificationRecipient`` per person), so a message read here is read in
+    the app: opening the page stamps the unread copies, which is also what
+    clears the number on the bell.
+    """
+    from .models import AppNotification, AppNotificationRecipient
+
+    email = (request.user.email or '').strip()
+    profile = SyncedUser.objects.filter(email__iexact=email).first() if email else None
+
+    match = Q(audience=AppNotification.AUDIENCE_ALL)
+    if email:
+        match |= Q(audience=(AppNotification.AUDIENCE_SUBSCRIBED
+                             if profile and profile.is_subscribed
+                             else AppNotification.AUDIENCE_UNSUBSCRIBED))
+        match |= Q(audience=AppNotification.AUDIENCE_SELECTED,
+                   recipients__email__iexact=email)
+
+    notes = list(AppNotification.objects
+                 .filter(match, is_active=True, sent_at__isnull=False)
+                 .distinct().order_by('-sent_at')[:60])
+
+    if email:
+        AppNotificationRecipient.objects.filter(
+            email__iexact=email, read_at__isnull=True).update(read_at=timezone.now())
+
+    return render(request, 'core/notifications.html', {
+        'notes': notes,
+        'email': email,
     })
 
 def calendar_movies(request):

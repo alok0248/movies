@@ -1,6 +1,8 @@
 import json
 import re
-from .models import SiteSettings, NavbarItem, Ad, AdsterraLink, AmazonAffiliateProduct, ProviderItem, WatchRegion
+from .models import (SiteSettings, NavbarItem, Ad, AdsterraLink,
+                     AmazonAffiliateProduct, AppNotificationRecipient,
+                     ProviderItem, WatchRegion)
 from .google_auth import google_login_enabled, resolve_client_id
 
 
@@ -127,8 +129,20 @@ def site_settings(request):
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
     watch_regions_nav = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')[:50]
 
+    # Unread messages for the bell in the top bar. One indexed count for a
+    # signed-in visitor, nothing at all for everyone else.
+    unread_notifications = 0
+    try:
+        visitor = getattr(request, 'user', None)
+        if visitor is not None and visitor.is_authenticated and visitor.email:
+            unread_notifications = AppNotificationRecipient.objects.filter(
+                email__iexact=visitor.email, read_at__isnull=True).count()
+    except Exception:
+        unread_notifications = 0
+
     return {
         'site_settings': ss,
+        'unread_notifications': unread_notifications,
         'navbar_items': NavbarItem.objects.filter(is_active=True).order_by('order'),
         'enabled_providers': enabled_providers,
         'watch_regions_nav': watch_regions_nav,

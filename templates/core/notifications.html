@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<style>
+    /* Written for the dark frame, with the site's own tokens so the page is
+       readable in light theme too. */
+    .nt-wrap { max-width: 820px; margin: 0 auto; padding: 2rem 1rem 3rem; }
+    .nt-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+    .nt-title { font-size: 1.5rem; font-weight: 800; color: var(--text); margin: 0; }
+    .nt-sub { color: var(--text-2); font-size: .88rem; margin: .2rem 0 0; }
+    .nt-card { background: var(--card-bg, var(--bg-2)); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: .7rem; }
+    .nt-card-top { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+    .nt-card-title { font-weight: 700; color: var(--text); font-size: 1rem; margin: 0; }
+    .nt-when { color: var(--text-3); font-size: .74rem; white-space: nowrap; }
+    .nt-body { color: var(--text-2); font-size: .9rem; line-height: 1.55; margin-top: .45rem; white-space: pre-wrap; }
+    .nt-link { display: inline-block; margin-top: .6rem; font-size: .82rem; font-weight: 600; color: var(--brand, #e50914); text-decoration: none; }
+    .nt-link:hover { text-decoration: underline; }
+    .nt-empty { text-align: center; color: var(--text-2); padding: 3rem 1rem; }
+</style>
+
+<div class="nt-wrap">
+    <div class="nt-head">
+        <div>
+            <h1 class="nt-title"><i class="fas fa-bell me-2" style="color:var(--brand,#e50914);"></i>Notifications</h1>
+            <p class="nt-sub">
+                Messages sent to your account{% if email %} ({{ email }}){% endif %} — the same ones the app inbox shows.
+            </p>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{% url 'watchlist' %}"><i class="fas fa-bookmark me-1"></i>Watchlist</a>
+    </div>
+
+    {% for n in notes %}
+    <article class="nt-card">
+        <div class="nt-card-top">
+            <h2 class="nt-card-title">{{ n.title }}</h2>
+            <span class="nt-when">{{ n.sent_at|date:'d M Y, H:i' }}</span>
+        </div>
+        {% if n.body %}<div class="nt-body">{{ n.body }}</div>{% endif %}
+        {% if n.link_url %}<a class="nt-link" href="{{ n.link_url }}" target="_blank" rel="noopener">Open <i class="fas fa-arrow-right ms-1"></i></a>{% endif %}
+    </article>
+    {% empty %}
+    <div class="nt-empty">
+        <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+        Nothing here yet. Messages the team sends you will appear on this page.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

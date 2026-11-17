@@ -274,6 +274,8 @@ urlpatterns = [
     path('play-history/', views.user_play_history, name='user_play_history'),
     path('ajax/fetch-wikipedia/', views.fetch_wikipedia, name='fetch_wikipedia'),
     path('watchlist/', views.watchlist, name='watchlist'),
+    # The visitor's own messages (same rows the app inbox shows).
+    path('notifications/', views.user_notifications, name='user_notifications'),
     path('profile/', views.user_profile, name='user_profile'),
     path('calendar/', views.calendar_page, name='calendar_page'),
     path('ajax/calendar-db/', views.calendar_db, name='calendar_db'),
