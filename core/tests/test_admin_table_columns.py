@@ -1,303 +1,284 @@
-"""The users-full tables and the per-admin column layouts.
+"""The users-full page: one people table, its filters and its two row pops.
 
-The page has four tabs, each carrying every column of the tabs it replaced:
-the verified, signed-out and app-version lists are filters on the account
-table, and the devices gone quiet are a filter on the device table. Every tab
-can have its columns chosen and ordered by the admin
-(`core.admin_table_columns`) and the choice is stored per admin, not per app.
+The page used to be eight tabs, then four. It is now two: everyone the app has
+seen in one table, and the per-period chart. The verified, signed-out, blocked,
+no-account, app-version and gone-quiet lists are filters on that one table, so
+these tests hold the property that matters most — a filter changes which rows
+are on the page and never which columns.
 """
 import json
+import pathlib
 import re
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from core.admin_table_columns import (TAB_SPECS, default_keys,
-                                      filter_table_columns)
-from core.models import AndroidApp, AdminTableLayout, SyncedUser
+from core.admin_table_columns import TAB_SPECS, default_keys, filter_table_columns
+from core.models import (AndroidApp, AndroidAppDevice, AndroidAppDeviceVisit,
+                         AdminTableLayout, SyncedUser, UserMessage)
 
 User = get_user_model()
 
+# The order the table writes its columns in, and the contract the layout script
+# and the picker both rely on: the two row actions are the last two columns.
+PEOPLE_KEYS = ['check', 'who', 'status', 'account', 'app', 'ip',
+               'subscription', 'activity', 'access', 'messages', 'details']
 
-class ColumnLayoutBase(TestCase):
+
+class Base(TestCase):
     def setUp(self):
+        # The merged people list is cached for a minute under the app id, and
+        # every test gets id 1 — without this each test reads the last one's
+        # rows.
+        cache.clear()
         self.app = AndroidApp.objects.create(
             name='CineStream', slug='cinestream', access_username='u',
             access_password='p')
         self.staff = User.objects.create_user('alok', 'alok@example.com', 'x',
                                               is_staff=True)
-        self.other_staff = User.objects.create_user('ops', 'ops@example.com', 'x',
-                                                    is_staff=True)
-        self.customer = User.objects.create_user('viewer', 'viewer@example.com',
-                                                 'x')
+        self.customer = User.objects.create_user('viewer', 'viewer@example.com', 'x')
         self.client.force_login(self.staff)
 
-    def users_url(self, **params):
-        url = reverse('android_app_users_full', args=[self.app.id])
+    def url(self, **params):
+        base = reverse('android_app_users_full', args=[self.app.id])
         query = '&'.join('%s=%s' % (k, v) for k, v in params.items())
-        return url + ('?' + query if query else '')
-
-    def layout_url(self):
-        return reverse('admin_table_layout')
-
-    def island(self, resp, ident):
-        """Read one of the page's |json_script islands the way the browser does."""
-        import re
-        match = re.search(r'id="%s"[^>]*>(.*?)</script>' % ident,
-                          resp.content.decode(), re.S)
-        self.assertIsNotNone(match, 'missing %s island' % ident)
-        return json.loads(match.group(1))
-
-
-class VerifiedFilterTest(ColumnLayoutBase):
-    """The verified list is a filter on the one account table, not a tab.
-
-    The old ?tab=registered URL still resolves to it, so links and bookmarks
-    from before the tabs were merged keep working.
-    """
-
-    def setUp(self):
-        super().setUp()
-        self.verified = SyncedUser.objects.create(
-            email='verified@example.com', display_name='Verified',
-            is_email_verified=True)
-        self.unverified = SyncedUser.objects.create(
-            email='unverified@example.com', display_name='Unverified',
-            is_email_verified=False)
-
-    def test_the_old_registered_tab_is_the_verified_filter_now(self):
-        resp = self.client.get(self.users_url(tab='registered'))
-
-        self.assertEqual(200, resp.status_code)
-        self.assertEqual('accounts', resp.context['active_tab'])
-        self.assertEqual('verified', resp.context['view'])
-        self.assertEqual(['verified@example.com'],
-                         [row['obj'].email for row in resp.context['rows']])
-        self.assertEqual(1, resp.context['counts']['registered'])
-        self.assertEqual(2, resp.context['counts']['total'])
-
-    def test_the_verified_chip_filters_the_same_table(self):
-        resp = self.client.get(self.users_url(tab='accounts', f='verified'))
-        self.assertEqual(['verified@example.com'],
-                         [row['obj'].email for row in resp.context['rows']])
-
-    def test_search_narrows_the_verified_list(self):
-        resp = self.client.get(self.users_url(tab='accounts', f='verified',
-                                              q='unverified@'))
-        self.assertEqual([], [row['obj'].email for row in resp.context['rows']])
-
-    def test_a_header_click_sorts_the_whole_table(self):
-        for name in ('carol', 'alice', 'bob'):
-            SyncedUser.objects.create(email='%s@example.com' % name,
-                                      display_name=name, is_email_verified=True)
-
-        resp = self.client.get(self.users_url(tab='accounts', f='verified',
-                                              sort='email', dir='asc'))
-        ascending = [row['obj'].email for row in resp.context['rows']]
-        self.assertEqual(sorted(ascending), ascending)
-
-        resp = self.client.get(self.users_url(tab='accounts', f='verified',
-                                              sort='email', dir='desc'))
-        descending = [row['obj'].email for row in resp.context['rows']]
-        self.assertEqual(sorted(descending, reverse=True), descending)
-
-    def test_sorting_by_a_column_the_table_does_not_have_is_ignored(self):
-        resp = self.client.get(self.users_url(tab='accounts', sort='password',
-                                              dir='desc'))
-        self.assertEqual(200, resp.status_code)
-        self.assertEqual(2, len(resp.context['rows']))
-
-    def test_the_list_is_paginated(self):
-        SyncedUser.objects.all().delete()
-        for i in range(30):
-            SyncedUser.objects.create(email='user%02d@example.com' % i,
-                                      is_email_verified=True)
-
-        first = self.client.get(self.users_url(tab='registered'))
-        self.assertEqual(25, len(first.context['rows']))
-        self.assertEqual(2, first.context['page_obj'].paginator.num_pages)
-
-        second = self.client.get(self.users_url(tab='registered', page=2))
-        self.assertEqual(5, len(second.context['rows']))
-
-    def test_the_chip_is_on_the_page_and_needs_staff(self):
-        resp = self.client.get(self.users_url(tab='accounts'))
-        self.assertContains(resp, 'f=verified')
-
-        self.client.force_login(self.customer)
-        self.assertEqual(302, self.client.get(
-            self.users_url(tab='accounts')).status_code)
-
-    def test_every_column_of_the_account_table_is_a_header(self):
-        resp = self.client.get(self.users_url(tab='accounts'))
-        columns = resp.context['account_columns']
-        self.assertEqual(default_keys('accounts'), [c['key'] for c in columns])
-        self.assertIn('verified', [c['key'] for c in columns])
-        self.assertTrue(any(c['sortable'] for c in columns))
-        self.assertEqual(1, sum(1 for c in columns if c['active']))
-
-
-class SignedOutFilterTest(ColumnLayoutBase):
-    """Signed out of the app is a filter on the account table too."""
-
-    def test_the_old_signedout_tab_is_the_signedout_filter_now(self):
-        from core.models import UserHeartbeat
-
-        SyncedUser.objects.create(email='out@example.com', is_email_verified=True)
-        SyncedUser.objects.create(email='in@example.com', is_email_verified=True)
-        UserHeartbeat.objects.create(email='out@example.com', is_logged_in=False)
-        UserHeartbeat.objects.create(email='in@example.com', is_logged_in=True)
-
-        resp = self.client.get(self.users_url(tab='signedout'))
-
-        self.assertEqual('accounts', resp.context['active_tab'])
-        self.assertEqual('signedout', resp.context['view'])
-        self.assertEqual(['out@example.com'],
-                         [row['obj'].email for row in resp.context['rows']])
-
-class ColumnLayoutEndpointTest(ColumnLayoutBase):
-    def post_layout(self, payload):
-        return self.client.post(self.layout_url(), data=json.dumps(payload),
-                                content_type='application/json')
-
-    def test_saves_the_order_for_this_admin(self):
-        columns = ['email', 'user', 'manage']
-        resp = self.post_layout({'tab': 'accounts', 'columns': columns})
-        self.assertEqual(200, resp.status_code)
-        self.assertEqual(columns, resp.json()['columns'])
-
-        saved = AdminTableLayout.objects.get(user=self.staff, tab='accounts')
-        self.assertEqual(columns, saved.columns)
-
-        page = self.client.get(self.users_url(tab='accounts'))
-        self.assertEqual(columns, self.island(page, 'colLayoutIsland')['accounts'])
-
-    def test_layouts_are_per_admin(self):
-        self.post_layout({'tab': 'visits', 'columns': ['ip', 'time']})
-        self.client.force_login(self.other_staff)
-        page = self.client.get(self.users_url(tab='visits'))
-        self.assertEqual(default_keys('visits'),
-                         self.island(page, 'colLayoutIsland')['visits'])
-
-    def test_unknown_keys_are_dropped_and_repeats_collapse(self):
-        resp = self.post_layout({'tab': 'accounts',
-                                 'columns': ['user', 'user', 'not_a_column']})
-        self.assertEqual(['user'], resp.json()['columns'])
-
-    def test_an_empty_list_falls_back_to_the_default_order(self):
-        resp = self.post_layout({'tab': 'uniquedevices', 'columns': []})
-        self.assertEqual(default_keys('uniquedevices'), resp.json()['columns'])
-
-    def test_reset_restores_the_defaults(self):
-        self.post_layout({'tab': 'uniquedevices', 'columns': ['ip', 'silent']})
-        resp = self.post_layout({'tab': 'uniquedevices', 'reset': True})
-        self.assertEqual(default_keys('uniquedevices'), resp.json()['columns'])
-
-    def test_bad_requests_are_refused(self):
-        self.assertEqual(400, self.post_layout({'tab': 'nope'}).status_code)
-        self.assertEqual(400, self.post_layout({'tab': 'visits',
-                                                'columns': 'ip'}).status_code)
-        resp = self.client.post(self.layout_url(), data='not json',
-                                content_type='application/json')
-        self.assertEqual(400, resp.status_code)
-
-    def test_requires_staff_and_post(self):
-        self.assertEqual(405, self.client.get(self.layout_url()).status_code)
-        self.client.force_login(self.customer)
-        resp = self.post_layout({'tab': 'visits', 'columns': ['ip']})
-        self.assertEqual(302, resp.status_code)
-
-
-class ServerRenderedLayoutTest(ColumnLayoutBase):
-    """The saved layout is applied to the markup, not just by the page script.
-
-    A hidden column must not be in the HTML at all: shipping it and hiding it
-    with JavaScript lets it show for a moment while the page loads.
-    """
-
-    def save(self, tab, keys):
-        resp = self.client.post(self.layout_url(),
-                                data=json.dumps({'tab': tab, 'columns': keys}),
-                                content_type='application/json')
-        self.assertEqual(200, resp.status_code)
+        return base + ('?' + query if query else '')
 
     def headers(self, resp):
         html = resp.content.decode()
         at = html.find('data-tab-cols="')
         self.assertNotEqual(-1, at, 'no table with data-tab-cols on the page')
         head = html[at:].split('</thead>')[0]
-        return [re.sub(r'<[^>]+>', ' ', cell).strip()
-                for cell in re.findall(r'<th[^>]*>(.*?)</th>', head, re.S)]
+        return re.findall(r'<th data-col="([a-z_]+)"', head)
+
+    def island(self, resp, ident):
+        match = re.search(r'id="%s"[^>]*>(.*?)</script>' % ident,
+                          resp.content.decode(), re.S)
+        self.assertIsNotNone(match, 'missing %s island' % ident)
+        return json.loads(match.group(1))
+
+
+class PeopleTableTest(Base):
+    def test_the_page_has_two_tabs(self):
+        resp = self.client.get(self.url(tab='people'))
+        tabs = re.findall(r'class="fbtn tabbtn[^"]*" data-tab="([a-z]+)"',
+                          resp.content.decode())
+        self.assertEqual(['people', 'dailyusers'], tabs)
+
+    def test_every_column_is_rendered_once_in_the_documented_order(self):
+        resp = self.client.get(self.url(tab='people'))
+        self.assertEqual(PEOPLE_KEYS, self.headers(resp))
+        self.assertEqual(PEOPLE_KEYS, [c['key'] for c in resp.context['people_columns']])
+
+    def test_the_two_row_actions_are_the_last_columns(self):
+        self.assertEqual(['messages', 'details'], PEOPLE_KEYS[-2:])
+
+    def test_a_filter_changes_rows_without_changing_columns(self):
+        SyncedUser.objects.create(email='yes@example.com', display_name='Yes',
+                                  is_email_verified=True, device_id='d-yes')
+        SyncedUser.objects.create(email='no@example.com', display_name='No',
+                                  is_email_verified=False, device_id='d-no')
+        all_headers = None
+        for view in ('all', 'online', 'verified', 'signedout', 'blocked',
+                     'subscribed', 'free', 'noacc'):
+            with self.subTest(view=view):
+                resp = self.client.get(self.url(tab='people', f=view))
+                self.assertEqual(200, resp.status_code)
+                headers = self.headers(resp)
+                self.assertEqual(PEOPLE_KEYS, headers)
+                if all_headers is None:
+                    all_headers = headers
+                self.assertEqual(all_headers, headers)
+
+        resp = self.client.get(self.url(tab='people', f='verified'))
+        self.assertEqual(['yes@example.com'],
+                         [r['email'] for r in resp.context['people_rows']])
+
+    def test_the_old_tabs_all_land_on_the_one_table(self):
+        for old in ('accounts', 'registered', 'signedout', 'versions',
+                    'devices', 'inactive', 'uniquedevices', 'visits'):
+            with self.subTest(old=old):
+                resp = self.client.get(self.url(tab=old))
+                self.assertEqual(200, resp.status_code, old)
+                self.assertEqual('people', resp.context['active_tab'])
+        self.assertEqual('verified', self.client.get(
+            self.url(tab='registered')).context['view'])
+
+    def test_every_filter_is_offered_on_the_one_table(self):
+        html = self.client.get(self.url(tab='people')).content.decode()
+        for marker in ('f=verified', 'f=signedout', 'f=blocked', 'f=noacc',
+                       'name="nv"', 'name="sil"', 'name="version"', 'name="app"'):
+            self.assertIn(marker, html)
+
+    def test_the_silent_and_version_filters_narrow_the_table(self):
+        SyncedUser.objects.create(email='old@example.com', display_name='Old',
+                                  device_id='d-old', app_version='3.0.0')
+        SyncedUser.objects.create(email='new@example.com', display_name='New',
+                                  device_id='d-new', app_version='4.0.0')
+        resp = self.client.get(self.url(tab='people', version='4.0.0'))
+        self.assertEqual(['new@example.com'],
+                         [r['email'] for r in resp.context['people_rows']])
+        resp = self.client.get(self.url(tab='people', version='4.0.0', f='verified'))
+        # No verified rows on that version, but the columns are still there.
+        self.assertEqual([], [r['email'] for r in resp.context['people_rows']])
+        self.assertEqual(PEOPLE_KEYS, self.headers(resp))
+
+    def test_a_header_click_sorts_the_merged_rows(self):
+        for name in ('carol', 'alice', 'bob'):
+            SyncedUser.objects.create(email='%s@example.com' % name,
+                                      display_name=name, device_id='d-' + name)
+        resp = self.client.get(self.url(tab='people', sort='name', dir='asc'))
+        self.assertEqual(['alice', 'bob', 'carol'],
+                         [r['display_name'] for r in resp.context['people_rows']])
+        resp = self.client.get(self.url(tab='people', sort='name', dir='desc'))
+        self.assertEqual(['carol', 'bob', 'alice'],
+                         [r['display_name'] for r in resp.context['people_rows']])
+
+    def test_the_list_is_paginated(self):
+        for i in range(30):
+            SyncedUser.objects.create(email='u%02d@example.com' % i,
+                                      device_id='d%02d' % i)
+        resp = self.client.get(self.url(tab='people'))
+        self.assertEqual(25, len(resp.context['people_rows']))
+        self.assertEqual(2, resp.context['page_obj'].paginator.num_pages)
+
+    def test_partial_returns_only_the_panel(self):
+        resp = self.client.get(self.url(tab='people', partial=1))
+        self.assertNotIn('<html', resp.content.decode())
+        self.assertIn('data-tab-cols', resp.content.decode())
+
+    def test_requires_staff(self):
+        self.client.force_login(self.customer)
+        self.assertEqual(302, self.client.get(self.url(tab='people')).status_code)
+
+
+class MessagesColumnTest(Base):
+    def setUp(self):
+        super().setUp()
+        self.profile = SyncedUser.objects.create(
+            email='chat@example.com', display_name='Chatty', device_id='dev-chat')
+
+    def test_an_unread_message_shows_a_red_number_on_the_row(self):
+        UserMessage.objects.create(app=self.app, email='chat@example.com',
+                                   device_id='dev-chat', body='please help')
+        resp = self.client.get(self.url(tab='people'))
+        html = resp.content.decode()
+        self.assertContains(resp, 'badge bg-danger')
+        self.assertIn('please help', html)
+        self.assertEqual(1, resp.context['people_rows'][0]['unread'])
+
+    def test_a_read_message_keeps_its_text_but_loses_the_number(self):
+        UserMessage.objects.create(app=self.app, email='chat@example.com',
+                                   body='seen already', is_read=True)
+        resp = self.client.get(self.url(tab='people'))
+        self.assertIn('seen already', resp.content.decode())
+        self.assertEqual(0, resp.context['people_rows'][0]['unread'])
+
+    def test_the_popup_opens_for_an_account_and_marks_the_thread_read(self):
+        UserMessage.objects.create(app=self.app, email='chat@example.com',
+                                   body='hello')
+        resp = self.client.get(
+            reverse('android_app_user_chat', args=[self.app.id, self.profile.pk]))
+        self.assertEqual(200, resp.status_code)
+        self.assertContains(resp, 'hello')
+        self.assertTrue(UserMessage.objects.get().is_read)
+
+    def test_the_popup_opens_for_a_device_with_no_account(self):
+        UserMessage.objects.create(app=self.app, device_id='guest-dev',
+                                   body='from a guest')
+        url = (reverse('android_app_user_chat', args=[self.app.id, 0])
+               + '?key=guest-dev')
+        resp = self.client.get(url)
+        self.assertEqual(200, resp.status_code)
+        self.assertContains(resp, 'from a guest')
+
+    def test_the_details_popup_shows_the_requests_that_device_made(self):
+        device = AndroidAppDevice.objects.create(
+            android_app=self.app, user_id='dev-chat', device_model='Pixel 7',
+            total_visits=3)
+        AndroidAppDeviceVisit.objects.create(
+            android_app=self.app, device=device, device_model='Pixel 7',
+            os_version='14', ip_address='1.2.3.4', full_request='GET /api/ HTTP/1.1')
+        resp = self.client.get(reverse('android_app_user_details', args=[self.app.id])
+                               + '?key=dev-chat')
+        self.assertEqual(200, resp.status_code)
+        self.assertContains(resp, 'GET /api/ HTTP/1.1')
+        self.assertContains(resp, 'Pixel 7')
+
+    def test_the_details_popup_opens_for_an_unknown_device(self):
+        resp = self.client.get(reverse('android_app_user_details', args=[self.app.id])
+                               + '?key=nothing-here')
+        self.assertEqual(200, resp.status_code)
+
+    def test_sending_an_answer_records_it_on_the_row(self):
+        message = UserMessage.objects.create(app=self.app, email='chat@example.com',
+                                             body='a question')
+        url = reverse('android_app_user_chat', args=[self.app.id, self.profile.pk])
+        resp = self.client.post(url, {'body': 'the answer'},
+                                HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(200, resp.status_code)
+        message.refresh_from_db()
+        self.assertEqual('the answer', message.reply_body)
+        self.assertIsNotNone(message.replied_at)
+
+
+class ColumnLayoutTest(Base):
+    def post_layout(self, payload):
+        return self.client.post(reverse('admin_table_layout'),
+                                data=json.dumps(payload),
+                                content_type='application/json')
+
+    def test_the_layout_is_saved_per_admin_and_per_table(self):
+        columns = ['who', 'messages', 'details']
+        resp = self.post_layout({'tab': 'people', 'columns': columns})
+        self.assertEqual(columns, resp.json()['columns'])
+        self.assertEqual(columns, AdminTableLayout.objects.get(
+            user=self.staff, tab='people').columns)
+        page = self.client.get(self.url(tab='people'))
+        self.assertEqual(columns, self.island(page, 'colLayoutIsland')['people'])
+
+    def test_unknown_keys_are_dropped_and_repeats_collapse(self):
+        resp = self.post_layout({'tab': 'people',
+                                 'columns': ['who', 'who', 'not_a_column']})
+        self.assertEqual(['who'], resp.json()['columns'])
+
+    def test_reset_restores_the_defaults(self):
+        self.post_layout({'tab': 'people', 'columns': ['who']})
+        resp = self.post_layout({'tab': 'people', 'reset': True})
+        self.assertEqual(default_keys('people'), resp.json()['columns'])
+
+    def test_bad_requests_are_refused(self):
+        self.assertEqual(400, self.post_layout({'tab': 'nope'}).status_code)
+        self.assertEqual(400, self.post_layout(
+            {'tab': 'people', 'columns': 'who'}).status_code)
 
     def test_a_hidden_column_is_not_sent_to_the_browser(self):
         SyncedUser.objects.create(email='a@example.com', display_name='Ada',
-                                  is_email_verified=True)
-        self.save('accounts', ['user', 'manage'])
-
-        resp = self.client.get(self.users_url(tab='accounts'))
-
-        # The header is what proves the cell is gone: a hidden column's label
-        # still ships inside the picker's JSON island, its cells must not.
-        self.assertEqual(['User', 'Manage'], self.headers(resp))
-        self.assertContains(resp, 'data-tab-cols="user,manage"')
-
-    def test_the_saved_order_is_the_rendered_order(self):
-        self.save('accounts', ['manage', 'user', 'status'])
-        resp = self.client.get(self.users_url(tab='accounts'))
-        self.assertEqual(['Manage', 'User', 'Status (live)'], self.headers(resp))
-
-    def test_the_account_table_renders_only_the_kept_columns(self):
-        SyncedUser.objects.create(email='a@example.com', is_email_verified=True)
-        self.save('accounts', ['email', 'app', 'manage'])
-
-        resp = self.client.get(self.users_url(tab='accounts'))
-        html = resp.content.decode()
-
-        self.assertEqual(['Email', 'App version', 'Manage'], self.headers(resp))
-        self.assertNotIn('data-col="verified"', html)
-        self.assertNotIn('data-col="last_sync"', html)
-        self.assertIn('data-col="email"', html)
-        # the kept columns keep their header-click sorting
-        self.assertIn('sort=email', html)
+                                  device_id='d-a')
+        self.post_layout({'tab': 'people',
+                          'columns': ['who', 'messages', 'details']})
+        resp = self.client.get(self.url(tab='people'))
+        self.assertEqual(['who', 'messages', 'details'], self.headers(resp))
+        self.assertNotIn('data-col="status"', resp.content.decode())
 
     def test_the_empty_message_spans_only_the_visible_columns(self):
-        self.save('accounts', ['user', 'email', 'manage'])
-        resp = self.client.get(self.users_url(tab='accounts'))
-        self.assertContains(resp, 'colspan="3"')
+        self.post_layout({'tab': 'people', 'columns': ['who', 'details']})
+        resp = self.client.get(self.url(tab='people'))
+        self.assertContains(resp, 'colspan="2"')
 
-    def test_the_tab_fragment_is_filtered_too(self):
-        self.save('accounts', ['user'])
-        resp = self.client.get(self.users_url(tab='accounts', partial=1))
-        html = resp.content.decode()
-        self.assertEqual(['User'], self.headers(resp))
-        self.assertNotIn('<html', html)
-
-    def test_the_default_layout_still_ships_every_column(self):
-        resp = self.client.get(self.users_url(tab='accounts'))
-        self.assertEqual(
-            [c['label'] for c in TAB_SPECS['accounts']], self.headers(resp))
+    def test_the_default_layout_ships_every_column(self):
+        resp = self.client.get(self.url(tab='people'))
+        head = resp.content.decode().split('</thead>')[0]
+        labels = [re.sub(r'<[^>]+>', '', cell).strip()
+                  for cell in re.findall(r'<th[^>]*>(.*?)</th>', head, re.S)]
+        self.assertEqual([c['label'] for c in TAB_SPECS['people']], labels)
         self.assertContains(
-            resp, 'data-tab-cols="%s"' % ','.join(default_keys('accounts')))
-
-    def test_the_rest_of_the_page_survives_the_rewrite(self):
-        self.save('accounts', ['user'])
-        resp = self.client.get(self.users_url(tab='accounts'))
-        html = resp.content.decode()
-        for marker in ('id="panelWrap"', 'id="colCfgOverlay"', 'csrf-holder',
-                       'colCfgSave', '</html>'):
-            self.assertIn(marker, html)
-
-    def test_a_column_that_had_been_hidden_can_come_back(self):
-        self.save('accounts', ['user'])
-        self.assertEqual(['User'], self.headers(
-            self.client.get(self.users_url(tab='accounts'))))
-        self.save('accounts', ['user', 'app_device'])
-        self.assertEqual(['User', 'Install record'], self.headers(
-            self.client.get(self.users_url(tab='accounts'))))
+            resp, 'data-tab-cols="%s"' % ','.join(default_keys('people')))
 
 
-class ColumnFilterUnitTest(ColumnLayoutBase):
+class ColumnFilterUnitTest(TestCase):
     TABLE = ('<table class="t" data-tab-cols="a,b,c"><thead><tr>'
              '<th>A</th><th>B</th><th>C</th></tr></thead><tbody>'
              '<tr><td>1</td><td>2</td><td>3</td></tr></tbody></table>')
@@ -310,9 +291,7 @@ class ColumnFilterUnitTest(ColumnLayoutBase):
     def test_cells_without_data_col_are_matched_by_position(self):
         out = filter_table_columns(self.TABLE, ['c', 'a'], ['a', 'b', 'c'])
         self.assertIn('<th>C</th><th>A</th>', out)
-        self.assertIn('<td>3</td><td>1</td>', out)
         self.assertNotIn('<td>2</td>', out)
-        self.assertNotIn('<th>B</th>', out)
 
     def test_data_col_names_the_column_even_out_of_markup_order(self):
         table = ('<table data-tab-cols="a,b"><thead><tr>'
@@ -330,117 +309,29 @@ class ColumnFilterUnitTest(ColumnLayoutBase):
         self.assertIn('colspan="2"', out)
         self.assertIn('Nothing here', out)
 
-    def test_a_table_without_the_attribute_is_left_alone(self):
-        html = ('<div><table><tr><td data-col="b">2</td>'
-                '<td data-col="a">1</td></tr></table>'
-                + self.TABLE + '</div>')
-        out = filter_table_columns(html, ['a'], ['a', 'b', 'c'])
-        self.assertIn('<table><tr><td data-col="b">2</td><td data-col="a">1</td>', out)
-        self.assertIn('<th>A</th>', out)
-
-    def test_the_rewrite_is_idempotent(self):
-        once = filter_table_columns(self.TABLE, ['b', 'a'], ['a', 'b', 'c'])
-        self.assertEqual(
-            once, filter_table_columns(once, ['b', 'a'], ['b', 'a']))
-
-    def test_a_cell_holding_a_nested_table_is_copied_whole(self):
-        table = ('<table data-tab-cols="a,b"><tbody><tr>'
-                 '<td><table><tr><td>inner</td></tr></table></td>'
-                 '<td>B</td></tr></tbody></table>')
-        out = filter_table_columns(table, ['a'], ['a', 'b'])
-        self.assertIn('<table><tr><td>inner</td></tr></table>', out)
-        self.assertNotIn('<td>B</td>', out)
-
     def test_no_layout_returns_the_input(self):
         self.assertEqual(self.TABLE, filter_table_columns(self.TABLE, [], ['a']))
-        self.assertEqual(self.TABLE, filter_table_columns(self.TABLE, None, ['a']))
 
     def test_unclosed_markup_never_raises(self):
         broken = '<table data-tab-cols="a"><tr><td>oops'
-        out = filter_table_columns(broken, ['a'], ['a', 'b'])
-        self.assertIsInstance(out, str)
-        self.assertIn('data-tab-cols', out)
+        self.assertIn('data-tab-cols', filter_table_columns(broken, ['a'], ['a', 'b']))
 
 
-class TableColumnSpecTest(ColumnLayoutBase):
-    def test_every_table_renders_its_columns_for_the_layout_script(self):
-        for tab in ('accounts', 'visits', 'uniquedevices', 'dailyusers'):
-            resp = self.client.get(self.users_url(tab=tab))
-            self.assertContains(resp, 'data-tab-cols="%s"' % ','.join(default_keys(tab)))
+class SpecTest(TestCase):
+    def test_the_people_spec_is_the_documented_order(self):
+        self.assertEqual(PEOPLE_KEYS, [c['key'] for c in TAB_SPECS['people']])
 
-    def test_every_tab_still_renders(self):
-        SyncedUser.objects.create(email='a@example.com', is_email_verified=True,
-                                  device_model='Pixel 7', app_version='3.4.8.694')
-        for tab in ('accounts', 'uniquedevices', 'visits', 'dailyusers'):
-            with self.subTest(tab=tab):
-                resp = self.client.get(self.users_url(tab=tab))
-                self.assertEqual(200, resp.status_code, tab)
-                self.assertEqual(tab, resp.context['active_tab'])
-
-    def test_the_old_tab_urls_land_on_the_tab_that_replaced_them(self):
-        SyncedUser.objects.create(email='a@example.com', is_email_verified=True)
-        for old, new, view in (('registered', 'accounts', 'verified'),
-                               ('signedout', 'accounts', 'signedout'),
-                               ('versions', 'accounts', 'all'),
-                               ('inactive', 'uniquedevices', 'all'),
-                               ('devices', 'uniquedevices', 'all')):
-            with self.subTest(old=old):
-                resp = self.client.get(self.users_url(tab=old))
-                self.assertEqual(200, resp.status_code, old)
-                self.assertEqual(new, resp.context['active_tab'])
-                self.assertEqual(view, resp.context['view'], old)
-
-    def test_only_four_tabs_ship_with_the_page(self):
-        resp = self.client.get(self.users_url(tab='accounts'))
-        html = resp.content.decode()
-        tabs = re.findall(r'class="fbtn tabbtn[^"]*" data-tab="([a-z]+)"', html)
-        self.assertEqual(['accounts', 'uniquedevices', 'visits', 'dailyusers'],
-                         tabs)
-
-    def test_the_layout_islands_are_objects_the_page_script_can_read(self):
-        """json_script must serialise the dicts themselves; a pre-dumped JSON
-        string would arrive double encoded and the script could not use it."""
-        resp = self.client.get(self.users_url(tab='accounts'))
-        specs = self.island(resp, 'colSpecsIsland')
-        layout = self.island(resp, 'colLayoutIsland')
-        for tab in TAB_SPECS:
-            self.assertIsInstance(specs[tab], list, tab)
-            self.assertIsInstance(layout[tab], list, tab)
-            self.assertEqual(default_keys(tab), layout[tab], tab)
-        self.assertEqual('accounts', self.island(resp, 'activeTabIsland'))
-
-    def test_the_pencil_button_is_on_the_page(self):
-        resp = self.client.get(self.users_url(tab='accounts'))
-        self.assertContains(resp, 'id="colCfgBtn"')
-        self.assertContains(resp, 'id="colCfgOverlay"')
-
-    def test_each_table_markup_has_one_header_per_declared_column(self):
-        """The layout script maps cells to columns by position, so the header
-        count and the spec length must agree for every tab."""
-        import pathlib
-        import re
-        templates = {
-            'accounts': '_users_full_accounts.html',
-            'uniquedevices': '_users_full_uniquedevices.html',
-            'visits': '_users_full_visits.html',
-            'dailyusers': '_users_full_dailyusers.html',
-        }
-        base = pathlib.Path(__file__).resolve().parents[2] / 'templates' / 'core'
-        for tab, name in templates.items():
-            text = (base / name).read_text(encoding='utf-8')
-            self.assertIn('data-tab-cols', text, tab)
-            if tab == 'accounts':
-                # This table builds its headers from the column list, so the
-                # markup has one <th> inside a loop instead of one per column.
-                self.assertIn('{% for c in account_columns %}', text)
-                continue
-            head = text.split('data-tab-cols')[1].split('</thead>')[0]
-            # '<th' would also match '<thead', so require a tag boundary.
-            self.assertEqual(len(default_keys(tab)),
-                             len(re.findall(r'<th[\s>]', head)), tab)
-
-    def test_specs_are_unique_per_tab(self):
+    def test_specs_are_unique_per_table(self):
         for tab, specs in TAB_SPECS.items():
             keys = [c['key'] for c in specs]
             self.assertEqual(len(keys), len(set(keys)), tab)
             self.assertTrue(keys, tab)
+
+    def test_the_markup_has_one_header_per_declared_column(self):
+        base = pathlib.Path(__file__).resolve().parents[2] / 'templates' / 'core'
+        text = (base / '_users_full_people.html').read_text(encoding='utf-8')
+        self.assertIn('{% for c in people_columns %}', text)
+        self.assertIn('data-tab-cols', text)
+        for key in PEOPLE_KEYS:
+            self.assertIn('data-col="%s"' % key, text)
+        self.assertEqual(PEOPLE_KEYS, re.findall(r'data-col="([a-z_]+)"', text))

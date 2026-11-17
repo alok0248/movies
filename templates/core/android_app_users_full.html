@@ -306,7 +306,6 @@
             <form class="d-flex gap-2 flex-wrap" method="get" action="">
                 <input type="hidden" name="f" value="{{ view }}">
                 <input type="hidden" name="tab" value="{{ active_tab }}">
-                {% for v in selected_versions %}<input type="hidden" name="versions" value="{{ v }}">{% endfor %}
                 <input class="form-control form-control-sm" style="width:230px;background:rgba(15,23,42,.8);border-color:rgba(148,163,184,.3);color:#e2e8f0;"
                        type="search" name="q" value="{{ q }}" placeholder="Search email, name, device, plan…">
                 <button aria-label="Search" class="btn btn-sm btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
@@ -319,9 +318,7 @@
              big tables, and switching between them is a fragment fetch (no
              reload, the other lists simply disappear). -->
         <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
-            <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}" title="Every account: verified, signed out of the app, app version and the rest — all filters on this one table"><i class="fas fa-users me-1"></i>Users<span class="pill chip-count ms-1">{{ counts.total }}</span></a>
-            <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}" title="Every device, including the ones that have gone quiet, with bulk delete"><i class="fas fa-mobile-screen-button me-1"></i>Devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
-            <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill chip-count ms-1">{{ counts.visits }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'people' %}active{% endif %}" data-tab="people" href="?tab=people" role="tab" aria-selected="{% if active_tab == 'people' %}true{% else %}false{% endif %}" title="Everyone the app has seen: one row per device with the account behind it. Verified, signed out, blocked, no account, app version and gone quiet are filters on this table, not tabs"><i class="fas fa-users-gear me-1"></i>Users &amp; devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'dailyusers' %}active{% endif %}" data-tab="dailyusers" href="?tab=dailyusers" role="tab" aria-selected="{% if active_tab == 'dailyusers' %}true{% else %}false{% endif %}" title="How many users the app saw each day, month and year"><i class="fas fa-chart-column me-1"></i>Users per day</a>
             <button type="button" class="fbtn ms-auto" id="colCfgBtn" onclick="openColumnConfig()" title="Choose which columns this table shows, and their order"><i class="fas fa-pen"></i> Columns</button>
         </div>
@@ -378,6 +375,19 @@
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeUserChat()" aria-label="Close"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="ucm-dialog-body" id="userChatBody"></div>
+    </div>
+</div>
+
+<!-- Details popup: the user/device itself, its install records, the requests it
+     made and the errors the server returned to it — the old request-log tab,
+     for one row at a time. -->
+<div class="ucm-overlay" id="userDetailsOverlay" role="dialog" aria-modal="true" aria-labelledby="userDetailsTitle">
+    <div class="ucm-dialog">
+        <div class="ucm-dialog-head">
+            <div class="ucm-dialog-title" id="userDetailsTitle"><i class="fas fa-circle-info me-2 text-info"></i>Details</div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeUserDetails()" aria-label="Close"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="ucm-dialog-body" id="userDetailsBody"></div>
     </div>
 </div>
 {% endblock %}
@@ -964,12 +974,12 @@ function resendCode(id, btn) {
     .finally(function() { if (btn) { btn.disabled = false; } });
 }
 /* ================= Tab switching (no page reload) =================
-   This screen carries four big lists (accounts, devices with no account,
-   signed-out accounts, recent visits). The server renders and sends only
-   the one that is open, so a single page load stays small; picking another
-   tab fetches just that list's fragment and swaps it in. Everything degrades
-   to a normal navigation if fetch is missing or the request fails — the links
-   themselves carry ?tab=… and the view answers those with a full page too. */
+   This screen carries two big views: the merged people/devices table and the
+   per-period chart. The server renders and sends only the one that is open, so
+   a single page load stays small; picking the other fetches just that panel's
+   fragment and swaps it in. Everything degrades to a normal navigation if
+   fetch is missing or the request fails — the links themselves carry ?tab=…
+   and the view answers those with a full page too. */
 (function () {
     var wrap = document.getElementById('panelWrap');
     if (!wrap || !window.fetch) return;
@@ -978,7 +988,7 @@ function resendCode(id, btn) {
 
     function tabOf(url) {
         var m = /[?&]tab=([a-z]+)/.exec(url || '');
-        return m ? m[1] : 'accounts';
+        return m ? m[1] : 'people';
     }
 
     function markActive(tab) {
@@ -1083,30 +1093,27 @@ function resendCode(id, btn) {
    an incognito window — and the admin's own session is left untouched. */
 var USERS_APP_ID = {{ selected_app.id }};
 
-function _chatUrl(id) {
-    return '/admin-dashboard/android-apps/' + USERS_APP_ID + '/users/' + id + '/chat/';
-}
-
-function _chatLoad(id) {
-    var body = document.getElementById('userChatBody');
-    if (!body) return;
-    body.setAttribute('data-user', id);
-    body.innerHTML = '<div class="sub py-4 text-center"><i class="fas fa-spinner fa-spin me-1"></i>Loading conversation...</div>';
-    fetch(_chatUrl(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+/* Both row popups are fetched fragments: the row carries the URL the server
+   built for it, so one device with no account and one with a full account use
+   the same two buttons. */
+function _openPopup(overlayId, url) {
+    var overlay = document.getElementById(overlayId);
+    var body = document.getElementById(overlayId === 'userChatOverlay'
+        ? 'userChatBody' : 'userDetailsBody');
+    if (!overlay || !body) return;
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    body.innerHTML = '<div class="sub py-4 text-center"><i class="fas fa-spinner fa-spin me-1"></i>Loading&hellip;</div>';
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
         .then(function (html) { body.innerHTML = html; })
         .catch(function () {
-            body.innerHTML = '<div class="ucm-alert bad">Could not load the conversation.</div>';
+            body.innerHTML = '<div class="ucm-alert bad">Could not load this panel.</div>';
         });
 }
 
-function openUserChat(id) {
-    var overlay = document.getElementById('userChatOverlay');
-    if (!overlay) return;
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-    _chatLoad(id);
-}
+function openUserChat(url) { _openPopup('userChatOverlay', url); }
+function openUserDetails(url) { _openPopup('userDetailsOverlay', url); }
 
 function closeUserChat() {
     var overlay = document.getElementById('userChatOverlay');
@@ -1115,13 +1122,49 @@ function closeUserChat() {
     document.body.style.overflow = '';
 }
 
+function closeUserDetails() {
+    var overlay = document.getElementById('userDetailsOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
 document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeUserChat();
+    if (e.key === 'Escape') { closeUserChat(); closeUserDetails(); }
 });
 document.addEventListener('click', function (e) {
-    var overlay = document.getElementById('userChatOverlay');
-    if (overlay && e.target === overlay) closeUserChat();
+    ['userChatOverlay', 'userDetailsOverlay'].forEach(function (id) {
+        var overlay = document.getElementById(id);
+        if (overlay && e.target === overlay) {
+            if (id === 'userChatOverlay') { closeUserChat(); } else { closeUserDetails(); }
+        }
+    });
 });
+
+/* One row's access change: an account blocks through its SyncedUser, a device
+   with no account through its install record. The row carries which URL. */
+function __peopleBlock(btn, mode) {
+    var wrap = btn.closest('.access-actions');
+    var url = wrap ? wrap.getAttribute('data-url') : '';
+    if (!url) return;
+    var question = mode === 'full'
+        ? 'Fully block this device? Every API call from it will be refused.'
+        : (mode === 'app'
+            ? 'App-block this device? It will see the server as unreachable.'
+            : 'Restore normal access for this device?');
+    if (!confirm(question)) { return; }
+    btn.disabled = true;
+    fetch(url, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': _csrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: 'block_mode=' + encodeURIComponent(mode)
+    }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res.success) { alert(res.error || 'Could not change the block.'); return; }
+        _status('<i class="fas fa-check me-1"></i>Access updated.', 'text-success');
+        if (window.__reloadPanel) { window.__reloadPanel(); }
+    }).catch(function () { alert('Request failed.'); })
+      .finally(function () { btn.disabled = false; });
+}
 
 /* Sending answers with the panel itself, so the thread stays on screen. */
 document.addEventListener('submit', function (e) {

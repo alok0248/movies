@@ -1,0 +1,155 @@
+{% load ip_geo %}
+<!-- The popup behind a row's Details button. It is where the old "Recent
+     visits" tab lives now: the requests a device made and the errors it was
+     sent, for one device at a time, next to what the server knows about it.
+     Opening it costs a fragment, and the list behind never reloads. -->
+<div class="ucm-head">
+    <div>
+        <div class="fw-semibold text-white">{{ details.name|default:details.email|default:'Unknown device' }}</div>
+        <div class="sub mono">{{ details.email|default:'no email — never signed in' }}</div>
+        <div class="sub">
+            device <span class="mono">{{ details.device_id|default:'unknown' }}</span>
+            {% if details.model %} &middot; {{ details.model }}{% endif %}
+            {% if details.os %} &middot; Android {{ details.os }}{% endif %}
+        </div>
+    </div>
+    <div class="text-end">
+        {% if details.block_mode %}
+            <span class="pill bg-danger">{{ details.block_mode }} block</span>
+        {% else %}
+            <span class="pill bg-success">Active</span>
+        {% endif %}
+        {% if user %}
+            {% if user.is_subscribed %}<span class="pill bg-success">Subscribed</span>{% else %}<span class="pill bg-secondary">Free</span>{% endif %}
+        {% endif %}
+        <div class="d-flex gap-1 justify-content-end mt-1 flex-wrap">
+            {% if history_url %}<a class="fbtn" href="{{ history_url }}" target="_blank" rel="noopener">Analytics</a>{% endif %}
+            {% if synced_url %}<a class="fbtn" href="{{ synced_url }}" target="_blank" rel="noopener">Account</a>{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-2 mt-2">
+    <div class="col-lg-5">
+        <div class="ucm-card">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-id-card me-1 text-info"></i>What the server knows</span>
+            </div>
+            <div class="sub">
+                <div>First seen: <span class="text-white">{{ details.first_seen|date:'Y-m-d H:i'|default:'—' }}</span></div>
+                <div>Last seen: <span class="text-white">{{ details.last_seen|date:'Y-m-d H:i'|default:'—' }}</span>
+                    {% if details.last_seen %}<span class="text-secondary">({{ details.last_seen|timesince }} ago)</span>{% endif %}</div>
+                <div>Requests recorded: <span class="text-white">{{ details.visits|default_if_none:'—' }}</span></div>
+                <div>Install records: <span class="text-white">{{ details.install_count }}</span></div>
+                {% if user %}
+                    <div>Registered: <span class="text-white">{{ user.created_at|date:'Y-m-d' }}</span></div>
+                    <div>App version: <span class="text-white">{{ user.app_version|default:'—' }}</span>
+                        {% if user.build_number %}<span class="text-secondary">({{ user.build_number }})</span>{% endif %}</div>
+                    <div>Last sync: <span class="text-white">{% if user.last_synced_at %}{{ user.last_synced_at|timesince }} ago{% else %}never{% endif %}</span></div>
+                {% endif %}
+                {% if heartbeat %}
+                    <div>Heartbeat screen: <span class="text-white">{{ heartbeat.current_screen|default:'—' }}</span></div>
+                    {% if heartbeat.media_title %}<div>Playing: <span class="text-white">{{ heartbeat.media_title }}</span></div>{% endif %}
+                {% endif %}
+            </div>
+            {% if details.ips %}
+                <div class="sub mt-2">
+                    <div class="text-secondary">Addresses</div>
+                    {% for ip in details.ips %}
+                        <div class="mono">{{ ip }} {% ip_geo_chip ip %}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="ucm-card mt-2">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-mobile-screen me-1 text-warning"></i>Install records</span>
+                <span class="sub">{{ installs|length }}</span>
+            </div>
+            <div class="ucm-watch">
+                {% for i in installs %}
+                    <div class="ucm-watch-row">
+                        <div class="d-flex justify-content-between gap-2">
+                            <span class="text-white" style="font-size:.78rem;">{{ i.device_model|default:'Unknown device' }}</span>
+                            <span class="pill bg-dark border border-secondary">{{ i.total_visits }} visits</span>
+                        </div>
+                        <div class="sub">
+                            {{ i.os_version|default:'OS unknown' }} &middot;
+                            first {{ i.first_seen_at|date:'Y-m-d' }} &middot;
+                            last {{ i.last_seen_at|timesince }} ago
+                            {% if i.block_mode %} &middot; <span class="text-danger">{{ i.block_mode }} block</span>{% endif %}
+                        </div>
+                        <div class="mono sub" title="{{ i.user_id }}">{{ i.user_id|truncatechars:32 }}</div>
+                    </div>
+                {% empty %}
+                    <div class="sub py-3 text-center">No install record: the device has never hit the install endpoint.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="ucm-card">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-bug me-1 text-danger"></i>Errors returned to this device</span>
+                <span class="sub">{{ errors|length }} recent</span>
+            </div>
+            {% if errors %}
+                <div class="ucm-watch">
+                    {% for e in errors %}
+                    <div class="ucm-watch-row">
+                        <div class="d-flex justify-content-between gap-2">
+                            <span class="pill {% if e.status >= 500 %}bg-danger{% elif e.status >= 400 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ e.status }}</span>
+                            <span class="sub">{{ e.at|date:'Y-m-d H:i' }} &middot; {{ e.kind }}</span>
+                        </div>
+                        <div class="mono sub">{{ e.path|truncatechars:70 }}</div>
+                        {% if e.message %}<div class="sub">{{ e.message|truncatechars:200 }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="sub py-2 text-center">No failed response was recorded for this device's addresses.</div>
+            {% endif %}
+        </div>
+
+        <div class="ucm-card mt-2">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-list me-1 text-info"></i>Recent requests</span>
+                <span class="sub">{{ visits|length }} newest</span>
+            </div>
+            {% if visits %}
+                <div class="ucm-watch">
+                    <table class="table table-dark table-sm mb-0" style="font-size:.72rem;">
+                        <thead>
+                            <tr><th>Time</th><th>IP</th><th>Build</th><th>Model</th><th>Request</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for v in visits %}
+                            <tr>
+                                <td class="sub">{{ v.visited_at|date:'Y-m-d H:i:s' }}</td>
+                                <td class="mono sub">{% if v.ip_address %}{{ v.ip_address }}{% else %}—{% endif %}</td>
+                                <td class="sub">{{ v.build_identifier|default:'—' }}</td>
+                                <td class="sub">{{ v.device_model|default:'—' }}</td>
+                                <td>
+                                    {% if v.full_request %}
+                                    <details>
+                                        <summary class="fbtn" style="cursor:pointer;display:inline-block;">Details</summary>
+                                        <pre class="mb-0 mono" style="white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto;background:rgba(0,0,0,.45);padding:8px;border-radius:6px;margin-top:6px;min-width:280px;">{{ v.full_request }}</pre>
+                                    </details>
+                                    {% else %}<span class="sub">&mdash;</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="sub py-2 text-center">
+                    No request recorded for this device yet. The app's visit log keeps
+                    {{ app.data_retention_days }} days.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

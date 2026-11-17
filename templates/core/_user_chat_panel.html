@@ -1,11 +1,13 @@
 {% load custom_filters %}
-<!-- The popup behind a row's Message button: the device's conversation with the
-     admin on the left, its watch history and live activity on the right. It is
-     fetched into a modal and re-fetched after every send, so the admin never
-     leaves the user list. -->
+<!-- The popup behind a row's Messages button: the device's conversation with
+     the admin on the left, its watch history and live activity on the right,
+     and the errors the server returned to it underneath. It is fetched into a
+     modal and re-fetched after every send, so the admin never leaves the list.
+     A device with no account opens here too: the thread is keyed by its device
+     id, which is the only identity a guest ever has. -->
 <div class="ucm-head">
     <div>
-        <div class="fw-semibold text-white">{{ user.display_name|default:user.email|default:'Guest device' }}</div>
+        <div class="fw-semibold text-white">{{ display_name|default:email|default:'Device with no account' }}</div>
         <div class="sub mono">{{ email|default:'no email — guest device' }}</div>
         <div class="sub">
             device <span class="mono">{{ device_id|default:'unknown' }}</span>
@@ -16,8 +18,10 @@
     <div class="text-end">
         {% if user.is_subscribed %}
             <span class="pill bg-success">Subscribed{% if user.valid_until %} until {{ user.valid_until|date:'Y-m-d' }}{% endif %}</span>
-        {% else %}
+        {% elif user %}
             <span class="pill bg-secondary">Free</span>
+        {% else %}
+            <span class="pill bg-secondary">No account</span>
         {% endif %}
         {% if user.block_mode %}<span class="pill bg-danger">{{ user.get_block_mode_display }}</span>{% endif %}
         {% if activity %}
@@ -52,8 +56,9 @@
                     </div>
                 {% endfor %}
             </div>
-            <form data-chat-form method="post" action="{% url 'android_app_user_chat' app.id user.id %}">
+            <form data-chat-form method="post" action="{{ chat_url }}">
                 {% csrf_token %}
+                {% if device_id %}<input type="hidden" name="key" value="{{ device_id }}">{% endif %}
                 <textarea class="form-control form-control-sm" name="body" rows="2" maxlength="{{ max_len }}"
                           style="background:rgba(15,23,42,.85);border-color:rgba(148,163,184,.3);color:#e2e8f0;font-size:.76rem;"
                           placeholder="{% if email %}Answer {{ email }} — it arrives in the app inbox.{% else %}Answer this device's message.{% endif %}"
@@ -69,6 +74,31 @@
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- What the server answered this device when it failed: the errors that
+             never reach a person, but are what they mean by "it does not work". -->
+        <div class="ucm-card mt-2">
+            <div class="ucm-card-title">
+                <span><i class="fas fa-bug me-1 text-danger"></i>Errors returned to this device</span>
+                <span class="sub">{{ errors|length }} recent</span>
+            </div>
+            {% if errors %}
+                <div class="ucm-watch">
+                    {% for e in errors %}
+                    <div class="ucm-watch-row">
+                        <div class="d-flex justify-content-between gap-2">
+                            <span class="pill {% if e.status >= 500 %}bg-danger{% elif e.status >= 400 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ e.status }}</span>
+                            <span class="sub">{{ e.at|date:'Y-m-d H:i' }}</span>
+                        </div>
+                        <div class="mono sub">{{ e.path|truncatechars:60 }}</div>
+                        {% if e.message %}<div class="sub">{{ e.message|truncatechars:120 }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="sub py-2 text-center">No failed response was recorded for this device's addresses.</div>
+            {% endif %}
         </div>
     </div>
 

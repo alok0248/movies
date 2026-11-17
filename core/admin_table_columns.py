@@ -26,52 +26,29 @@ from .models import AdminTableLayout
 
 # Fallback wording when a tab has no saved layout: this is what a fresh admin
 # sees, and the order the table markup is written in.
-# The page keeps four tabs: every account in one table (verified, signed out and
-# app version are filters on it), every device in another (the devices gone
-# quiet are a filter there, with the same bulk delete), the visit log and the
-# per-period counts. The tables carry the columns of the tabs they replaced.
+#
+# The page has one list of people and devices, and that list is the whole of
+# it: the verified, signed-out, blocked, no-account, app-version and silence
+# lists that used to be tabs of their own are filters on this one table. That
+# is why the spec is a single set of columns — filtering changes the rows, and
+# never the layout, so a filtered list reads like the same list, shortened.
+# The last two columns are the two row actions, always in the same place: the
+# conversation with the device, then everything else about it.
 TAB_SPECS = {
-    'accounts': [
-        {'key': 'user', 'label': 'User', 'sort': 'display_name'},
-        {'key': 'email', 'label': 'Email', 'sort': 'email'},
-        {'key': 'verified', 'label': 'Email verified', 'sort': 'is_email_verified'},
-        {'key': 'joined', 'label': 'Registered', 'sort': 'created_at'},
-        {'key': 'status', 'label': 'Status (live)'},
-        {'key': 'device', 'label': 'Device', 'sort': 'device_model'},
-        {'key': 'app', 'label': 'App version', 'sort': 'app_version'},
-        {'key': 'build', 'label': 'Build', 'sort': 'build_number'},
-        {'key': 'last_sync', 'label': 'Last sync', 'sort': 'last_synced_at'},
-        {'key': 'app_device', 'label': 'Install record'},
-        {'key': 'account', 'label': 'Login account'},
-        {'key': 'subscription', 'label': 'Subscription', 'sort': 'plan'},
-        {'key': 'library', 'label': 'Library / cloud'},
-        {'key': 'access', 'label': 'Access', 'sort': 'block_mode'},
-        {'key': 'manage', 'label': 'Manage'},
-    ],
-    'uniquedevices': [
+    'people': [
         {'key': 'check', 'label': ''},
-        {'key': 'index', 'label': '#'},
-        {'key': 'device', 'label': 'Device'},
-        {'key': 'account', 'label': 'Account'},
-        {'key': 'status', 'label': 'Status'},
-        {'key': 'ip', 'label': 'IP'},
-        {'key': 'subscription', 'label': 'Subscription'},
-        {'key': 'first_registered', 'label': 'First registered'},
-        {'key': 'last_seen', 'label': 'Last seen online'},
-        {'key': 'silent', 'label': 'Silent'},
-        {'key': 'visits', 'label': 'Visits'},
-        {'key': 'history', 'label': 'History'},
+        {'key': 'who', 'label': 'User / device', 'sort': 'name'},
+        {'key': 'status', 'label': 'Status', 'sort': 'seen'},
+        {'key': 'account', 'label': 'Account', 'sort': 'verified'},
+        {'key': 'app', 'label': 'App / build', 'sort': 'version'},
+        {'key': 'ip', 'label': 'IP', 'sort': 'ip'},
+        {'key': 'subscription', 'label': 'Subscription', 'sort': 'plan'},
+        {'key': 'activity', 'label': 'Activity', 'sort': 'visits'},
+        {'key': 'access', 'label': 'Access', 'sort': 'block'},
+        {'key': 'messages', 'label': 'Messages'},
+        {'key': 'details', 'label': 'Details'},
     ],
-    'visits': [
-        {'key': 'time', 'label': 'Time'},
-        {'key': 'device_id', 'label': 'Device ID'},
-        {'key': 'account', 'label': 'Account'},
-        {'key': 'model', 'label': 'Model'},
-        {'key': 'os', 'label': 'OS'},
-        {'key': 'build', 'label': 'Build ID'},
-        {'key': 'ip', 'label': 'IP address'},
-        {'key': 'request', 'label': 'Request'},
-    ],
+    # The chart tab's period table: a time series, so its columns are its own.
     'dailyusers': [
         {'key': 'period', 'label': 'Period'},
         {'key': 'active', 'label': 'Active'},
@@ -83,25 +60,23 @@ TAB_SPECS = {
     ],
 }
 
-# ORM fields a header click may sort by. A column that is not listed here is
-# not sortable (it is computed per row, or it is an action cell).
+# The row attribute a header click sorts by. The people table is merged in
+# Python (accounts, heartbeats and install records all describe the same
+# device), so sorting happens on the merged rows, not in the ORM.
 SORT_FIELDS = {
-    'accounts': {
-        'display_name': 'display_name',
-        'email': 'email',
-        'is_email_verified': 'is_email_verified',
-        'created_at': 'created_at',
+    'people': {
+        'name': 'display_name',
+        'seen': 'last_seen',
+        'verified': 'verified',
+        'version': 'app_version',
+        'ip': 'ip',
         'plan': 'plan',
-        'valid_until': 'valid_until',
-        'block_mode': 'block_mode',
-        'device_model': 'device_model',
-        'app_version': 'app_version',
-        'build_number': 'build_number',
-        'last_synced_at': 'last_synced_at',
+        'visits': 'total',
+        'block': 'block_mode',
     },
 }
 
-DEFAULT_SORT = {'accounts': '-last_synced_at'}
+DEFAULT_SORT = {'people': '-last_seen'}
 
 
 def specs(tab):
@@ -210,6 +185,36 @@ def order_queryset(qs, tab, sort_key, sort_dir):
     prefix = '-' if sort_dir == 'desc' else ''
     # A stable tie-breaker keeps pagination from repeating rows.
     return qs.order_by(prefix + field, '-id')
+
+
+def _sort_value(value):
+    """A comparable stand-in for a row value, with '' / None sorting last."""
+    if value is None or value == '':
+        return (1, '')
+    if isinstance(value, bool):
+        return (0, 1 if value else 0)
+    if isinstance(value, (int, float)):
+        return (0, value)
+    if hasattr(value, 'isoformat'):
+        return (0, value.isoformat())
+    return (0, str(value).lower())
+
+
+def order_rows(rows, tab, sort_key, sort_dir):
+    """Apply the validated sort to already-merged rows.
+
+    Two passes, because an empty value has to sort last in both directions: the
+    second pass is stable, so it only moves the blanks without disturbing the
+    order the first one produced.
+    """
+    field = SORT_FIELDS.get(tab, {}).get(sort_key or '')
+    if not field:
+        return rows
+    rows = list(rows)
+    rows.sort(key=lambda row: _sort_value(row.get(field)),
+              reverse=(sort_dir == 'desc'))
+    rows.sort(key=lambda row: 1 if row.get(field) in (None, '') else 0)
+    return rows
 
 
 def table_cells_attr(tab, keys=None):

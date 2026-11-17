@@ -1,15 +1,12 @@
 {% comment %}
    Which list is on screen. The view renders (and sends) exactly one of these —
    the page stays small and switching tabs is a fragment fetch, not a reload.
-   Four lists: the verified / signed-out / app-version lists are filters on the
-   account table, and the devices gone quiet are a filter on the device table.
+   Two lists: everyone the app has seen (the verified, signed-out, blocked,
+   no-account, app-version and silence lists are filters on it) and how many
+   users it saw each period. The request log lives in each row's Details popup.
 {% endcomment %}
-{% if active_tab == 'uniquedevices' %}
-{% include 'core/_users_full_uniquedevices.html' %}
-{% elif active_tab == 'visits' %}
-{% include 'core/_users_full_visits.html' %}
-{% elif active_tab == 'dailyusers' %}
+{% if active_tab == 'dailyusers' %}
 {% include 'core/_users_full_dailyusers.html' %}
 {% else %}
-{% include 'core/_users_full_accounts.html' %}
+{% include 'core/_users_full_people.html' %}
 {% endif %}

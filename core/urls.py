@@ -128,6 +128,8 @@ urlpatterns = [
     # Per-device popup from the full user list: chat + watch history, and the
     # separate-session "login as" preview.
     path('admin-dashboard/android-apps/<int:app_id>/users/<int:user_id>/chat/', chat_views.user_chat_panel, name='android_app_user_chat'),
+    # The row's Details popup: identity, installs, requests and returned errors.
+    path('admin-dashboard/android-apps/<int:app_id>/user-details/', chat_views.user_details_panel, name='android_app_user_details'),
     path('admin-dashboard/android-apps/<int:app_id>/users/<int:user_id>/login-as/', chat_views.login_as_preview, name='android_app_login_as'),
     # The only path inside a preview window (the middleware strips the prefix).
     path('preview-exit/', chat_views.preview_exit, name='preview_as_exit'),

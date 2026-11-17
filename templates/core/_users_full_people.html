@@ -1,0 +1,277 @@
+{% load ip_geo %}
+{% load custom_filters %}
+    <!-- ======================== USERS & DEVICES ========================
+         One table and one set of columns. The lists that used to be tabs of
+         their own — verified, signed out of the app, blocked, no account, one
+         app version, gone quiet — are the chips and selects above it, so they
+         only change which rows are here, never which columns. The last two
+         columns are always the row's two actions: the conversation with the
+         device, then everything else about it. -->
+    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mt-3 mb-1">
+        <div>
+            <div class="sect-title"><i class="fas fa-users-gear text-warning me-2"></i>Users &amp; devices</div>
+            <div class="sub">
+                {{ page_obj.paginator.count }} row{{ page_obj.paginator.count|pluralize }} &middot;
+                one row per device, with the account behind it. Deleting a device also deletes its visits.
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <span class="pill bg-dark border border-secondary">{{ people_chips.all }} total</span>
+            <span class="pill bg-success">{{ people_chips.online }} online</span>
+            {% if people_chips.blocked %}<span class="pill bg-danger">{{ people_chips.blocked }} blocked</span>{% endif %}
+            {% if people_chips.silent7 %}<span class="pill bg-warning text-dark">{{ people_chips.silent7 }} quiet 7d+</span>{% endif %}
+            {% if counts.guests %}<span class="pill bg-dark border border-secondary">{{ counts.guests }} guest sessions</span>{% endif %}
+        </div>
+    </div>
+
+    <!-- Status chips. Each one is a link, so they work with and without JS and
+         keep the other filters (search, new-users window, version, app). -->
+    <div class="d-flex gap-2 flex-wrap mb-1">
+        <a class="fbtn {% if view == 'all' %}active{% endif %}" href="?tab=people{{ people_qs }}">All <span class="sub">{{ people_chips.all }}</span></a>
+        <a class="fbtn {% if view == 'online' %}active{% endif %}" href="?tab=people&amp;f=online{{ people_qs }}" title="A heartbeat in the last five minutes">Online <span class="sub">{{ people_chips.online }}</span></a>
+        <a class="fbtn {% if view == 'verified' %}active{% endif %}" href="?tab=people&amp;f=verified{{ people_qs }}" title="The email address was proven (Google token, emailed code, web sign-up)">Verified <span class="sub">{{ people_chips.verified }}</span></a>
+        <a class="fbtn {% if view == 'signedout' %}active{% endif %}" href="?tab=people&amp;f=signedout{{ people_qs }}" title="Still using the app, but with no session">Signed out <span class="sub">{{ people_chips.signedout }}</span></a>
+        <a class="fbtn {% if view == 'blocked' %}active{% endif %}" href="?tab=people&amp;f=blocked{{ people_qs }}">Blocked <span class="sub">{{ people_chips.blocked }}</span></a>
+        <a class="fbtn {% if view == 'subscribed' %}active{% endif %}" href="?tab=people&amp;f=subscribed{{ people_qs }}">Subscribed <span class="sub">{{ people_chips.subscribed }}</span></a>
+        <a class="fbtn {% if view == 'free' %}active{% endif %}" href="?tab=people&amp;f=free{{ people_qs }}">Free <span class="sub">{{ people_chips.free }}</span></a>
+        <a class="fbtn {% if view == 'noacc' %}active{% endif %}" href="?tab=people&amp;f=noacc{{ people_qs }}" title="Devices no account has ever used">No account <span class="sub">{{ people_chips.noacc }}</span></a>
+    </div>
+
+    <!-- The three filters that read better as a select than as another row of
+         chips. They submit on change, so combining them costs no extra click. -->
+    <form method="get" action="" class="d-flex gap-2 flex-wrap align-items-center mb-2">
+        <input type="hidden" name="tab" value="people">
+        <input type="hidden" name="f" value="{{ view }}">
+        {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+
+        <span class="sub">New:</span>
+        <select class="form-select form-select-sm" name="nv" onchange="this.form.submit()" style="width:auto;background:rgba(15,23,42,.85);border-color:rgba(148,163,184,.3);color:#e2e8f0;" aria-label="Registered within">
+            <option value="">any time</option>
+            <option value="hour"{% if people_new == 'hour' %} selected{% endif %}>last hour ({{ new_counts.hour }})</option>
+            <option value="day"{% if people_new == 'day' %} selected{% endif %}>last 24h ({{ new_counts.day }})</option>
+            <option value="week"{% if people_new == 'week' %} selected{% endif %}>last 7 days ({{ new_counts.week }})</option>
+            <option value="month"{% if people_new == 'month' %} selected{% endif %}>last 30 days ({{ new_counts.month }})</option>
+        </select>
+
+        <span class="sub ms-1">Not seen for:</span>
+        <select class="form-select form-select-sm" name="sil" onchange="this.form.submit()" style="width:auto;background:rgba(15,23,42,.85);border-color:rgba(148,163,184,.3);color:#e2e8f0;" aria-label="Silent for">
+            <option value="">any</option>
+            {% for d in silent_choices %}
+            <option value="{{ d }}"{% if silent_days == d %} selected{% endif %}>silent {{ d }}d+</option>
+            {% endfor %}
+        </select>
+
+        <span class="sub ms-1">App version:</span>
+        <select class="form-select form-select-sm" name="version" onchange="this.form.submit()" style="width:auto;background:rgba(15,23,42,.85);border-color:rgba(148,163,184,.3);color:#e2e8f0;" aria-label="App version">
+            <option value="">all ({{ version_choices|length }})</option>
+            {% for v in version_choices %}
+            <option value="{{ v.name }}"{% if version_filter == v.name %} selected{% endif %}>{{ v.name }} ({{ v.count }})</option>
+            {% endfor %}
+        </select>
+
+        <span class="sub ms-1">App:</span>
+        <select class="form-select form-select-sm" name="app" onchange="this.form.submit()" style="width:auto;background:rgba(15,23,42,.85);border-color:rgba(148,163,184,.3);color:#e2e8f0;" aria-label="App">
+            <option value="">all apps</option>
+            {% for a in app_choices %}
+            <option value="{{ a.id }}"{% if app_filter == a.id %} selected{% endif %}>{{ a.name }}</option>
+            {% endfor %}
+        </select>
+
+        {% if view != 'all' or people_new or silent_days or version_filter or app_filter or q %}
+        <a class="fbtn" href="?tab=people" title="Clear every filter">Clear all</a>
+        {% endif %}
+        <span class="sub ms-2">Access changes land on the next heartbeat (&le;60s).</span>
+    </form>
+
+    <div class="inactive-toolbar" data-delete-url="{{ devices_delete_url }}">
+        <label class="inactive-all">
+            <input type="checkbox" id="inactiveAll" onclick="window.__inactiveToggleAll(this)">
+            <span>Select all {{ page_obj.paginator.count }} on this filter</span>
+        </label>
+        <span class="sub" id="inactivePicked">none selected</span>
+        <button type="button" class="btn btn-sm btn-danger ms-auto" id="inactiveDeleteBtn"
+                onclick="window.__inactiveDelete()" disabled>
+            <i class="fas fa-trash-can me-1"></i>Delete selected
+        </button>
+    </div>
+
+    <div class="adm-table-wrap">
+        <table class="table table-dark table-hover mb-0 align-middle" data-tab-cols="{{ table_cells.people }}">
+            <thead>
+                <tr>
+                    {% for c in people_columns %}
+                    <th data-col="{{ c.key }}"{% if c.key == 'messages' %} style="min-width:120px;"{% elif c.key == 'details' %} style="min-width:110px;"{% elif c.key == 'subscription' %} style="min-width:190px;"{% elif c.key == 'check' %} style="width:34px;"{% endif %}>
+                        {% if c.sortable %}
+                            <a class="col-sort{% if c.active %} is-active{% endif %}" href="?{{ c.url }}"
+                               title="Sort by {{ c.label }}">{{ c.label }}{% if c.active %}<i class="fas fa-caret-{% if c.dir == 'asc' %}up{% else %}down{% endif %} ms-1"></i>{% endif %}</a>
+                        {% else %}{{ c.label }}{% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in people_rows %}
+                <tr id="block-row-{{ r.profile_pk|default:r.install_pk }}" data-email="{{ r.email }}">
+                    <td data-col="check">
+                        {% if r.install_ids %}
+                            <input type="checkbox" class="inactive-pick" value="{{ r.install_ids }}"
+                                   data-label="{{ r.model|default:r.id }}" onclick="window.__inactiveCount()">
+                        {% else %}
+                            <span class="sub" title="No install record to delete for this device">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td data-col="who">
+                        <div class="d-flex align-items-center gap-2">
+                            {% if r.photo_url %}
+                                <img class="avatar" src="{{ r.photo_url }}" alt="">
+                            {% else %}
+                                <div class="avatar" style="background:linear-gradient(135deg,{% if r.is_subscribed %}#22c55e,#16a34a{% else %}#475569,#334155{% endif %});">{{ r.display_name|default:r.email|default:r.model|first|upper|default:'?' }}</div>
+                            {% endif %}
+                            <div>
+                                <div class="fw-semibold text-white">{{ r.display_name|default:r.email|default:r.model|default:'Unknown device' }}</div>
+                                {% if r.email %}<div class="sub"><code class="mono">{{ r.email }}</code></div>{% endif %}
+                                <div class="sub">{{ r.model|default:'device unknown' }}{% if r.os %} &middot; Android {{ r.os }}{% endif %}</div>
+                                <div class="mono sub" title="{{ r.id }}">{{ r.id|truncatechars:26 }}</div>
+                                {% if r.linked_by_ip %}<div class="sub text-info" title="The app reports a different id to the install endpoint; joined to the account through the visit IP">linked by IP</div>{% endif %}
+                                {% if r.apps %}
+                                    <div class="mt-1">{% for n in r.apps %}<span class="pill bg-dark border border-secondary me-1">{{ n }}</span>{% endfor %}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td data-col="status">
+                        {% if r.online %}
+                            <span class="pill bg-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>Online</span>
+                        {% elif r.last_seen %}
+                            <span class="pill bg-secondary">Offline</span>
+                        {% else %}
+                            <span class="pill bg-dark border border-secondary text-secondary">Never</span>
+                        {% endif %}
+                        {% if r.last_seen %}<div class="sub mt-1">{{ r.last_seen|timesince }} ago</div>{% endif %}
+                        {% if r.screen %}<div class="sub">{{ r.screen|truncatechars:24 }}</div>{% endif %}
+                        {% if r.signed_out %}<div class="pill bg-warning text-dark mt-1">Signed out</div>{% endif %}
+                        {% if r.silent_days >= 7 %}<div class="pill bg-dark border border-secondary mt-1">{{ r.silent_days }}d quiet</div>{% endif %}
+                    </td>
+                    <td data-col="account">
+                        {% if r.verified %}
+                            <span class="pill bg-success"><i class="fas fa-check me-1"></i>Verified</span>
+                        {% elif r.profile_pk %}
+                            <span class="pill bg-warning text-dark">Not verified</span>
+                        {% else %}
+                            <span class="pill bg-secondary">No account</span>
+                        {% endif %}
+                        {% if r.google %}<span class="pill bg-info">Google</span>{% endif %}
+                        {% if r.auth_provider %}<div class="sub">{{ r.auth_provider }}</div>{% endif %}
+                        {% if r.website_user_id %}
+                            <div class="sub">
+                                site #{{ r.website_user_id }}
+                                {% if r.profile_pk %}<a class="text-info" href="{% url 'synced_user_detail' r.profile_pk %}">open</a>{% endif %}
+                            </div>
+                        {% endif %}
+                        {% if r.registered %}<div class="sub">joined {{ r.registered|date:'Y-m-d' }}</div>{% endif %}
+                    </td>
+                    <td data-col="app">
+                        {% if r.app_version %}<div class="text-white">v{{ r.app_version }}</div>{% else %}<div class="sub">version unknown</div>{% endif %}
+                        {% if r.build_number %}<div class="sub">build {{ r.build_number }}</div>{% endif %}
+                        {% if r.last_sync %}<div class="sub">synced {{ r.last_sync|timesince }} ago</div>{% endif %}
+                        <div class="sub">{{ r.install_count }} install record{{ r.install_count|pluralize }}</div>
+                    </td>
+                    <td data-col="ip" class="mono sub">
+                        {% if r.ip %}<span class="ip-text">{{ r.ip }}</span> {% ip_geo_chip r.ip %}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td data-col="subscription">
+                        {% if r.profile_pk %}
+                            {% if r.is_subscribed %}
+                                <span class="pill bg-success"><i class="fas fa-crown me-1"></i>{{ r.plan|default:'Subscribed' }}</span>
+                                <div class="sub">{% if r.valid_until %}until {{ r.valid_until|date:'Y-m-d' }} &middot; {{ r.days_left }}d left{% else %}no end date{% endif %}</div>
+                            {% else %}
+                                <span class="pill bg-secondary">Free</span>
+                            {% endif %}
+                            <div class="d-flex gap-1 flex-wrap mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" data-user="{{ r.profile_pk }}" data-subaction="7" title="Add 7 days">+7d</button>
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" data-user="{{ r.profile_pk }}" data-subaction="30" title="Add 30 days">+30d</button>
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" data-user="{{ r.profile_pk }}" data-subaction="90" title="Add 90 days">+90d</button>
+                                {% if r.is_subscribed %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger act-btn" data-user="{{ r.profile_pk }}" data-subaction="revoke" title="Remove the subscription">Revoke</button>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <span class="sub">&mdash;</span>
+                            <div class="sub">no account behind this device</div>
+                        {% endif %}
+                    </td>
+                    <td data-col="activity">
+                        {% if r.total is not None %}
+                            <div class="text-white">{{ r.total }} visit{{ r.total|pluralize }}</div>
+                            <div class="sub"><span class="{% if r.today %}text-success{% endif %}">{{ r.today }} today</span></div>
+                        {% else %}
+                            <div class="sub">no install record</div>
+                        {% endif %}
+                        {% if r.counts %}
+                            <div class="sub mt-1">{{ r.counts.history }} history &middot; {{ r.counts.watchlist }} watchlist</div>
+                            {% if r.counts.cloud %}
+                                <div class="sub">cloud: {{ r.counts.cloud.history }} h &middot; {{ r.counts.cloud.watchlist }} w &middot; {{ r.counts.cloud.favorites }} fav</div>
+                            {% endif %}
+                        {% endif %}
+                        {% if r.silent_days is not None %}
+                            <span class="pill mt-1 {% if r.silent_days >= 30 %}bg-danger{% elif r.silent_days >= 7 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ r.silent_days }}d silent</span>
+                        {% endif %}
+                    </td>
+                    <td data-col="access">
+                        <span class="access-cell">
+                            {% if r.block_mode %}
+                                <span class="pill bg-danger">{{ r.block_display|default:r.block_mode }}</span>
+                            {% else %}
+                                <span class="pill bg-success">Active</span>
+                            {% endif %}
+                        </span>
+                        <div class="d-flex gap-1 flex-wrap mt-1 access-actions"
+                             data-url="{% if r.profile_pk %}{% url 'synced_user_block' r.profile_pk %}{% elif r.install_pk %}{% url 'android_app_device_block' selected_app.id r.install_pk %}{% endif %}">
+                            {% if r.block_mode %}
+                                <button type="button" class="btn btn-sm btn-outline-success act-btn" onclick="__peopleBlock(this, '')" title="Restore normal access">Restore</button>
+                            {% else %}
+                                <button type="button" class="btn btn-sm btn-outline-warning act-btn" onclick="__peopleBlock(this, 'app')" title="App block (the app sees the server as unreachable)">App block</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger act-btn" onclick="__peopleBlock(this, 'full')" title="Full block">Full block</button>
+                            {% endif %}
+                            {% if r.profile_pk %}
+                                <button type="button" class="btn btn-sm btn-outline-danger act-btn" onclick="wipeUserData({{ r.profile_pk }}, this)" title="Delete this account's cloud data and history, keeping the account">Wipe data</button>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td data-col="messages">
+                        <button type="button" class="btn btn-sm btn-outline-info act-btn"
+                                onclick="openUserChat('{{ r.chat_url }}')"
+                                title="{% if r.last_message %}{{ r.last_message.body|truncatechars:120 }}{% else %}No message from this device yet{% endif %}">
+                            <i class="fas fa-comment-dots me-1"></i>Messages
+                            {% if r.unread %}<span class="badge bg-danger rounded-pill">{{ r.unread }}</span>{% endif %}
+                        </button>
+                        {% if r.last_message %}
+                            <div class="sub mt-1">
+                                {{ r.last_message.body|truncatechars:34 }}
+                                <span class="text-secondary">{{ r.last_message.at|timesince }} ago</span>
+                            </div>
+                        {% else %}
+                            <div class="sub mt-1">no message yet</div>
+                        {% endif %}
+                    </td>
+                    <td data-col="details">
+                        <button type="button" class="btn btn-sm btn-outline-light act-btn"
+                                onclick="openUserDetails('{{ r.details_url }}')"
+                                title="Everything about this user or device: identity, installs, requests it made, errors it was sent">
+                            <i class="fas fa-circle-info me-1"></i>Details
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="11" class="text-center text-secondary py-4">
+                        <i class="fas fa-users-slash fa-2x mb-2 d-block"></i>
+                        No user or device matches these filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "core/_adm_pager.html" with pg=page_obj page_param="page" %}

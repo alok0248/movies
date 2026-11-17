@@ -4933,136 +4933,47 @@ def android_app_users_full(request, app_id):
     # the device table, so each table carries every column of the tab it
     # replaced and a user can be seen and managed without switching tabs. The
     # old tab names still resolve, so existing links and bookmarks keep working.
-    TABS = ('accounts', 'uniquedevices', 'visits', 'dailyusers')
+    TABS = ('people', 'dailyusers')
     tab = (request.GET.get('tab') or '').strip().lower()
     legacy_view = ''
-    legacy_ds = ''
-    if tab == 'registered':
-        tab, legacy_view = 'accounts', 'verified'
+    # Every list that used to be a tab of its own is a filter on this one table
+    # now, so old links and bookmarks land on the table instead of a 404.
+    if tab in ('registered', 'verified'):
+        legacy_view = 'verified'
     elif tab == 'signedout':
-        tab, legacy_view = 'accounts', 'signedout'
-    elif tab == 'versions':
-        tab = 'accounts'
-    elif tab == 'inactive':
-        tab, legacy_ds = 'uniquedevices', 'inactive'
-    elif tab == 'devices':
-        tab, legacy_ds = 'uniquedevices', 'noacc'
+        legacy_view = 'signedout'
     if tab not in TABS:
-        tab = 'accounts'
+        tab = 'people'
     partial = request.GET.get('partial') == '1'
 
     view = (request.GET.get('f') or legacy_view or 'all').strip().lower()
+    allowed_views = ('all', 'online', 'verified', 'signedout', 'blocked',
+                     'subscribed', 'free', 'noacc')
+    if view not in allowed_views:
+        view = 'all'
 
     # An account's app is whichever install carries its device id — or the
-    # account key the visit endpoint resolved for it — so "which app is this
-    # user on" is answered from the install rows, not from a column on the
-    # account.
+    # account key the visit endpoint resolved for it.
     app_filter = (request.GET.get('app') or '').strip()
     app_filter_id = int(app_filter) if app_filter.isdigit() else None
     app_choices = list(AndroidApp.objects.all().values('id', 'name').order_by('name'))
-
-    users_qs = SyncedUser.objects.all().order_by('-last_synced_at')
-    if q:
-        users_qs = users_qs.filter(
-            Q(email__icontains=q) | Q(display_name__icontains=q)
-            | Q(device_id__icontains=q) | Q(device_model__icontains=q)
-            | Q(plan__icontains=q)
-        )
-    if view == 'blocked':
-        users_qs = users_qs.filter(block_mode__gt='')
-    elif view == 'subscribed':
-        users_qs = users_qs.filter(is_subscribed=True)
-    elif view == 'free':
-        users_qs = users_qs.filter(is_subscribed=False)
-    elif view == 'verified':
-        # The old "Registered & verified" list: the address was actually proven.
-        users_qs = users_qs.filter(is_email_verified=True)
-    elif view == 'signedout':
-        # The old signed-out list: still using the app, but with no session.
-        logged_out = list(UserHeartbeat.objects.filter(is_logged_in=False)
-                          .values_list('email', flat=True))
-        users_qs = (users_qs.filter(email__in=logged_out) if logged_out
-                    else users_qs.none())
-    elif view in ('online', 'never'):
-        # Heartbeats live on the users DB, so the online filter is matched on
-        # the email set first (small table) instead of a cross-DB join.
-        online_emails = {
-            e for e in UserHeartbeat.objects.filter(
-                last_seen_at__gte=timezone.now() - timezone.timedelta(minutes=5)
-            ).values_list('email', flat=True)
-        }
-        if view == 'online':
-            users_qs = users_qs.filter(email__in=list(online_emails)) if online_emails else users_qs.none()
-        else:
-            users_qs = users_qs.exclude(email__in=list(online_emails))
-
+    app_keys = None
     if app_filter_id:
-        # An install is keyed by the device id it reported and by the account key
-        # resolved at visit time, so an account matches on either of those, or on
-        # its email/auth user id when the app sent one of those as the key.
-        install_keys = set()
+        app_keys = set()
         for dev_key, acct_key in AndroidAppDevice.objects.filter(
                 android_app_id=app_filter_id).values_list('user_id', 'account_key'):
             if dev_key:
-                install_keys.add(dev_key)
+                app_keys.add(dev_key)
             if acct_key:
-                install_keys.add(acct_key)
-        if install_keys:
-            keys = list(install_keys)
-            users_qs = users_qs.filter(
-                Q(device_id__in=keys) | Q(email__in=keys)
-                | Q(user_id__in=[k for k in keys if k.isdigit()]))
-        else:
-            users_qs = users_qs.none()
+                app_keys.add(acct_key)
 
-    # ---------------------------------------------------------- version filter
-    # Every app version the current scope has reported, deduped and ordered by
-    # build number (newest first), with how many accounts sit on each. The
-    # facet list is built BEFORE the version filter is applied so the dropdown
-    # keeps offering every version, including the ones already ticked.
-    from django.db.models import Max as _Max
-    selected_versions = [v.strip() for v in request.GET.getlist('versions') if v.strip()]
-    version_facets = list(
-        users_qs.exclude(app_version='')
-        # order_by() with no arguments clears the ordering users_qs carries
-        # (last_synced_at). An inherited ORDER BY joins the GROUP BY, which
-        # returned one row per user instead of one per version.
-        .order_by()
-        .values('app_version')
-        .annotate(n=Count('id'), b=_Max('build_number'))
-    )
 
-    def _version_key(value):
-        """3.4.8.685 -> (3, 4, 8, 685), so the list orders by release, not text."""
-        parts = []
-        for seg in (value or '').lstrip('vV').split('.'):
-            digits = ''.join(ch for ch in seg if ch.isdigit())
-            parts.append(int(digits) if digits else 0)
-        while len(parts) < 4:
-            parts.append(0)
-        return tuple(parts[:4])
-
-    # build_number on a sync row is sometimes the versionCode (350685) and
-    # sometimes the plain build (685), so ordering by it lifts old releases
-    # above new ones. The version string is the one reliable key.
-    version_facets.sort(key=lambda f: (_version_key(f['app_version']), f['n']),
-                        reverse=True)
-    if tab == 'accounts' and selected_versions:
-        users_qs = users_qs.filter(app_version__in=selected_versions)
-
-    # -------------------------------------------------- sorting the account table
-    # One account table, sorted by a header click (?sort=…&dir=…). The columns
-    # that used to live on the verified list are part of it, so the same sort
-    # fields apply.
     from .admin_table_columns import (columns_for, default_keys,
-                                      filter_table_columns, order_queryset,
+                                      filter_table_columns, order_rows,
                                       parse_sort, saved_keys_map, specs,
                                       table_cells_attr)
-    account_sort, account_dir = '', ''
-    if tab == 'accounts':
-        account_sort, account_dir = parse_sort(
-            'accounts', request.GET.get('sort'), request.GET.get('dir'))
-        users_qs = order_queryset(users_qs, 'accounts', account_sort, account_dir)
+    people_sort, people_dir = parse_sort(
+        'people', request.GET.get('sort'), request.GET.get('dir'))
 
     # ------------------------------------------------------------ headline counts
     all_users = SyncedUser.objects.all()
@@ -5073,7 +4984,7 @@ def android_app_users_full(request, app_id):
         'subscribed': all_users.filter(is_subscribed=True).count(),
         'free': all_users.filter(is_subscribed=False).count(),
         'registered': all_users.filter(is_email_verified=True).count(),
-        'versions': len(version_facets),
+        'versions': 0,
     }
 
     # ---------------------------------------------------------- shared bits
@@ -5128,8 +5039,6 @@ def android_app_users_full(request, app_id):
             'email_by_device': email_by_device,
             'app_choices': app_choices,
             'app_filter': app_filter_id,
-            'version_facets': version_facets,
-            'selected_versions': selected_versions,
             # Column layouts: the markup order of each table, the columns an
             # admin may choose from, and the order they have saved, so the
             # opener can arrange the table on load and the layout editor has
@@ -5146,116 +5055,34 @@ def android_app_users_full(request, app_id):
                 for t in TABS},
             'column_layout': layouts,
         }
+    if tab == 'people':
+        # ------------------------------------------------------ people & devices
+        # One table for everyone the app has seen: a row per device with the
+        # account behind it, plus a row for an account that never reported a
+        # device id (a web-only sign-up), so nobody is invisible. Every filter
+        # narrows this same table and never changes its columns, which is what
+        # makes "filtered to verified" look like the same list, only shorter.
+        from .models import UserMessage as _UserMessage
 
-    if tab == 'accounts':
-        ctx['account_columns'] = columns_for(
-            request.user, 'accounts', account_sort, account_dir,
-            base_params={'q': q, 'f': view, 'app': app_filter_id or ''})
-
-    if tab == 'accounts':
-        # ------------------------------------------------------------- user rows
-        paginator = Paginator(users_qs, 25)
-        page_obj = paginator.get_page(request.GET.get('page') or 1)
-
-        # {device key: {app names}} over the whole install table, built once so
-        # the App column costs no query per row.
-        apps_by_device_key = {}
-        for dev_row in AndroidAppDevice.objects.values('user_id', 'account_key',
-                                                       'android_app__name'):
-            name = dev_row['android_app__name']
-            for key in (dev_row['user_id'], dev_row['account_key']):
-                if key and name:
-                    apps_by_device_key.setdefault(key, set()).add(name)
-
-        def _row_apps(u):
-            for key in (u.device_id, u.email, str(u.user_id or '')):
-                if key and key in apps_by_device_key:
-                    return sorted(apps_by_device_key[key])
-            return []
-
-        page_ids = [u.user_id for u in page_obj.object_list if u.user_id]
-        page_emails = [u.email for u in page_obj.object_list if u.email]
-        page_device_ids = [u.device_id for u in page_obj.object_list if u.device_id]
-
-        hb_map = {h.email: h for h in UserHeartbeat.objects.filter(email__in=page_emails)}
-        account_map = {u.pk: u for u in User.objects.filter(pk__in=page_ids)} if page_ids else {}
-
-        def _counts_for(model):
-            if not page_ids:
-                return {}
-            try:
-                return dict(model.objects.filter(user_id__in=page_ids)
-                            .values_list('user_id').annotate(n=Count('id')))
-            except Exception:
-                return {}
-
-        history_counts = _counts_for(PlayHistory)
-        watchlist_counts = _counts_for(WatchList)
-        activity_counts = _counts_for(UserActivity)
-
-        cloud_map = {}
-        if page_ids:
-            for c in UserCloudData.objects.filter(user_id__in=page_ids):
-                cloud_map[c.user_id] = {
-                    'history': len(c.watch_history or []),
-                    'watchlist': len(c.watchlist_ids or []),
-                    'favorites': len(c.favorites or []),
-                    'playlists': len(c.playlists or []),
-                    'downloads': len(c.downloads or []),
-                    'progress': len(c.playback_progress or {}),
-                    'version': c.data_version,
-                }
-
-        device_map = {}
-        if page_device_ids:
-            device_map = {d.user_id: d for d in AndroidAppDevice.objects.filter(user_id__in=page_device_ids)}
-
-        rows = []
-        for u in page_obj.object_list:
-            hb = hb_map.get(u.email)
-            acct = account_map.get(u.user_id)
-            rows.append({
-                'obj': u,
-                'hb': hb,
-                'account': acct,
-                'device': device_map.get(u.device_id),
-                # Which apps this account's installs belong to, for the App
-                # column and to make the app filter legible in each row.
-                'apps': _row_apps(u),
-                'history': history_counts.get(u.user_id, 0),
-                'watchlist': watchlist_counts.get(u.user_id, 0),
-                'activity': activity_counts.get(u.user_id, 0),
-                'cloud': cloud_map.get(u.user_id),
-            })
-
-        ctx.update({
-            'rows': rows,
-            'page_obj': page_obj,
-        })
-
-    elif tab == 'uniquedevices':
-        # ------------------------------------------------------- unique devices
-        # One row per device, merged from the account's sync and heartbeat (those
-        # share an id space) and the install record that carries the visit
-        # counters (a different id, joined through account_key). Rows are plain
-        # primitives so the merged list can be cached for a minute and then
-        # filtered, searched and paginated without touching the database again.
-        from .models import HeartbeatActivity
-
-        dview = (request.GET.get('ds') or legacy_ds or '').strip().lower()
-        if dview not in ('', 'all', 'noacc', 'online', 'paid', 'free', 'expiring',
-                         'inactive'):
-            dview = ''
-        if not dview:
-            dview = 'all'
-        # "Silent for N days": the cleanup list (the old Inactive devices tab).
+        # Silence is its own filter, so it combines with the status chips:
+        # "blocked and quiet for 30 days" is a real question.
         try:
-            silent_days = int(request.GET.get('d') or 3)
+            silent_days = int(request.GET.get('sil') or 0)
         except (TypeError, ValueError):
-            silent_days = 3
-        silent_days = max(1, min(365, silent_days))
+            silent_days = 0
+        if silent_days not in (7, 14, 30, 60, 90):
+            silent_days = 0
 
-        cache_key = 'app_unique_devices_v2_%s' % selected_app.id
+        windows = {'hour': timezone.timedelta(hours=1),
+                   'day': timezone.timedelta(hours=24),
+                   'week': timezone.timedelta(days=7),
+                   'month': timezone.timedelta(days=30)}
+        nview = (request.GET.get('nv') or '').strip().lower()
+        if nview not in windows:
+            nview = ''
+        version_filter = (request.GET.get('version') or '').strip()
+
+        cache_key = 'app_people_v3_%s' % selected_app.id
         merged = cache.get(cache_key)
         if merged is None:
             profiles = list(SyncedUser.objects.all())
@@ -5268,6 +5095,10 @@ def android_app_users_full(request, app_id):
             for prof in profiles:
                 if prof.device_id:
                     entries.setdefault(prof.device_id, {})['profile'] = prof
+                else:
+                    # An account with no device id would otherwise exist only on
+                    # a table this page no longer has.
+                    entries.setdefault('acct-%d' % prof.pk, {})['profile'] = prof
             for beat in heartbeats:
                 if beat.device_id:
                     entries.setdefault(beat.device_id, {})['heartbeat'] = beat
@@ -5278,6 +5109,15 @@ def android_app_users_full(request, app_id):
             account_ids = [prof.user_id for prof in profiles if prof.user_id]
             account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
                              if account_ids else {})
+
+            # Which apps each device/account key has installed, in one pass.
+            apps_by_key = {}
+            for dev_row in AndroidAppDevice.objects.values('user_id', 'account_key',
+                                                          'android_app__name'):
+                name = dev_row['android_app__name']
+                for key in (dev_row['user_id'], dev_row['account_key']):
+                    if key and name:
+                        apps_by_key.setdefault(key, set()).add(name)
 
             install_ids = [d.pk for d in all_devices]
             last_ip, today_counts = {}, {}
@@ -5296,7 +5136,8 @@ def android_app_users_full(request, app_id):
             merged = []
             for device_key, item in entries.items():
                 beat = item.get('heartbeat')
-                prof = item.get('profile') or (synced_by_email.get(beat.email) if beat else None)
+                prof = item.get('profile') or (
+                    synced_by_email.get(beat.email) if beat else None)
                 installs = item.get('installs') or []
                 account = account_by_id.get(prof.user_id) if prof and prof.user_id else None
                 online = beat.is_online if beat else any(
@@ -5308,6 +5149,11 @@ def android_app_users_full(request, app_id):
                 visit_ip = next((last_ip.get(i.pk) for i in installs if last_ip.get(i.pk)), '')
                 first_seen = min([i.first_seen_at for i in installs if i.first_seen_at],
                                  default=None)
+                block_mode = ((prof.block_mode if prof else '')
+                              or next((i.block_mode for i in installs if i.block_mode), ''))
+                lookup_keys = [device_key]
+                if prof and prof.email:
+                    lookup_keys.append(prof.email)
                 merged.append({
                     'id': device_key,
                     'model': ((beat.device_model if beat else '')
@@ -5318,155 +5164,241 @@ def android_app_users_full(request, app_id):
                            or (prof.os_version if prof else '')),
                     'email': (prof.email if prof else (beat.email if beat else '')),
                     'display_name': prof.display_name if prof else '',
+                    'photo_url': (getattr(prof, 'photo_url', '') or '') if prof else '',
                     'profile_pk': prof.pk if prof else None,
+                    'account_pk': account.pk if account else None,
+                    'website_user_id': prof.user_id if prof else None,
                     'verified': bool(prof.is_email_verified) if prof else False,
+                    'auth_provider': (prof.auth_provider or '') if prof else '',
+                    'google': bool(prof.google_sub) if prof else False,
+                    'app_version': (prof.app_version or '') if prof else '',
+                    'build_number': prof.build_number if prof else None,
+                    'last_sync': prof.last_synced_at if prof else None,
+                    'joined': prof.created_at if prof else None,
+                    'is_logged_in': beat.is_logged_in if beat else None,
+                    'block_mode': block_mode,
                     'block_display': (prof.get_block_mode_display()
-                                      if prof and prof.block_mode else ''),
+                                      if prof and prof.block_mode else
+                                      ('App block' if block_mode == 'app' else
+                                       ('Full block' if block_mode else ''))),
                     'is_subscribed': bool(prof.is_subscribed) if prof else False,
                     'plan': (prof.plan or '') if prof else '',
                     'valid_until': prof.valid_until if prof else None,
                     'days_left': prof.days_remaining if prof else 0,
-                    'account_pk': account.pk if account else None,
                     'online': online,
                     'screen': beat.current_screen if beat else '',
+                    'signed_out': beat is not None and not beat.is_logged_in,
                     'ip': ((beat.ip_address if beat and beat.ip_address else '') or visit_ip or ''),
                     'today': (sum(today_counts.get(i.pk, 0) for i in installs)
                               if installs else None),
                     'total': sum(i.total_visits for i in installs) if installs else None,
                     'last_seen': last_seen,
-                    'registered': (prof.created_at if prof else first_seen),
-                    'history_url': (reverse('admin_user_analytics_detail',
-                                            args=[account.pk]) if account
-                                    else (reverse('synced_user_detail',
-                                                  args=[prof.pk]) if prof else '')),
+                    'registered': ((prof.created_at if prof else None) or first_seen),
                     'kind': 'account' if prof else ('guest' if beat else 'install'),
                     'linked_by_ip': any(i.account_key and i.account_key != i.user_id
                                         for i in installs),
-                    # The install rows behind this row, so the bulk delete on the
-                    # device table can remove exactly them.
+                    'apps': sorted({n for key in lookup_keys
+                                    for n in apps_by_key.get(key, ())}),
                     'install_ids': ','.join(str(i.pk) for i in installs),
+                    'install_pk': installs[0].pk if installs else None,
                     'install_count': len(installs),
                 })
             cache.set(cache_key, merged, 60)
 
         rows = merged
-        if dview == 'noacc':
-            rows = [r for r in rows if r['kind'] != 'account']
-        elif dview == 'online':
-            rows = [r for r in rows if r['online']]
-        elif dview == 'paid':
-            rows = [r for r in rows if r['is_subscribed']]
-        elif dview == 'free':
-            rows = [r for r in rows if r['profile_pk'] and not r['is_subscribed']]
-        elif dview == 'expiring':
-            limit = timezone.localdate() + datetime.timedelta(days=7)
-            rows = [r for r in rows if r['is_subscribed'] and r['valid_until']
-                    and r['valid_until'] <= limit]
-        elif dview == 'inactive':
-            cutoff = timezone.now() - datetime.timedelta(days=silent_days)
-            rows = [r for r in rows if r['last_seen'] and r['last_seen'] < cutoff]
-
         if q:
             needle = q.lower()
-            rows = [r for r in rows
-                    if needle in (r['id'] or '').lower()
-                    or needle in (r['email'] or '').lower()
-                    or needle in (r['model'] or '').lower()
-                    or needle in (r['os'] or '').lower()]
+            rows = [
+                r for r in rows
+                if needle in ' '.join(
+                    str(r.get(k) or '') for k in
+                    ('id', 'email', 'display_name', 'model', 'os', 'ip', 'plan')
+                ).lower()
+            ]
 
-        # "New" means first registered with the app: the account's creation date
-        # when it has one, otherwise the install's first sighting. It combines
-        # with the status chips above and the search box.
-        windows = {'hour': timezone.timedelta(hours=1),
-                   'day': timezone.timedelta(hours=24),
-                   'week': timezone.timedelta(days=7),
-                   'month': timezone.timedelta(days=30)}
-        nview = (request.GET.get('nv') or '').strip().lower()
-        if nview not in windows:
-            nview = ''
+        # The chip numbers describe this search, so a chip never promises rows
+        # the search box has already excluded.
+        chip_counts = {
+            'all': len(rows),
+            'online': sum(1 for r in rows if r['online']),
+            'verified': sum(1 for r in rows if r['verified']),
+            'signedout': sum(1 for r in rows if r['signed_out']),
+            'blocked': sum(1 for r in rows if r['block_mode']),
+            'subscribed': sum(1 for r in rows if r['is_subscribed']),
+            'free': sum(1 for r in rows if not r['is_subscribed']),
+            'noacc': sum(1 for r in rows if not r['profile_pk']),
+            'silent7': sum(1 for r in rows if r['last_seen'] and
+                           r['last_seen'] < timezone.now() - timezone.timedelta(days=7)),
+        }
+
+        # App versions with the number of rows on each: the one filter that a
+        # select reads better than a row of chips.
+        def _version_key(value):
+            parts = []
+            for seg in (value or '').lstrip('vV').split('.'):
+                digits = ''.join(ch for ch in seg if ch.isdigit())
+                parts.append(int(digits) if digits else 0)
+            while len(parts) < 4:
+                parts.append(0)
+            return tuple(parts[:4])
+
+        version_totals = {}
+        for r in rows:
+            if r['app_version']:
+                version_totals[r['app_version']] = version_totals.get(r['app_version'], 0) + 1
+        version_choices = [{'name': name, 'count': version_totals[name]}
+                           for name in sorted(version_totals, key=_version_key,
+                                              reverse=True)]
+        counts['versions'] = len(version_choices)
+
         now = timezone.now()
+        cutoff = now - timezone.timedelta(days=silent_days) if silent_days else None
         new_counts = {key: sum(1 for r in rows
                                if r['registered'] and r['registered'] >= now - delta)
                       for key, delta in windows.items()}
-        if nview:
-            cutoff = now - windows[nview]
-            rows = [r for r in rows if r['registered'] and r['registered'] >= cutoff]
 
-        epoch = timezone.make_aware(datetime.datetime(1970, 1, 1))
-        rows.sort(key=lambda r: (r['last_seen'] or epoch), reverse=True)
+        def _keep(row):
+            if view == 'online' and not row['online']:
+                return False
+            if view == 'verified' and not row['verified']:
+                return False
+            if view == 'signedout' and not row['signed_out']:
+                return False
+            if view == 'blocked' and not row['block_mode']:
+                return False
+            if view == 'subscribed' and not row['is_subscribed']:
+                return False
+            if view == 'free' and row['is_subscribed']:
+                return False
+            if view == 'noacc' and row['profile_pk']:
+                return False
+            if version_filter and row['app_version'] != version_filter:
+                return False
+            if app_keys is not None and not (
+                    {row['id'], row['email'], str(row['website_user_id'] or '')} & app_keys):
+                return False
+            if nview and not (row['registered'] and row['registered'] >= now - windows[nview]):
+                return False
+            if cutoff and not (row['last_seen'] and row['last_seen'] < cutoff):
+                return False
+            return True
 
-        expiring_limit = timezone.localdate() + datetime.timedelta(days=7)
+        rows = [r for r in rows if _keep(r)]
+        rows = order_rows(rows, 'people', people_sort, people_dir)
 
-        def _expiring(r):
-            return r['is_subscribed'] and r['valid_until'] and r['valid_until'] <= expiring_limit
+        page_obj = Paginator(rows, 25).get_page(request.GET.get('page') or 1)
+        people_rows = list(page_obj.object_list)
 
-        silent_cutoff = timezone.now() - datetime.timedelta(days=silent_days)
-        chips = {
-            'all': len(merged),
-            'online': sum(1 for r in merged if r['online']),
-            'paid': sum(1 for r in merged if r['is_subscribed']),
-            'free': sum(1 for r in merged if r['profile_pk'] and not r['is_subscribed']),
-            'noacc': sum(1 for r in merged if r['kind'] != 'account'),
-            'expiring': sum(1 for r in merged if _expiring(r)),
-            'inactive': sum(1 for r in merged
-                            if r['last_seen'] and r['last_seen'] < silent_cutoff),
-        }
-        # How many devices are silent for each bucket, for the "not seen for"
-        # chips: cumulative, so a device silent for a month counts in every one.
-        silent_chips = []
-        for n in (1, 3, 7, 14, 30, 60):
-            bucket_cutoff = timezone.now() - datetime.timedelta(days=n)
-            silent_chips.append({
-                'days': n,
-                'count': sum(1 for r in merged
-                             if r['last_seen'] and r['last_seen'] < bucket_cutoff),
-            })
+        # Library counts for the 25 accounts on this page, in four queries.
+        page_ids = [r['website_user_id'] for r in people_rows if r['website_user_id']]
 
-        if request.GET.get('export') == 'csv':
-            response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = (
-                'attachment; filename="devices-app-%s.csv"' % selected_app.id)
-            writer = csv.writer(response)
-            writer.writerow(['device id', 'model', 'os', 'account', 'plan', 'valid until',
-                             'online', 'ip', 'first registered', 'last seen',
-                             'total visits', 'visits today'])
-            for r in rows:
-                writer.writerow([
-                    r['id'], r['model'], r['os'], r['email'], r['plan'],
-                    r['valid_until'] or '', 'yes' if r['online'] else 'no', r['ip'],
-                    r['registered'] or '', r['last_seen'] or '',
-                    '' if r['total'] is None else r['total'],
-                    '' if r['today'] is None else r['today']])
-            return response
+        def _counts_for(model):
+            if not page_ids:
+                return {}
+            try:
+                return dict(model.objects.filter(user_id__in=page_ids)
+                            .values_list('user_id').annotate(n=Count('id')))
+            except Exception:
+                return {}
 
-        unique_page = Paginator(rows, 25).get_page(request.GET.get('upage') or 1)
-        page_rows = list(unique_page.object_list)
+        history_counts = _counts_for(PlayHistory)
+        watchlist_counts = _counts_for(WatchList)
+        activity_counts = _counts_for(UserActivity)
+        cloud_map = {}
+        if page_ids:
+            for cloud in UserCloudData.objects.filter(user_id__in=page_ids):
+                cloud_map[cloud.user_id] = {
+                    'history': len(cloud.watch_history or []),
+                    'watchlist': len(cloud.watchlist_ids or []),
+                    'favorites': len(cloud.favorites or []),
+                    'playlists': len(cloud.playlists or []),
+                    'downloads': len(cloud.downloads or []),
+                }
 
-        # The newest few things each account did, from the heartbeat history.
-        recent = {}
-        page_emails = [r['email'] for r in page_rows if r['email']]
-        if page_emails:
-            for entry in (HeartbeatActivity.objects.filter(email__in=page_emails)
-                          .order_by('-created_at')[:25 * 4]):
-                bucket = recent.setdefault(entry.email, [])
-                if len(bucket) < 3:
-                    bucket.append(entry)
-        for row in page_rows:
-            row['recent'] = recent.get(row['email'], [])
+        # The newest messages of this app, so a row can carry its unread number
+        # and the last thing the device said without a query per row.
+        last_message, unread = {}, {}
+        for msg in (_UserMessage.objects.filter(app=selected_app)
+                    .order_by('-created_at')[:500]):
+            # One key per message, not one per identity it carries: a signed-in
+            # device's message has both an address and a device id, and counting
+            # it under both would show 2 for a row that offers both keys.
+            if msg.email:
+                msg_key = 'e:' + msg.email.strip().lower()
+            elif msg.device_id:
+                msg_key = 'd:' + msg.device_id.strip()
+            else:
+                msg_key = ''
+            if msg_key:
+                last_message.setdefault(msg_key, {
+                    'body': (msg.body or '').strip(),
+                    'at': msg.created_at,
+                    'answered': bool(msg.replied_at),
+                })
+                if not msg.is_read:
+                    unread[msg_key] = unread.get(msg_key, 0) + 1
+
+        for row in people_rows:
+            keys = []
+            if row['email']:
+                keys.append('e:' + row['email'].strip().lower())
+            if row['id']:
+                keys.append('d:' + row['id'].strip())
+            row['last_message'] = next((last_message[k] for k in keys
+                                        if k in last_message), None)
+            row['unread'] = sum(unread.get(k, 0) for k in keys)
+            if row['profile_pk']:
+                row['chat_url'] = reverse('android_app_user_chat',
+                                          args=[selected_app.id, row['profile_pk']])
+                row['details_url'] = (reverse('android_app_user_details',
+                                              args=[selected_app.id])
+                                      + '?user=%d' % row['profile_pk'])
+            else:
+                row['chat_url'] = (reverse('android_app_user_chat',
+                                           args=[selected_app.id, 0])
+                                   + '?' + _urlencode({'key': row['id']}))
+                row['details_url'] = (reverse('android_app_user_details',
+                                              args=[selected_app.id])
+                                      + '?' + _urlencode({'key': row['id']}))
+            row['counts'] = ({
+                'history': history_counts.get(row['website_user_id'], 0),
+                'watchlist': watchlist_counts.get(row['website_user_id'], 0),
+                'activity': activity_counts.get(row['website_user_id'], 0),
+                'cloud': cloud_map.get(row['website_user_id']),
+            } if row['website_user_id'] else None)
             row['silent_days'] = ((timezone.now() - row['last_seen']).days
                                   if row['last_seen'] else None)
 
-        ctx.update({'unique_rows': page_rows, 'unique_page': unique_page,
-                    'devices_view': dview, 'device_chips': chips,
-                    'silent_days': silent_days, 'silent_chips': silent_chips,
-                    'devices_delete_url': reverse(
-                        'android_app_devices_delete', args=[selected_app.id]),
-                    'devices_new': nview, 'new_counts': new_counts,
-                    # Row numbers continue across pages instead of restarting at 1.
-                    'row_offset': (unique_page.number - 1) * 25})
+        # The other filters as one query suffix, so a chip link only has to add
+        # its own `f=` and never drops what the reader already chose.
+        people_qs = ''.join(
+            '&' + _urlencode({k: v}) for k, v in
+            {'sil': silent_days or '', 'nv': nview, 'app': app_filter_id or '',
+             'version': version_filter, 'q': q}.items() if v)
+
+        ctx.update({
+            'people_qs': people_qs,
+            'version_filter': version_filter,
+            'people_rows': people_rows,
+            'page_obj': page_obj,
+            'people_columns': columns_for(
+                request.user, 'people', people_sort, people_dir,
+                base_params={'q': q, 'f': view, 'sil': silent_days or '',
+                             'nv': nview, 'app': app_filter_id or '',
+                             'version': version_filter}),
+            'people_chips': chip_counts,
+            'version_choices': version_choices,
+            'silent_days': silent_days,
+            'silent_choices': (7, 14, 30, 60, 90),
+            'people_new': nview,
+            'new_counts': new_counts,
+            'devices_delete_url': reverse('android_app_devices_delete',
+                                          args=[selected_app.id]),
+            'row_offset': (page_obj.number - 1) * 25,
+        })
 
 
-    elif tab == 'dailyusers':
+    if tab == 'dailyusers':
         # ---------------------------------------------- users per day / month / year
         # How many users the app saw in each period. A user here is a device:
         # the app reports one install per device and the server keeps one row
@@ -5857,18 +5789,6 @@ def android_app_users_full(request, app_id):
                 'shown': sum(values),
             },
         })
-
-    else:  # recent visits
-        # ---------------------------------------------------------------- visits
-        # The analytics page's "Recent Visits" plus its "Full Request Debug"
-        # expander, both moved here so the endpoint page stays a dashboard.
-        # visits_count_qs (built in the shared block above, for the header badge)
-        # already carries the search filter.
-        visits_qs = visits_count_qs.select_related('device')
-        visits_page = Paginator(visits_qs.order_by('-visited_at'), 25).get_page(
-            request.GET.get('vpage') or 1)
-
-        ctx['visits_page'] = visits_page
 
     spec_keys = default_keys(tab)
 
