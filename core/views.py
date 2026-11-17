@@ -4926,7 +4926,32 @@ def android_app_users_full(request, app_id):
 
     # ---------------------------------------------------------------- filters
     q = (request.GET.get('q') or '').strip()
-    view = (request.GET.get('f') or 'all').strip().lower()
+
+    # ---------------------------------------------------------------- tabs
+    # Four lists, not eight. The verified, signed-out and app-version lists are
+    # filters on the account table, and the devices gone quiet are a filter on
+    # the device table, so each table carries every column of the tab it
+    # replaced and a user can be seen and managed without switching tabs. The
+    # old tab names still resolve, so existing links and bookmarks keep working.
+    TABS = ('accounts', 'uniquedevices', 'visits', 'dailyusers')
+    tab = (request.GET.get('tab') or '').strip().lower()
+    legacy_view = ''
+    legacy_ds = ''
+    if tab == 'registered':
+        tab, legacy_view = 'accounts', 'verified'
+    elif tab == 'signedout':
+        tab, legacy_view = 'accounts', 'signedout'
+    elif tab == 'versions':
+        tab = 'accounts'
+    elif tab == 'inactive':
+        tab, legacy_ds = 'uniquedevices', 'inactive'
+    elif tab == 'devices':
+        tab, legacy_ds = 'uniquedevices', 'noacc'
+    if tab not in TABS:
+        tab = 'accounts'
+    partial = request.GET.get('partial') == '1'
+
+    view = (request.GET.get('f') or legacy_view or 'all').strip().lower()
 
     # An account's app is whichever install carries its device id — or the
     # account key the visit endpoint resolved for it — so "which app is this
@@ -4949,6 +4974,15 @@ def android_app_users_full(request, app_id):
         users_qs = users_qs.filter(is_subscribed=True)
     elif view == 'free':
         users_qs = users_qs.filter(is_subscribed=False)
+    elif view == 'verified':
+        # The old "Registered & verified" list: the address was actually proven.
+        users_qs = users_qs.filter(is_email_verified=True)
+    elif view == 'signedout':
+        # The old signed-out list: still using the app, but with no session.
+        logged_out = list(UserHeartbeat.objects.filter(is_logged_in=False)
+                          .values_list('email', flat=True))
+        users_qs = (users_qs.filter(email__in=logged_out) if logged_out
+                    else users_qs.none())
     elif view in ('online', 'never'):
         # Heartbeats live on the users DB, so the online filter is matched on
         # the email set first (small table) instead of a cross-DB join.
@@ -4980,23 +5014,6 @@ def android_app_users_full(request, app_id):
                 | Q(user_id__in=[k for k in keys if k.isdigit()]))
         else:
             users_qs = users_qs.none()
-
-    # ---------------------------------------------------------------- tabs
-    # One list per tab. Only the open tab's rows are built and only its markup
-    # is sent: this page used to render the accounts table, the devices table
-    # with its per-device drill-downs, the whole recent-visits dump and the
-    # signed-out list at the same time, which is what made it heavy. The tab
-    # bar asks for ?partial=1 when the admin switches, so that swap needs no
-    # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'registered', 'versions', 'uniquedevices', 'inactive',
-            'signedout', 'visits', 'dailyusers')
-    tab = (request.GET.get('tab') or '').strip().lower()
-    legacy_devices = tab == 'devices'
-    if legacy_devices:
-        tab = 'uniquedevices'
-    if tab not in TABS:
-        tab = 'accounts'
-    partial = request.GET.get('partial') == '1'
 
     # ---------------------------------------------------------- version filter
     # Every app version the current scope has reported, deduped and ordered by
@@ -5030,26 +5047,22 @@ def android_app_users_full(request, app_id):
     # above new ones. The version string is the one reliable key.
     version_facets.sort(key=lambda f: (_version_key(f['app_version']), f['n']),
                         reverse=True)
-    if tab == 'versions' and selected_versions:
+    if tab == 'accounts' and selected_versions:
         users_qs = users_qs.filter(app_version__in=selected_versions)
 
-    # -------------------------------------------------- registered & verified tab
-    # "Registered" here means the address was actually proven - Google token,
-    # emailed OTP, or the web sign-up flow - i.e. SyncedUser.is_email_verified.
-    # That is the list of accounts the app trusts and we may email, so it gets
-    # its own tab instead of being a filter on the accounts table. Sorting is
-    # per column and comes from a header click (?sort=…&dir=…).
+    # -------------------------------------------------- sorting the account table
+    # One account table, sorted by a header click (?sort=…&dir=…). The columns
+    # that used to live on the verified list are part of it, so the same sort
+    # fields apply.
     from .admin_table_columns import (columns_for, default_keys,
                                       filter_table_columns, order_queryset,
                                       parse_sort, saved_keys_map, specs,
                                       table_cells_attr)
-    registered_sort, registered_dir = '', ''
-    if tab == 'registered':
-        users_qs = users_qs.filter(is_email_verified=True)
-        registered_sort, registered_dir = parse_sort(
-            'registered', request.GET.get('sort'), request.GET.get('dir'))
-        users_qs = order_queryset(users_qs, 'registered',
-                                  registered_sort, registered_dir)
+    account_sort, account_dir = '', ''
+    if tab == 'accounts':
+        account_sort, account_dir = parse_sort(
+            'accounts', request.GET.get('sort'), request.GET.get('dir'))
+        users_qs = order_queryset(users_qs, 'accounts', account_sort, account_dir)
 
     # ------------------------------------------------------------ headline counts
     all_users = SyncedUser.objects.all()
@@ -5134,12 +5147,12 @@ def android_app_users_full(request, app_id):
             'column_layout': layouts,
         }
 
-    if tab == 'registered':
-        ctx['registered_columns'] = columns_for(
-            request.user, 'registered', registered_sort, registered_dir,
+    if tab == 'accounts':
+        ctx['account_columns'] = columns_for(
+            request.user, 'accounts', account_sort, account_dir,
             base_params={'q': q, 'f': view, 'app': app_filter_id or ''})
 
-    if tab in ('accounts', 'versions', 'registered'):
+    if tab == 'accounts':
         # ------------------------------------------------------------- user rows
         paginator = Paginator(users_qs, 25)
         page_obj = paginator.get_page(request.GET.get('page') or 1)
@@ -5220,80 +5233,6 @@ def android_app_users_full(request, app_id):
             'page_obj': page_obj,
         })
 
-    elif tab == 'devices':
-        devices_qs = all_devices.order_by('-last_seen_at')
-        # The tab IS "devices with no account", so that is what shows unless
-        # the "All devices" chip asks for everything (dn=0).
-        no_account_only = request.GET.get('dn') != '0'
-        if no_account_only and linked_device_ids:
-            devices_qs = devices_qs.exclude(user_id__in=linked_device_ids)
-        if q:
-            devices_qs = devices_qs.filter(Q(user_id__icontains=q) | Q(device_model__icontains=q)
-                                           | Q(os_version__icontains=q))
-
-        device_page = Paginator(devices_qs, 25).get_page(request.GET.get('dpage') or 1)
-        page_devices = list(device_page.object_list)
-        last_visit = {}
-        if page_devices:
-            # Latest visit per device (one query) for IP + build + exact last hit.
-            for v in (AndroidAppDeviceVisit.objects
-                      .filter(device__in=page_devices).order_by('-visited_at')
-                      .values('device_id', 'ip_address', 'build_identifier', 'visited_at')[:5000]):
-                last_visit.setdefault(v['device_id'], v)
-
-        # Everything each row expands into: the account behind the device, its
-        # last visits (with the full request) and its last app-log lines. Two
-        # queries pull the freshest few hundred visits/logs for the devices on
-        # this page and they are grouped in Python — no window functions, so it
-        # behaves the same on SQLite, MySQL and Oracle.
-        def _drill_lists(devices):
-            device_pks = [d.pk for d in devices]
-            visits, logs = {}, {}
-            if not device_pks:
-                return visits, logs
-            for v in (AndroidAppDeviceVisit.objects.filter(device_id__in=device_pks)
-                      .order_by('-visited_at')[:DRILLDOWN_LIMIT * len(device_pks)]):
-                bucket = visits.setdefault(v.device_id, [])
-                if len(bucket) < DRILLDOWN_LIMIT:
-                    bucket.append(v)
-            for entry in (AndroidAppLog.objects.filter(device_id__in=device_pks)
-                          .order_by('-timestamp')[:DRILLDOWN_LIMIT * len(device_pks)]):
-                bucket = logs.setdefault(entry.device_id, [])
-                if len(bucket) < DRILLDOWN_LIMIT:
-                    bucket.append(entry)
-            return visits, logs
-
-        drill_visits, drill_logs = _drill_lists(page_devices)
-
-        # The synced profile behind each device (plan, block state, last sync) and
-        # the Django login it belongs to, keyed by the device id the app sends.
-        synced_by_device = {}
-        for su in SyncedUser.objects.exclude(device_id='').order_by('-last_synced_at'):
-            synced_by_device.setdefault(su.device_id, su)
-        account_ids = [su.user_id for su in synced_by_device.values() if su.user_id]
-        account_by_id = ({u.pk: u for u in User.objects.filter(pk__in=account_ids)}
-                         if account_ids else {})
-
-        device_rows = []
-        for d in page_devices:
-            su = synced_by_device.get(d.user_id)
-            device_rows.append({
-                'device': d,
-                'email': email_by_device.get(d.user_id),
-                'visit': last_visit.get(d.id),
-                'synced': su,
-                'account': account_by_id.get(su.user_id) if su else None,
-                'visits': drill_visits.get(d.pk, []),
-                'logs': drill_logs.get(d.pk, []),
-                'log_url': reverse('android_device_logs', args=[selected_app.id, d.user_id]),
-            })
-
-        ctx.update({
-            'device_rows': device_rows,
-            'device_page': device_page,
-            'no_account_only': no_account_only,
-        })
-
     elif tab == 'uniquedevices':
         # ------------------------------------------------------- unique devices
         # One row per device, merged from the account's sync and heartbeat (those
@@ -5303,11 +5242,18 @@ def android_app_users_full(request, app_id):
         # filtered, searched and paginated without touching the database again.
         from .models import HeartbeatActivity
 
-        dview = (request.GET.get('ds') or '').strip().lower()
-        if dview not in ('', 'all', 'noacc', 'online', 'paid', 'free', 'expiring'):
+        dview = (request.GET.get('ds') or legacy_ds or '').strip().lower()
+        if dview not in ('', 'all', 'noacc', 'online', 'paid', 'free', 'expiring',
+                         'inactive'):
             dview = ''
         if not dview:
-            dview = 'noacc' if legacy_devices else 'all'
+            dview = 'all'
+        # "Silent for N days": the cleanup list (the old Inactive devices tab).
+        try:
+            silent_days = int(request.GET.get('d') or 3)
+        except (TypeError, ValueError):
+            silent_days = 3
+        silent_days = max(1, min(365, silent_days))
 
         cache_key = 'app_unique_devices_v2_%s' % selected_app.id
         merged = cache.get(cache_key)
@@ -5396,6 +5342,10 @@ def android_app_users_full(request, app_id):
                     'kind': 'account' if prof else ('guest' if beat else 'install'),
                     'linked_by_ip': any(i.account_key and i.account_key != i.user_id
                                         for i in installs),
+                    # The install rows behind this row, so the bulk delete on the
+                    # device table can remove exactly them.
+                    'install_ids': ','.join(str(i.pk) for i in installs),
+                    'install_count': len(installs),
                 })
             cache.set(cache_key, merged, 60)
 
@@ -5412,6 +5362,9 @@ def android_app_users_full(request, app_id):
             limit = timezone.localdate() + datetime.timedelta(days=7)
             rows = [r for r in rows if r['is_subscribed'] and r['valid_until']
                     and r['valid_until'] <= limit]
+        elif dview == 'inactive':
+            cutoff = timezone.now() - datetime.timedelta(days=silent_days)
+            rows = [r for r in rows if r['last_seen'] and r['last_seen'] < cutoff]
 
         if q:
             needle = q.lower()
@@ -5447,6 +5400,7 @@ def android_app_users_full(request, app_id):
         def _expiring(r):
             return r['is_subscribed'] and r['valid_until'] and r['valid_until'] <= expiring_limit
 
+        silent_cutoff = timezone.now() - datetime.timedelta(days=silent_days)
         chips = {
             'all': len(merged),
             'online': sum(1 for r in merged if r['online']),
@@ -5454,7 +5408,19 @@ def android_app_users_full(request, app_id):
             'free': sum(1 for r in merged if r['profile_pk'] and not r['is_subscribed']),
             'noacc': sum(1 for r in merged if r['kind'] != 'account'),
             'expiring': sum(1 for r in merged if _expiring(r)),
+            'inactive': sum(1 for r in merged
+                            if r['last_seen'] and r['last_seen'] < silent_cutoff),
         }
+        # How many devices are silent for each bucket, for the "not seen for"
+        # chips: cumulative, so a device silent for a month counts in every one.
+        silent_chips = []
+        for n in (1, 3, 7, 14, 30, 60):
+            bucket_cutoff = timezone.now() - datetime.timedelta(days=n)
+            silent_chips.append({
+                'days': n,
+                'count': sum(1 for r in merged
+                             if r['last_seen'] and r['last_seen'] < bucket_cutoff),
+            })
 
         if request.GET.get('export') == 'csv':
             response = HttpResponse(content_type='text/csv')
@@ -5487,9 +5453,14 @@ def android_app_users_full(request, app_id):
                     bucket.append(entry)
         for row in page_rows:
             row['recent'] = recent.get(row['email'], [])
+            row['silent_days'] = ((timezone.now() - row['last_seen']).days
+                                  if row['last_seen'] else None)
 
         ctx.update({'unique_rows': page_rows, 'unique_page': unique_page,
                     'devices_view': dview, 'device_chips': chips,
+                    'silent_days': silent_days, 'silent_chips': silent_chips,
+                    'devices_delete_url': reverse(
+                        'android_app_devices_delete', args=[selected_app.id]),
                     'devices_new': nview, 'new_counts': new_counts,
                     # Row numbers continue across pages instead of restarting at 1.
                     'row_offset': (unique_page.number - 1) * 25})
@@ -5887,63 +5858,7 @@ def android_app_users_full(request, app_id):
             },
         })
 
-    elif tab == 'inactive':
-        # ------------------------------------------------------- devices gone quiet
-        # The cleanup list: installs the app has not seen for N days. Buckets are
-        # cumulative ("3 days" means three or more), because that is the question
-        # an operator asks — how much dead weight is there — and a device that has
-        # been silent for a month belongs in every bucket. Deleting one removes
-        # its visits too; the panel says so before the button is pressed.
-        try:
-            inactive_days = int(request.GET.get('d') or 3)
-        except (TypeError, ValueError):
-            inactive_days = 3
-        inactive_days = max(1, min(365, inactive_days))
-        cutoff = timezone.now() - datetime.timedelta(days=inactive_days)
-
-        inactive_qs = (all_devices.filter(last_seen_at__lt=cutoff)
-                       .order_by('-last_seen_at'))
-        if q:
-            inactive_qs = inactive_qs.filter(
-                Q(user_id__icontains=q) | Q(device_model__icontains=q)
-                | Q(os_version__icontains=q))
-        inactive_page = Paginator(inactive_qs, 50).get_page(request.GET.get('ipage') or 1)
-
-        inactive_rows = []
-        now = timezone.now()
-        for dev in inactive_page.object_list:
-            email = (email_by_device.get(dev.user_id)
-                     or email_by_device.get(dev.account_key) or '')
-            inactive_rows.append({
-                'dev': dev,
-                'email': email,
-                'registered': dev.registered_at is not None or bool(email),
-                'days': (now - dev.last_seen_at).days,
-                'last_seen': timezone.localtime(dev.last_seen_at).strftime('%d %b %Y'),
-                'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y')
-                              if dev.first_seen_at else '',
-                'block_mode': dev.block_mode or '',
-            })
-
-        inactive_chips = []
-        for n in (1, 2, 3, 7, 14, 30, 60):
-            inactive_chips.append({
-                'days': n,
-                'count': all_devices.filter(
-                    last_seen_at__lt=timezone.now() - datetime.timedelta(days=n)).count(),
-            })
-
-        ctx.update({
-            'inactive_days': inactive_days,
-            'inactive_rows': inactive_rows,
-            'inactive_page': inactive_page,
-            'inactive_total': inactive_qs.count(),
-            'inactive_chips': inactive_chips,
-            'inactive_all_devices': all_devices.count(),
-            'online_window_min': getattr(UserHeartbeat, 'ONLINE_WINDOW_SECONDS', 300) // 60,
-        })
-
-    elif tab == 'visits':
+    else:  # recent visits
         # ---------------------------------------------------------------- visits
         # The analytics page's "Recent Visits" plus its "Full Request Debug"
         # expander, both moved here so the endpoint page stays a dashboard.
@@ -5955,49 +5870,6 @@ def android_app_users_full(request, app_id):
 
         ctx['visits_page'] = visits_page
 
-    else:  # signed-out sessions
-        # Still using the app as a guest (heartbeat says is_logged_in=False).
-        # ------------------------------------------------- sessions signed out of the app
-        # Each heartbeat row already carries the whole live picture (device,
-        # IP, screen, the title being played, its position, the app's recent
-        # actions), so the panel reads the row and derives the few display
-        # values here rather than storing another copy of them.
-        def _pct(position, duration):
-            try:
-                if not duration:
-                    return 0
-                return max(0, min(100, int(position * 100 / duration)))
-            except (TypeError, ValueError, ZeroDivisionError):
-                return 0
-
-        signed_out_qs = UserHeartbeat.objects.filter(is_logged_in=False)
-        signed_out_online = signed_out_qs.filter(
-            last_seen_at__gte=timezone.now()
-            - timezone.timedelta(seconds=UserHeartbeat.ONLINE_WINDOW_SECONDS)).count()
-
-        signed_out = []
-        for h in signed_out_qs.order_by('-last_seen_at')[:500]:
-            actions = [str(a) for a in (h.recent_actions or []) if str(a).strip()]
-            signed_out.append({
-                'hb': h,
-                'email': h.email,
-                'online': h.is_online,
-                'ip': h.ip_address or '',
-                'pct': _pct(h.playback_position_ms, h.duration_ms),
-                'watched_min': int((h.playback_position_ms or 0) // 60000),
-                'total_min': int((h.duration_ms or 0) // 60000),
-                'actions': actions,
-                'last_action': actions[0] if actions else '',
-            })
-
-        signed_out_page = Paginator(signed_out, 25).get_page(request.GET.get('spage') or 1)
-        ctx['signed_out'] = list(signed_out_page.object_list)
-        ctx['signed_out_page'] = signed_out_page
-        ctx['signed_out_total'] = signed_out_qs.count()
-        ctx['signed_out_online'] = signed_out_online
-
-    # Hide and re-order the columns here, before the markup leaves the server,
-    # so a hidden column is never sent and cannot flash while the page loads.
     spec_keys = default_keys(tab)
 
     def _with_layout(html):

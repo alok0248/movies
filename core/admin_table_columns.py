@@ -26,43 +26,30 @@ from .models import AdminTableLayout
 
 # Fallback wording when a tab has no saved layout: this is what a fresh admin
 # sees, and the order the table markup is written in.
+# The page keeps four tabs: every account in one table (verified, signed out and
+# app version are filters on it), every device in another (the devices gone
+# quiet are a filter there, with the same bulk delete), the visit log and the
+# per-period counts. The tables carry the columns of the tabs they replaced.
 TAB_SPECS = {
     'accounts': [
-        {'key': 'user', 'label': 'User'},
-        {'key': 'status', 'label': 'Status'},
-        {'key': 'device', 'label': 'Device (live)'},
-        {'key': 'app_device', 'label': 'App device record'},
-        {'key': 'account', 'label': 'Account'},
-        {'key': 'subscription', 'label': 'Subscription'},
-        {'key': 'library', 'label': 'Library / cloud'},
-        {'key': 'access', 'label': 'Access'},
-        {'key': 'manage', 'label': 'Manage'},
-    ],
-    'registered': [
         {'key': 'user', 'label': 'User', 'sort': 'display_name'},
         {'key': 'email', 'label': 'Email', 'sort': 'email'},
         {'key': 'verified', 'label': 'Email verified', 'sort': 'is_email_verified'},
         {'key': 'joined', 'label': 'Registered', 'sort': 'created_at'},
-        {'key': 'plan', 'label': 'Plan', 'sort': 'plan'},
-        {'key': 'valid', 'label': 'Paid until', 'sort': 'valid_until'},
-        {'key': 'status', 'label': 'Block state', 'sort': 'block_mode'},
+        {'key': 'status', 'label': 'Status (live)'},
         {'key': 'device', 'label': 'Device', 'sort': 'device_model'},
         {'key': 'app', 'label': 'App version', 'sort': 'app_version'},
         {'key': 'build', 'label': 'Build', 'sort': 'build_number'},
         {'key': 'last_sync', 'label': 'Last sync', 'sort': 'last_synced_at'},
+        {'key': 'app_device', 'label': 'Install record'},
+        {'key': 'account', 'label': 'Login account'},
+        {'key': 'subscription', 'label': 'Subscription', 'sort': 'plan'},
         {'key': 'library', 'label': 'Library / cloud'},
+        {'key': 'access', 'label': 'Access', 'sort': 'block_mode'},
         {'key': 'manage', 'label': 'Manage'},
     ],
-    'versions': [
-        {'key': 'user', 'label': 'User'},
-        {'key': 'app_version', 'label': 'App version'},
-        {'key': 'build', 'label': 'Build'},
-        {'key': 'status', 'label': 'Status'},
-        {'key': 'device', 'label': 'Device'},
-        {'key': 'last_sync', 'label': 'Last synced'},
-        {'key': 'plan', 'label': 'Plan'},
-    ],
     'uniquedevices': [
+        {'key': 'check', 'label': ''},
         {'key': 'index', 'label': '#'},
         {'key': 'device', 'label': 'Device'},
         {'key': 'account', 'label': 'Account'},
@@ -71,26 +58,9 @@ TAB_SPECS = {
         {'key': 'subscription', 'label': 'Subscription'},
         {'key': 'first_registered', 'label': 'First registered'},
         {'key': 'last_seen', 'label': 'Last seen online'},
-        {'key': 'visits', 'label': 'Visits'},
-        {'key': 'history', 'label': 'History'},
-    ],
-    'inactive': [
-        {'key': 'check', 'label': ''},
-        {'key': 'device', 'label': 'Device'},
-        {'key': 'account', 'label': 'Account'},
-        {'key': 'last_seen', 'label': 'Last seen'},
         {'key': 'silent', 'label': 'Silent'},
         {'key': 'visits', 'label': 'Visits'},
-        {'key': 'first_seen', 'label': 'First seen'},
-        {'key': 'actions', 'label': ''},
-    ],
-    'signedout': [
-        {'key': 'account', 'label': 'Account'},
-        {'key': 'online', 'label': 'Online & IP'},
-        {'key': 'app', 'label': 'App & device'},
-        {'key': 'doing', 'label': 'What they are doing'},
-        {'key': 'last_seen', 'label': 'Last seen'},
-        {'key': 'actions', 'label': ''},
+        {'key': 'history', 'label': 'History'},
     ],
     'visits': [
         {'key': 'time', 'label': 'Time'},
@@ -116,7 +86,7 @@ TAB_SPECS = {
 # ORM fields a header click may sort by. A column that is not listed here is
 # not sortable (it is computed per row, or it is an action cell).
 SORT_FIELDS = {
-    'registered': {
+    'accounts': {
         'display_name': 'display_name',
         'email': 'email',
         'is_email_verified': 'is_email_verified',
@@ -131,7 +101,7 @@ SORT_FIELDS = {
     },
 }
 
-DEFAULT_SORT = {'registered': '-last_synced_at'}
+DEFAULT_SORT = {'accounts': '-last_synced_at'}
 
 
 def specs(tab):

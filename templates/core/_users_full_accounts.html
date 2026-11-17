@@ -1,10 +1,16 @@
 {% load custom_filters %}
-    <!-- ============================ ACCOUNTS ============================ -->
+    <!-- ============================ ACCOUNTS ============================
+         One table for every account. The lists that used to be separate tabs
+         (verified only, signed out of the app, one app version) are the filter
+         chips below, so a user can be found, inspected and managed here
+         without switching tabs. -->
     <div class="d-flex gap-2 flex-wrap mt-2 mb-1">
-        <a class="fbtn {% if view == 'all' %}active{% endif %}" href="?tab=accounts{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">All</a>
+        <a class="fbtn {% if view == 'all' %}active{% endif %}" href="?tab=accounts{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">All <span class="sub">{{ counts.total }}</span></a>
         <a class="fbtn {% if view == 'online' %}active{% endif %}" href="?tab=accounts&f=online{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Online now</a>
-        <a class="fbtn {% if view == 'blocked' %}active{% endif %}" href="?tab=accounts&f=blocked{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Blocked</a>
-        <a class="fbtn {% if view == 'subscribed' %}active{% endif %}" href="?tab=accounts&f=subscribed{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Subscribed</a>
+        <a class="fbtn {% if view == 'verified' %}active{% endif %}" href="?tab=accounts&f=verified{% if app_filter %}&amp;app={{ app_filter }}{% endif %}" title="The email address was actually proven (Google token, emailed code, or the web sign-up flow)">Verified <span class="sub">{{ counts.registered }}</span></a>
+        <a class="fbtn {% if view == 'signedout' %}active{% endif %}" href="?tab=accounts&f=signedout{% if app_filter %}&amp;app={{ app_filter }}{% endif %}" title="Still using the app, but with no session (heartbeat says signed out)">Signed out of app <span class="sub">{{ counts.signed_out }}</span></a>
+        <a class="fbtn {% if view == 'blocked' %}active{% endif %}" href="?tab=accounts&f=blocked{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Blocked <span class="sub">{{ counts.blocked }}</span></a>
+        <a class="fbtn {% if view == 'subscribed' %}active{% endif %}" href="?tab=accounts&f=subscribed{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Subscribed <span class="sub">{{ counts.subscribed }}</span></a>
         <a class="fbtn {% if view == 'free' %}active{% endif %}" href="?tab=accounts&f=free{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Free</a>
         <a class="fbtn {% if view == 'never' %}active{% endif %}" href="?tab=accounts&f=never{% if app_filter %}&amp;app={{ app_filter }}{% endif %}">Never online</a>
     </div>
@@ -20,26 +26,30 @@
         {% endfor %}
         <span class="sub ms-2">Access changes land on the next heartbeat (&le;60s).</span>
     </div>
-    <div class="adm-table-wrap mt-3">
+
+    <!-- App version: every version in the current scope, each row the number of
+         accounts on it. This used to be a tab of its own. -->
+    {% include 'core/_users_full_version_filter.html' %}
+
+    <div class="adm-table-wrap mt-2">
         <table class="table table-dark table-hover mb-0" data-tab-cols="{{ table_cells.accounts }}">
             <thead>
                 <tr>
-                    <th>User</th>
-                    <th>Status</th>
-                    <th>Device (live)</th>
-                    <th>App device record</th>
-                    <th>Account</th>
-                    <th>Subscription</th>
-                    <th>Library / cloud</th>
-                    <th>Access</th>
-                    <th style="min-width:330px;">Manage</th>
+                    {% for c in account_columns %}
+                    <th data-col="{{ c.key }}"{% if c.key == 'manage' %} style="min-width:330px;"{% endif %}>
+                        {% if c.sortable %}
+                            <a class="col-sort{% if c.active %} is-active{% endif %}" href="?{{ c.url }}"
+                               title="Sort by {{ c.label }}">{{ c.label }}{% if c.active %}<i class="fas fa-caret-{% if c.dir == 'asc' %}up{% else %}down{% endif %} ms-1"></i>{% endif %}</a>
+                        {% else %}{{ c.label }}{% endif %}
+                    </th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>
                 {% for r in rows %}
                 {% with u=r.obj hb=r.hb %}
                 <tr id="block-row-{{ u.id }}" data-email="{{ u.email }}">
-                    <td>
+                    <td data-col="user">
                         <div class="d-flex align-items-center gap-2">
                             {% if u.photo_url %}
                                 <img class="avatar" src="{{ u.photo_url }}" alt="">
@@ -48,12 +58,32 @@
                             {% endif %}
                             <div>
                                 <div class="fw-semibold text-white">{{ u.display_name|default:u.email }}</div>
-                                <div class="sub"><code class="mono">{{ u.email }}</code></div>
-                                <div class="sub">#{{ u.id }} · synced {{ u.last_synced_at|timesince }} ago</div>
+                                <div class="sub">#{{ u.id }}</div>
+                                {% if r.apps %}
+                                    <div class="mt-1">{% for n in r.apps %}<span class="pill bg-dark border border-secondary me-1">{{ n }}</span>{% endfor %}</div>
+                                {% endif %}
                             </div>
                         </div>
                     </td>
-                    <td>
+                    <td data-col="email">
+                        <code class="mono">{{ u.email }}</code>
+                        <div class="sub">
+                            {% if u.google_sub %}<span class="pill bg-info">Google</span>{% endif %}
+                            {% if u.auth_provider %}{{ u.auth_provider }}{% endif %}
+                        </div>
+                    </td>
+                    <td data-col="verified">
+                        {% if u.is_email_verified %}
+                            <span class="pill bg-success"><i class="fas fa-check me-1"></i>Verified</span>
+                        {% else %}
+                            <span class="pill bg-warning text-dark">Not verified</span>
+                        {% endif %}
+                    </td>
+                    <td data-col="joined">
+                        <div class="text-white">{{ u.created_at|date:'Y-m-d'|default:'—' }}</div>
+                        {% if u.created_at %}<div class="sub">{{ u.created_at|timesince }} ago</div>{% endif %}
+                    </td>
+                    <td data-col="status">
                         {% if hb and hb.is_online %}
                             <span class="pill bg-success"><i class="fas fa-circle me-1" style="font-size:.5rem;"></i>Online</span>
                         {% elif hb %}
@@ -63,45 +93,51 @@
                         {% endif %}
                         {% if hb %}
                             <div class="sub mt-1">{{ hb.last_seen_at|timesince }} ago</div>
-                            {% if hb.is_playing %}<div class="sub text-success">▶ {{ hb.media_title|default:'playing' }}</div>{% endif %}
+                            {% if hb.is_playing %}<div class="sub text-success">&#9654; {{ hb.media_title|default:'playing' }}</div>{% endif %}
                             {% if hb.current_screen %}<div class="sub">{{ hb.current_screen }}</div>{% endif %}
                             {% if not hb.is_logged_in %}<div class="pill bg-warning text-dark mt-1">Signed out</div>{% endif %}
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-col="device">
                         {% if hb %}
                             <div class="text-white">{% if hb.device_model %}<i class="fab fa-android text-success me-1"></i>{{ hb.device_model }}{% else %}{{ u.device_model|default:'-' }}{% endif %}</div>
-                            <div class="sub">v{{ hb.app_version|default:u.app_version|default:'-' }} · {{ hb.os_version|default:u.os_version }}</div>
-                            {% if hb.device_id %}<div class="mono sub">{{ hb.device_id }}</div>{% endif %}
+                            <div class="sub">{{ hb.os_version|default:u.os_version }}</div>
+                            {% if hb.device_id %}<div class="mono sub" title="{{ hb.device_id }}">{{ hb.device_id|truncatechars:22 }}</div>{% endif %}
                             {% if hb.player_engine %}<div class="sub">{{ hb.player_engine }}</div>{% endif %}
                         {% else %}
                             <div class="text-white">{{ u.device_model|default:'-' }}</div>
-                            <div class="sub">v{{ u.app_version|default:'-' }}{% if u.build_number %} · build {{ u.build_number }}{% endif %}</div>
-                            {% if u.device_id %}<div class="mono sub">{{ u.device_id }}</div>{% endif %}
+                            <div class="sub">{{ u.os_version }}</div>
+                            {% if u.device_id %}<div class="mono sub" title="{{ u.device_id }}">{{ u.device_id|truncatechars:22 }}</div>{% endif %}
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-col="app">
+                        <div class="text-white">{% if hb.app_version %}{{ hb.app_version }}{% elif u.app_version %}{{ u.app_version }}{% else %}&mdash;{% endif %}</div>
+                        {% if u.app_version and hb.app_version and hb.app_version != u.app_version %}<div class="sub">sync says {{ u.app_version }}</div>{% endif %}
+                    </td>
+                    <td data-col="build" class="mono">{{ u.build_number|default:'—' }}</td>
+                    <td data-col="last_sync">
+                        <div class="text-white">{% if u.last_synced_at %}{{ u.last_synced_at|timesince }} ago{% else %}&mdash;{% endif %}</div>
+                        {% if u.last_synced_at %}<div class="sub">{{ u.last_synced_at|date:'Y-m-d H:i' }}</div>{% endif %}
+                    </td>
+                    <td data-col="app_device">
                         {% if r.device %}
-                            <div class="sub">visits {{ r.device.total_visits }} · last {{ r.device.last_seen_at|timesince }} ago</div>
+                            <div class="sub">visits {{ r.device.total_visits }} &middot; last {{ r.device.last_seen_at|timesince }} ago</div>
                             <div class="sub">first seen {{ r.device.first_seen_at|date:'Y-m-d H:i' }}</div>
                         {% else %}
                             <div class="sub">No device record yet</div>
                         {% endif %}
-                        {% if r.apps %}
-                            <div class="mt-1">{% for n in r.apps %}<span class="pill bg-dark border border-secondary me-1">{{ n }}</span>{% endfor %}</div>
-                        {% endif %}
                     </td>
-                    <td>
+                    <td data-col="account">
                         {% if r.account %}
                             <div class="text-white">{{ r.account.username }}</div>
                             <div class="sub">joined {{ r.account.date_joined|date:'Y-m-d' }}</div>
                             <div class="sub">last login {{ r.account.last_login|date:'Y-m-d H:i'|default:'never' }}</div>
-                            <div>{% if r.account.is_active %}<span class="pill bg-success">Verified</span>{% else %}<span class="pill bg-warning text-dark">Not verified</span>{% endif %}</div>
+                            <div>{% if r.account.is_active %}<span class="pill bg-success">Login active</span>{% else %}<span class="pill bg-warning text-dark">Login disabled</span>{% endif %}</div>
                         {% else %}
                             <span class="pill bg-dark border border-secondary text-secondary">No login account</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-col="subscription">
                         {% if u.is_subscribed %}
                             <span class="pill bg-success"><i class="fas fa-check me-1"></i>{{ u.plan|default:'VIP' }}</span>
                             <div class="sub">until {{ u.valid_until|date:'Y-m-d'|default:'—' }} ({{ u.days_remaining }}d)</div>
@@ -110,7 +146,7 @@
                         {% endif %}
                         {% if u.features %}<div class="sub">{{ u.features|join:', '|truncatechars:40 }}</div>{% endif %}
                     </td>
-                    <td>
+                    <td data-col="library">
                         {% if r.cloud %}
                             <div class="sub">history {{ r.cloud.history }} · list {{ r.cloud.watchlist }} · fav {{ r.cloud.favorites }} · dl {{ r.cloud.downloads }}</div>
                             <div class="sub">progress {{ r.cloud.progress }} · playlists {{ r.cloud.playlists }} · v{{ r.cloud.version }}</div>
@@ -119,7 +155,7 @@
                         {% endif %}
                         <div class="sub">plays {{ r.history }} · wl {{ r.watchlist }} · activity {{ r.activity }}</div>
                     </td>
-                    <td class="access-cell">
+                    <td data-col="access" class="access-cell">
                         {% if u.block_mode %}
                             <span class="pill bg-danger">{{ u.get_block_mode_display }}</span>
                             {% if u.blocked_at %}<div class="sub">{{ u.blocked_at|timesince }} ago</div>{% endif %}
@@ -128,7 +164,7 @@
                             <span class="pill bg-success">Active</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-col="manage">
                         <div class="d-flex gap-1 flex-wrap">
                             <button type="button" class="btn btn-sm btn-outline-warning act-btn" title="Playback blocked" onclick="blockUser({{ u.id }}, 'play', this)"><i class="fas fa-volume-mute me-1"></i>Play</button>
                             <button type="button" class="btn btn-sm btn-outline-warning act-btn" title="App blocked — no data, app shows Server is Down" onclick="blockUser({{ u.id }}, 'app', this)"><i class="fas fa-wifi me-1"></i>App</button>
@@ -145,7 +181,7 @@
                 </tr>
                 {% endwith %}
                 {% empty %}
-                <tr><td colspan="9" class="text-center text-secondary py-4"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>{% if q or view != 'all' %}No user matches this filter.{% else %}No synced users yet — they appear the first time the app syncs.{% endif %}</td></tr>
+                <tr><td colspan="{{ account_columns|length }}" class="text-center text-secondary py-4"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>{% if q or view != 'all' %}No user matches this filter.{% else %}No synced users yet — they appear the first time the app syncs.{% endif %}</td></tr>
                 {% endfor %}
             </tbody>
         </table>

@@ -1,21 +1,15 @@
 {% comment %}
    Which list is on screen. The view renders (and sends) exactly one of these —
    the page stays small and switching tabs is a fragment fetch, not a reload.
+   Four lists: the verified / signed-out / app-version lists are filters on the
+   account table, and the devices gone quiet are a filter on the device table.
 {% endcomment %}
-{% if active_tab == 'registered' %}
-{% include 'core/_users_full_registered.html' %}
-{% elif active_tab == 'uniquedevices' %}
+{% if active_tab == 'uniquedevices' %}
 {% include 'core/_users_full_uniquedevices.html' %}
-{% elif active_tab == 'versions' %}
-{% include 'core/_users_full_versions.html' %}
-{% elif active_tab == 'dailyusers' %}
-{% include 'core/_users_full_dailyusers.html' %}
-{% elif active_tab == 'inactive' %}
-{% include 'core/_users_full_inactive.html' %}
-{% elif active_tab == 'signedout' %}
-{% include 'core/_users_full_signedout.html' %}
 {% elif active_tab == 'visits' %}
 {% include 'core/_users_full_visits.html' %}
+{% elif active_tab == 'dailyusers' %}
+{% include 'core/_users_full_dailyusers.html' %}
 {% else %}
 {% include 'core/_users_full_accounts.html' %}
 {% endif %}

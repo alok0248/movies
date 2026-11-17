@@ -1,10 +1,10 @@
-"""The Registered & verified tab and the per-admin column layouts.
+"""The users-full tables and the per-admin column layouts.
 
-The users-full page has one tab per table. "Registered & verified" lists the
-profiles whose email address has actually been proven, with a searchable,
-sortable, paginated table; every tab can have its columns chosen and ordered by
-the admin (`core.admin_table_columns`) and the choice is stored per admin, not
-per app.
+The page has four tabs, each carrying every column of the tabs it replaced:
+the verified, signed-out and app-version lists are filters on the account
+table, and the devices gone quiet are a filter on the device table. Every tab
+can have its columns chosen and ordered by the admin
+(`core.admin_table_columns`) and the choice is stored per admin, not per app.
 """
 import json
 import re
@@ -50,56 +50,66 @@ class ColumnLayoutBase(TestCase):
         return json.loads(match.group(1))
 
 
-class RegisteredTabTest(ColumnLayoutBase):
-    def test_lists_only_verified_addresses(self):
-        SyncedUser.objects.create(email='verified@example.com',
-                                  display_name='Verified', is_email_verified=True)
-        SyncedUser.objects.create(email='unverified@example.com',
-                                  display_name='Unverified',
-                                  is_email_verified=False)
+class VerifiedFilterTest(ColumnLayoutBase):
+    """The verified list is a filter on the one account table, not a tab.
 
+    The old ?tab=registered URL still resolves to it, so links and bookmarks
+    from before the tabs were merged keep working.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.verified = SyncedUser.objects.create(
+            email='verified@example.com', display_name='Verified',
+            is_email_verified=True)
+        self.unverified = SyncedUser.objects.create(
+            email='unverified@example.com', display_name='Unverified',
+            is_email_verified=False)
+
+    def test_the_old_registered_tab_is_the_verified_filter_now(self):
         resp = self.client.get(self.users_url(tab='registered'))
 
         self.assertEqual(200, resp.status_code)
-        emails = [row['obj'].email for row in resp.context['rows']]
-        self.assertEqual(['verified@example.com'], emails)
+        self.assertEqual('accounts', resp.context['active_tab'])
+        self.assertEqual('verified', resp.context['view'])
+        self.assertEqual(['verified@example.com'],
+                         [row['obj'].email for row in resp.context['rows']])
         self.assertEqual(1, resp.context['counts']['registered'])
         self.assertEqual(2, resp.context['counts']['total'])
 
-    def test_search_narrows_the_registered_list(self):
-        SyncedUser.objects.create(email='a@example.com', display_name='A',
-                                  is_email_verified=True)
-        SyncedUser.objects.create(email='b@example.com', display_name='B',
-                                  is_email_verified=True)
-
-        resp = self.client.get(self.users_url(tab='registered', q='a@example'))
-
-        self.assertEqual(['a@example.com'],
+    def test_the_verified_chip_filters_the_same_table(self):
+        resp = self.client.get(self.users_url(tab='accounts', f='verified'))
+        self.assertEqual(['verified@example.com'],
                          [row['obj'].email for row in resp.context['rows']])
+
+    def test_search_narrows_the_verified_list(self):
+        resp = self.client.get(self.users_url(tab='accounts', f='verified',
+                                              q='unverified@'))
+        self.assertEqual([], [row['obj'].email for row in resp.context['rows']])
 
     def test_a_header_click_sorts_the_whole_table(self):
         for name in ('carol', 'alice', 'bob'):
             SyncedUser.objects.create(email='%s@example.com' % name,
                                       display_name=name, is_email_verified=True)
 
-        resp = self.client.get(self.users_url(tab='registered', sort='email',
-                                              dir='asc'))
+        resp = self.client.get(self.users_url(tab='accounts', f='verified',
+                                              sort='email', dir='asc'))
         ascending = [row['obj'].email for row in resp.context['rows']]
         self.assertEqual(sorted(ascending), ascending)
 
-        resp = self.client.get(self.users_url(tab='registered', sort='email',
-                                              dir='desc'))
+        resp = self.client.get(self.users_url(tab='accounts', f='verified',
+                                              sort='email', dir='desc'))
         descending = [row['obj'].email for row in resp.context['rows']]
         self.assertEqual(sorted(descending, reverse=True), descending)
 
-    def test_sorting_by_a_column_the_tab_does_not_have_is_ignored(self):
-        SyncedUser.objects.create(email='x@example.com', is_email_verified=True)
-        resp = self.client.get(self.users_url(tab='registered', sort='password',
+    def test_sorting_by_a_column_the_table_does_not_have_is_ignored(self):
+        resp = self.client.get(self.users_url(tab='accounts', sort='password',
                                               dir='desc'))
         self.assertEqual(200, resp.status_code)
-        self.assertEqual(1, len(resp.context['rows']))
+        self.assertEqual(2, len(resp.context['rows']))
 
     def test_the_list_is_paginated(self):
+        SyncedUser.objects.all().delete()
         for i in range(30):
             SyncedUser.objects.create(email='user%02d@example.com' % i,
                                       is_email_verified=True)
@@ -111,21 +121,40 @@ class RegisteredTabTest(ColumnLayoutBase):
         second = self.client.get(self.users_url(tab='registered', page=2))
         self.assertEqual(5, len(second.context['rows']))
 
-    def test_the_tab_is_on_the_page_and_needs_staff(self):
-        resp = self.client.get(self.users_url(tab='registered'))
-        self.assertContains(resp, 'Registered &amp; verified')
+    def test_the_chip_is_on_the_page_and_needs_staff(self):
+        resp = self.client.get(self.users_url(tab='accounts'))
+        self.assertContains(resp, 'f=verified')
 
         self.client.force_login(self.customer)
-        self.assertEqual(302, self.client.get(self.users_url(tab='registered')).status_code)
+        self.assertEqual(302, self.client.get(
+            self.users_url(tab='accounts')).status_code)
 
-    def test_every_column_of_the_tab_is_a_sortable_header(self):
-        SyncedUser.objects.create(email='x@example.com', is_email_verified=True)
-        resp = self.client.get(self.users_url(tab='registered'))
-        columns = resp.context['registered_columns']
-        self.assertEqual(default_keys('registered'), [c['key'] for c in columns])
+    def test_every_column_of_the_account_table_is_a_header(self):
+        resp = self.client.get(self.users_url(tab='accounts'))
+        columns = resp.context['account_columns']
+        self.assertEqual(default_keys('accounts'), [c['key'] for c in columns])
+        self.assertIn('verified', [c['key'] for c in columns])
         self.assertTrue(any(c['sortable'] for c in columns))
         self.assertEqual(1, sum(1 for c in columns if c['active']))
 
+
+class SignedOutFilterTest(ColumnLayoutBase):
+    """Signed out of the app is a filter on the account table too."""
+
+    def test_the_old_signedout_tab_is_the_signedout_filter_now(self):
+        from core.models import UserHeartbeat
+
+        SyncedUser.objects.create(email='out@example.com', is_email_verified=True)
+        SyncedUser.objects.create(email='in@example.com', is_email_verified=True)
+        UserHeartbeat.objects.create(email='out@example.com', is_logged_in=False)
+        UserHeartbeat.objects.create(email='in@example.com', is_logged_in=True)
+
+        resp = self.client.get(self.users_url(tab='signedout'))
+
+        self.assertEqual('accounts', resp.context['active_tab'])
+        self.assertEqual('signedout', resp.context['view'])
+        self.assertEqual(['out@example.com'],
+                         [row['obj'].email for row in resp.context['rows']])
 
 class ColumnLayoutEndpointTest(ColumnLayoutBase):
     def post_layout(self, payload):
@@ -134,15 +163,15 @@ class ColumnLayoutEndpointTest(ColumnLayoutBase):
 
     def test_saves_the_order_for_this_admin(self):
         columns = ['email', 'user', 'manage']
-        resp = self.post_layout({'tab': 'registered', 'columns': columns})
+        resp = self.post_layout({'tab': 'accounts', 'columns': columns})
         self.assertEqual(200, resp.status_code)
         self.assertEqual(columns, resp.json()['columns'])
 
-        saved = AdminTableLayout.objects.get(user=self.staff, tab='registered')
+        saved = AdminTableLayout.objects.get(user=self.staff, tab='accounts')
         self.assertEqual(columns, saved.columns)
 
-        page = self.client.get(self.users_url(tab='registered'))
-        self.assertEqual(columns, self.island(page, 'colLayoutIsland')['registered'])
+        page = self.client.get(self.users_url(tab='accounts'))
+        self.assertEqual(columns, self.island(page, 'colLayoutIsland')['accounts'])
 
     def test_layouts_are_per_admin(self):
         self.post_layout({'tab': 'visits', 'columns': ['ip', 'time']})
@@ -157,13 +186,13 @@ class ColumnLayoutEndpointTest(ColumnLayoutBase):
         self.assertEqual(['user'], resp.json()['columns'])
 
     def test_an_empty_list_falls_back_to_the_default_order(self):
-        resp = self.post_layout({'tab': 'versions', 'columns': []})
-        self.assertEqual(default_keys('versions'), resp.json()['columns'])
+        resp = self.post_layout({'tab': 'uniquedevices', 'columns': []})
+        self.assertEqual(default_keys('uniquedevices'), resp.json()['columns'])
 
     def test_reset_restores_the_defaults(self):
-        self.post_layout({'tab': 'signedout', 'columns': ['actions']})
-        resp = self.post_layout({'tab': 'signedout', 'reset': True})
-        self.assertEqual(default_keys('signedout'), resp.json()['columns'])
+        self.post_layout({'tab': 'uniquedevices', 'columns': ['ip', 'silent']})
+        resp = self.post_layout({'tab': 'uniquedevices', 'reset': True})
+        self.assertEqual(default_keys('uniquedevices'), resp.json()['columns'])
 
     def test_bad_requests_are_refused(self):
         self.assertEqual(400, self.post_layout({'tab': 'nope'}).status_code)
@@ -216,13 +245,13 @@ class ServerRenderedLayoutTest(ColumnLayoutBase):
     def test_the_saved_order_is_the_rendered_order(self):
         self.save('accounts', ['manage', 'user', 'status'])
         resp = self.client.get(self.users_url(tab='accounts'))
-        self.assertEqual(['Manage', 'User', 'Status'], self.headers(resp))
+        self.assertEqual(['Manage', 'User', 'Status (live)'], self.headers(resp))
 
-    def test_the_registered_tab_renders_only_the_kept_columns(self):
+    def test_the_account_table_renders_only_the_kept_columns(self):
         SyncedUser.objects.create(email='a@example.com', is_email_verified=True)
-        self.save('registered', ['email', 'app', 'manage'])
+        self.save('accounts', ['email', 'app', 'manage'])
 
-        resp = self.client.get(self.users_url(tab='registered'))
+        resp = self.client.get(self.users_url(tab='accounts'))
         html = resp.content.decode()
 
         self.assertEqual(['Email', 'App version', 'Manage'], self.headers(resp))
@@ -233,8 +262,8 @@ class ServerRenderedLayoutTest(ColumnLayoutBase):
         self.assertIn('sort=email', html)
 
     def test_the_empty_message_spans_only_the_visible_columns(self):
-        self.save('registered', ['user', 'email', 'manage'])
-        resp = self.client.get(self.users_url(tab='registered'))
+        self.save('accounts', ['user', 'email', 'manage'])
+        resp = self.client.get(self.users_url(tab='accounts'))
         self.assertContains(resp, 'colspan="3"')
 
     def test_the_tab_fragment_is_filtered_too(self):
@@ -264,7 +293,7 @@ class ServerRenderedLayoutTest(ColumnLayoutBase):
         self.assertEqual(['User'], self.headers(
             self.client.get(self.users_url(tab='accounts'))))
         self.save('accounts', ['user', 'app_device'])
-        self.assertEqual(['User', 'App device record'], self.headers(
+        self.assertEqual(['User', 'Install record'], self.headers(
             self.client.get(self.users_url(tab='accounts'))))
 
 
@@ -335,19 +364,38 @@ class ColumnFilterUnitTest(ColumnLayoutBase):
 
 class TableColumnSpecTest(ColumnLayoutBase):
     def test_every_table_renders_its_columns_for_the_layout_script(self):
-        for tab in ('accounts', 'registered', 'visits', 'uniquedevices'):
+        for tab in ('accounts', 'visits', 'uniquedevices', 'dailyusers'):
             resp = self.client.get(self.users_url(tab=tab))
             self.assertContains(resp, 'data-tab-cols="%s"' % ','.join(default_keys(tab)))
 
     def test_every_tab_still_renders(self):
         SyncedUser.objects.create(email='a@example.com', is_email_verified=True,
                                   device_model='Pixel 7', app_version='3.4.8.694')
-        for tab in ('accounts', 'registered', 'versions', 'uniquedevices',
-                    'inactive', 'signedout', 'visits', 'dailyusers'):
+        for tab in ('accounts', 'uniquedevices', 'visits', 'dailyusers'):
             with self.subTest(tab=tab):
                 resp = self.client.get(self.users_url(tab=tab))
                 self.assertEqual(200, resp.status_code, tab)
                 self.assertEqual(tab, resp.context['active_tab'])
+
+    def test_the_old_tab_urls_land_on_the_tab_that_replaced_them(self):
+        SyncedUser.objects.create(email='a@example.com', is_email_verified=True)
+        for old, new, view in (('registered', 'accounts', 'verified'),
+                               ('signedout', 'accounts', 'signedout'),
+                               ('versions', 'accounts', 'all'),
+                               ('inactive', 'uniquedevices', 'all'),
+                               ('devices', 'uniquedevices', 'all')):
+            with self.subTest(old=old):
+                resp = self.client.get(self.users_url(tab=old))
+                self.assertEqual(200, resp.status_code, old)
+                self.assertEqual(new, resp.context['active_tab'])
+                self.assertEqual(view, resp.context['view'], old)
+
+    def test_only_four_tabs_ship_with_the_page(self):
+        resp = self.client.get(self.users_url(tab='accounts'))
+        html = resp.content.decode()
+        tabs = re.findall(r'class="fbtn tabbtn[^"]*" data-tab="([a-z]+)"', html)
+        self.assertEqual(['accounts', 'uniquedevices', 'visits', 'dailyusers'],
+                         tabs)
 
     def test_the_layout_islands_are_objects_the_page_script_can_read(self):
         """json_script must serialise the dicts themselves; a pre-dumped JSON
@@ -373,11 +421,7 @@ class TableColumnSpecTest(ColumnLayoutBase):
         import re
         templates = {
             'accounts': '_users_full_accounts.html',
-            'registered': '_users_full_registered.html',
-            'versions': '_users_full_versions.html',
             'uniquedevices': '_users_full_uniquedevices.html',
-            'inactive': '_users_full_inactive.html',
-            'signedout': '_users_full_signedout.html',
             'visits': '_users_full_visits.html',
             'dailyusers': '_users_full_dailyusers.html',
         }
@@ -385,10 +429,10 @@ class TableColumnSpecTest(ColumnLayoutBase):
         for tab, name in templates.items():
             text = (base / name).read_text(encoding='utf-8')
             self.assertIn('data-tab-cols', text, tab)
-            if tab == 'registered':
+            if tab == 'accounts':
                 # This table builds its headers from the column list, so the
                 # markup has one <th> inside a loop instead of one per column.
-                self.assertIn('{% for c in registered_columns %}', text)
+                self.assertIn('{% for c in account_columns %}', text)
                 continue
             head = text.split('data-tab-cols')[1].split('</thead>')[0]
             # '<th' would also match '<thead', so require a tag boundary.
