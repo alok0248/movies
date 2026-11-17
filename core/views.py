@@ -4810,8 +4810,8 @@ def android_app_users_full(request, app_id):
     # signed-out list at the same time, which is what made it heavy. The tab
     # bar asks for ?partial=1 when the admin switches, so that swap needs no
     # page load — and with JS off the links still work as plain ?tab=… URLs.
-    TABS = ('accounts', 'versions', 'uniquedevices', 'inactive', 'signedout',
-            'visits', 'dailyusers')
+    TABS = ('accounts', 'registered', 'versions', 'uniquedevices', 'inactive',
+            'signedout', 'visits', 'dailyusers')
     tab = (request.GET.get('tab') or '').strip().lower()
     legacy_devices = tab == 'devices'
     if legacy_devices:
@@ -4855,6 +4855,22 @@ def android_app_users_full(request, app_id):
     if tab == 'versions' and selected_versions:
         users_qs = users_qs.filter(app_version__in=selected_versions)
 
+    # -------------------------------------------------- registered & verified tab
+    # "Registered" here means the address was actually proven - Google token,
+    # emailed OTP, or the web sign-up flow - i.e. SyncedUser.is_email_verified.
+    # That is the list of accounts the app trusts and we may email, so it gets
+    # its own tab instead of being a filter on the accounts table. Sorting is
+    # per column and comes from a header click (?sort=…&dir=…).
+    from .admin_table_columns import (columns_for, order_queryset, parse_sort,
+                                      saved_keys, specs, table_cells_attr)
+    registered_sort, registered_dir = '', ''
+    if tab == 'registered':
+        users_qs = users_qs.filter(is_email_verified=True)
+        registered_sort, registered_dir = parse_sort(
+            'registered', request.GET.get('sort'), request.GET.get('dir'))
+        users_qs = order_queryset(users_qs, 'registered',
+                                  registered_sort, registered_dir)
+
     # ------------------------------------------------------------ headline counts
     all_users = SyncedUser.objects.all()
     total_users = all_users.count()
@@ -4863,6 +4879,7 @@ def android_app_users_full(request, app_id):
         'blocked': all_users.filter(block_mode__gt='').count(),
         'subscribed': all_users.filter(is_subscribed=True).count(),
         'free': all_users.filter(is_subscribed=False).count(),
+        'registered': all_users.filter(is_email_verified=True).count(),
         'versions': len(version_facets),
     }
 
@@ -4917,9 +4934,26 @@ def android_app_users_full(request, app_id):
             'app_filter': app_filter_id,
             'version_facets': version_facets,
             'selected_versions': selected_versions,
+            # Column layouts: the markup order of each table, the columns an
+            # admin may choose from, and the order they have saved, so the
+            # opener can arrange the table on load and the layout editor has
+            # everything it needs without another request.
+            'table_cells': {t: table_cells_attr(t) for t in TABS},
+            # Plain dicts, not JSON text: the template uses |json_script, which
+            # serialises the value itself. Handing it a string would embed a
+            # double-encoded JSON string and the page script could not read it.
+            'column_specs': {
+                t: [{'key': c['key'], 'label': c['label']} for c in specs(t)]
+                for t in TABS},
+            'column_layout': {t: saved_keys(request.user, t) for t in TABS},
         }
 
-    if tab in ('accounts', 'versions'):
+    if tab == 'registered':
+        ctx['registered_columns'] = columns_for(
+            request.user, 'registered', registered_sort, registered_dir,
+            base_params={'q': q, 'f': view, 'app': app_filter_id or ''})
+
+    if tab in ('accounts', 'versions', 'registered'):
         # ------------------------------------------------------------- user rows
         paginator = Paginator(users_qs, 25)
         page_obj = paginator.get_page(request.GET.get('page') or 1)
@@ -5781,6 +5815,43 @@ def android_app_users_full(request, app_id):
         return HttpResponse(
             render_to_string('core/_users_full_panels.html', ctx, request=request))
     return render(request, 'core/android_app_users_full.html', ctx)
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+@require_POST
+def admin_table_layout(request):
+    """POST /admin-dashboard/table-layout/ - save which columns a tab shows.
+
+    Body: ``{"tab": "registered", "columns": ["user", "email", ...]}``.
+    ``{"reset": true}`` restores the tab's default order. The layout belongs to
+    the admin, not to the app: it is about what this person wants to see, so one
+    operator can watch heartbeats while another watches subscriptions.
+
+    Unknown keys are dropped and repeats collapse, so a stale browser tab can
+    never save a layout that points at columns which no longer exist.
+    """
+    from .admin_table_columns import TAB_SPECS, default_keys, save_keys
+
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON body.'}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({'ok': False, 'error': 'Expected a JSON object.'}, status=400)
+
+    tab = str(payload.get('tab') or '').strip().lower()
+    if tab not in TAB_SPECS:
+        return JsonResponse({'ok': False, 'error': 'Unknown table: %s' % tab},
+                            status=400)
+
+    columns = default_keys(tab) if payload.get('reset') else payload.get('columns')
+    if not isinstance(columns, list) or not all(isinstance(c, str) for c in columns):
+        return JsonResponse({'ok': False, 'error': 'columns must be a list of keys.'},
+                            status=400)
+
+    saved = save_keys(request.user, tab, columns)
+    return JsonResponse({'ok': True, 'tab': tab, 'columns': saved})
 
 
 def _p95_latency_ms(hours=24, limit=5000):

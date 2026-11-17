@@ -121,6 +121,8 @@ urlpatterns = [
     path('admin-dashboard/android-apps/<int:app_id>/failed-attempts/', views.android_app_failed_attempts, name='android_app_failed_attempts'),
     # Full-screen user + device list behind the "Users & Blocking" card (no side nav).
     path('admin-dashboard/android-apps/<int:app_id>/users-full/', views.android_app_users_full, name='android_app_users_full'),
+    # Which columns each tab of that page shows, saved per admin.
+    path('admin-dashboard/table-layout/', views.admin_table_layout, name='admin_table_layout'),
     # Per-device popup from the full user list: chat + watch history, and the
     # separate-session "login as" preview.
     path('admin-dashboard/android-apps/<int:app_id>/users/<int:user_id>/chat/', chat_views.user_chat_panel, name='android_app_user_chat'),

@@ -4382,3 +4382,32 @@ class DeviceIPHistory(models.Model):
 
     def __str__(self):
         return '%s @ %s' % (self.device_id or 'unknown device', self.ip)
+
+
+class AdminTableLayout(models.Model):
+    """Which columns one admin shows for one table, and in what order.
+
+    The "All Users & Devices" page has a tab per table (accounts, registered,
+    unique devices, visits...). Each admin saves their own column list per tab,
+    so an operator watching heartbeats and one watching subscriptions can look
+    at the same table with the columns they need. ``columns`` holds keys from
+    ``core.admin_table_columns.TAB_SPECS`` in display order.
+
+    This is admin preference, not user data, so it stays on the default
+    (config) database next to the auth user instead of the users database.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name='admin_table_layouts')
+    tab = models.CharField(max_length=40)
+    columns = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'tab')
+        verbose_name = 'Admin table column layout'
+        verbose_name_plural = 'Admin table column layouts'
+
+    def __str__(self):
+        return '%s · %s · %s' % (self.user, self.tab,
+                                  ','.join(self.columns or []))

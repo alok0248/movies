@@ -1,0 +1,244 @@
+<script>
+/* ===================== Per-tab column layout =====================
+   Every table carries data-tab-cols: its columns in the order the markup
+   writes them. The server sends the admin's saved order for each tab, and the
+   table is rearranged here by moving cells — no extra request. Columns the
+   admin removed are hidden rather than dropped, so a saved layout always
+   describes the whole table and can be extended later.
+   Applied again after every panel swap, because a tab switch replaces the
+   table markup. */
+(function () {
+    function island(id, fallback) {
+        var el = document.getElementById(id);
+        if (!el) return fallback;
+        try { return JSON.parse(el.textContent); } catch (e) { return fallback; }
+    }
+    var SPECS = island('colSpecsIsland', {});
+    var LAYOUT = island('colLayoutIsland', {});
+
+    function activeTab() {
+        var on = document.querySelector('.tabbtn.active');
+        if (on) return on.getAttribute('data-tab');
+        return island('activeTabIsland', 'accounts');
+    }
+
+    window.applyTableLayout = function (tab) {
+        var keys = LAYOUT[tab] || [];
+        if (!keys.length) return;
+        document.querySelectorAll('table[data-tab-cols]').forEach(function (table) {
+            var defaults = (table.getAttribute('data-tab-cols') || '').split(',').filter(Boolean);
+            if (!defaults.length) return;
+            table.querySelectorAll('tr').forEach(function (row) {
+                var cells = row.children;
+                if (!cells || cells.length !== defaults.length) return; /* colspan row */
+                var byKey = {};
+                for (var i = 0; i < defaults.length; i++) {
+                    byKey[defaults[i]] = cells[i];
+                }
+                defaults.forEach(function (k) {
+                    if (byKey[k]) byKey[k].style.display = 'none';
+                });
+                var shown = [];
+                keys.forEach(function (k) {
+                    var cell = byKey[k];
+                    if (!cell) return;
+                    cell.style.display = '';
+                    shown.push(cell);
+                });
+                shown.forEach(function (cell) { row.appendChild(cell); });
+            });
+        });
+    };
+
+    function labelOf(tab, key) {
+        var specs = SPECS[tab] || [];
+        for (var i = 0; i < specs.length; i++) {
+            if (specs[i].key === key) return specs[i].label || key;
+        }
+        return key;
+    }
+
+    function currentKeys() {
+        return (LAYOUT[activeTab()] || []).slice();
+    }
+
+    function renderPicker() {
+        var tab = activeTab();
+        var listEl = document.getElementById('colCfgList');
+        var addEl = document.getElementById('colCfgAdd');
+        if (!listEl || !addEl) return;
+        var keys = currentKeys();
+        listEl.innerHTML = '';
+        keys.forEach(function (key) {
+            var row = document.createElement('div');
+            row.className = 'ccfg-row';
+            row.setAttribute('draggable', 'true');
+            row.setAttribute('data-key', key);
+            row.innerHTML =
+                '<span class="ccfg-grip"><i class="fas fa-grip-vertical"></i></span>' +
+                '<span class="ccfg-name"></span>' +
+                '<button type="button" data-act="up" title="Move up"><i class="fas fa-arrow-up"></i></button>' +
+                '<button type="button" data-act="down" title="Move down"><i class="fas fa-arrow-down"></i></button>' +
+                '<button type="button" data-act="remove" title="Hide this column"><i class="fas fa-xmark"></i></button>';
+            row.querySelector('.ccfg-name').textContent = labelOf(tab, key);
+            listEl.appendChild(row);
+        });
+        addEl.innerHTML = '';
+        (SPECS[tab] || []).forEach(function (spec) {
+            if (keys.indexOf(spec.key) !== -1) return;
+            var opt = document.createElement('option');
+            opt.value = spec.key;
+            opt.textContent = spec.label || spec.key;
+            addEl.appendChild(opt);
+        });
+        if (!addEl.options.length) {
+            var none = document.createElement('option');
+            none.value = '';
+            none.textContent = 'Every column is already shown';
+            addEl.appendChild(none);
+        }
+    }
+
+    function moveKey(key, delta) {
+        var tab = activeTab();
+        var keys = currentKeys();
+        var i = keys.indexOf(key);
+        if (i < 0) return;
+        var j = i + delta;
+        if (j < 0 || j >= keys.length) return;
+        keys.splice(j, 0, keys.splice(i, 1)[0]);
+        LAYOUT[tab] = keys;
+        renderPicker();
+        window.applyTableLayout(tab);
+    }
+
+    window.openColumnConfig = function () {
+        renderPicker();
+        var overlay = document.getElementById('colCfgOverlay');
+        if (overlay) overlay.classList.add('is-open');
+    };
+    window.closeColumnConfig = function () {
+        var overlay = document.getElementById('colCfgOverlay');
+        if (overlay) overlay.classList.remove('is-open');
+    };
+    window.columnConfigAdd = function () {
+        var el = document.getElementById('colCfgAdd');
+        var key = el && el.value;
+        if (!key) return;
+        var tab = activeTab();
+        var keys = currentKeys();
+        keys.push(key);
+        LAYOUT[tab] = keys;
+        renderPicker();
+        window.applyTableLayout(tab);
+    };
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('#colCfgList button[data-act]') : null;
+        if (!btn) return;
+        var row = btn.closest('.ccfg-row');
+        var key = row && row.getAttribute('data-key');
+        if (!key) return;
+        var act = btn.getAttribute('data-act');
+        var tab = activeTab();
+        if (act === 'up') { moveKey(key, -1); return; }
+        if (act === 'down') { moveKey(key, 1); return; }
+        if (act === 'remove') {
+            var keys = currentKeys().filter(function (k) { return k !== key; });
+            if (!keys.length) return; /* never leave a table with no columns */
+            LAYOUT[tab] = keys;
+            renderPicker();
+            window.applyTableLayout(tab);
+        }
+    });
+
+    /* Drag a row onto another to move it there. */
+    var dragKey = null;
+    document.addEventListener('dragstart', function (e) {
+        var row = e.target && e.target.closest ? e.target.closest('.ccfg-row') : null;
+        if (!row) return;
+        dragKey = row.getAttribute('data-key');
+        row.classList.add('is-dragging');
+        try {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', dragKey);
+        } catch (err) {}
+    });
+    document.addEventListener('dragend', function (e) {
+        var row = e.target && e.target.closest ? e.target.closest('.ccfg-row') : null;
+        if (row) row.classList.remove('is-dragging');
+        dragKey = null;
+    });
+    document.addEventListener('dragover', function (e) {
+        if (!dragKey) return;
+        var over = e.target && e.target.closest ? e.target.closest('.ccfg-row') : null;
+        if (!over || over.getAttribute('data-key') === dragKey) return;
+        e.preventDefault();
+        var tab = activeTab();
+        var keys = currentKeys();
+        var from = keys.indexOf(dragKey);
+        var to = keys.indexOf(over.getAttribute('data-key'));
+        if (from < 0 || to < 0) return;
+        keys.splice(to, 0, keys.splice(from, 1)[0]);
+        LAYOUT[tab] = keys;
+        renderPicker();
+        window.applyTableLayout(tab);
+    });
+
+    function csrf() {
+        var input = document.querySelector('.csrf-holder input[name=csrfmiddlewaretoken]');
+        if (input) return input.value;
+        var m = /csrftoken=([^;]+)/.exec(document.cookie || '');
+        return m ? m[1] : '';
+    }
+
+    function postLayout(body) {
+        return fetch('{% url "admin_table_layout" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(body)
+        }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+        });
+    }
+
+    window.columnConfigSave = function () {
+        var tab = activeTab();
+        var btn = document.getElementById('colCfgSave');
+        if (btn) btn.disabled = true;
+        postLayout({ tab: tab, columns: currentKeys() })
+            .then(function (res) {
+                if (!res.ok || !res.data.ok) throw new Error((res.data && res.data.error) || 'Save failed');
+                LAYOUT[tab] = res.data.columns || currentKeys();
+                window.applyTableLayout(tab);
+                window.closeColumnConfig();
+            })
+            .catch(function (err) { alert('Could not save the layout: ' + err.message); })
+            .finally(function () { if (btn) btn.disabled = false; });
+    };
+
+    window.columnConfigReset = function () {
+        var tab = activeTab();
+        postLayout({ tab: tab, reset: true })
+            .then(function (res) {
+                if (!res.ok || !res.data.ok) throw new Error((res.data && res.data.error) || 'Reset failed');
+                LAYOUT[tab] = res.data.columns || [];
+                window.applyTableLayout(tab);
+                renderPicker();
+            })
+            .catch(function (err) { alert('Could not reset the layout: ' + err.message); });
+    };
+
+    window.applyTableLayout(activeTab());
+    var wrap = document.getElementById('panelWrap');
+    if (wrap && window.MutationObserver) {
+        new MutationObserver(function () {
+            window.applyTableLayout(activeTab());
+        }).observe(wrap, { childList: true });
+    }
+})();
+</script>

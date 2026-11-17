@@ -257,6 +257,38 @@
         display: flex; gap: .4rem; padding: .4rem .45rem .2rem; margin-top: .3rem;
         border-top: 1px solid rgba(148,163,184,.2);
     }
+    /* Column layout: sortable headers and the picker. */
+    .col-sort { color: #cbd5e1; text-decoration: none; white-space: nowrap; }
+    .col-sort:hover { color: #fff; }
+    .col-sort.is-active { color: #38bdf8; font-weight: 600; }
+    .ccfg-overlay {
+        position: fixed; inset: 0; z-index: 1080; display: none;
+        align-items: center; justify-content: center; padding: 1rem;
+        background: rgba(2, 6, 23, .72);
+    }
+    .ccfg-overlay.is-open { display: flex; }
+    .ccfg-dialog {
+        width: min(620px, 100%); max-height: 88vh; overflow: auto;
+        background: #0b1220; border: 1px solid rgba(148, 163, 184, .3);
+        border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+    }
+    .ccfg-head, .ccfg-foot {
+        display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+        padding: .8rem 1rem; border-bottom: 1px solid rgba(148, 163, 184, .2);
+    }
+    .ccfg-foot { border-bottom: 0; border-top: 1px solid rgba(148, 163, 184, .2); }
+    .ccfg-body { padding: .8rem 1rem; }
+    .ccfg-row {
+        display: flex; align-items: center; gap: .5rem; padding: .35rem .5rem;
+        border: 1px solid rgba(148, 163, 184, .22); border-radius: 8px;
+        background: rgba(15, 23, 42, .75); margin-bottom: .35rem; cursor: grab;
+    }
+    .ccfg-row.is-dragging { opacity: .45; }
+    .ccfg-row .ccfg-name { flex: 1 1 auto; color: #e2e8f0; font-size: .85rem; }
+    .ccfg-row .ccfg-grip { color: #64748b; }
+    .ccfg-row button { border: 0; background: transparent; color: #94a3b8; padding: .1rem .3rem; }
+    .ccfg-row button:hover { color: #fff; }
+    .ccfg-add { display: flex; gap: .5rem; margin: .5rem 0 .9rem; }
 </style>
 
 <div class="full-users-wrap">
@@ -288,12 +320,14 @@
              reload, the other lists simply disappear). -->
         <div class="d-flex gap-2 flex-wrap mt-2" id="tabsBar" role="tablist">
             <a class="fbtn tabbtn {% if active_tab == 'accounts' %}active{% endif %}" data-tab="accounts" href="?tab=accounts" role="tab" aria-selected="{% if active_tab == 'accounts' %}true{% else %}false{% endif %}"><i class="fas fa-users me-1"></i>All Users &amp; Devices<span class="pill chip-count ms-1">{{ counts.total }}</span></a>
+            <a class="fbtn tabbtn {% if active_tab == 'registered' %}active{% endif %}" data-tab="registered" href="?tab=registered" role="tab" aria-selected="{% if active_tab == 'registered' %}true{% else %}false{% endif %}" title="Every profile whose email address is verified"><i class="fas fa-circle-check me-1"></i>Registered &amp; verified<span class="pill chip-count ms-1">{{ counts.registered }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'versions' %}active{% endif %}" data-tab="versions" href="?tab=versions{% if app_filter %}&amp;app={{ app_filter }}{% endif %}" role="tab" aria-selected="{% if active_tab == 'versions' %}true{% else %}false{% endif %}" title="Filter the user list by the app version each install reports"><i class="fas fa-code-branch me-1"></i>App version<span class="pill chip-count ms-1">{{ counts.versions }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'uniquedevices' %}active{% endif %}" data-tab="uniquedevices" href="?tab=uniquedevices" role="tab" aria-selected="{% if active_tab == 'uniquedevices' %}true{% else %}false{% endif %}"><i class="fas fa-mobile-screen-button me-1"></i>Unique devices<span class="pill chip-count ms-1">{{ counts.unique_devices }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'inactive' %}active{% endif %}" data-tab="inactive" href="?tab=inactive" role="tab" aria-selected="{% if active_tab == 'inactive' %}true{% else %}false{% endif %}" title="Installs the app has not seen for a while, with bulk delete"><i class="fas fa-moon me-1"></i>Inactive devices</a>
             <a class="fbtn tabbtn {% if active_tab == 'signedout' %}active{% endif %}" data-tab="signedout" href="?tab=signedout" role="tab" aria-selected="{% if active_tab == 'signedout' %}true{% else %}false{% endif %}"><i class="fas fa-user-lock me-1"></i>Accounts currently signed out of the app<span class="pill chip-count ms-1">{{ counts.signed_out }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'visits' %}active{% endif %}" data-tab="visits" href="?tab=visits" role="tab" aria-selected="{% if active_tab == 'visits' %}true{% else %}false{% endif %}"><i class="fas fa-history me-1"></i>Recent visits<span class="pill chip-count ms-1">{{ counts.visits }}</span></a>
             <a class="fbtn tabbtn {% if active_tab == 'dailyusers' %}active{% endif %}" data-tab="dailyusers" href="?tab=dailyusers" role="tab" aria-selected="{% if active_tab == 'dailyusers' %}true{% else %}false{% endif %}" title="How many users the app saw each day, month and year"><i class="fas fa-chart-column me-1"></i>Users per day</a>
+            <button type="button" class="fbtn ms-auto" id="colCfgBtn" onclick="openColumnConfig()" title="Choose which columns this table shows, and their order"><i class="fas fa-pen"></i> Columns</button>
         </div>
 
         <!-- Kept outside the swappable panel: the row actions need both. -->
@@ -308,6 +342,36 @@
         {% include 'core/_users_full_panels.html' %}
     </div>
 </div>
+
+<!-- Column picker: which columns the open table shows and in what order. Saved
+     per admin and per tab, so it follows the operator, and applied to the
+     table without a page reload. -->
+<div class="ccfg-overlay" id="colCfgOverlay" role="dialog" aria-modal="true" aria-labelledby="colCfgTitle">
+    <div class="ccfg-dialog">
+        <div class="ccfg-head">
+            <div class="fw-semibold text-white" id="colCfgTitle"><i class="fas fa-table-columns me-2 text-info"></i>Columns for this table</div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeColumnConfig()" aria-label="Close"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="ccfg-body">
+            <div class="sub mb-2">Drag a row to reorder it, or use the arrows. Only the listed columns are shown.</div>
+            <div class="ccfg-add">
+                <select class="form-select form-select-sm" id="colCfgAdd" aria-label="Column to add"></select>
+                <button type="button" class="btn btn-sm btn-outline-info text-nowrap" onclick="columnConfigAdd()"><i class="fas fa-plus me-1"></i>Add</button>
+            </div>
+            <div id="colCfgList"></div>
+        </div>
+        <div class="ccfg-foot">
+            <button type="button" class="btn btn-sm btn-outline-warning" onclick="columnConfigReset()"><i class="fas fa-rotate-left me-1"></i>Reset to default</button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeColumnConfig()">Cancel</button>
+                <button type="button" class="btn btn-sm btn-success" id="colCfgSave" onclick="columnConfigSave()"><i class="fas fa-floppy-disk me-1"></i>Save layout</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{ column_specs|json_script:"colSpecsIsland" }}
+{{ column_layout|json_script:"colLayoutIsland" }}
+{{ active_tab|json_script:"activeTabIsland" }}
 
 <!-- Message popup: the device's chat + watch history panel is fetched into it,
      so opening one costs a fragment, not a page. -->
@@ -1112,5 +1176,6 @@ function loginAs(id) {
     });
 }
 </script>
+{% include 'core/_users_full_cols_js.html' %}
 <script src="{% static 'js/typed-confirm.js' %}"></script>
 {% endblock %}
