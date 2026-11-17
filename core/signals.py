@@ -1,12 +1,36 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
+
+from .models import AmazonAffiliateProduct, AndroidApp
 
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     """Create related objects when a new user is created."""
     pass
+
+
+def _clear_app_config_cache(sender, **kwargs):
+    """Drop the cached app configs, which carry the Amazon affiliate links.
+
+    The config is cached per app for a few minutes; a link added, switched off
+    or deleted on the Amazon links page should not have to wait that out before
+    the app sees it.
+    """
+    try:
+        from django.core.cache import cache
+
+        for slug in AndroidApp.objects.values_list('slug', flat=True):
+            cache.delete('android_endpoint_payload_%s' % slug)
+    except Exception:
+        pass
+
+
+post_save.connect(_clear_app_config_cache, sender=AmazonAffiliateProduct,
+                  dispatch_uid='core_amazon_link_saved')
+post_delete.connect(_clear_app_config_cache, sender=AmazonAffiliateProduct,
+                    dispatch_uid='core_amazon_link_deleted')
 
 
 def _configure_sqlite_connection(sender, connection, **kwargs):

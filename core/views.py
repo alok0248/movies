@@ -1998,6 +1998,42 @@ def _clean_amazon_url(value):
     return url
 
 
+def _amazon_affiliate_urls():
+    """The Amazon links the app should open, in the order saved on the page."""
+    urls, seen = [], set()
+    for url in (AmazonAffiliateProduct.objects.filter(is_active=True)
+                .order_by('order', 'id')
+                .values_list('affiliate_url', flat=True)):
+        url = (url or '').strip()
+        if not url or url.lower() in seen:
+            continue
+        seen.add(url.lower())
+        urls.append(url)
+    return urls
+
+
+def _attach_amazon_links(payload):
+    """Fill ``ads1.amazon1.url`` with the links saved on the Amazon page.
+
+    The block's tracking tag stays the one already saved in the payload (that
+    is what the app builds its own links with); only the list is replaced, so
+    adding a link on the page is enough and nothing has to be pasted into the
+    JSON by hand. Payloads without that block are returned untouched.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    ads1 = payload.get('ads1')
+    if not isinstance(ads1, dict) or not isinstance(ads1.get('amazon1'), dict):
+        return payload
+    amazon1 = dict(ads1['amazon1'])
+    amazon1['url'] = _amazon_affiliate_urls()
+    ads1 = dict(ads1)
+    ads1['amazon1'] = amazon1
+    payload = dict(payload)
+    payload['ads1'] = ads1
+    return payload
+
+
 def _parse_amazon_bulk(text):
     """Read the bulk box: one link per line, with an optional title.
 
@@ -6848,6 +6884,7 @@ def android_app_endpoint(request, app_slug):
         response_payload['movie_servers'] = movie_servers
         response_payload['series_servers'] = series_servers
         response_payload['ads'] = ads_list
+        response_payload = _attach_amazon_links(response_payload)
     # Cache the response payload for 5 minutes
     cache.set(cache_key, response_payload, 300)
     return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
