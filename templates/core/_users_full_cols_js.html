@@ -1,12 +1,13 @@
 <script>
 /* ===================== Per-tab column layout =====================
-   Every table carries data-tab-cols: its columns in the order the markup
-   writes them. The server sends the admin's saved order for each tab, and the
-   table is rearranged here by moving cells — no extra request. Columns the
-   admin removed are hidden rather than dropped, so a saved layout always
-   describes the whole table and can be extended later.
-   Applied again after every panel swap, because a tab switch replaces the
-   table markup. */
+   The layout is applied on the server: the table arrives with only the columns
+   the admin kept, already in their saved order, and data-tab-cols names exactly
+   those cells. This script therefore never has to hide anything on load.
+
+   It exists for the picker: while the dialog is open, moving or removing a row
+   rearranges the live table at once. Adding a column cannot be previewed (its
+   cells were never sent), so a save re-fetches the panel from the server, which
+   renders the new set. */
 (function () {
     function island(id, fallback) {
         var el = document.getElementById(id);
@@ -206,6 +207,14 @@
         });
     }
 
+    /* The table is rendered by the server with the saved columns, so after a
+       save the open panel is fetched again: that is what brings in a column the
+       admin has just added, and what leaves a removed one out of the HTML. */
+    function refreshPanel() {
+        if (window.__reloadPanel) { window.__reloadPanel(); return; }
+        window.location.reload();
+    }
+
     window.columnConfigSave = function () {
         var tab = activeTab();
         var btn = document.getElementById('colCfgSave');
@@ -214,8 +223,8 @@
             .then(function (res) {
                 if (!res.ok || !res.data.ok) throw new Error((res.data && res.data.error) || 'Save failed');
                 LAYOUT[tab] = res.data.columns || currentKeys();
-                window.applyTableLayout(tab);
                 window.closeColumnConfig();
+                refreshPanel();
             })
             .catch(function (err) { alert('Could not save the layout: ' + err.message); })
             .finally(function () { if (btn) btn.disabled = false; });
@@ -227,8 +236,8 @@
             .then(function (res) {
                 if (!res.ok || !res.data.ok) throw new Error((res.data && res.data.error) || 'Reset failed');
                 LAYOUT[tab] = res.data.columns || [];
-                window.applyTableLayout(tab);
                 renderPicker();
+                refreshPanel();
             })
             .catch(function (err) { alert('Could not reset the layout: ' + err.message); });
     };

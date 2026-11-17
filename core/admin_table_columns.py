@@ -10,11 +10,17 @@ that knows:
   (``AdminTableLayout``, one row per admin + tab),
 * how a clickable header sorts that tab's queryset (``SORT_FIELDS``).
 
-The templates render every column the tab has; the browser then hides and
-reorders them from the saved layout (see ``applyTableLayout`` in
-``android_app_users_full.html``), so changing the layout never needs a
-migration of the markup, only one saved list of keys.
+The templates write every column a tab has, in one fixed order, and mark the
+table with ``data-tab-cols``. The saved layout is then applied **on the server**
+before the page is sent (``filter_table_columns``), so a column an admin hid is
+not in the HTML at all and cannot flash on screen while the page loads. The
+browser script (``applyTableLayout`` in ``_users_full_cols_js.html``) only keeps
+the table in step with the picker while it is open, and the panel is re-rendered
+from the server once a layout is saved.
 """
+
+import re
+from html.parser import HTMLParser
 
 from .models import AdminTableLayout
 
@@ -148,19 +154,28 @@ def _valid_keys(tab, keys):
     return out
 
 
+def saved_keys_map(user, tabs):
+    """Every layout this admin has saved for ``tabs``, in one query.
+
+    Tabs without a saved (or still valid) layout get their default order, so the
+    result always has an entry per requested tab.
+    """
+    tabs = list(tabs)
+    stored = {}
+    if user is not None and getattr(user, 'is_authenticated', False) and tabs:
+        try:
+            stored = dict(AdminTableLayout.objects.filter(user=user, tab__in=tabs)
+                          .values_list('tab', 'columns'))
+        except Exception:
+            # A layout is a preference: if its table is missing (code deployed
+            # ahead of `migrate`), the page still has to render with defaults.
+            stored = {}
+    return {t: (_valid_keys(t, stored.get(t)) or default_keys(t)) for t in tabs}
+
+
 def saved_keys(user, tab):
     """The admin's own column order for this tab, or the tab's default order."""
-    if user is None or not getattr(user, 'is_authenticated', False):
-        return default_keys(tab)
-    try:
-        row = (AdminTableLayout.objects.filter(user=user, tab=tab)
-               .values_list('columns', flat=True).first())
-    except Exception:
-        # A layout is a preference: if its table is missing (code deployed
-        # ahead of `migrate`), the page still has to render with the defaults.
-        row = None
-    keys = _valid_keys(tab, row)
-    return keys or default_keys(tab)
+    return saved_keys_map(user, [tab])[tab]
 
 
 def save_keys(user, tab, keys):
@@ -227,6 +242,172 @@ def order_queryset(qs, tab, sort_key, sort_dir):
     return qs.order_by(prefix + field, '-id')
 
 
-def table_cells_attr(tab):
-    """``data-tab-cols`` value: the markup's column order, comma separated."""
-    return ','.join(default_keys(tab))
+def table_cells_attr(tab, keys=None):
+    """``data-tab-cols`` value: the columns the cells are in, comma separated."""
+    return ','.join(keys if keys is not None else default_keys(tab))
+
+
+_COLSPAN = re.compile(r'(colspan\s*=\s*)("[^"]*"|\'[^\']*\'|[^\s>]+)', re.I)
+
+
+class _ColumnFilter(HTMLParser):
+    """Rewrites the rows of every ``<table data-tab-cols>`` to one layout.
+
+    Cells are matched to columns by their ``data-col`` attribute when they have
+    one and by position otherwise (the markup writes them in the tab's default
+    order). Hidden columns are dropped, kept columns are emitted in the saved
+    order, and everything else in the document is copied through unchanged.
+
+    A row whose cell count is not the tab's column count (the single spanning
+    "nothing here" cell) is left whole, with its colspan corrected to the number
+    of visible columns.
+    """
+
+    _CELLS = ('td', 'th')
+
+    def __init__(self, layout_keys, spec_keys):
+        HTMLParser.__init__(self, convert_charrefs=False)
+        self.layout = list(layout_keys)
+        self.spec = list(spec_keys)
+        self.out = []
+        self.tables = 0          # open <table> elements
+        self.mapped = None       # depth of the table being rewritten
+        self.row = None          # the row being collected
+        self.cell = None         # the cell being collected
+        self.found = False       # saw a table with data-tab-cols
+
+    # ---------------------------------------------------------------- output
+    def _add(self, text):
+        if self.cell is not None:
+            self.cell['parts'].append(text)
+        elif self.row is not None:
+            self.row['parts'].append(text)
+        else:
+            self.out.append(text)
+
+    def _cell_html(self, cell, spans=False):
+        raw = cell['raw']
+        if spans:
+            raw = _COLSPAN.sub(
+                lambda m: '%s"%d"' % (m.group(1), len(self.layout)), raw, count=1)
+        return raw + ''.join(cell['parts']) + '</%s>' % cell['tag']
+
+    def _render_row(self, row):
+        cells = [p for p in row['parts'] if isinstance(p, dict)]
+        if cells and len(cells) == len(self.spec):
+            by_key = {}
+            for index, cell in enumerate(cells):
+                key = cell['col'] or (self.spec[index]
+                                      if index < len(self.spec) else None)
+                if key:
+                    by_key.setdefault(key, cell)
+            body = ''.join(self._cell_html(by_key[key])
+                           for key in self.layout if key in by_key)
+            return row['raw'] + body + '</tr>'
+        # A spanning row (or any irregular one): keep it whole so its message
+        # still reads across the table, with the span narrowed to the columns
+        # that are actually on screen.
+        body = ''.join(self._cell_html(p, spans=True) if isinstance(p, dict) else p
+                       for p in row['parts'])
+        return row['raw'] + body + '</tr>'
+
+    # ---------------------------------------------------------------- parser
+    def handle_starttag(self, tag, attrs):
+        raw = self.get_starttag_text() or '<%s>' % tag
+        if tag == 'table':
+            self.tables += 1
+            if self.mapped is None and 'data-tab-cols' in dict(attrs):
+                self.mapped = self.tables
+                self.found = True
+            self._add(raw)
+            return
+        if self.cell is not None:
+            if tag == self.cell['tag']:
+                self.cell['same'] += 1
+            self.cell['parts'].append(raw)
+            return
+        if self.mapped == self.tables:
+            if tag == 'tr':
+                self.row = {'raw': raw, 'parts': []}
+                return
+            if tag in self._CELLS:
+                self.cell = {'tag': tag, 'raw': raw, 'same': 0, 'parts': [],
+                             'col': (dict(attrs) or {}).get('data-col')}
+                return
+        self._add(raw)
+
+    def handle_startendtag(self, tag, attrs):
+        self._add(self.get_starttag_text() or '<%s/>' % tag)
+
+    def handle_endtag(self, tag):
+        if tag == 'table':
+            if self.mapped == self.tables:
+                self.mapped = None
+            self.tables = max(0, self.tables - 1)
+            self._add('</table>')
+            return
+        if self.cell is not None:
+            if tag == self.cell['tag']:
+                if self.cell['same']:
+                    self.cell['same'] -= 1
+                else:
+                    # The closing tag is added by _cell_html, once, when the cell
+                    # is written back out in its new position.
+                    cell, self.cell = self.cell, None
+                    if self.row is not None:
+                        self.row['parts'].append(cell)
+                    else:
+                        # A stray cell outside any row: pass it through as it is.
+                        self.out.append(self._cell_html(cell))
+                    return
+            self.cell['parts'].append('</%s>' % tag)
+            return
+        if tag == 'tr' and self.row is not None:
+            row, self.row = self.row, None
+            self.out.append(self._render_row(row))
+            return
+        self._add('</%s>' % tag)
+
+    def handle_data(self, data):
+        self._add(data)
+
+    def handle_entityref(self, name):
+        self._add('&%s;' % name)
+
+    def handle_charref(self, name):
+        self._add('&#%s;' % name)
+
+    def handle_comment(self, data):
+        self._add('<!--%s-->' % data)
+
+    def handle_decl(self, decl):
+        self._add('<!%s>' % decl)
+
+    def handle_pi(self, data):
+        self._add('<?%s>' % data)
+
+    def unknown_decl(self, data):
+        self._add('<![%s]>' % data)
+
+
+def filter_table_columns(html, layout_keys, spec_keys):
+    """Apply a saved layout to already-rendered markup.
+
+    Returns ``html`` untouched when the layout is the tab's default order (the
+    common case, and the reason this costs nothing for an admin who never opened
+    the picker), when the markup has no matching table, or if parsing fails —
+    the page must render either way.
+    """
+    layout_keys = list(layout_keys or [])
+    spec_keys = list(spec_keys or [])
+    if not layout_keys or not html or layout_keys == spec_keys:
+        return html
+    parser = _ColumnFilter(layout_keys, spec_keys)
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return html
+    if not parser.found:
+        return html
+    return ''.join(parser.out)

@@ -4861,8 +4861,10 @@ def android_app_users_full(request, app_id):
     # That is the list of accounts the app trusts and we may email, so it gets
     # its own tab instead of being a filter on the accounts table. Sorting is
     # per column and comes from a header click (?sort=…&dir=…).
-    from .admin_table_columns import (columns_for, order_queryset, parse_sort,
-                                      saved_keys, specs, table_cells_attr)
+    from .admin_table_columns import (columns_for, default_keys,
+                                      filter_table_columns, order_queryset,
+                                      parse_sort, saved_keys_map, specs,
+                                      table_cells_attr)
     registered_sort, registered_dir = '', ''
     if tab == 'registered':
         users_qs = users_qs.filter(is_email_verified=True)
@@ -4923,6 +4925,9 @@ def android_app_users_full(request, app_id):
     counts['visits'] = visits_count_qs.count()
     counts['signed_out'] = UserHeartbeat.objects.filter(is_logged_in=False).count()
 
+    # One query for every tab's layout, instead of one per tab.
+    layouts = saved_keys_map(request.user, TABS)
+
     ctx = {
         'selected_app': selected_app,
         'q': q,
@@ -4938,14 +4943,17 @@ def android_app_users_full(request, app_id):
             # admin may choose from, and the order they have saved, so the
             # opener can arrange the table on load and the layout editor has
             # everything it needs without another request.
-            'table_cells': {t: table_cells_attr(t) for t in TABS},
+            # The cells of the open table are already in the saved order (the
+            # layout is applied to the markup below), so data-tab-cols describes
+            # what the browser actually receives.
+            'table_cells': {t: table_cells_attr(t, layouts[t]) for t in TABS},
             # Plain dicts, not JSON text: the template uses |json_script, which
             # serialises the value itself. Handing it a string would embed a
             # double-encoded JSON string and the page script could not read it.
             'column_specs': {
                 t: [{'key': c['key'], 'label': c['label']} for c in specs(t)]
                 for t in TABS},
-            'column_layout': {t: saved_keys(request.user, t) for t in TABS},
+            'column_layout': layouts,
         }
 
     if tab == 'registered':
@@ -5810,11 +5818,23 @@ def android_app_users_full(request, app_id):
         ctx['signed_out_total'] = signed_out_qs.count()
         ctx['signed_out_online'] = signed_out_online
 
+    # Hide and re-order the columns here, before the markup leaves the server,
+    # so a hidden column is never sent and cannot flash while the page loads.
+    spec_keys = default_keys(tab)
+
+    def _with_layout(html):
+        return filter_table_columns(html, layouts[tab], spec_keys)
+
     if partial:
         # The tab bar asked for this one list: send the markup and nothing else.
-        return HttpResponse(
-            render_to_string('core/_users_full_panels.html', ctx, request=request))
-    return render(request, 'core/android_app_users_full.html', ctx)
+        return HttpResponse(_with_layout(
+            render_to_string('core/_users_full_panels.html', ctx, request=request)))
+    response = render(request, 'core/android_app_users_full.html', ctx)
+    if layouts[tab] != spec_keys:
+        charset = response.charset or 'utf-8'
+        response.content = _with_layout(
+            response.content.decode(charset)).encode(charset)
+    return response
 
 
 @login_required

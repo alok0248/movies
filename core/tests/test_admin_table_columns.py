@@ -7,12 +7,14 @@ the admin (`core.admin_table_columns`) and the choice is stored per admin, not
 per app.
 """
 import json
+import re
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from core.admin_table_columns import TAB_SPECS, default_keys
+from core.admin_table_columns import (TAB_SPECS, default_keys,
+                                      filter_table_columns)
 from core.models import AndroidApp, AdminTableLayout, SyncedUser
 
 User = get_user_model()
@@ -176,6 +178,159 @@ class ColumnLayoutEndpointTest(ColumnLayoutBase):
         self.client.force_login(self.customer)
         resp = self.post_layout({'tab': 'visits', 'columns': ['ip']})
         self.assertEqual(302, resp.status_code)
+
+
+class ServerRenderedLayoutTest(ColumnLayoutBase):
+    """The saved layout is applied to the markup, not just by the page script.
+
+    A hidden column must not be in the HTML at all: shipping it and hiding it
+    with JavaScript lets it show for a moment while the page loads.
+    """
+
+    def save(self, tab, keys):
+        resp = self.client.post(self.layout_url(),
+                                data=json.dumps({'tab': tab, 'columns': keys}),
+                                content_type='application/json')
+        self.assertEqual(200, resp.status_code)
+
+    def headers(self, resp):
+        html = resp.content.decode()
+        at = html.find('data-tab-cols="')
+        self.assertNotEqual(-1, at, 'no table with data-tab-cols on the page')
+        head = html[at:].split('</thead>')[0]
+        return [re.sub(r'<[^>]+>', ' ', cell).strip()
+                for cell in re.findall(r'<th[^>]*>(.*?)</th>', head, re.S)]
+
+    def test_a_hidden_column_is_not_sent_to_the_browser(self):
+        SyncedUser.objects.create(email='a@example.com', display_name='Ada',
+                                  is_email_verified=True)
+        self.save('accounts', ['user', 'manage'])
+
+        resp = self.client.get(self.users_url(tab='accounts'))
+
+        # The header is what proves the cell is gone: a hidden column's label
+        # still ships inside the picker's JSON island, its cells must not.
+        self.assertEqual(['User', 'Manage'], self.headers(resp))
+        self.assertContains(resp, 'data-tab-cols="user,manage"')
+
+    def test_the_saved_order_is_the_rendered_order(self):
+        self.save('accounts', ['manage', 'user', 'status'])
+        resp = self.client.get(self.users_url(tab='accounts'))
+        self.assertEqual(['Manage', 'User', 'Status'], self.headers(resp))
+
+    def test_the_registered_tab_renders_only_the_kept_columns(self):
+        SyncedUser.objects.create(email='a@example.com', is_email_verified=True)
+        self.save('registered', ['email', 'app', 'manage'])
+
+        resp = self.client.get(self.users_url(tab='registered'))
+        html = resp.content.decode()
+
+        self.assertEqual(['Email', 'App version', 'Manage'], self.headers(resp))
+        self.assertNotIn('data-col="verified"', html)
+        self.assertNotIn('data-col="last_sync"', html)
+        self.assertIn('data-col="email"', html)
+        # the kept columns keep their header-click sorting
+        self.assertIn('sort=email', html)
+
+    def test_the_empty_message_spans_only_the_visible_columns(self):
+        self.save('registered', ['user', 'email', 'manage'])
+        resp = self.client.get(self.users_url(tab='registered'))
+        self.assertContains(resp, 'colspan="3"')
+
+    def test_the_tab_fragment_is_filtered_too(self):
+        self.save('accounts', ['user'])
+        resp = self.client.get(self.users_url(tab='accounts', partial=1))
+        html = resp.content.decode()
+        self.assertEqual(['User'], self.headers(resp))
+        self.assertNotIn('<html', html)
+
+    def test_the_default_layout_still_ships_every_column(self):
+        resp = self.client.get(self.users_url(tab='accounts'))
+        self.assertEqual(
+            [c['label'] for c in TAB_SPECS['accounts']], self.headers(resp))
+        self.assertContains(
+            resp, 'data-tab-cols="%s"' % ','.join(default_keys('accounts')))
+
+    def test_the_rest_of_the_page_survives_the_rewrite(self):
+        self.save('accounts', ['user'])
+        resp = self.client.get(self.users_url(tab='accounts'))
+        html = resp.content.decode()
+        for marker in ('id="panelWrap"', 'id="colCfgOverlay"', 'csrf-holder',
+                       'colCfgSave', '</html>'):
+            self.assertIn(marker, html)
+
+    def test_a_column_that_had_been_hidden_can_come_back(self):
+        self.save('accounts', ['user'])
+        self.assertEqual(['User'], self.headers(
+            self.client.get(self.users_url(tab='accounts'))))
+        self.save('accounts', ['user', 'app_device'])
+        self.assertEqual(['User', 'App device record'], self.headers(
+            self.client.get(self.users_url(tab='accounts'))))
+
+
+class ColumnFilterUnitTest(ColumnLayoutBase):
+    TABLE = ('<table class="t" data-tab-cols="a,b,c"><thead><tr>'
+             '<th>A</th><th>B</th><th>C</th></tr></thead><tbody>'
+             '<tr><td>1</td><td>2</td><td>3</td></tr></tbody></table>')
+
+    def test_the_default_order_is_returned_untouched(self):
+        self.assertEqual(
+            self.TABLE,
+            filter_table_columns(self.TABLE, ['a', 'b', 'c'], ['a', 'b', 'c']))
+
+    def test_cells_without_data_col_are_matched_by_position(self):
+        out = filter_table_columns(self.TABLE, ['c', 'a'], ['a', 'b', 'c'])
+        self.assertIn('<th>C</th><th>A</th>', out)
+        self.assertIn('<td>3</td><td>1</td>', out)
+        self.assertNotIn('<td>2</td>', out)
+        self.assertNotIn('<th>B</th>', out)
+
+    def test_data_col_names_the_column_even_out_of_markup_order(self):
+        table = ('<table data-tab-cols="a,b"><thead><tr>'
+                 '<th data-col="b">B</th><th data-col="a">A</th></tr></thead>'
+                 '<tbody><tr><td data-col="b">2</td><td data-col="a">1</td>'
+                 '</tr></tbody></table>')
+        out = filter_table_columns(table, ['a'], ['a', 'b'])
+        self.assertIn('<th data-col="a">A</th>', out)
+        self.assertNotIn('<th data-col="b">B</th>', out)
+
+    def test_a_spanning_row_keeps_its_message_and_narrows_the_span(self):
+        table = ('<table data-tab-cols="a,b,c"><tbody><tr>'
+                 '<td colspan="3">Nothing here</td></tr></tbody></table>')
+        out = filter_table_columns(table, ['a', 'b'], ['a', 'b', 'c'])
+        self.assertIn('colspan="2"', out)
+        self.assertIn('Nothing here', out)
+
+    def test_a_table_without_the_attribute_is_left_alone(self):
+        html = ('<div><table><tr><td data-col="b">2</td>'
+                '<td data-col="a">1</td></tr></table>'
+                + self.TABLE + '</div>')
+        out = filter_table_columns(html, ['a'], ['a', 'b', 'c'])
+        self.assertIn('<table><tr><td data-col="b">2</td><td data-col="a">1</td>', out)
+        self.assertIn('<th>A</th>', out)
+
+    def test_the_rewrite_is_idempotent(self):
+        once = filter_table_columns(self.TABLE, ['b', 'a'], ['a', 'b', 'c'])
+        self.assertEqual(
+            once, filter_table_columns(once, ['b', 'a'], ['b', 'a']))
+
+    def test_a_cell_holding_a_nested_table_is_copied_whole(self):
+        table = ('<table data-tab-cols="a,b"><tbody><tr>'
+                 '<td><table><tr><td>inner</td></tr></table></td>'
+                 '<td>B</td></tr></tbody></table>')
+        out = filter_table_columns(table, ['a'], ['a', 'b'])
+        self.assertIn('<table><tr><td>inner</td></tr></table>', out)
+        self.assertNotIn('<td>B</td>', out)
+
+    def test_no_layout_returns_the_input(self):
+        self.assertEqual(self.TABLE, filter_table_columns(self.TABLE, [], ['a']))
+        self.assertEqual(self.TABLE, filter_table_columns(self.TABLE, None, ['a']))
+
+    def test_unclosed_markup_never_raises(self):
+        broken = '<table data-tab-cols="a"><tr><td>oops'
+        out = filter_table_columns(broken, ['a'], ['a', 'b'])
+        self.assertIsInstance(out, str)
+        self.assertIn('data-tab-cols', out)
 
 
 class TableColumnSpecTest(ColumnLayoutBase):
