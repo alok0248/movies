@@ -1853,6 +1853,42 @@
                         </a>
                     </li>
                 </ul>
+
+                <form class="nav-search" method="GET" action="{% url 'search' %}">
+                    <input class="form-control search-input" type="search" name="q" placeholder="Search movies &amp; shows" aria-label="Search">
+                    <button class="nav-search-btn" type="submit" aria-label="Search"><i class="fas fa-search"></i></button>
+                </form>
+
+                <div class="nav-controls">
+                    {% if user.is_authenticated %}
+                    <div class="dropdown">
+                        <button class="nav-user-chip dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="nav-avatar">{{ user.username|slice:":1"|upper }}</span>
+                            <span class="nav-user-name">Hi, {{ user.username }}</span>
+                            <i class="fas fa-chevron-down nav-caret"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{% url 'user_profile' %}"><i class="fas fa-user-circle me-2"></i>My Profile</a></li>
+                            <li><a class="dropdown-item" href="{% url 'watchlist' %}"><i class="fas fa-bookmark me-2"></i>My Watch List</a></li>
+                            <li><a class="dropdown-item" href="{% url 'user_play_history' %}"><i class="fas fa-clock me-2"></i>Play History</a></li>
+                            {% if user.is_staff or user.is_superuser %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'admin_dashboard' %}"><i class="fas fa-tachometer-alt me-2"></i>Admin Dashboard</a></li>
+                            <li><a class="dropdown-item" href="{% url 'admin_subscribers' %}"><i class="fas fa-envelope me-2"></i>Subscribers</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="post" action="{% url 'ajax_logout' %}" style="display:inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item" style="background:none;border:none;width:100%;text-align:left;cursor:pointer;"><i class="fas fa-sign-out-alt me-2"></i>Logout</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <button class="nav-signin" onclick="openAuthModal('login')"><i class="fas fa-user"></i>Sign In</button>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </nav>
