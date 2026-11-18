@@ -70,10 +70,10 @@
         background: color-mix(in srgb, var(--brand) 26%, transparent); color: var(--text); }
     .ml-av.is-bell { background: rgba(96,165,250,.18); }
     .ml-av.is-mail { background: rgba(56,189,248,.16); }
-    .ml-row-main { min-width: 0; }
-    .ml-row-who { display: flex; align-items: baseline; gap: .35rem; font-size: .78rem; }
+    .ml-row-main { min-width: 0; display: block; }
+    .ml-row-who { display: flex; align-items: baseline; gap: .35rem; font-size: .78rem; min-width: 0; }
     .ml-row-who b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ml-row-sub { font-size: .74rem; color: var(--text-2); overflow: hidden;
+    .ml-row-sub { display: block; font-size: .74rem; color: var(--text-2); overflow: hidden;
         text-overflow: ellipsis; white-space: nowrap; }
     .ml-row.is-unread .ml-row-who b, .ml-row.is-unread .ml-row-sub { color: var(--text); font-weight: 700; }
     .ml-row-right { text-align: right; font-size: .66rem; color: var(--text-2); white-space: nowrap; }
@@ -457,7 +457,7 @@
         <section class="ml-list">
             <div class="ml-list-head">
                 <h2 class="ml-list-title">Sent</h2>
-                <span class="ml-list-count">{{ campaigns|length }} campaigns</span>
+                <span class="ml-list-count">{{ campaigns|length }} sent item{{ campaigns|length|pluralize }}</span>
                 <div class="ml-filter">
                     <form method="get" action="{% url 'mail_center' %}" id="mlSentFilter">
                         <input type="hidden" name="folder" value="sent">
@@ -482,7 +482,7 @@
                     <span class="ml-av is-mail"><i class="fas fa-paper-plane"></i></span>
                     <span class="ml-row-main">
                         <span class="ml-row-who"><b>{{ c.subject|default:"(no subject)"|truncatechars:58 }}</b></span>
-                        <span class="ml-row-sub">{{ c.total }} recipient{{ c.total|pluralize }} · {{ c.audience|default:"-" }}</span>
+                        <span class="ml-row-sub">{% if c.single %}{{ c.audience|default:"single send" }}{% else %}{{ c.total }} recipient{{ c.total|pluralize }} · {{ c.audience|default:"-" }}{% endif %}</span>
                     </span>
                     <span class="ml-row-right">
                         {{ c.created|date:"d M H:i" }}
@@ -495,7 +495,7 @@
                     </span>
                 </a>
                 {% empty %}
-                <div class="ml-empty"><i class="fas fa-paper-plane"></i><br>No campaigns for that filter.</div>
+                <div class="ml-empty"><i class="fas fa-paper-plane"></i><br>Nothing sent yet.</div>
                 {% endfor %}
             </div>
         </section>
@@ -512,10 +512,12 @@
                 </div>
                 <div class="ml-pane-actions">
                     <a class="ml-chip-btn" href="{% url 'mail_export' batch %}"><i class="fas fa-file-csv"></i> CSV</a>
+                    {% if not active_campaign.single %}
                     <form method="post" action="{% url 'mail_retry' batch %}" style="margin:0">
                         {% csrf_token %}
                         <button class="ml-chip-btn" type="submit"><i class="fas fa-rotate"></i> Retry unsent</button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
             <div class="ml-pane-body">

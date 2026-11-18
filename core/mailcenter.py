@@ -201,9 +201,31 @@ def _send_batch(batch, request, limit=MAX_SEND_PER_REQUEST):
     return sent, failed
 
 
-def _email_campaigns():
-    """Campaign rows for the sent list, one per batch, with per-status counts."""
-    return list(
+SINGLE_PREFIX = 'log:'
+
+
+def _batch_rows(key):
+    """The log rows behind one Sent entry.
+
+    A compose run is a batch of rows sharing ``batch``; mail sent by the rest
+    of the site (support replies, welcome mail, app notifications) has no group
+    and stands on its own, keyed by its row id.
+    """
+    if key.startswith(SINGLE_PREFIX):
+        try:
+            return EmailSendLog.objects.filter(id=int(key[len(SINGLE_PREFIX):]))
+        except ValueError:
+            return EmailSendLog.objects.none()
+    return EmailSendLog.objects.filter(batch=key)
+
+
+def _email_campaigns(limit=300):
+    """Sent-list rows: one per compose batch, plus every single send.
+
+    Without the singles the folder read "0 campaigns" on a database holding
+    hundreds of sends, because only the compose flow stamps a batch key.
+    """
+    campaigns = list(
         EmailSendLog.objects.filter(batch__gt='')
         .values('batch', 'audience')
         .annotate(
@@ -216,7 +238,28 @@ def _email_campaigns():
             read=Count('id', filter=Q(status=EmailSendLog.STATUS_READ)),
             failed=Count('id', filter=Q(status=EmailSendLog.STATUS_FAILED)),
         )
-        .order_by('-created'))
+        .order_by('-created')[:limit])
+    for campaign in campaigns:
+        campaign['single'] = False
+    for row in (EmailSendLog.objects.filter(batch='')
+                .select_related('address').order_by('-created_at', '-id')[:limit]):
+        got_read = row.read_at is not None
+        got_delivered = row.delivered_at is not None or got_read
+        campaigns.append({
+            'batch': SINGLE_PREFIX + str(row.id),
+            'subject': row.subject,
+            'audience': row.audience or (row.purpose or ''),
+            'created': row.created_at,
+            'total': 1,
+            'pending': int(row.status == EmailSendLog.STATUS_PENDING),
+            'sent': int(row.status == EmailSendLog.STATUS_SENT),
+            'delivered': int(got_delivered),
+            'read': int(got_read),
+            'failed': int(row.status == EmailSendLog.STATUS_FAILED),
+            'single': True,
+        })
+    campaigns.sort(key=lambda c: c['created'] or timezone.now(), reverse=True)
+    return campaigns[:limit]
 
 
 def _inapp_campaigns():
@@ -256,22 +299,26 @@ def _folder_counts():
     """The numbers on the rail. Cheap aggregates, one query each."""
     return {
         'inbox': UserMessage.objects.filter(replied_at=None).count(),
-        'sent': EmailSendLog.objects.filter(batch__gt='')
-                .values('batch').distinct().count(),
+        'sent': (EmailSendLog.objects.filter(batch__gt='')
+                 .values('batch').distinct().count()
+                 + EmailSendLog.objects.filter(batch='').count()),
         'notifications': AppNotification.objects.filter(is_active=True).count(),
         'devices': AccountDevice.objects.count(),
     }
 
 
 def _stats():
-    base = EmailSendLog.objects.filter(batch__gt='')
+    # Every row counts here, grouped or not: the rail's numbers are the site's
+    # real mail volume, not just what the compose form produced.
+    base = EmailSendLog.objects.all()
     return {
         'pending': base.filter(status=EmailSendLog.STATUS_PENDING).count(),
         'sent': base.filter(status=EmailSendLog.STATUS_SENT).count(),
         'delivered': base.exclude(delivered_at=None).count(),
         'read': base.exclude(read_at=None).count(),
         'failed': base.filter(status=EmailSendLog.STATUS_FAILED).count(),
-        'campaigns': base.values('batch').distinct().count(),
+        'campaigns': (base.filter(batch__gt='').values('batch').distinct().count()
+                      + base.filter(batch='').count()),
         'inapp': AppNotification.objects.count(),
         'inbox_open': UserMessage.objects.filter(replied_at=None).count(),
         'inbox_total': UserMessage.objects.count(),
@@ -440,18 +487,21 @@ def mail_center(request):
         active_batch = (request.GET.get('batch') or '').strip()
         campaign = next((c for c in campaigns if c['batch'] == active_batch), None)
         if campaign is None and active_batch:
-            rows = EmailSendLog.objects.filter(batch=active_batch)
+            rows = _batch_rows(active_batch)
             if rows.exists():
-                campaign = {'batch': active_batch, 'subject': rows.first().subject,
-                            'created': rows.first().created_at,
-                            'audience': rows.first().audience, 'total': rows.count()}
+                first = rows.order_by('id').first()
+                campaign = {'batch': active_batch, 'subject': first.subject,
+                            'created': first.created_at,
+                            'audience': first.audience or first.purpose,
+                            'total': rows.count(),
+                            'single': active_batch.startswith(SINGLE_PREFIX)}
                 campaigns.insert(0, campaign)
         if campaign is None and campaigns:
             campaign = campaigns[0]
         recips = []
         counts = {}
         if campaign is not None:
-            rows = EmailSendLog.objects.filter(batch=campaign['batch'])
+            rows = _batch_rows(campaign['batch'])
             counts = {code: rows.filter(status=code).count()
                       for code, _label in EmailSendLog.STATUS_CHOICES}
             recips = list(rows.order_by('id')[:PANE_ROWS])
@@ -670,7 +720,7 @@ def mail_send(request):
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def mail_campaign_detail(request, batch):
     """One campaign, full page: every recipient, its status, error and read time."""
-    rows = EmailSendLog.objects.filter(batch=batch).select_related('address')
+    rows = _batch_rows(batch).select_related('address')
     if not rows.exists():
         messages.error(request, 'That campaign no longer exists.')
         return redirect('mail_center')
@@ -681,15 +731,15 @@ def mail_campaign_detail(request, batch):
     if q:
         rows = rows.filter(recipient__icontains=q)
 
-    first = EmailSendLog.objects.filter(batch=batch).order_by('id').first()
-    counts = {code: EmailSendLog.objects.filter(batch=batch, status=code).count()
+    first = _batch_rows(batch).order_by('id').first()
+    counts = {code: _batch_rows(batch).filter(status=code).count()
               for code, _label in EmailSendLog.STATUS_CHOICES}
     return render(request, 'core/admin_mail_campaign.html', {
         'batch': batch,
         'campaign': first,
         'counts': counts,
         'total': sum(counts.values()),
-        'read_total': EmailSendLog.objects.filter(batch=batch).exclude(read_at=None).count(),
+        'read_total': _batch_rows(batch).exclude(read_at=None).count(),
         'statuses': EmailSendLog.STATUS_CHOICES,
         'status': status,
         'q': q,
@@ -718,7 +768,10 @@ def mail_retry(request, batch):
         messages.success(request, '%d sent, %d still failing.' % (sent, failed))
         return redirect(reverse('mail_center') + '?folder=sent')
 
-    if not EmailSendLog.objects.filter(batch=batch).exists():
+    if batch.startswith(SINGLE_PREFIX):
+        messages.info(request, 'That mail was sent on its own, so there is nothing to retry.')
+        return redirect(reverse('mail_center') + '?folder=sent&batch=' + batch)
+    if not _batch_rows(batch).exists():
         messages.error(request, 'That campaign no longer exists.')
         return redirect('mail_center')
     sent, failed = _send_batch(batch, request)
@@ -735,7 +788,7 @@ def mail_retry(request, batch):
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def mail_export(request, batch):
     """CSV of one campaign, per recipient, for a record outside the panel."""
-    rows = EmailSendLog.objects.filter(batch=batch).order_by('id')
+    rows = _batch_rows(batch).order_by('id')
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="mail-%s.csv"' % batch
     response.write('recipient,status,sent_at,read_at,error\n')
