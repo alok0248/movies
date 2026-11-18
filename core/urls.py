@@ -4,6 +4,7 @@ from . import views
 from . import local_player
 from . import mbtv_views
 from . import notifications as notification_views
+from . import mailcenter as mail_views
 from . import support as support_views
 from . import guest_access as guest_views
 from . import device_activity as activity_views
@@ -143,6 +144,14 @@ urlpatterns = [
     path('admin-dashboard/notifications/user-search/', notification_views.synced_user_search, name='synced_user_search'),
     # Messages users write to the admin from the app inbox, and the answers.
     path('admin-dashboard/user-messages/', notification_views.user_messages_admin, name='user_messages_admin'),
+    # Mail centre: one page for outbox, compose, received mail/chat and devices.
+    path('admin-dashboard/mail/', mail_views.mail_center, name='mail_center'),
+    path('admin-dashboard/mail/send/', mail_views.mail_send, name='mail_send'),
+    path('admin-dashboard/mail/batch/<str:batch>/', mail_views.mail_campaign_detail, name='mail_campaign_detail'),
+    path('admin-dashboard/mail/batch/<str:batch>/retry/', mail_views.mail_retry, name='mail_retry'),
+    path('admin-dashboard/mail/batch/<str:batch>/export/', mail_views.mail_export, name='mail_export'),
+    # Read pixel for campaign mail. Public: the recipient's mail client fetches it.
+    path('t/<str:token>.gif', mail_views.mail_track, name='mail_track'),
     # Per-device online time: actual online/offline hours with graphs.
     path('admin-dashboard/devices/', views.devices_ips, name='devices_ips'),
     path('admin-dashboard/device-activity/', activity_views.device_activity, name='device_activity'),

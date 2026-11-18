@@ -1,0 +1,98 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}Campaign - Mail Centre{% endblock %}
+{% block admin_content %}
+<style>
+    .mcx-page { max-width: 1200px; }
+    .mc-st { display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .45rem;
+        border-radius: 999px; font-size: .68rem; font-weight: 700;
+        border: 1px solid transparent; white-space: nowrap; }
+    .mc-st.is-pending { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.4); color: #94a3b8; }
+    .mc-st.is-sent { background: rgba(56,189,248,.14); border-color: rgba(56,189,248,.35); color: #38bdf8; }
+    .mc-st.is-delivered { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.4); color: #60a5fa; }
+    .mc-st.is-read { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.35); color: #22c55e; }
+    .mc-st.is-failed { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.35); color: #ef4444; }
+    .mcx-body { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 46rem; }
+    .mcx-err { color: #ef4444; font-size: .74rem; overflow-wrap: anywhere; }
+    .mcx-counts { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .mcx-counts a { text-decoration: none; }
+</style>
+<div class="mcx-page container-fluid">
+    <div class="adm-hero">
+        <div>
+            <span class="adm-hero-eyebrow"><i class="fas fa-envelope"></i> Campaign</span>
+            <h1 class="adm-hero-title">{{ campaign.subject|default:"(no subject)"|truncatechars:90 }}</h1>
+            <p class="adm-hero-sub">Queued {{ campaign.created_at|date:"d M Y H:i" }} · audience {{ campaign.audience|default:"-" }} · {{ total }} recipient{{ total|pluralize }}</p>
+        </div>
+        <div class="adm-hero-side" style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <a class="adm-btn" href="{% url 'mail_center' %}?tab=outbox"><i class="fas fa-arrow-left"></i> Outbox</a>
+            <a class="adm-btn" href="{% url 'mail_export' batch %}"><i class="fas fa-file-csv"></i> CSV</a>
+            <form method="post" action="{% url 'mail_retry' batch %}" style="margin:0">
+                {% csrf_token %}
+                <button class="adm-btn is-primary" type="submit"><i class="fas fa-rotate"></i> Retry unsent</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="adm-shell adm-rise">
+        <div class="adm-shell-core">
+            <div class="adm-card">
+                <div class="adm-card-head"><h2 class="adm-card-title">Status</h2></div>
+                <div class="adm-card-body">
+                    <div class="mcx-counts" style="margin-bottom:.7rem">
+                        {% for code, label in statuses %}
+                        <a href="?status={{ code }}" class="adm-btn is-sm{% if status == code %} is-primary{% else %} is-quiet{% endif %}">
+                            {{ label }}
+                            {% for key, value in counts.items %}{% if key == code %}<b>{{ value }}</b>{% endif %}{% endfor %}
+                        </a>
+                        {% endfor %}
+                        {% if status != 'all' %}<a class="adm-btn is-sm" href="?">Any status</a>{% endif %}
+                    </div>
+                    <form method="get" class="mc-filter" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+                        <div class="adm-field" style="margin:0;flex:1;min-width:12rem">
+                            <label for="mcx-q">Recipient</label>
+                            <input id="mcx-q" class="adm-input" type="search" name="q" value="{{ q }}" placeholder="Search an address">
+                        </div>
+                        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+                        <button class="adm-btn is-sm" type="submit"><i class="fas fa-filter"></i> Filter</button>
+                    </form>
+                </div>
+                <div class="adm-card-body">
+                    <h3 class="adm-card-title" style="font-size:.8rem">Message</h3>
+                    <div class="mcx-body adm-sub">{{ campaign.body|default:"(body not stored for this campaign)" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="adm-shell adm-rise" style="margin-top:1rem">
+        <div class="adm-shell-core">
+            <div class="adm-card">
+                <div class="adm-card-head"><h2 class="adm-card-title">Recipients</h2></div>
+                <div class="adm-card-body flush">
+                    <div class="adm-table-wrap">
+                        <table class="adm-table">
+                            <thead>
+                                <tr><th>Recipient</th><th>Status</th><th>Queued</th><th>Read</th><th>Error</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for row in rows %}
+                                <tr>
+                                    <td>{{ row.recipient }}</td>
+                                    <td><span class="mc-st is-{{ row.status }}">{{ row.get_status_display }}</span></td>
+                                    <td class="adm-sub">{{ row.created_at|date:"d M H:i" }}</td>
+                                    <td class="adm-sub">{{ row.read_at|date:"d M H:i"|default:"-" }}</td>
+                                    <td class="mcx-err">{{ row.error_message|default:""|truncatechars:160 }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="adm-sub">No recipient matches that filter.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% include 'core/_adm_pager.html' with pg=rows %}
+</div>
+{% endblock %}

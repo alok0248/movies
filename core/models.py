@@ -3496,17 +3496,50 @@ class DBConnectionConfig(models.Model):
 
 
 class EmailSendLog(models.Model):
-    """Track every email sent from the platform."""
+    """One outbound mail — row per recipient, and the mail centre's outbox.
+
+    Two shapes share this table. A transactional send (verification, password
+    reset, a test) writes one row after the attempt, as it always did. A mail
+    centre campaign writes every row *before* sending, all sharing a ``batch``
+    key, so a recipient whose mail never left stays ``pending`` with its error
+    string instead of vanishing — that is what makes a retry possible.
+
+    ``delivered`` is only ever set for in-app messages (the app fetching one),
+    and ``read`` for mail once the tracking pixel in the HTML body is hit.
+    """
+    STATUS_PENDING = 'pending'
+    STATUS_SENT = 'sent'
+    STATUS_DELIVERED = 'delivered'
+    STATUS_READ = 'read'
+    STATUS_FAILED = 'failed'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_DELIVERED, 'Delivered'),
+        (STATUS_READ, 'Read'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
     # Cross-DB link (external users DB vs default config) — no DB-level constraint.
     address = models.ForeignKey('EmailAddress', on_delete=models.SET_NULL, null=True, blank=True, help_text='SMTP address used', db_constraint=False)
     recipient = models.EmailField(help_text='Recipient email address')
     subject = models.CharField(max_length=500)
     purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES, default='notification')
-    status = models.CharField(max_length=20, choices=[
-        ('sent', 'Sent'),
-        ('failed', 'Failed'),
-    ])
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     error_message = models.TextField(blank=True, default='')
+    # Campaign identity: rows written by one compose share it, so the detail
+    # page, the retry and the CSV export all work from one key. '' means the
+    # row came from a transactional send and is not part of a campaign.
+    batch = models.CharField(max_length=40, blank=True, default='', db_default='', db_index=True)
+    # The message itself, kept so the mail centre can show what was sent. The
+    # transactional paths never fill it; only campaigns do.
+    body = models.TextField(blank=True, default='', db_default='')
+    audience = models.CharField(max_length=20, blank=True, default='', db_default='')
+    # 1x1-pixel token, one per mail: hitting it is the only honest "read"
+    # signal an SMTP box can give us.
+    track_token = models.CharField(max_length=64, blank=True, default='', db_default='', db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
     # Cross-DB link (external users DB vs default auth) — no DB-level constraint.
     sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text='Admin who triggered it', db_constraint=False)
     source = models.CharField(max_length=20, choices=[

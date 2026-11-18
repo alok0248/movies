@@ -1390,6 +1390,9 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             <a href="{% url 'admin_user_list' %}" class="sb-item {% if 'users' in request.path %}active{% endif %}">
                 <i class="fas fa-user-shield"></i> Users
             </a>
+            <a href="{% url 'mail_center' %}" class="sb-item {% if 'admin-dashboard/mail' in request.path %}active{% endif %}">
+                <i class="fas fa-envelope-open-text"></i> Mail Centre
+            </a>
             <a href="{% url 'synced_users_list' %}" class="sb-item {% if 'synced-users' in request.path %}active{% endif %}">
                 <i class="fas fa-users"></i> Synced Users
                 {% if admin_badges.blocked_today %}<span class="sb-badge" title="{{ admin_badges.blocked_today }} account{{ admin_badges.blocked_today|pluralize }} blocked today">{{ admin_badges.blocked_today }}</span>{% endif %}
