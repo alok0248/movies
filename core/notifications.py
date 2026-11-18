@@ -73,7 +73,15 @@ def _notification_audience_emails(audience, selected_emails=None):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def notifications_admin(request):
-    """Compose a notification and see everything already sent."""
+    """Compose a notification and see everything already sent.
+
+    Reading this page now belongs to the mailbox: the Notifications folder of
+    ``mail_center`` shows the same messages with the same per-user delivery and
+    read counts, so a GET is sent there. A POST still lands here, which keeps
+    any form or bookmark that already pointed at this URL working.
+    """
+    if request.method == 'GET':
+        return redirect(reverse('mail_center') + '?folder=notifications')
     if request.method == 'POST':
         title = (request.POST.get('title') or '').strip()
         body = (request.POST.get('body') or '').strip()
@@ -394,7 +402,13 @@ def user_messages_admin(request):
     (registered or guest) and by state (waiting or answered), with a free-text
     search over the address, device id and both bodies. Answering stamps the reply
     on the row and, for a signed-in sender, also sends it to their app inbox.
+
+    Reading and answering now happen in the mailbox's Inbox folder
+    (``mail_center``), which uses this same grouping; a GET is redirected there
+    and a POST is still handled here so older forms keep working.
     """
+    if request.method == 'GET':
+        return redirect(reverse('mail_center') + '?folder=inbox')
     from django.core.paginator import Paginator
 
     if request.method == 'POST' and (request.POST.get('canned_action') or '').strip():

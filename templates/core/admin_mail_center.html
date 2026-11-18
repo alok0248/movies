@@ -1,511 +1,683 @@
 {% extends 'core/admin_base.html' %}
-{% block title %}Mail Centre - Admin{% endblock %}
+{% block title %}Mail - Admin{% endblock %}
 {% block admin_content %}
 <style>
-    .mc-page { max-width: 1500px; }
-    /* Tabs: same weight as the sidebar items, so the page reads as one place. */
-    .mc-tabs { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 1rem; }
-    .mc-tab { display: inline-flex; align-items: center; gap: .4rem; padding: .42rem .8rem;
-        border-radius: 999px; border: 1px solid var(--adm-line); color: var(--text);
-        text-decoration: none; font-size: .78rem; font-weight: 600; }
-    .mc-tab:hover { background: var(--surface-hover); color: var(--text); }
-    .mc-tab.is-active { background: color-mix(in srgb, var(--brand) 18%, transparent);
-        border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
-    .mc-tab .sb-badge { margin-left: .15rem; }
-    .mc-st { display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .45rem;
-        border-radius: 999px; font-size: .68rem; font-weight: 700; letter-spacing: .01em;
-        border: 1px solid transparent; white-space: nowrap; }
-    .mc-st.is-pending { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.4); color: #94a3b8; }
-    .mc-st.is-sent { background: rgba(56,189,248,.14); border-color: rgba(56,189,248,.35); color: #38bdf8; }
-    .mc-st.is-delivered { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.4); color: #60a5fa; }
-    .mc-st.is-read { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.35); color: #22c55e; }
-    .mc-st.is-failed { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.35); color: #ef4444; }
-    .mc-msg { max-width: 34rem; white-space: pre-wrap; overflow-wrap: anywhere;
-        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-    .mc-reply { border-left: 2px solid color-mix(in srgb, var(--brand) 55%, transparent);
-        padding-left: .55rem; margin-top: .3rem; font-size: .76rem; color: var(--text-2); }
-    .mc-num { text-align: right; font-variant-numeric: tabular-nums; }
-    .mc-err { color: #ef4444; font-size: .72rem; overflow-wrap: anywhere;
-        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .mc-dev-check { width: 1rem; height: 1rem; accent-color: var(--brand); }
-    .mc-filter { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
-    .mc-filter .adm-field { margin: 0; min-width: 9rem; }
-    .mc-note { font-size: .74rem; color: var(--text-2); }
-    @media (max-width: 720px) { .mc-hide-sm { display: none; } }
+    /* One mailbox: rail, list, reading pane. The three feeds that used to be
+       three pages (received mail/chat, sent mail, in-app notifications) are
+       folders here, so the same list/read model applies to all of them. */
+    .ml { --ml-line: var(--adm-line); --ml-hover: var(--surface-hover);
+          max-width: 1560px; display: flex; flex-direction: column; gap: .75rem; }
+    .ml-top { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+    .ml-compose {
+        display: inline-flex; align-items: center; gap: .5rem; padding: .6rem 1.1rem;
+        border-radius: 999px; font-weight: 700; font-size: .82rem; text-decoration: none;
+        color: #08131f; background: color-mix(in srgb, var(--brand) 88%, #fff);
+        box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--brand) 70%, transparent);
+        white-space: nowrap;
+    }
+    .ml-compose:hover { filter: brightness(1.08); color: #08131f; }
+    .ml-search { flex: 1; min-width: 12rem; position: relative; }
+    .ml-search i { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%);
+        font-size: .8rem; color: var(--text-2); pointer-events: none; }
+    .ml-search input { width: 100%; padding: .55rem .9rem .55rem 2.2rem; border-radius: 999px;
+        border: 1px solid var(--ml-line); background: var(--card-bg, var(--surface));
+        color: var(--text); font-size: .82rem; }
+    .ml-search input:focus { outline: 2px solid color-mix(in srgb, var(--brand) 45%, transparent);
+        outline-offset: 1px; }
+    .ml-top-right { display: flex; gap: .35rem; align-items: center; font-size: .72rem; color: var(--text-2); }
+    .ml-chip { padding: .1rem .5rem; border-radius: 999px; border: 1px solid var(--ml-line); white-space: nowrap; }
+
+    .ml-body { display: grid; grid-template-columns: 208px minmax(0, 1fr) minmax(0, 1.15fr);
+        gap: .7rem; align-items: start; }
+    .ml-body.is-wide { grid-template-columns: 208px minmax(0, 1fr); }
+    body.admin-page .ml { color: var(--text); }
+
+    /* ---- rail ---- */
+    .ml-rail { display: flex; flex-direction: column; gap: .18rem; padding: .35rem .15rem; }
+    .ml-folder { display: flex; align-items: center; gap: .55rem; padding: .45rem .7rem;
+        border-radius: 999px; text-decoration: none; color: var(--text); font-size: .8rem; font-weight: 600; }
+    .ml-folder i { width: 1rem; text-align: center; opacity: .8; font-size: .78rem; }
+    .ml-folder:hover { background: var(--ml-hover); color: var(--text); }
+    .ml-folder.is-active { background: color-mix(in srgb, var(--brand) 20%, transparent); color: var(--text); }
+    .ml-folder .n { margin-left: auto; font-size: .68rem; font-weight: 700; color: var(--text-2);
+        background: var(--ml-hover); border-radius: 999px; padding: .02rem .4rem; }
+    .ml-folder.is-active .n { color: var(--text); }
+    .ml-rail-sep { height: 1px; background: var(--ml-line); margin: .45rem .6rem; }
+    .ml-rail-title { font-size: .64rem; text-transform: uppercase; letter-spacing: .08em;
+        color: var(--text-2); padding: .3rem .85rem; }
+    .ml-rail-note { font-size: .68rem; color: var(--text-2); padding: .2rem .85rem; line-height: 1.45; }
+
+    /* ---- list ---- */
+    .ml-list, .ml-pane { border: 1px solid var(--ml-line); border-radius: 14px;
+        background: var(--card-bg, var(--surface)); overflow: hidden; }
+    .ml-list-head { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap;
+        padding: .55rem .75rem; border-bottom: 1px solid var(--ml-line); }
+    .ml-list-title { font-size: .84rem; font-weight: 700; margin: 0; }
+    .ml-list-count { font-size: .68rem; color: var(--text-2); }
+    .ml-filter { display: flex; gap: .3rem; margin-left: auto; flex-wrap: wrap; }
+    .ml-filter select { font-size: .7rem; padding: .2rem .4rem; border-radius: 8px;
+        border: 1px solid var(--ml-line); background: transparent; color: var(--text); }
+    .ml-rows { max-height: 74vh; overflow: auto; }
+    .ml-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto;
+        gap: .55rem; padding: .5rem .75rem; text-decoration: none; color: var(--text);
+        border-bottom: 1px solid color-mix(in srgb, var(--ml-line) 55%, transparent);
+        border-left: 3px solid transparent; align-items: center; }
+    .ml-row:hover { background: var(--ml-hover); color: var(--text); }
+    .ml-row.is-active { background: color-mix(in srgb, var(--brand) 12%, transparent);
+        border-left-color: color-mix(in srgb, var(--brand) 75%, transparent); }
+    .ml-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+        font-size: .68rem; font-weight: 800; letter-spacing: .01em;
+        background: color-mix(in srgb, var(--brand) 26%, transparent); color: var(--text); }
+    .ml-av.is-bell { background: rgba(96,165,250,.18); }
+    .ml-av.is-mail { background: rgba(56,189,248,.16); }
+    .ml-row-main { min-width: 0; }
+    .ml-row-who { display: flex; align-items: baseline; gap: .35rem; font-size: .78rem; }
+    .ml-row-who b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ml-row-sub { font-size: .74rem; color: var(--text-2); overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap; }
+    .ml-row.is-unread .ml-row-who b, .ml-row.is-unread .ml-row-sub { color: var(--text); font-weight: 700; }
+    .ml-row-right { text-align: right; font-size: .66rem; color: var(--text-2); white-space: nowrap; }
+    .ml-row-right .dots { display: flex; gap: .2rem; justify-content: flex-end; margin-top: .15rem; }
+    .ml-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .ml-dot.is-pending { background: #94a3b8; }
+    .ml-dot.is-sent { background: #38bdf8; }
+    .ml-dot.is-read { background: #22c55e; }
+    .ml-dot.is-failed { background: #ef4444; }
+    .ml-dot.is-wait { background: #f59e0b; }
+    .ml-empty { padding: 2.2rem 1rem; text-align: center; color: var(--text-2); font-size: .8rem; }
+
+    /* ---- reading pane ---- */
+    .ml-pane-head { display: flex; align-items: flex-start; gap: .6rem; padding: .8rem .9rem;
+        border-bottom: 1px solid var(--ml-line); }
+    .ml-pane-subject { font-size: .98rem; font-weight: 700; margin: 0 0 .2rem; line-height: 1.3; }
+    .ml-pane-meta { font-size: .7rem; color: var(--text-2); }
+    .ml-pane-actions { margin-left: auto; display: flex; gap: .3rem; flex-wrap: wrap; justify-content: flex-end; }
+    .ml-pane-body { padding: .9rem; max-height: 62vh; overflow: auto; }
+    .ml-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .84rem; line-height: 1.6; }
+    .ml-quote { border-left: 2px solid color-mix(in srgb, var(--brand) 55%, transparent);
+        padding-left: .6rem; margin: .6rem 0 0; font-size: .78rem; color: var(--text-2); }
+    .ml-stats { display: flex; flex-wrap: wrap; gap: .35rem; margin: .5rem 0 .8rem; }
+    .ml-pill { display: inline-flex; gap: .3rem; align-items: center; padding: .1rem .5rem;
+        border-radius: 999px; font-size: .68rem; font-weight: 700; border: 1px solid transparent; }
+    .ml-pill.is-pending { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.4); color: #94a3b8; }
+    .ml-pill.is-sent { background: rgba(56,189,248,.14); border-color: rgba(56,189,248,.35); color: #38bdf8; }
+    .ml-pill.is-delivered { background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.4); color: #60a5fa; }
+    .ml-pill.is-read { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.35); color: #22c55e; }
+    .ml-pill.is-failed { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.35); color: #ef4444; }
+    .ml-mini { width: 100%; border-collapse: collapse; font-size: .74rem; }
+    .ml-mini th { text-align: left; font-size: .66rem; text-transform: uppercase;
+        letter-spacing: .05em; color: var(--text-2); padding: .3rem .35rem;
+        border-bottom: 1px solid var(--ml-line); font-weight: 700; }
+    .ml-mini td { padding: .3rem .35rem; border-bottom: 1px solid color-mix(in srgb, var(--ml-line) 45%, transparent);
+        vertical-align: top; }
+    .ml-mini .err { color: #ef4444; font-size: .68rem; overflow-wrap: anywhere; }
+    .ml-reply { border-top: 1px solid var(--ml-line); padding: .75rem .9rem; }
+    .ml-reply textarea { width: 100%; min-height: 5.5rem; border-radius: 10px;
+        border: 1px solid var(--ml-line); background: transparent; color: var(--text);
+        padding: .55rem .65rem; font-size: .82rem; }
+    .ml-reply-foot { display: flex; align-items: center; gap: .4rem; margin-top: .4rem; flex-wrap: wrap; }
+    .ml-chip-btn { font-size: .68rem; padding: .15rem .5rem; border-radius: 999px;
+        border: 1px solid var(--ml-line); background: transparent; color: var(--text-2); cursor: pointer; }
+    .ml-chip-btn:hover { color: var(--text); background: var(--ml-hover); }
+    .ml-note { font-size: .7rem; color: var(--text-2); }
+
+    /* ---- compose / devices ---- */
+    .ml-wide-body { padding: .9rem; }
+    .ml-form-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, .9fr); gap: .9rem; }
+    .ml-field { margin-bottom: .6rem; }
+    .ml-field label { display: block; font-size: .72rem; font-weight: 700; margin-bottom: .2rem; color: var(--text-2); }
+    .ml-field input, .ml-field select, .ml-field textarea { width: 100%; border-radius: 9px;
+        border: 1px solid var(--ml-line); background: transparent; color: var(--text);
+        padding: .45rem .6rem; font-size: .8rem; }
+    .ml-field textarea { min-height: 8rem; }
+    .ml-check { display: flex; align-items: center; gap: .4rem; font-size: .76rem; }
+    .ml-send { display: inline-flex; align-items: center; gap: .45rem; padding: .5rem 1rem;
+        border-radius: 999px; border: 0; font-weight: 700; font-size: .8rem; cursor: pointer;
+        background: color-mix(in srgb, var(--brand) 88%, #fff); color: #08131f; }
+    .ml-facts { display: grid; gap: .5rem; font-size: .74rem; }
+    .ml-facts b { display: block; font-size: .72rem; }
+    .ml-table-wrap { overflow: auto; }
+    .ml-dev-check { width: .95rem; height: .95rem; accent-color: var(--brand); }
+    .ml-toolbar { display: flex; gap: .4rem; flex-wrap: wrap; align-items: end; margin-bottom: .7rem; }
+
+    @media (max-width: 1180px) {
+        .ml-body, .ml-body.is-wide { grid-template-columns: minmax(0, 1fr); }
+        .ml-rail { flex-direction: row; flex-wrap: wrap; overflow-x: auto; }
+        .ml-rail-sep, .ml-rail-title, .ml-rail-note { display: none; }
+        .ml-rows { max-height: none; }
+        .ml-pane-body { max-height: none; }
+        .ml-form-grid { grid-template-columns: minmax(0, 1fr); }
+    }
 </style>
 
-<div class="mc-page container-fluid">
-    <div class="adm-hero">
-        <div>
-            <span class="adm-hero-eyebrow"><i class="fas fa-envelope-open-text"></i> Mail &amp; messages</span>
-            <h1 class="adm-hero-title">Mail Centre</h1>
-            <p class="adm-hero-sub">Every mail queued, sent, read or failed, the messages people send you, and the devices you can reach — on one page.</p>
-        </div>
-        <div class="adm-hero-side">
-            <a class="adm-btn is-primary" href="{% url 'mail_center' %}?tab=compose">
-                <i class="fas fa-paper-plane"></i> Compose
-            </a>
-        </div>
-    </div>
-
-    <div class="adm-tiles">
-        <div class="adm-tile adm-rise" style="--i:0">
-            <span class="adm-tile-ico"><i class="fas fa-hourglass-half"></i></span>
-            <b class="adm-tile-num">{{ stats.pending }}</b>
-            <span class="adm-tile-label">Pending</span>
-            <span class="adm-tile-hint">Written, not yet accepted by SMTP</span>
-        </div>
-        <div class="adm-tile adm-rise" style="--i:1">
-            <span class="adm-tile-ico"><i class="fas fa-paper-plane"></i></span>
-            <b class="adm-tile-num">{{ stats.sent }}</b>
-            <span class="adm-tile-label">Sent</span>
-            <span class="adm-tile-hint">Accepted by the mail box</span>
-        </div>
-        <div class="adm-tile adm-rise" style="--i:2">
-            <span class="adm-tile-ico"><i class="fas fa-eye"></i></span>
-            <b class="adm-tile-num">{{ stats.read }}</b>
-            <span class="adm-tile-label">Read</span>
-            <span class="adm-tile-hint">Tracking pixel fetched</span>
-        </div>
-        <div class="adm-tile adm-rise" style="--i:3">
-            <span class="adm-tile-ico"><i class="fas fa-triangle-exclamation"></i></span>
-            <b class="adm-tile-num">{{ stats.failed }}</b>
-            <span class="adm-tile-label">Failed</span>
-            <span class="adm-tile-hint">Kept with its error, retryable</span>
-        </div>
-        <div class="adm-tile adm-rise" style="--i:4">
-            <span class="adm-tile-ico"><i class="fas fa-inbox"></i></span>
-            <b class="adm-tile-num">{{ stats.inbox_open }}</b>
-            <span class="adm-tile-label">Waiting on you</span>
-            <span class="adm-tile-hint">Received mail and chat unanswered</span>
-        </div>
-        <div class="adm-tile adm-rise" style="--i:5">
-            <span class="adm-tile-ico"><i class="fas fa-mobile-screen"></i></span>
-            <b class="adm-tile-num">{{ stats.devices }}</b>
-            <span class="adm-tile-label">Devices</span>
-            <span class="adm-tile-hint">{{ stats.users }} synced accounts</span>
+<div class="ml">
+    <div class="ml-top">
+        <a class="ml-compose" href="{% url 'mail_center' %}?folder=compose">
+            <i class="fas fa-pen"></i> Compose
+        </a>
+        <form class="ml-search" method="get" action="{% url 'mail_center' %}">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="search" name="q" value="{{ q }}" placeholder="Search mail, messages and notifications"
+                   aria-label="Search the mailbox">
+            <input type="hidden" name="folder" value="{{ folder }}">
+            {% if folder == 'inbox' %}
+            <input type="hidden" name="state" value="{{ state }}">
+            <input type="hidden" name="user" value="{{ user_kind }}">
+            <input type="hidden" name="kind" value="{{ kind }}">
+            {% elif folder == 'sent' %}
+            <input type="hidden" name="status" value="{{ status }}">
+            {% elif folder == 'devices' %}
+            <input type="hidden" name="version" value="{{ version }}">
+            {% endif %}
+        </form>
+        <div class="ml-top-right">
+            <span class="ml-chip" title="Mail written but not yet accepted by the mail box">
+                <i class="fas fa-hourglass-half"></i> {{ stats.pending }} pending
+            </span>
+            <span class="ml-chip" title="Mail the mail box accepted">
+                <i class="fas fa-paper-plane"></i> {{ stats.sent }} sent
+            </span>
+            <span class="ml-chip" title="Read pixel fetched">
+                <i class="fas fa-eye"></i> {{ stats.read }} read
+            </span>
+            {% if stats.failed %}<span class="ml-chip" style="color:#ef4444;border-color:rgba(239,68,68,.45)">
+                <i class="fas fa-triangle-exclamation"></i> {{ stats.failed }} failed</span>{% endif %}
         </div>
     </div>
 
-    <div class="mc-tabs">
-        <a class="mc-tab {% if tab == 'outbox' %}is-active{% endif %}" href="{% url 'mail_center' %}?tab=outbox">
-            <i class="fas fa-paper-plane"></i> Outbox</a>
-        <a class="mc-tab {% if tab == 'compose' %}is-active{% endif %}" href="{% url 'mail_center' %}?tab=compose">
-            <i class="fas fa-pen-to-square"></i> Compose</a>
-        <a class="mc-tab {% if tab == 'inbox' %}is-active{% endif %}" href="{% url 'mail_center' %}?tab=inbox">
-            <i class="fas fa-inbox"></i> Inbox
-            {% if stats.inbox_open %}<span class="sb-badge info">{{ stats.inbox_open }}</span>{% endif %}</a>
-        <a class="mc-tab {% if tab == 'devices' %}is-active{% endif %}" href="{% url 'mail_center' %}?tab=devices">
-            <i class="fas fa-mobile-screen"></i> Devices</a>
-    </div>
-
-    {% if not address and tab != 'inbox' and tab != 'devices' %}
-    <div class="adm-card" style="margin-bottom:1rem;border-color:rgba(239,68,68,.4)">
-        <div class="adm-card-body">
-            <b><i class="fas fa-triangle-exclamation"></i> No active SMTP address.</b>
-            <span class="mc-note">Every queued mail will fail until an address is enabled in
-                <a class="adm-link" href="{% url 'email_settings' %}">Email settings</a>. Queued mail is kept, so nothing is lost.</span>
-        </div>
+    {% if not address and folder == 'compose' %}
+    <div class="ml-chip" style="color:#ef4444;border-color:rgba(239,68,68,.45);padding:.35rem .7rem">
+        <i class="fas fa-triangle-exclamation"></i> No active SMTP address — queued mail will fail until one is
+        enabled in <a class="adm-link" href="{% url 'email_settings' %}">Email settings</a>. Nothing is lost.
     </div>
     {% endif %}
 
-    {% if tab == 'outbox' %}
-    <div class="adm-shell adm-rise">
-        <div class="adm-shell-core">
-            <div class="adm-card">
-                <div class="adm-card-head" style="display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap">
-                    <h2 class="adm-card-title">Sent mail</h2>
+    <div class="ml-body{% if folder == 'compose' or folder == 'devices' %} is-wide{% endif %}">
+        <aside class="ml-rail">
+            {% for key, label, icon, count in folders %}
+            <a class="ml-folder{% if folder == key %} is-active{% endif %}"
+               href="{% url 'mail_center' %}?folder={{ key }}">
+                <i class="fas {{ icon }}"></i> {{ label }}
+                {% if count %}<span class="n">{{ count }}</span>{% endif %}
+            </a>
+            {% endfor %}
+            <div class="ml-rail-sep"></div>
+            <div class="ml-rail-title">Quick filters</div>
+            <a class="ml-folder" href="{% url 'mail_center' %}?folder=inbox&amp;state=open">
+                <i class="fas fa-clock"></i> Waiting on you
+                {% if stats.inbox_open %}<span class="n">{{ stats.inbox_open }}</span>{% endif %}
+            </a>
+            <a class="ml-folder" href="{% url 'mail_center' %}?folder=sent&amp;status=failed">
+                <i class="fas fa-rotate"></i> Failed mail
+                {% if stats.failed %}<span class="n">{{ stats.failed }}</span>{% endif %}
+            </a>
+            <a class="ml-folder" href="{% url 'mail_center' %}?folder=notifications">
+                <i class="fas fa-chart-simple"></i> In-app delivery
+            </a>
+            <div class="ml-rail-sep"></div>
+            <p class="ml-rail-note">{{ stats.users }} accounts · {{ stats.devices }} devices · {{ stats.campaigns }} campaigns</p>
+        </aside>
+
+        {% if folder == 'compose' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">New message</h2>
+                <span class="ml-list-count">Email, in-app, or both</span>
+            </div>
+            <div class="ml-wide-body">
+                <form method="post" action="{% url 'mail_send' %}">
+                    {% csrf_token %}
+                    <div class="ml-form-grid">
+                        <div>
+                            <div class="ml-field">
+                                <label for="ml-aud">Audience</label>
+                                <select id="ml-aud" name="audience">
+                                    {% for value, label in audiences %}
+                                    <option value="{{ value }}"{% if audience == value %} selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-to">Recipients — one per line or comma separated</label>
+                                <textarea id="ml-to" name="selected_emails" rows="3"
+                                          placeholder="name@example.com">{{ to_prefill }}</textarea>
+                                <span class="ml-note">Used for “Selected users”. An address that never synced still gets the mail; it just cannot get the in-app copy.</span>
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-sub">Subject</label>
+                                <input id="ml-sub" name="subject" type="text" maxlength="500" required
+                                       value="{{ subject }}" placeholder="What is new in CineStream">
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-body">Message</label>
+                                <textarea id="ml-body" name="body" rows="9" required
+                                          placeholder="Plain text; sent as text plus a simple HTML body."></textarea>
+                            </div>
+                            <div class="ml-field">
+                                <label>Channels</label>
+                                <div style="display:flex;gap:1.1rem">
+                                    <label class="ml-check"><input type="checkbox" name="send_email" value="1" checked> Email</label>
+                                    <label class="ml-check"><input type="checkbox" name="send_inapp" value="1"> In-app message</label>
+                                </div>
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-link">In-app link (optional)</label>
+                                <input id="ml-link" name="link_url" type="text" maxlength="500"
+                                       placeholder="https://newmovies.linkpc.net/…">
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-app">App (optional, in-app only)</label>
+                                <select id="ml-app" name="app">
+                                    <option value="">All apps</option>
+                                    {% for app in apps %}
+                                    <option value="{{ app.id }}">{{ app.name|default:app.slug|default:app.id }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button class="ml-send" type="submit"><i class="fas fa-paper-plane"></i> Queue and send</button>
+                        </div>
+                        <div>
+                            <div class="ml-facts">
+                                <div><b>Pending</b><span class="ml-note">row written before the attempt — nothing is lost if SMTP is down</span></div>
+                                <div><b>Sent</b><span class="ml-note">the mail box accepted it for that address</span></div>
+                                <div><b>Read</b><span class="ml-note">the 1×1 pixel in the HTML body was fetched</span></div>
+                                <div><b>Failed</b><span class="ml-note">kept with the SMTP error; retry as often as you like</span></div>
+                                <div><b>In-app</b><span class="ml-note">delivered when a device fetches it, read when the user opens it</span></div>
+                            </div>
+                            <p class="ml-note" style="margin-top:.9rem">
+                                Up to 150 addresses go out immediately; a bigger audience stays queued and
+                                drains with <b>Retry unsent</b> in the Sent folder.
+                            </p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        {% elif folder == 'devices' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Devices</h2>
+                <span class="ml-list-count">{{ rows.paginator.count }} installs</span>
+                <div class="ml-filter">
+                    <button class="ml-chip-btn" type="button" id="mlDevAll">Select all on page</button>
+                    <button class="ml-chip-btn" type="button" id="mlDevSend">Message selected</button>
+                </div>
+            </div>
+            <div class="ml-wide-body">
+                <form method="get" action="{% url 'mail_center' %}" class="ml-toolbar">
+                    <input type="hidden" name="folder" value="devices">
+                    <div class="ml-field" style="margin:0">
+                        <label for="ml-ver">Version</label>
+                        <select id="ml-ver" name="version">
+                            <option value="">Any version</option>
+                            {% for v in versions %}
+                            <option value="{{ v }}"{% if version == v %} selected{% endif %}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="ml-field" style="margin:0;flex:1;min-width:11rem">
+                        <label for="ml-dq">Search</label>
+                        <input id="ml-dq" type="search" name="q" value="{{ q }}" placeholder="Email, device or device id">
+                    </div>
+                    <button class="ml-chip-btn" type="submit"><i class="fas fa-filter"></i> Filter</button>
+                </form>
+                <div class="ml-table-wrap">
+                    <table class="ml-mini">
+                        <thead>
+                            <tr><th></th><th>Email</th><th>Device</th><th>Version</th><th>Device id</th><th>Last seen</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td><input class="ml-dev-check" type="checkbox" data-email="{{ row.email }}"
+                                           {% if not row.email %}disabled{% endif %} aria-label="Select {{ row.email }}"></td>
+                                <td>{{ row.email|default:"(no account)" }}</td>
+                                <td>{{ row.device_model|default:"-" }}</td>
+                                <td>{% if row.app_version %}<span class="ml-pill is-sent">{{ row.app_version }}</span>{% else %}-{% endif %}</td>
+                                <td class="ml-note">{{ row.device_id|default:"-"|truncatechars:26 }}</td>
+                                <td class="ml-note">{{ row.last_seen|date:"d M H:i"|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="ml-note">No devices match.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% include 'core/_adm_pager.html' with pg=rows %}
+            </div>
+        </section>
+
+        {% elif folder == 'inbox' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Inbox</h2>
+                <span class="ml-list-count">{{ conversations|length }} conversations · {{ stats.inbox_open }} waiting</span>
+                <div class="ml-filter">
+                    <form method="get" action="{% url 'mail_center' %}" id="mlInboxFilter">
+                        <input type="hidden" name="folder" value="inbox">
+                        <input type="hidden" name="q" value="{{ q }}">
+                        <select name="state" onchange="this.form.submit()" aria-label="Filter by state">
+                            <option value="all"{% if state == 'all' %} selected{% endif %}>All</option>
+                            <option value="open"{% if state == 'open' %} selected{% endif %}>Waiting</option>
+                            <option value="answered"{% if state == 'answered' %} selected{% endif %}>Answered</option>
+                        </select>
+                        <select name="user" onchange="this.form.submit()" aria-label="Filter by sender">
+                            <option value="all"{% if user_kind == 'all' %} selected{% endif %}>Anyone</option>
+                            <option value="registered"{% if user_kind == 'registered' %} selected{% endif %}>Signed-in</option>
+                            <option value="guest"{% if user_kind == 'guest' %} selected{% endif %}>Guests</option>
+                        </select>
+                        <select name="kind" onchange="this.form.submit()" aria-label="Filter by type">
+                            <option value="all"{% if kind == 'all' %} selected{% endif %}>All types</option>
+                            <option value="suggestion"{% if kind == 'suggestion' %} selected{% endif %}>Suggestion</option>
+                            <option value="reply"{% if kind == 'reply' %} selected{% endif %}>Reply</option>
+                        </select>
+                    </form>
+                </div>
+            </div>
+            <div class="ml-rows">
+                {% for conv in conversations %}
+                <a class="ml-row{% if conv.waiting %} is-unread{% endif %}{% if active and conv.key == active.key %} is-active{% endif %}"
+                   href="{% url 'mail_center' %}?folder=inbox&amp;thread={{ conv.key|urlencode }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">
+                    <span class="ml-av">{{ conv.initials }}</span>
+                    <span class="ml-row-main">
+                        <span class="ml-row-who">
+                            <b>{{ conv.display_user|truncatechars:44 }}</b>
+                            {% if conv.waiting %}<span class="ml-dot is-wait" title="{{ conv.waiting }} waiting"></span>{% endif %}
+                        </span>
+                        <span class="ml-row-sub">{{ conv.last_body|truncatechars:96 }}</span>
+                    </span>
+                    <span class="ml-row-right">
+                        {{ conv.last_at|date:"d M" }}
+                        <span class="dots">{% if conv.total > 1 %}<span class="ml-note">{{ conv.total }}</span>{% endif %}</span>
+                    </span>
+                </a>
+                {% empty %}
+                <div class="ml-empty"><i class="fas fa-inbox"></i><br>Nothing in the inbox for that filter.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ml-pane">
+            {% if active %}
+            <div class="ml-pane-head">
+                <span class="ml-av">{{ active.initials }}</span>
+                <div style="min-width:0">
+                    <h3 class="ml-pane-subject">{{ active.display_user|truncatechars:70 }}</h3>
+                    <div class="ml-pane-meta">
+                        {% if active.email %}{{ active.email }}{% else %}Guest device {{ active.device_id|truncatechars:22 }}{% endif %}
+                        · {{ active.total }} message{{ active.total|pluralize }}
+                        {% if active.waiting %}· <b style="color:#f59e0b">{{ active.waiting }} waiting</b>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="ml-pane-body">
+                {% for msg in messages %}
+                <div style="margin-bottom:1rem">
+                    <div class="ml-pane-meta" style="margin-bottom:.25rem">
+                        {{ msg.created_at|date:"d M Y H:i" }} · {{ msg.get_kind_display }}{% if msg.notification %} · about “{{ msg.notification.title|truncatechars:40 }}”{% endif %}
+                    </div>
+                    <div class="ml-text">{{ msg.body }}</div>
+                    {% if msg.reply_body %}
+                    <div class="ml-quote">
+                        <b>Our reply</b> · {{ msg.replied_at|date:"d M H:i" }}{% if msg.replied_by %} · {{ msg.replied_by }}{% endif %}
+                        <div class="ml-text" style="margin-top:.2rem">{{ msg.reply_body }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="ml-empty">No messages in this thread.</div>
+                {% endfor %}
+            </div>
+            {% if reply_target %}
+            <div class="ml-reply">
+                <form method="post" action="{% url 'mail_center' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reply">
+                    <input type="hidden" name="message_id" value="{{ reply_target.id }}">
+                    <input type="hidden" name="thread" value="{{ thread_key }}">
+                    <textarea name="reply" id="mlReply" required
+                              placeholder="Reply to {{ active.display_user }} — this reaches the app inbox."></textarea>
+                    <div class="ml-reply-foot">
+                        <button class="ml-send" type="submit"><i class="fas fa-reply"></i> Send reply</button>
+                        {% for canned in canned_replies %}
+                        <button class="ml-chip-btn" type="button" data-canned="{{ canned.body|escape }}"
+                                title="{{ canned.title }}">{{ canned.title|truncatechars:26 }}</button>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="ml-empty"><i class="fas fa-envelope-open-text"></i><br>Pick a conversation.</div>
+            {% endif %}
+        </section>
+
+        {% elif folder == 'sent' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Sent</h2>
+                <span class="ml-list-count">{{ campaigns|length }} campaigns</span>
+                <div class="ml-filter">
+                    <form method="get" action="{% url 'mail_center' %}" id="mlSentFilter">
+                        <input type="hidden" name="folder" value="sent">
+                        <input type="hidden" name="q" value="{{ q }}">
+                        <select name="status" onchange="this.form.submit()" aria-label="Filter by status">
+                            <option value="all"{% if status == 'all' %} selected{% endif %}>Any status</option>
+                            {% for code, label in statuses %}
+                            <option value="{{ code }}"{% if status == code %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
                     <form method="post" action="{% url 'mail_retry' 'pending' %}" style="margin:0">
                         {% csrf_token %}
-                        <button type="submit" class="adm-btn is-sm">
-                            <i class="fas fa-rotate"></i> Retry all pending
+                        <button class="ml-chip-btn" type="submit"><i class="fas fa-rotate"></i> Retry unsent</button>
+                    </form>
+                </div>
+            </div>
+            <div class="ml-rows">
+                {% for c in campaigns %}
+                <a class="ml-row{% if c.failed %} is-unread{% endif %}{% if active_campaign and c.batch == active_campaign.batch %} is-active{% endif %}"
+                   href="{% url 'mail_center' %}?folder=sent&amp;batch={{ c.batch }}{% if status != 'all' %}&amp;status={{ status }}{% endif %}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">
+                    <span class="ml-av is-mail"><i class="fas fa-paper-plane"></i></span>
+                    <span class="ml-row-main">
+                        <span class="ml-row-who"><b>{{ c.subject|default:"(no subject)"|truncatechars:58 }}</b></span>
+                        <span class="ml-row-sub">{{ c.total }} recipient{{ c.total|pluralize }} · {{ c.audience|default:"-" }}</span>
+                    </span>
+                    <span class="ml-row-right">
+                        {{ c.created|date:"d M H:i" }}
+                        <span class="dots">
+                            {% if c.pending %}<span class="ml-dot is-pending" title="{{ c.pending }} pending"></span>{% endif %}
+                            {% if c.sent %}<span class="ml-dot is-sent" title="{{ c.sent }} sent"></span>{% endif %}
+                            {% if c.read %}<span class="ml-dot is-read" title="{{ c.read }} read"></span>{% endif %}
+                            {% if c.failed %}<span class="ml-dot is-failed" title="{{ c.failed }} failed"></span>{% endif %}
+                        </span>
+                    </span>
+                </a>
+                {% empty %}
+                <div class="ml-empty"><i class="fas fa-paper-plane"></i><br>No campaigns for that filter.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ml-pane">
+            {% if active_campaign %}
+            <div class="ml-pane-head">
+                <div style="min-width:0">
+                    <h3 class="ml-pane-subject">{{ active_campaign.subject|default:"(no subject)"|truncatechars:80 }}</h3>
+                    <div class="ml-pane-meta">
+                        {{ active_campaign.created|date:"d M Y H:i" }} · {{ active_campaign.audience|default:"-" }} ·
+                        {{ campaign_total }} recipient{{ campaign_total|pluralize }}
+                    </div>
+                </div>
+                <div class="ml-pane-actions">
+                    <a class="ml-chip-btn" href="{% url 'mail_export' batch %}"><i class="fas fa-file-csv"></i> CSV</a>
+                    <form method="post" action="{% url 'mail_retry' batch %}" style="margin:0">
+                        {% csrf_token %}
+                        <button class="ml-chip-btn" type="submit"><i class="fas fa-rotate"></i> Retry unsent</button>
+                    </form>
+                </div>
+            </div>
+            <div class="ml-pane-body">
+                <div class="ml-stats">
+                    {% for code, label in statuses %}
+                    <span class="ml-pill is-{{ code }}">
+                        {{ label }}
+                        {% for key, value in campaign_counts.items %}{% if key == code %}{{ value }}{% endif %}{% endfor %}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% if active_campaign.body %}
+                <div class="ml-text">{{ active_campaign.body }}</div>
+                {% endif %}
+                <h4 class="ml-note" style="margin:1rem 0 .35rem;text-transform:uppercase;letter-spacing:.06em">Recipients</h4>
+                <table class="ml-mini">
+                    <thead><tr><th>Recipient</th><th>Status</th><th>Read</th><th>Error</th></tr></thead>
+                    <tbody>
+                        {% for r in recipients %}
+                        <tr>
+                            <td>{{ r.recipient }}</td>
+                            <td><span class="ml-pill is-{{ r.status }}">{{ r.get_status_display }}</span></td>
+                            <td class="ml-note">{{ r.read_at|date:"d M H:i"|default:"-" }}</td>
+                            <td class="err">{{ r.error_message|default:""|truncatechars:90 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="ml-note">No recipients.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if campaign_total > recipients|length %}
+                <p class="ml-note" style="margin-top:.5rem">
+                    Showing {{ recipients|length }} of {{ campaign_total }} — the CSV has every row.
+                </p>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="ml-empty"><i class="fas fa-paper-plane"></i><br>Pick a campaign.</div>
+            {% endif %}
+        </section>
+
+        {% else %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Notifications</h2>
+                <span class="ml-list-count">{{ notes|length }} in-app messages</span>
+                <div class="ml-filter">
+                    <form method="get" action="{% url 'mail_center' %}">
+                        <input type="hidden" name="folder" value="notifications">
+                        <input type="hidden" name="q" value="{{ q }}">
+                    </form>
+                </div>
+            </div>
+            <div class="ml-rows">
+                {% for n in notes %}
+                <a class="ml-row{% if not n.is_active %} is-unread{% endif %}{% if active_note and n.id == active_note.id %} is-active{% endif %}"
+                   href="{% url 'mail_center' %}?folder=notifications&amp;item={{ n.id }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">
+                    <span class="ml-av is-bell"><i class="fas fa-bell"></i></span>
+                    <span class="ml-row-main">
+                        <span class="ml-row-who">
+                            <b>{{ n.title|truncatechars:52 }}</b>
+                            {% if not n.is_active %}<span class="ml-note">off</span>{% endif %}
+                        </span>
+                        <span class="ml-row-sub">{{ n.body|default:"(no body)"|truncatechars:92 }}</span>
+                    </span>
+                    <span class="ml-row-right">
+                        {{ n.sent_at|default:n.created_at|date:"d M" }}
+                        <span class="dots"><span class="ml-note">{{ n.delivered }}/{{ n.total }}</span></span>
+                    </span>
+                </a>
+                {% empty %}
+                <div class="ml-empty"><i class="fas fa-bell-slash"></i><br>No notifications for that filter.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ml-pane">
+            {% if active_note %}
+            <div class="ml-pane-head">
+                <div style="min-width:0">
+                    <h3 class="ml-pane-subject">{{ active_note.title }}</h3>
+                    <div class="ml-pane-meta">
+                        {{ active_note.sent_at|default:active_note.created_at|date:"d M Y H:i" }} ·
+                        {{ active_note.get_audience_display }}{% if active_note.app %} · {{ active_note.app.name|default:active_note.app.slug }}{% endif %}
+                    </div>
+                </div>
+                <div class="ml-pane-actions">
+                    <form method="post" action="{% url 'notification_toggle' active_note.id %}" style="margin:0">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="ml-chip-btn" type="submit">
+                            {% if active_note.is_active %}<i class="fas fa-eye-slash"></i> Turn off{% else %}<i class="fas fa-eye"></i> Turn on{% endif %}
                         </button>
                     </form>
                 </div>
-                <div class="adm-card-body">
-                    <form method="get" action="{% url 'mail_center' %}" class="mc-filter">
-                        <input type="hidden" name="tab" value="outbox">
-                        <div class="adm-field">
-                            <label for="mc-status">Status</label>
-                            <select id="mc-status" name="status" class="adm-select">
-                                <option value="all"{% if status == 'all' %} selected{% endif %}>Any status</option>
-                                {% for code, label in statuses %}
-                                <option value="{{ code }}"{% if status == code %} selected{% endif %}>{{ label }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="adm-field">
-                            <label for="mc-kind">Type</label>
-                            <select id="mc-kind" name="kind" class="adm-select">
-                                <option value="all"{% if kind == 'all' %} selected{% endif %}>Mail and in-app</option>
-                                <option value="email"{% if kind == 'email' %} selected{% endif %}>Email campaigns</option>
-                                <option value="inapp"{% if kind == 'inapp' %} selected{% endif %}>In-app messages</option>
-                            </select>
-                        </div>
-                        <div class="adm-field" style="flex:1;min-width:12rem">
-                            <label for="mc-q">Subject</label>
-                            <input id="mc-q" class="adm-input" type="search" name="q" value="{{ q }}" placeholder="Search a subject">
-                        </div>
-                        <button class="adm-btn is-sm" type="submit"><i class="fas fa-filter"></i> Filter</button>
-                        {% if status != 'all' or q or kind != 'all' %}
-                        <a class="adm-btn is-sm is-quiet" href="{% url 'mail_center' %}?tab=outbox">Clear</a>
-                        {% endif %}
-                    </form>
+            </div>
+            <div class="ml-pane-body">
+                <div class="ml-stats">
+                    <span class="ml-pill is-sent">Recipients {{ active_note.total }}</span>
+                    <span class="ml-pill is-delivered">Delivered {{ active_note.delivered }}</span>
+                    <span class="ml-pill is-read">Read {{ active_note.read }}</span>
+                    <span class="ml-pill is-pending">Not fetched {{ active_note.pending }}</span>
                 </div>
-                {% if rows %}
-                <div class="adm-card-body flush">
-                    <div class="adm-table-wrap">
-                        <table class="adm-table">
-                            <thead>
-                                <tr>
-                                    <th>When</th><th>Subject</th><th class="mc-hide-sm">Audience</th>
-                                    <th class="mc-num">To</th>
-                                    <th class="mc-num mc-hide-sm">Pending</th>
-                                    <th class="mc-num">Sent</th>
-                                    <th class="mc-num mc-hide-sm">Delivered</th>
-                                    <th class="mc-num">Read</th>
-                                    <th class="mc-num">Failed</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for row in rows %}
-                                <tr>
-                                    <td class="adm-sub">{{ row.created|date:"d M H:i"|default:"-" }}</td>
-                                    <td>
-                                        <a class="adm-link" href="{{ row.url }}">{{ row.subject|default:"(no subject)"|truncatechars:70 }}</a>
-                                        {% if row.kind == 'inapp' %}
-                                        <span class="adm-badge is-off" title="In-app message">in-app</span>
-                                        {% if not row.is_active %}<span class="adm-badge is-off">off</span>{% endif %}
-                                        {% endif %}
-                                    </td>
-                                    <td class="mc-hide-sm"><span class="adm-badge is-off">{{ row.audience|default:"-" }}</span></td>
-                                    <td class="mc-num">{{ row.total }}</td>
-                                    <td class="mc-num mc-hide-sm">{% if row.pending %}<span class="mc-st is-pending">{{ row.pending }}</span>{% else %}&middot;{% endif %}</td>
-                                    <td class="mc-num">{% if row.sent %}<span class="mc-st is-sent">{{ row.sent }}</span>{% else %}&middot;{% endif %}</td>
-                                    <td class="mc-num mc-hide-sm">{% if row.delivered %}<span class="mc-st is-delivered">{{ row.delivered }}</span>{% else %}&middot;{% endif %}</td>
-                                    <td class="mc-num">{% if row.read %}<span class="mc-st is-read">{{ row.read }}</span>{% else %}&middot;{% endif %}</td>
-                                    <td class="mc-num">{% if row.failed %}<span class="mc-st is-failed">{{ row.failed }}</span>{% else %}&middot;{% endif %}</td>
-                                    <td class="mc-num">
-                                        {% if row.kind == 'email' and row.pending or row.kind == 'email' and row.failed %}
-                                        <form method="post" action="{% url 'mail_retry' row.key %}" style="margin:0">
-                                            {% csrf_token %}
-                                            <button class="adm-btn is-sm is-quiet" type="submit" title="Retry the rows that did not leave">
-                                                <i class="fas fa-rotate"></i> Retry
-                                            </button>
-                                        </form>
-                                        {% else %}
-                                        <a class="adm-btn is-sm is-quiet" href="{{ row.url }}">Open</a>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% else %}
-                <div class="adm-empty"><i class="fas fa-paper-plane"></i>Nothing matches yet.</div>
+                <div class="ml-text">{{ active_note.body|default:"(no body)" }}</div>
+                {% if active_note.link_url %}
+                <p class="ml-note" style="margin-top:.6rem"><i class="fas fa-link"></i> {{ active_note.link_url }}</p>
                 {% endif %}
+                <h4 class="ml-note" style="margin:1rem 0 .35rem;text-transform:uppercase;letter-spacing:.06em">Per user</h4>
+                <table class="ml-mini">
+                    <thead><tr><th>Email</th><th>Delivered</th><th>Read</th><th>Opens</th></tr></thead>
+                    <tbody>
+                        {% for r in note_recipients %}
+                        <tr>
+                            <td>{{ r.email }}</td>
+                            <td class="ml-note">{{ r.delivered_at|date:"d M H:i"|default:"-" }}</td>
+                            <td class="ml-note">{{ r.read_at|date:"d M H:i"|default:"-" }}</td>
+                            <td>{{ r.read_count }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="ml-note">No recipient rows yet — the app creates them on fetch.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-        </div>
+            {% else %}
+            <div class="ml-empty"><i class="fas fa-bell"></i><br>Pick a notification.</div>
+            {% endif %}
+        </section>
+        {% endif %}
     </div>
-
-    {% include 'core/_adm_pager.html' with pg=rows %}
-
-    <div class="adm-shell adm-rise" style="margin-top:1rem">
-        <div class="adm-shell-core">
-            <div class="adm-card">
-                <div class="adm-card-head">
-                    <h2 class="adm-card-title">Other mail</h2>
-                    <p class="adm-card-sub">Verification, password resets and test mail — one row per address, no campaign.</p>
-                </div>
-                {% if singles %}
-                <div class="adm-card-body flush">
-                    <div class="adm-table-wrap">
-                        <table class="adm-table">
-                            <thead><tr><th>When</th><th>Recipient</th><th>Subject</th><th class="mc-hide-sm">Type</th><th>Status</th></tr></thead>
-                            <tbody>
-                                {% for log in singles %}
-                                <tr>
-                                    <td class="adm-sub">{{ log.created_at|date:"d M H:i" }}</td>
-                                    <td class="adm-sub">{{ log.recipient|truncatechars:40 }}</td>
-                                    <td>{{ log.subject|truncatechars:60 }}{% if log.error_message %}<div class="mc-err">{{ log.error_message|truncatechars:120 }}</div>{% endif %}</td>
-                                    <td class="mc-hide-sm"><span class="adm-badge is-off">{{ log.get_source_display }}</span></td>
-                                    <td><span class="mc-st is-{{ log.status }}">{{ log.get_status_display }}</span></td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% else %}
-                <div class="adm-empty"><i class="fas fa-envelope"></i>No other mail yet.</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    {% elif tab == 'compose' %}
-    <div class="row g-3">
-        <div class="col-lg-7">
-            <div class="adm-shell adm-rise">
-                <div class="adm-shell-core">
-                    <div class="adm-card">
-                        <div class="adm-card-head">
-                            <h2 class="adm-card-title">Send mail</h2>
-                            <p class="adm-card-sub">Mail and the in-app message can go out together; each recipient gets one row you can retry.</p>
-                        </div>
-                        <div class="adm-card-body">
-                            <form method="post" action="{% url 'mail_send' %}">
-                                {% csrf_token %}
-                                <div class="adm-field">
-                                    <label for="mc-aud">Audience</label>
-                                    <select id="mc-aud" name="audience" class="adm-select">
-                                        {% for value, label in audiences %}
-                                        <option value="{{ value }}"{% if audience == value %} selected{% endif %}>{{ label }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="adm-field">
-                                    <label for="mc-to">Recipients — one per line, or comma separated</label>
-                                    <textarea id="mc-to" name="selected_emails" class="adm-textarea" rows="4"
-                                              placeholder="name@example.com">{{ to_prefill }}</textarea>
-                                    <span class="mc-note">Used for the “Selected users” audience. An address that never synced still gets the mail; it just cannot get the in-app copy.</span>
-                                </div>
-                                <div class="adm-field">
-                                    <label for="mc-subject">Subject</label>
-                                    <input id="mc-subject" name="subject" class="adm-input" type="text" maxlength="500" required
-                                           value="{{ subject }}" placeholder="What is new in CineStream">
-                                </div>
-                                <div class="adm-field">
-                                    <label for="mc-body">Message</label>
-                                    <textarea id="mc-body" name="body" class="adm-textarea" rows="9" required
-                                              placeholder="Written as plain text; sent as text plus a simple HTML body."></textarea>
-                                </div>
-                                <div class="adm-field">
-                                    <label>Channels</label>
-                                    <label class="mc-note" style="display:flex;gap:.4rem;align-items:center">
-                                        <input type="checkbox" name="send_email" value="1" checked> Email
-                                        <input type="checkbox" name="send_inapp" value="1" style="margin-left:.9rem"> In-app message
-                                    </label>
-                                </div>
-                                <div class="adm-field">
-                                    <label for="mc-link">In-app link (optional)</label>
-                                    <input id="mc-link" name="link_url" class="adm-input" type="text" maxlength="500"
-                                           placeholder="https://newmovies.linkpc.net/...">
-                                </div>
-                                <div class="adm-field">
-                                    <label for="mc-app">App (optional, in-app only)</label>
-                                    <select id="mc-app" name="app" class="adm-select">
-                                        <option value="">All apps</option>
-                                        {% for app in apps %}
-                                        <option value="{{ app.id }}">{{ app.name|default:app.slug|default:app.id }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button class="adm-cta" type="submit"><span>Queue and send</span><span class="adm-cta-ico"><i class="fas fa-paper-plane"></i></span></button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-5">
-            <div class="adm-shell adm-rise" style="--i:1">
-                <div class="adm-shell-core">
-                    <div class="adm-card">
-                        <div class="adm-card-head"><h2 class="adm-card-title">How it goes out</h2></div>
-                        <div class="adm-card-body">
-                            <div class="adm-facts">
-                                <div><b>Pending</b><span class="mc-note">row written before the attempt — nothing is lost if SMTP is down</span></div>
-                                <div><b>Sent</b><span class="mc-note">the mail box accepted it for that address</span></div>
-                                <div><b>Read</b><span class="mc-note">the 1×1 pixel in the HTML body was fetched</span></div>
-                                <div><b>Failed</b><span class="mc-note">kept with the SMTP error; retry as often as you like</span></div>
-                            </div>
-                            <p class="mc-note" style="margin-top:.8rem">
-                                Up to 150 addresses per request go out immediately. Anything larger is queued as
-                                pending and drained with <b>Retry all pending</b>, so a slow mail box cannot stall the page.
-                            </p>
-                            <p class="mc-note">
-                                In-app messages show <b>delivered</b> when a device fetches one and <b>read</b> when the
-                                user opens it — that tracking is per account, not per mail address.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {% elif tab == 'inbox' %}
-    <div class="adm-shell adm-rise">
-        <div class="adm-shell-core">
-            <div class="adm-card">
-                <div class="adm-card-head">
-                    <h2 class="adm-card-title">Received mail and chat</h2>
-                    <p class="adm-card-sub">Everything written from the app, with the answer we sent. Replies are written in the support console.</p>
-                </div>
-                <div class="adm-card-body">
-                    <form method="get" action="{% url 'mail_center' %}" class="mc-filter">
-                        <input type="hidden" name="tab" value="inbox">
-                        <div class="adm-field">
-                            <label for="mc-state">State</label>
-                            <select id="mc-state" name="state" class="adm-select">
-                                <option value="all"{% if state == 'all' %} selected{% endif %}>All</option>
-                                <option value="open"{% if state == 'open' %} selected{% endif %}>Waiting for an answer</option>
-                                <option value="answered"{% if state == 'answered' %} selected{% endif %}>Answered</option>
-                            </select>
-                        </div>
-                        <div class="adm-field">
-                            <label for="mc-user">From</label>
-                            <select id="mc-user" name="user" class="adm-select">
-                                <option value="all"{% if user_kind == 'all' %} selected{% endif %}>Anyone</option>
-                                <option value="registered"{% if user_kind == 'registered' %} selected{% endif %}>Signed-in users</option>
-                                <option value="guest"{% if user_kind == 'guest' %} selected{% endif %}>Guests</option>
-                            </select>
-                        </div>
-                        <div class="adm-field">
-                            <label for="mc-mkind">Type</label>
-                            <select id="mc-mkind" name="kind" class="adm-select">
-                                <option value="all"{% if kind == 'all' %} selected{% endif %}>All</option>
-                                <option value="suggestion"{% if kind == 'suggestion' %} selected{% endif %}>Suggestion</option>
-                                <option value="reply"{% if kind == 'reply' %} selected{% endif %}>Reply to a message</option>
-                            </select>
-                        </div>
-                        <div class="adm-field" style="flex:1;min-width:12rem">
-                            <label for="mc-mq">Search</label>
-                            <input id="mc-mq" class="adm-input" type="search" name="q" value="{{ q }}" placeholder="Address, device or text">
-                        </div>
-                        <button class="adm-btn is-sm" type="submit"><i class="fas fa-filter"></i> Filter</button>
-                    </form>
-                </div>
-                {% if rows.object_list %}
-                <div class="adm-card-body flush">
-                    <div class="adm-table-wrap">
-                        <table class="adm-table">
-                            <thead>
-                                <tr><th>Received</th><th>From</th><th class="mc-hide-sm">Type</th><th>Message</th><th>Status</th><th></th></tr>
-                            </thead>
-                            <tbody>
-                                {% for row in rows %}
-                                <tr>
-                                    <td class="adm-sub">{{ row.created_at|date:"d M H:i" }}</td>
-                                    <td>
-                                        {{ row.display_user|truncatechars:36 }}
-                                        {% if row.app %}<div class="mc-note">{{ row.app.name|default:row.app.slug }}</div>{% endif %}
-                                    </td>
-                                    <td class="mc-hide-sm"><span class="adm-badge is-off">{{ row.get_kind_display }}</span></td>
-                                    <td>
-                                        <div class="mc-msg">{{ row.body }}</div>
-                                        {% if row.reply_body %}
-                                        <div class="mc-reply"><b>Our reply</b> · {{ row.replied_at|date:"d M H:i" }}<br>{{ row.reply_body|truncatechars:220 }}</div>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if row.replied_at %}<span class="mc-st is-read">Answered</span>
-                                        {% else %}<span class="mc-st is-pending">Waiting</span>{% endif %}
-                                    </td>
-                                    <td class="mc-num">
-                                        <a class="adm-btn is-sm is-quiet" href="{% url 'user_messages_admin' %}?q={{ row.email|default:row.device_id|urlencode }}">Open thread</a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% else %}
-                <div class="adm-empty"><i class="fas fa-inbox"></i>No messages match.</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% include 'core/_adm_pager.html' with pg=rows %}
-
-    {% else %}
-    <div class="adm-shell adm-rise">
-        <div class="adm-shell-core">
-            <div class="adm-card">
-                <div class="adm-card-head">
-                    <h2 class="adm-card-title">Devices</h2>
-                    <p class="adm-card-sub">Every install we know with the build it runs. Tick the ones to message, or filter by version.</p>
-                </div>
-                <div class="adm-card-body">
-                    <form method="get" action="{% url 'mail_center' %}" class="mc-filter" id="mcDevFilter">
-                        <input type="hidden" name="tab" value="devices">
-                        <div class="adm-field">
-                            <label for="mc-version">Version</label>
-                            <select id="mc-version" name="version" class="adm-select">
-                                <option value="">Any version</option>
-                                {% for v in versions %}
-                                <option value="{{ v }}"{% if version == v %} selected{% endif %}>{{ v }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="adm-field" style="flex:1;min-width:12rem">
-                            <label for="mc-dq">Search</label>
-                            <input id="mc-dq" class="adm-input" type="search" name="q" value="{{ q }}" placeholder="Email, device or device id">
-                        </div>
-                        <button class="adm-btn is-sm" type="submit"><i class="fas fa-filter"></i> Filter</button>
-                        <button class="adm-btn is-sm" type="button" id="mcDevAll">Select all on page</button>
-                        <button class="adm-btn is-sm is-primary" type="button" id="mcDevSend">
-                            <i class="fas fa-paper-plane"></i> Message selected
-                        </button>
-                    </form>
-                </div>
-                {% if rows.object_list %}
-                <div class="adm-card-body flush">
-                    <div class="adm-table-wrap">
-                        <table class="adm-table">
-                            <thead>
-                                <tr><th></th><th>Email</th><th class="mc-hide-sm">Device</th><th>Version</th><th class="mc-hide-sm">Device id</th><th>Last seen</th></tr>
-                            </thead>
-                            <tbody>
-                                {% for row in rows %}
-                                <tr>
-                                    <td><input class="mc-dev-check" type="checkbox" data-email="{{ row.email }}" {% if not row.email %}disabled{% endif %} aria-label="Select {{ row.email }}"></td>
-                                    <td>{{ row.email|default:"(no account)" }}</td>
-                                    <td class="mc-hide-sm">{{ row.device_model|default:"-" }}</td>
-                                    <td>{% if row.app_version %}<span class="adm-badge is-off">{{ row.app_version }}</span>{% else %}-{% endif %}</td>
-                                    <td class="mc-hide-sm adm-sub">{{ row.device_id|default:"-"|truncatechars:24 }}</td>
-                                    <td class="adm-sub">{{ row.last_seen|date:"d M H:i"|default:"-" }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% else %}
-                <div class="adm-empty"><i class="fas fa-mobile-screen"></i>No devices match.</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% include 'core/_adm_pager.html' with pg=rows %}
-    {% endif %}
 </div>
 
 <script>
 (function () {
-    // Devices: tick some installs, then land on the composer with exactly those
-    // addresses filled in and the "Selected users" audience already chosen.
-    var all = document.getElementById('mcDevAll');
-    var send = document.getElementById('mcDevSend');
-    if (!all || !send) return;
-    function boxes() { return Array.prototype.slice.call(document.querySelectorAll('.mc-dev-check')); }
-    all.addEventListener('click', function () {
-        var list = boxes();
-        var every = list.every(function (b) { return b.checked || b.disabled; });
-        list.forEach(function (b) { if (!b.disabled) b.checked = !every; });
+    // Canned replies drop into the composer, the same list the support console uses.
+    var box = document.getElementById('mlReply');
+    document.querySelectorAll('[data-canned]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!box) return;
+            box.value = (box.value ? box.value + '\n\n' : '') + btn.getAttribute('data-canned');
+            box.focus();
+        });
     });
-    send.addEventListener('click', function () {
-        var emails = boxes().filter(function (b) { return b.checked; })
-            .map(function (b) { return b.getAttribute('data-email'); });
-        if (!emails.length) { alert('Tick at least one device first.'); return; }
-        var base = "{% url 'mail_center' %}";
-        window.location = base + '?tab=compose&audience=selected&to=' + encodeURIComponent(emails.join(','));
-    });
+
+    // Devices: tick installs, land on the composer with exactly those addresses.
+    var all = document.getElementById('mlDevAll');
+    var send = document.getElementById('mlDevSend');
+    if (all && send) {
+        function boxes() { return Array.prototype.slice.call(document.querySelectorAll('.ml-dev-check')); }
+        all.addEventListener('click', function () {
+            var list = boxes();
+            var every = list.every(function (b) { return b.checked || b.disabled; });
+            list.forEach(function (b) { if (!b.disabled) b.checked = !every; });
+        });
+        send.addEventListener('click', function () {
+            var emails = boxes().filter(function (b) { return b.checked; })
+                .map(function (b) { return b.getAttribute('data-email'); });
+            if (!emails.length) { alert('Tick at least one device first.'); return; }
+            window.location = "{% url 'mail_center' %}?folder=compose&audience=selected&to="
+                + encodeURIComponent(emails.join(','));
+        });
+    }
 })();
 </script>
 {% endblock %}

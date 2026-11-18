@@ -1390,19 +1390,13 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
             <a href="{% url 'admin_user_list' %}" class="sb-item {% if 'users' in request.path %}active{% endif %}">
                 <i class="fas fa-user-shield"></i> Users
             </a>
-            <a href="{% url 'mail_center' %}" class="sb-item {% if 'admin-dashboard/mail' in request.path %}active{% endif %}">
-                <i class="fas fa-envelope-open-text"></i> Mail Centre
+            <a href="{% url 'mail_center' %}" class="sb-item {% if 'admin-dashboard/mail' in request.path or 'admin-dashboard/notifications' in request.path or 'user-messages' in request.path %}active{% endif %}">
+                <i class="fas fa-envelope-open-text"></i> Mail
+                {% if admin_badges.overdue_messages %}<span class="sb-badge danger" title="{{ admin_badges.overdue_messages }} message{{ admin_badges.overdue_messages|pluralize }} waiting longer than the first-response target">{{ admin_badges.overdue_messages }}</span>{% elif admin_badges.waiting_messages %}<span class="sb-badge info" title="{{ admin_badges.waiting_messages }} message{{ admin_badges.waiting_messages|pluralize }} waiting for an answer">{{ admin_badges.waiting_messages }}</span>{% endif %}
             </a>
             <a href="{% url 'synced_users_list' %}" class="sb-item {% if 'synced-users' in request.path %}active{% endif %}">
                 <i class="fas fa-users"></i> Synced Users
                 {% if admin_badges.blocked_today %}<span class="sb-badge" title="{{ admin_badges.blocked_today }} account{{ admin_badges.blocked_today|pluralize }} blocked today">{{ admin_badges.blocked_today }}</span>{% endif %}
-            </a>
-            <a href="{% url 'notifications_admin' %}" class="sb-item {% if 'admin-dashboard/notifications' in request.path %}active{% endif %}">
-                <i class="fas fa-bell"></i> Notifications
-            </a>
-            <a href="{% url 'user_messages_admin' %}" class="sb-item {% if 'user-messages' in request.path %}active{% endif %}">
-                <i class="fas fa-comments"></i> User Messages
-                {% if admin_badges.overdue_messages %}<span class="sb-badge danger" title="{{ admin_badges.overdue_messages }} message{{ admin_badges.overdue_messages|pluralize }} waiting longer than the first-response target">{{ admin_badges.overdue_messages }}</span>{% elif admin_badges.waiting_messages %}<span class="sb-badge info" title="{{ admin_badges.waiting_messages }} message{{ admin_badges.waiting_messages|pluralize }} waiting for an answer">{{ admin_badges.waiting_messages }}</span>{% endif %}
             </a>
             <a href="{% url 'admin_history_calendar' %}" class="sb-item {% if 'history-calendar' in request.path %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i> History Calendar

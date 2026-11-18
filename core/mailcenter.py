@@ -1,20 +1,19 @@
-"""Mail centre: compose, outbox, inbox and devices in one admin page.
+"""Mail centre: one Gmail-shaped page for mail, messages and notifications.
 
 Why this exists
 ---------------
-``EmailSendLog`` used to be a write-only audit trail: a send either worked or
-left a ``failed`` row with an error string nobody read, so when the SMTP box
-started refusing connections the only symptom was "mail is not going out".
-This module makes that same table an outbox. A campaign writes one row per
-recipient with ``status='pending'`` and a shared ``batch`` key *before* the
-first attempt, every attempt updates its own row, and a retry re-runs only the
-rows that never left. Nothing about the message is lost, because the body is
-stored too.
+Sending mail used to be a write-only audit trail: a send either worked or left a
+``failed`` row with an error string nobody read, so when the SMTP box started
+refusing connections the only symptom was "mail is not going out". A campaign
+now writes one row per recipient with ``status='pending'`` and a shared
+``batch`` key *before* the first attempt, every attempt updates its own row,
+and a retry re-runs only the rows that never left. The body is stored, so the
+page can show what was actually sent.
 
-Around the outbox the page carries what mail alone cannot show: the app's
+Around the outbox the same page carries what mail alone cannot show: the app's
 in-app notifications (fetched/opened tracked per user), mail and chat arriving
-from ``UserMessage``, and the device list — so an admin can see who is reachable
-on which build, and send to everyone or only the people they ticked.
+from ``UserMessage``, and the device list — so one place answers "who wrote to
+us, what did we send, what failed, and who can we reach on which build".
 
 Honesty about statuses: an SMTP box can only tell us a message was accepted, so
 ``sent`` is the real ceiling for plain mail. ``read`` is set when the 1x1
@@ -24,6 +23,7 @@ when it fetches an in-app message. Nothing here invents a delivery receipt.
 
 import re
 import uuid
+from urllib.parse import quote
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -59,6 +59,18 @@ AUDIENCES = [
 ]
 
 STATUS_LABELS = dict(EmailSendLog.STATUS_CHOICES)
+
+# The three consoles this page replaces, as folders of one mailbox.
+FOLDERS = [
+    ('inbox', 'Inbox', 'fa-inbox'),
+    ('sent', 'Sent', 'fa-paper-plane'),
+    ('notifications', 'Notifications', 'fa-bell'),
+    ('devices', 'Devices', 'fa-mobile-screen-button'),
+]
+
+# How many rows the reading pane will show before it says "and N more". The
+# exported CSV always carries every row, so the pane does not need to.
+PANE_ROWS = 200
 
 # 1x1 transparent GIF, the smallest thing a mail client will still fetch.
 _TRACKING_GIF = bytes.fromhex(
@@ -190,7 +202,7 @@ def _send_batch(batch, request, limit=MAX_SEND_PER_REQUEST):
 
 
 def _email_campaigns():
-    """Campaign rows for the outbox, one per batch, with per-status counts."""
+    """Campaign rows for the sent list, one per batch, with per-status counts."""
     return list(
         EmailSendLog.objects.filter(batch__gt='')
         .values('batch', 'audience')
@@ -208,7 +220,7 @@ def _email_campaigns():
 
 
 def _inapp_campaigns():
-    """In-app messages as outbox rows: pending = not fetched by a device yet."""
+    """In-app messages as list rows: pending = not fetched by a device yet."""
     notes = (AppNotification.objects
              .annotate(
                  total=Count('recipients', distinct=True),
@@ -223,7 +235,9 @@ def _inapp_campaigns():
         rows.append({
             'kind': 'inapp',
             'key': 'note:%d' % note.id,
+            'id': note.id,
             'subject': note.title,
+            'snippet': note.body,
             'audience': note.get_audience_display(),
             'created': note.sent_at or note.created_at,
             'total': total,
@@ -238,31 +252,19 @@ def _inapp_campaigns():
     return rows
 
 
-def _outbox_rows(status='all', q='', kind='all'):
-    rows = []
-    if kind in ('all', 'email'):
-        for campaign in _email_campaigns():
-            campaign = dict(campaign)
-            campaign['kind'] = 'email'
-            campaign['key'] = campaign['batch']
-            campaign['url'] = reverse('mail_campaign_detail',
-                                      args=[campaign['batch']])
-            rows.append(campaign)
-    if kind in ('all', 'inapp'):
-        rows.extend(_inapp_campaigns())
-
-    if q:
-        needle = q.lower()
-        rows = [row for row in rows if needle in (row['subject'] or '').lower()]
-    if status != 'all':
-        rows = [row for row in rows if (row.get(status) or 0) > 0]
-    rows.sort(key=lambda row: row['created'] or timezone.now(), reverse=True)
-    return rows
+def _folder_counts():
+    """The numbers on the rail. Cheap aggregates, one query each."""
+    return {
+        'inbox': UserMessage.objects.filter(replied_at=None).count(),
+        'sent': EmailSendLog.objects.filter(batch__gt='')
+                .values('batch').distinct().count(),
+        'notifications': AppNotification.objects.filter(is_active=True).count(),
+        'devices': AccountDevice.objects.count(),
+    }
 
 
 def _stats():
     base = EmailSendLog.objects.filter(batch__gt='')
-    inapp = AppNotification.objects.count()
     return {
         'pending': base.filter(status=EmailSendLog.STATUS_PENDING).count(),
         'sent': base.filter(status=EmailSendLog.STATUS_SENT).count(),
@@ -270,7 +272,7 @@ def _stats():
         'read': base.exclude(read_at=None).count(),
         'failed': base.filter(status=EmailSendLog.STATUS_FAILED).count(),
         'campaigns': base.values('batch').distinct().count(),
-        'inapp': inapp,
+        'inapp': AppNotification.objects.count(),
         'inbox_open': UserMessage.objects.filter(replied_at=None).count(),
         'inbox_total': UserMessage.objects.count(),
         'devices': AccountDevice.objects.count(),
@@ -316,81 +318,254 @@ def _device_rows(q='', version=''):
     return rows
 
 
+def _inbox_threads(q='', state='all', user_kind='all', kind='all'):
+    """Conversations for the inbox list, newest first.
+
+    Grouping is the support console's own (``notifications._group_conversations``)
+    so the two views can never disagree about what a thread is.
+    """
+    from .notifications import CONVERSATION_WINDOW, _group_conversations
+
+    rows = UserMessage.objects.select_related('app', 'notification')
+    if state == 'open':
+        rows = rows.filter(replied_at=None)
+    elif state == 'answered':
+        rows = rows.exclude(replied_at=None)
+    if user_kind == 'registered':
+        rows = rows.exclude(email='')
+    elif user_kind == 'guest':
+        rows = rows.filter(email='')
+    if kind in (UserMessage.KIND_SUGGESTION, UserMessage.KIND_REPLY):
+        rows = rows.filter(kind=kind)
+    if q:
+        rows = rows.filter(Q(body__icontains=q) | Q(reply_body__icontains=q)
+                           | Q(email__icontains=q) | Q(device_id__icontains=q))
+    window = list(rows.order_by('-created_at', '-id')[:CONVERSATION_WINDOW])
+    return _group_conversations(window)
+
+
+def _thread_detail(thread):
+    """One conversation's messages, oldest first, plus the row a reply lands on."""
+    from .notifications import _conversation_messages
+
+    rows = _conversation_messages(thread)
+    reply_target = None
+    for row in reversed(rows):
+        if not row.replied_at:
+            reply_target = row
+            break
+    if reply_target is None and rows:
+        reply_target = rows[-1]
+    thread['total'] = len(rows) or thread['total']
+    thread['waiting'] = sum(1 for row in rows if not row.replied_at)
+    return rows, reply_target
+
+
+def _thread_from_key(key):
+    from .notifications import _conversation_from_key
+    return _conversation_from_key(key)
+
+
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def mail_center(request):
-    """The page: outbox, compose, inbox and devices under one roof."""
-    tab = (request.GET.get('tab') or 'outbox').lower()
-    if tab not in ('outbox', 'compose', 'inbox', 'devices'):
-        tab = 'outbox'
+    """The mailbox: one rail, one list and one reading pane for all three feeds."""
+    if request.method == 'POST' and (request.POST.get('action') or '') == 'reply':
+        return _reply_from_center(request)
 
+    folder = (request.GET.get('folder') or 'inbox').lower()
+    if folder not in dict((key, label) for key, label, _icon in FOLDERS) and folder != 'compose':
+        folder = 'inbox'
+
+    q = (request.GET.get('q') or '').strip()
+    state = (request.GET.get('state') or 'all').lower()
+    user_kind = (request.GET.get('user') or 'all').lower()
+    kind = (request.GET.get('kind') or 'all').lower()
+    status = (request.GET.get('status') or 'all').lower()
+    if status not in dict(EmailSendLog.STATUS_CHOICES):
+        status = 'all'
+
+    # One aggregate per folder, computed once: the rail is on every load.
+    counts_by_folder = _folder_counts() if folder != 'compose' else {}
     context = {
-        'tab': tab,
+        'folder': folder,
+        'folders': [(key, label, icon, counts_by_folder.get(key, 0))
+                    for key, label, icon in FOLDERS],
         'stats': _stats(),
+        'q': q, 'state': state, 'user_kind': user_kind, 'kind': kind, 'status': status,
         'statuses': EmailSendLog.STATUS_CHOICES,
         'audiences': AUDIENCES,
         'apps': AndroidApp.objects.all().order_by('name'),
         'address': _pick_address('notification'),
+        'thread_key': '', 'batch': '', 'item': '',
+        'messages': [], 'reply_target': None, 'active': None,
     }
 
-    if tab == 'compose':
-        context['to_prefill'] = ', '.join(_parse_emails(request.GET.get('to')))
-        context['audience'] = (request.GET.get('audience') or 'selected').lower()
-        context['subject'] = request.GET.get('subject') or ''
+    if folder == 'inbox':
+        threads = _inbox_threads(q, state, user_kind, kind)
+        active_key = (request.GET.get('thread') or '').strip()
+        active = next((t for t in threads if t['key'] == active_key), None)
+        if active is None and active_key:
+            active = _thread_from_key(active_key)
+            if active is not None:
+                threads.insert(0, active)
+                active_key = active['key']
+        if active is None:
+            active = next((t for t in threads if t['waiting']), None)
+        if active is None and threads:
+            active = threads[0]
 
-    elif tab == 'inbox':
-        state = (request.GET.get('state') or 'all').lower()
-        user_kind = (request.GET.get('user') or 'all').lower()
-        kind = (request.GET.get('kind') or 'all').lower()
-        q = (request.GET.get('q') or '').strip()
-        rows = UserMessage.objects.select_related('app', 'notification')
-        if state == 'open':
-            rows = rows.filter(replied_at=None)
-        elif state == 'answered':
-            rows = rows.exclude(replied_at=None)
-        if user_kind == 'registered':
-            rows = rows.exclude(email='')
-        elif user_kind == 'guest':
-            rows = rows.filter(email='')
-        if kind in (UserMessage.KIND_SUGGESTION, UserMessage.KIND_REPLY):
-            rows = rows.filter(kind=kind)
-        if q:
-            rows = rows.filter(Q(body__icontains=q) | Q(reply_body__icontains=q)
-                               | Q(email__icontains=q) | Q(device_id__icontains=q))
+        thread_rows, reply_target = ([], None)
+        if active is not None:
+            thread_rows, reply_target = _thread_detail(active)
+            active_key = active['key']
+            if active not in threads:
+                threads.insert(0, active)
+
         context.update({
-            'rows': Paginator(rows.order_by('-created_at', '-id'), 40)
-                    .get_page(request.GET.get('page')),
-            'state': state, 'user_kind': user_kind, 'kind': kind, 'q': q,
+            'conversations': threads[:400],
+            'active': active,
+            'thread_key': active_key,
+            'messages': thread_rows,
+            'reply_target': reply_target,
+            'canned_replies': _canned(),
         })
 
-    elif tab == 'devices':
-        q = (request.GET.get('q') or '').strip()
+    elif folder == 'sent':
+        campaigns = _email_campaigns()
+        if q:
+            campaigns = [c for c in campaigns if q.lower() in (c['subject'] or '').lower()]
+        if status != 'all':
+            campaigns = [c for c in campaigns if (c.get(status) or 0) > 0]
+        active_batch = (request.GET.get('batch') or '').strip()
+        campaign = next((c for c in campaigns if c['batch'] == active_batch), None)
+        if campaign is None and active_batch:
+            rows = EmailSendLog.objects.filter(batch=active_batch)
+            if rows.exists():
+                campaign = {'batch': active_batch, 'subject': rows.first().subject,
+                            'created': rows.first().created_at,
+                            'audience': rows.first().audience, 'total': rows.count()}
+                campaigns.insert(0, campaign)
+        if campaign is None and campaigns:
+            campaign = campaigns[0]
+        recips = []
+        counts = {}
+        if campaign is not None:
+            rows = EmailSendLog.objects.filter(batch=campaign['batch'])
+            counts = {code: rows.filter(status=code).count()
+                      for code, _label in EmailSendLog.STATUS_CHOICES}
+            recips = list(rows.order_by('id')[:PANE_ROWS])
+            # The subject/anonymous row comes from an aggregate; the body only
+            # lives on the rows, so read it once for the reading pane.
+            first = rows.order_by('id').first()
+            campaign['body'] = first.body if first else ''
+            campaign['batch'] = campaign['batch']
+        context.update({
+            'campaigns': campaigns[:200],
+            'active_campaign': campaign,
+            'campaign_counts': counts,
+            'campaign_total': sum(counts.values()),
+            'recipients': recips,
+            'batch': campaign['batch'] if campaign else '',
+        })
+
+    elif folder == 'notifications':
+        notes = list(AppNotification.objects.select_related('app')
+                     .annotate(
+                         total=Count('recipients', distinct=True),
+                         delivered=Count('recipients', distinct=True,
+                                         filter=~Q(recipients__delivered_at=None)),
+                         read=Count('recipients', distinct=True,
+                                    filter=~Q(recipients__read_at=None)))
+                     .order_by('-created_at')[:200])
+        if q:
+            needle = q.lower()
+            notes = [n for n in notes
+                     if needle in (n.title or '').lower() or needle in (n.body or '').lower()]
+        active_id = (request.GET.get('item') or '').strip()
+        note = next((n for n in notes if str(n.id) == active_id), None)
+        if note is None and active_id.isdigit():
+            note = AppNotification.objects.filter(id=int(active_id)).first()
+            if note is not None:
+                notes.insert(0, note)
+        if note is None and notes:
+            note = notes[0]
+        recips = []
+        if note is not None:
+            recips = list(note.recipients.all().order_by('email')[:PANE_ROWS])
+            # Templates cannot subtract, and 0 - 0 would print as "-"; keep the
+            # count where it is computed.
+            note.pending = max(0, (note.total or 0) - (note.delivered or 0))
+        context.update({
+            'notes': notes,
+            'active_note': note,
+            'item': str(note.id) if note else '',
+            'note_recipients': recips,
+        })
+
+    elif folder == 'devices':
         version = (request.GET.get('version') or '').strip()
         context.update({
-            'rows': Paginator(_device_rows(q, version), 100)
-                    .get_page(request.GET.get('page')),
-            'q': q, 'version': version,
+            'rows': Paginator(_device_rows(q, version), 100).get_page(request.GET.get('page')),
+            'version': version,
             'versions': sorted({row['app_version'] for row in _device_rows()
                                 if row['app_version']}, reverse=True)[:40],
         })
 
-    else:
-        status = (request.GET.get('status') or 'all').lower()
-        if status not in dict(EmailSendLog.STATUS_CHOICES):
-            status = 'all'
-        q = (request.GET.get('q') or '').strip()
-        kind = (request.GET.get('kind') or 'all').lower()
-        rows = _outbox_rows(status, q, kind)
+    else:  # compose
         context.update({
-            'rows': Paginator(rows, 20).get_page(request.GET.get('page')),
-            'status': status, 'q': q, 'kind': kind,
-            # Transactional sends (verification, resets, test mail) have no
-            # batch; they still belong on the page, just not in a campaign row.
-            'singles': EmailSendLog.objects.filter(batch='')
-                       .select_related('address').order_by('-created_at')[:25],
+            'to_prefill': ', '.join(_parse_emails(request.GET.get('to'))),
+            'audience': (request.GET.get('audience') or 'selected').lower(),
+            'subject': request.GET.get('subject') or '',
         })
 
     return render(request, 'core/admin_mail_center.html', context)
+
+
+def _canned():
+    try:
+        from .support import canned_replies
+        return list(canned_replies())[:8]
+    except Exception:
+        return []
+
+
+def _reply_from_center(request):
+    """Answer one received message without leaving the mailbox.
+
+    The reply is stamped on the row (the app reads it from the same thread) and,
+    for a signed-in sender, also delivered as an in-app notification — exactly
+    what the support console does, so the two paths cannot drift.
+    """
+    from .notifications import MAX_USER_MESSAGE_LEN, _deliver_reply
+    from . import support as support_desk
+
+    row = get_object_or_404(UserMessage, id=request.POST.get('message_id') or 0)
+    reply = (request.POST.get('reply') or '').strip()
+    if not reply:
+        messages.error(request, 'A reply cannot be empty.')
+    elif len(reply) > MAX_USER_MESSAGE_LEN:
+        messages.error(request, 'Keep the reply under %d characters.' % MAX_USER_MESSAGE_LEN)
+    else:
+        reply = support_desk.ask_for_rating(row, request, reply)
+        row.reply_body = reply
+        row.replied_at = timezone.now()
+        row.replied_by = getattr(request.user, 'username', '') or ''
+        row.is_read = True
+        row.save(update_fields=['reply_body', 'replied_at', 'replied_by', 'is_read'])
+        delivered = _deliver_reply(row)
+        support_desk.bump_canned_use(reply)
+        log_action(request, 'user_message_reply', 'message #%d' % row.id,
+                   'to=%s delivered=%s' % (row.email or row.device_id, delivered))
+        messages.success(request, 'Replied to %s. %s' % (
+            row.display_user,
+            'Delivered to the app inbox.' if delivered
+            else 'The app shows it in their message thread.'))
+    thread = (request.POST.get('thread') or '').strip()
+    back = reverse('mail_center') + '?folder=inbox'
+    if thread:
+        back += '&thread=' + quote(thread)
+    return redirect(back)
 
 
 @login_required
@@ -416,25 +591,25 @@ def mail_send(request):
 
     if not subject:
         messages.error(request, 'A subject is required.')
-        return redirect(reverse('mail_center') + '?tab=compose')
+        return redirect(reverse('mail_center') + '?folder=compose')
     if not (send_email or send_inapp):
         messages.error(request, 'Pick at least one channel: email, in-app, or both.')
-        return redirect(reverse('mail_center') + '?tab=compose')
+        return redirect(reverse('mail_center') + '?folder=compose')
     if audience == 'selected' and not selected:
         messages.error(request, 'Pick at least one recipient for a selected audience.')
-        return redirect(reverse('mail_center') + '?tab=compose')
+        return redirect(reverse('mail_center') + '?folder=compose')
     if not body:
         messages.error(request, 'A message body is required.')
-        return redirect(reverse('mail_center') + '?tab=compose')
+        return redirect(reverse('mail_center') + '?folder=compose')
 
     emails = _audience_emails(audience, selected)
     if not emails:
         messages.error(request, 'That audience has no addresses to send to.')
-        return redirect(reverse('mail_center') + '?tab=compose')
+        return redirect(reverse('mail_center') + '?folder=compose')
     if len(emails) > MAX_CAMPAIGN_RECIPIENTS:
         messages.error(request, 'That is %d recipients; the limit for one send is %d.'
                        % (len(emails), MAX_CAMPAIGN_RECIPIENTS))
-        return redirect(reverse('mail_center') + '?tab=compose')
+        return redirect(reverse('mail_center') + '?folder=compose')
 
     batch = uuid.uuid4().hex[:16]
     created_by = getattr(request.user, 'username', '') or ''
@@ -485,16 +660,16 @@ def mail_send(request):
                          'Open the campaign to retry what did not leave.'
                          % (len(emails), '' if len(emails) == 1 else 's',
                             sent, failed, waiting))
-        return redirect(reverse('mail_campaign_detail', args=[batch]))
+        return redirect(reverse('mail_center') + '?folder=sent&batch=' + batch)
     messages.success(request, 'In-app message sent to %d user%s.'
                      % (inapp_total, '' if inapp_total == 1 else 's'))
-    return redirect(reverse('mail_center') + '?tab=outbox&kind=inapp')
+    return redirect(reverse('mail_center') + '?folder=notifications')
 
 
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def mail_campaign_detail(request, batch):
-    """One campaign: every recipient, its status, its error and its read time."""
+    """One campaign, full page: every recipient, its status, error and read time."""
     rows = EmailSendLog.objects.filter(batch=batch).select_related('address')
     if not rows.exists():
         messages.error(request, 'That campaign no longer exists.')
@@ -541,7 +716,7 @@ def mail_retry(request, batch):
         log_action(request, 'mail_retry_all', 'pending batches=%d' % len(ids),
                    'sent=%d failed=%d' % (sent, failed))
         messages.success(request, '%d sent, %d still failing.' % (sent, failed))
-        return redirect(reverse('mail_center') + '?tab=outbox')
+        return redirect(reverse('mail_center') + '?folder=sent')
 
     if not EmailSendLog.objects.filter(batch=batch).exists():
         messages.error(request, 'That campaign no longer exists.')
@@ -553,7 +728,7 @@ def mail_retry(request, batch):
         messages.success(request, '%d sent, %d still failing.' % (sent, failed))
     else:
         messages.info(request, 'Nothing to retry in that campaign.')
-    return redirect(reverse('mail_campaign_detail', args=[batch]))
+    return redirect(reverse('mail_center') + '?folder=sent&batch=' + batch)
 
 
 @login_required
