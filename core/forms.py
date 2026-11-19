@@ -1,6 +1,6 @@
 from django import forms
 from django.core.cache import cache
-from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdUnit
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdUnit, AppVersionPolicy
 import json
 class BrandingSettingsForm(forms.ModelForm):
     class Meta:
@@ -457,6 +457,51 @@ class AdUnitForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'order': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1'}),
         }
+
+
+class AppVersionPolicyForm(forms.ModelForm):
+    """One content rule: which app builds it covers and what stays available."""
+
+    class Meta:
+        model = AppVersionPolicy
+        fields = ['name', 'android_app', 'min_build', 'max_build',
+                  'allow_movies', 'allow_series', 'allow_tv_channels',
+                  'message', 'is_active']
+        labels = {
+            'name': 'Rule name',
+            'android_app': 'App',
+            'min_build': 'From build',
+            'max_build': 'Up to build',
+            'allow_movies': 'Allow movies',
+            'allow_series': 'Allow series',
+            'allow_tv_channels': 'Allow live TV channels',
+            'message': 'Message shown in the app',
+            'is_active': 'Rule is active',
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Retire beta 3.7.0'}),
+            'android_app': forms.Select(attrs={'class': 'form-select'}),
+            'min_build': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1'}),
+            'max_build': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1'}),
+            'allow_movies': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'allow_series': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'allow_tv_channels': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'message': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Please update to the latest version to keep watching.'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def clean_message(self):
+        return (self.cleaned_data.get('message') or '').strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        lowest = cleaned.get('min_build') or 0
+        highest = cleaned.get('max_build') or 0
+        if highest and lowest and highest < lowest:
+            self.add_error('max_build', 'The last build cannot be lower than the first build.')
+        return cleaned
 
 
 class AdSwitchesForm(forms.ModelForm):

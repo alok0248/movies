@@ -84,6 +84,11 @@ urlpatterns = [
     path('admin-dashboard/ads/<int:ad_id>/edit/', views.ad_edit, name='ad_edit'),
     path('admin-dashboard/ads/<int:ad_id>/delete/', views.ad_delete, name='ad_delete'),
     path('admin-dashboard/ads/units/<int:unit_id>/delete/', views.ad_unit_delete, name='ad_unit_delete'),
+    # App-wide content switches, optionally scoped to a build range, plus the
+    # per-build device counts that say when an old build can be retired.
+    path('admin-dashboard/app-controls/', views.app_controls, name='app_controls'),
+    path('admin-dashboard/app-controls/<int:policy_id>/toggle/', views.app_version_policy_toggle, name='app_version_policy_toggle'),
+    path('admin-dashboard/app-controls/<int:policy_id>/delete/', views.app_version_policy_delete, name='app_version_policy_delete'),
     path('admin-dashboard/ads/<int:ad_id>/toggle/', views.ad_toggle, name='ad_toggle'),
     path('ajax/track-click/', views.track_user_click, name='track_user_click'),
     path('ajax/page-activity/', views.ajax_page_activity, name='ajax_page_activity'),

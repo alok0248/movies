@@ -1,0 +1,184 @@
+{% extends 'core/admin_base.html' %}
+{% block title %}App controls{% endblock %}
+
+{% block admin_content %}
+<div class="container mt-4">
+    <h1 class="mb-2">App controls</h1>
+    <p class="text-muted mb-4">
+        Switch whole content kinds off for the Android app &mdash; for everybody, or only for a range of
+        app builds. Rules apply app-wide: never per device, per account or per user.
+    </p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}success{% endif %} py-2">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="mb-4 d-flex gap-2 flex-wrap">
+        <a href="#rules" class="adm-btn is-sm">Content rules</a>
+        <a href="#versions" class="adm-btn is-sm">Versions in use</a>
+        <a href="{% url 'ad_list' %}" class="adm-btn is-sm">Ads</a>
+        <a href="{% url 'android_app_dashboard' %}" class="adm-btn is-sm">App analytics</a>
+        <a href="{% url 'admin_dashboard' %}" class="adm-btn is-sm">Dashboard</a>
+    </div>
+
+    <section id="rules" class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h2 class="h4 m-0">Content rules</h2>
+            <span class="badge bg-secondary">{{ rules|length }} configured</span>
+        </div>
+        <p class="text-muted mb-3">
+            A rule applies to the builds between <strong>From build</strong> and <strong>Up to build</strong>
+            (leave <em>Up to build</em> empty to keep every newer build working). It travels with the same
+            config the app already downloads, so a switch reaches devices within minutes and needs no app
+            release. A build no rule matches &mdash; including a build the app does not report &mdash; keeps
+            working exactly as before.
+        </p>
+
+        <div class="adm-card mb-4">
+            <div class="adm-card-body">
+                <h3 class="h6 text-uppercase text-muted mb-3">
+                    {% if editing_rule %}Edit rule: {{ editing_rule.name }}{% else %}Add a content rule{% endif %}
+                </h3>
+                <form method="post" action="{% url 'app_controls' %}#rules">
+                    {% csrf_token %}
+                    <input type="hidden" name="form" value="policy">
+                    {% if editing_rule %}<input type="hidden" name="policy_id" value="{{ editing_rule.id }}">{% endif %}
+                    <div class="row g-3">
+                        {% for field in policy_form %}
+                        {% if field.field.widget.input_type == 'checkbox' %}
+                        <div class="col-12 col-md-4">
+                            <div class="form-check form-switch">
+                                {{ field }}
+                                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            </div>
+                            {% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}
+                            {% if field.errors %}<div class="text-danger small">{{ field.errors|join:", " }}</div>{% endif %}
+                        </div>
+                        {% else %}
+                        <div class="col-12 col-md-4">
+                            <label class="adm-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<small class="text-muted d-block">{{ field.help_text }}</small>{% endif %}
+                            {% if field.errors %}<div class="text-danger small">{{ field.errors|join:", " }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="mt-3 d-flex gap-2 flex-wrap align-items-center">
+                        <button type="submit" class="adm-btn is-primary is-sm">
+                            {% if editing_rule %}Save changes{% else %}Add rule{% endif %}
+                        </button>
+                        {% if editing_rule %}<a href="{% url 'app_controls' %}#rules" class="adm-btn is-sm">Cancel edit</a>{% endif %}
+                        <span class="text-muted small">
+                            Example: turn movies off for build 1&ndash;721, leave <em>Up to build</em> empty,
+                            and every new build keeps playing.
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="adm-table-wrap">
+            <table class="adm-table align-middle">
+                <thead>
+                    <tr>
+                        <th>Rule</th>
+                        <th>App</th>
+                        <th>Builds</th>
+                        <th>Movies</th>
+                        <th>Series</th>
+                        <th>Live TV</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr>
+                        <td>
+                            {{ rule.name }}
+                            {% if rule.message %}<div class="small text-muted">{{ rule.message }}</div>{% endif %}
+                        </td>
+                        <td class="small text-muted">{{ rule.android_app.name|default:"All apps" }}</td>
+                        <td class="small text-muted">
+                            {{ rule.min_build|default:"oldest" }} &rarr;
+                            {% if rule.max_build %}{{ rule.max_build }}{% else %}any newer{% endif %}
+                        </td>
+                        <td>{% if rule.allow_movies %}<span class="adm-badge is-ok">On</span>{% else %}<span class="adm-badge is-off">Off</span>{% endif %}</td>
+                        <td>{% if rule.allow_series %}<span class="adm-badge is-ok">On</span>{% else %}<span class="adm-badge is-off">Off</span>{% endif %}</td>
+                        <td>{% if rule.allow_tv_channels %}<span class="adm-badge is-ok">On</span>{% else %}<span class="adm-badge is-off">Off</span>{% endif %}</td>
+                        <td>
+                            {% if rule.is_active %}<span class="adm-badge is-ok">Active</span>{% else %}<span class="adm-badge is-off">Inactive</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'app_version_policy_toggle' rule.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="adm-btn is-sm {% if rule.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %} me-2">
+                                    {% if rule.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                            <a href="{% url 'app_controls' %}?rule={{ rule.id }}#rules" class="adm-btn is-sm me-2">Edit</a>
+                            <a href="{% url 'app_version_policy_delete' rule.id %}" class="adm-btn is-sm is-danger"
+                               onclick="return confirm('Delete this content rule? Builds it covered go back to their normal behaviour.');">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">No content rules yet. Every app keeps working as it is.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section id="versions" class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h2 class="h4 m-0">Versions in use</h2>
+            <span class="badge bg-secondary">{{ version_device_total }} device report(s)</span>
+        </div>
+        <p class="text-muted mb-3">
+            Which build each device last asked for its config with. Builds that have not been seen for a week
+            are counted as stale. Use this table to confirm an old build is emptying out before you switch a
+            rule on for it.
+        </p>
+        {% if version_stale_count %}
+        <p class="small text-warning">{{ version_stale_count }} build(s) have not been seen for 7 days or more.</p>
+        {% endif %}
+        <div class="adm-table-wrap">
+            <table class="adm-table align-middle">
+                <thead>
+                    <tr>
+                        <th>App</th>
+                        <th>Version</th>
+                        <th>Build</th>
+                        <th>Devices</th>
+                        <th>Accounts</th>
+                        <th>First seen</th>
+                        <th>Last seen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in version_rows %}
+                    <tr>
+                        <td class="small text-muted">{{ row.android_app__name }}</td>
+                        <td>{% if row.version_name %}{{ row.version_name }}{% else %}&mdash;{% endif %}</td>
+                        <td><code>#{{ row.build_code }}</code></td>
+                        <td>{{ row.devices }}</td>
+                        <td>{{ row.accounts }}</td>
+                        <td class="small text-muted">{{ row.first_seen|date:"Y-m-d H:i" }}</td>
+                        <td class="small text-muted">{{ row.last_seen|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No version reports yet. They arrive with each app config request.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

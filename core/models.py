@@ -4439,3 +4439,131 @@ class AdminTableLayout(models.Model):
     def __str__(self):
         return '%s · %s · %s' % (self.user, self.tab,
                                   ','.join(self.columns or []))
+
+
+# --- app-wide content switches (optionally per build range) ----------------
+# The operator can take movies, series or live TV off the air for the whole
+# app, not per device or per account, and can scope a switch to a build range
+# so an old APK can be retired while a newer one keeps working. Nothing here is
+# sent unless a policy actually matches the caller's build, so an install that
+# never meets a policy behaves exactly as before.
+class AppVersionPolicy(models.Model):
+    """One row of content switches, for one build range of one app.
+
+    ``android_app`` empty means every app. ``min_build`` 0 means "from the
+    oldest build", ``max_build`` 0 means "no upper limit". A build that cannot
+    be read is never matched, which is what keeps an unknown/old client working.
+    """
+
+    android_app = models.ForeignKey(
+        'AndroidApp', null=True, blank=True, on_delete=models.CASCADE,
+        related_name='version_policies',
+        help_text='Leave empty to apply this rule to every app.')
+    name = models.CharField(max_length=120)
+    min_build = models.PositiveIntegerField(
+        default=0, help_text='First app build this rule applies to (0 = every older build too).')
+    max_build = models.PositiveIntegerField(
+        default=0, help_text='Last app build this rule applies to (0 = no upper limit, so newer builds keep working).')
+    allow_movies = models.BooleanField(default=True, verbose_name='Allow movies')
+    allow_series = models.BooleanField(default=True, verbose_name='Allow series')
+    allow_tv_channels = models.BooleanField(default=True, verbose_name='Allow live TV channels')
+    message = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Shown in the app when one of these switches blocks playback. Empty = built-in text.')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['android_app__name', 'min_build', 'name']
+        verbose_name = 'App content rule'
+        verbose_name_plural = 'App content rules'
+
+    def __str__(self):
+        scope = self.android_app.name if self.android_app_id else 'all apps'
+        upper = str(self.max_build) if self.max_build else 'any newer'
+        return '%s · %s · build %s-%s' % (self.name, scope, self.min_build, upper)
+
+    def covers(self, build):
+        """True when this rule is meant for that build number.
+
+        A missing/zero build is never covered: an install that does not say
+        which build it is must never be disabled by accident.
+        """
+        try:
+            build = int(build)
+        except (TypeError, ValueError):
+            return False
+        if build <= 0:
+            return False
+        if self.min_build and build < self.min_build:
+            return False
+        if self.max_build and build > self.max_build:
+            return False
+        return True
+
+    def feature_payload(self):
+        """Exactly the keys the app reads, plus the operator's message."""
+        payload = {
+            'movies': bool(self.allow_movies),
+            'series': bool(self.allow_series),
+            'tv_channels': bool(self.allow_tv_channels),
+        }
+        if self.message.strip():
+            payload['message'] = self.message.strip()
+        return payload
+
+    @classmethod
+    def match(cls, android_app, build):
+        """The most specific active rule for this app and build, or None."""
+        try:
+            build = int(build)
+        except (TypeError, ValueError):
+            return None
+        if build <= 0:
+            return None
+        app_rules = list(cls.objects.filter(is_active=True, android_app=android_app))
+        for rule in sorted(app_rules, key=lambda r: (-r.min_build, r.id)):
+            if rule.covers(build):
+                return rule
+        global_rules = list(cls.objects.filter(is_active=True, android_app__isnull=True))
+        for rule in sorted(global_rules, key=lambda r: (-r.min_build, r.id)):
+            if rule.covers(build):
+                return rule
+        return None
+
+    @classmethod
+    def features_for(cls, android_app, build):
+        """The ``features`` object to send this caller, or {} when none matches."""
+        rule = cls.match(android_app, build)
+        return rule.feature_payload() if rule else {}
+
+
+class AppVersionDevice(models.Model):
+    """Which build one device/account was last seen running.
+
+    Written from the config endpoint every install already polls, so the
+    operator can see how many devices are still on an old build before
+    switching that build off. One row per app + build + device; the row's
+    counters are updated in place instead of growing a log.
+    """
+
+    android_app = models.ForeignKey(
+        AndroidApp, on_delete=models.CASCADE, related_name='version_devices')
+    build_code = models.PositiveIntegerField(default=0, db_index=True)
+    version_name = models.CharField(max_length=64, blank=True, default='')
+    device_id = models.CharField(max_length=255, db_index=True)
+    email = models.EmailField(blank=True, default='', db_index=True)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(default=timezone.now, db_index=True)
+    requests = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-last_seen']
+        unique_together = ('android_app', 'build_code', 'device_id')
+        verbose_name = 'App version device'
+        verbose_name_plural = 'App version devices'
+
+    def __str__(self):
+        return '%s · build %s · %s' % (
+            self.android_app.name, self.build_code or '?', self.device_id or 'unknown')

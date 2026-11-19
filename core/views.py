@@ -44,7 +44,8 @@ from bs4 import BeautifulSoup
 import psutil
 import platform
 from . import amazon_links
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdUnit, AmazonAffiliateProduct, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdUnit, AmazonAffiliateProduct, AppVersionPolicy, UserActivity)
+from .app_versions import features_for_build, record_version, version_identity, version_summary
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -53,7 +54,7 @@ from .forms import (
     ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
     PlayerSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdMonetizationSettingsForm,
-    AdSwitchesForm, AdUnitForm, GeneralSettingsForm, SecurityProtectionForm,
+    AdSwitchesForm, AdUnitForm, AppVersionPolicyForm, GeneralSettingsForm, SecurityProtectionForm,
     GENERAL_FIELD_SECTIONS, SECURITY_FIELD_SECTIONS
 )
 
@@ -1974,6 +1975,28 @@ def _attach_amazon_links(payload):
     return amazon_links.with_links(payload)
 
 
+def _with_version_features(payload, android_app, build_number):
+    """Add the build-scoped content switches to a config response.
+
+    The catalog itself is cached per app, but a kill-switch must not wait for
+    that cache: the ``features`` object is computed per request and merged over
+    a copy, so switching a rule reaches the app on its next poll (minutes) while
+    the cached catalog stays exactly as it was. Nothing is added when no rule
+    matches this build, which is why every existing install keeps working.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    features = features_for_build(android_app, build_number)
+    if not features:
+        # No rule covers this build. The all-allowed shape is still sent so a
+        # rule that is deactivated or deleted actively releases the builds it
+        # used to cover; a build that reads no such key is unaffected.
+        features = {'movies': True, 'series': True, 'tv_channels': True}
+    merged = dict(payload)
+    merged['features'] = features
+    return merged
+
+
 def _parse_amazon_bulk(text):
     """Read the bulk box: one link per line, with an optional title.
 
@@ -2155,6 +2178,98 @@ def ad_unit_delete(request, unit_id):
         'object_label': 'the app ad unit',
         'object_name': unit.name or unit.ad_unit_id,
         'cancel_url_name': 'ad_list',
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def app_controls(request):
+    """App-wide content switches, optionally scoped to a build range.
+
+    One page for the whole install base: add a rule, switch it off or delete it.
+    A rule covering a caller's build travels in the config payload the app
+    already polls, so a switch reaches devices within minutes and needs no
+    release. A build no rule matches - including a build we cannot read - keeps
+    working exactly as before.
+
+    The version table underneath shows how many devices still run each build,
+    which is what tells an operator when an old build can be switched off.
+    """
+    from .audit import log_action
+
+    edit_id = (request.GET.get('rule') or '').strip()
+    editing = AppVersionPolicy.objects.filter(id=int(edit_id)).first() if edit_id.isdigit() else None
+    form = AppVersionPolicyForm(instance=editing)
+
+    if request.method == 'POST' and request.POST.get('form') == 'policy':
+        rule_id = (request.POST.get('policy_id') or '').strip()
+        instance = AppVersionPolicy.objects.filter(id=int(rule_id)).first() if rule_id.isdigit() else None
+        form = AppVersionPolicyForm(request.POST, instance=instance)
+        if form.is_valid():
+            rule = form.save()
+            log_action(
+                request, 'app', rule.name,
+                'content rule saved for build %s-%s (movies=%s series=%s tv=%s)' % (
+                    rule.min_build, rule.max_build or 'any',
+                    int(rule.allow_movies), int(rule.allow_series), int(rule.allow_tv_channels)))
+            messages.success(request, 'Content rule "%s" saved.' % rule.name)
+            return HttpResponseRedirect(reverse('app_controls'))
+        messages.error(request, 'Could not save the rule: %s' % '; '.join(
+            '%s: %s' % (name, ', '.join(errs))
+            for name, errs in form.errors.items()))
+
+    rules = list(AppVersionPolicy.objects.select_related('android_app').order_by('name'))
+    rules.sort(key=lambda r: (not r.is_active, (r.android_app.name if r.android_app_id else 'All apps'), r.min_build))
+
+    apps = list(AndroidApp.objects.order_by('name'))
+    version_rows = version_summary(None, 80)
+    stale = [row for row in version_rows if (row.get('last_seen') and
+             (timezone.now() - row['last_seen']).days >= 7)]
+
+    return render(request, 'core/app_controls.html', {
+        'rules': rules,
+        'apps': apps,
+        'policy_form': form,
+        'editing_rule': editing,
+        'version_rows': version_rows,
+        'version_stale_count': len(stale),
+        'version_device_total': sum(row.get('devices') or 0 for row in version_rows),
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def app_version_policy_toggle(request, policy_id):
+    """Switch a content rule on or off without deleting it."""
+    if request.method != 'POST':
+        return redirect('app_controls')
+    rule = get_object_or_404(AppVersionPolicy, id=policy_id)
+    rule.is_active = not rule.is_active
+    rule.save(update_fields=['is_active', 'updated_at'])
+    from .audit import log_action
+    log_action(request, 'app', rule.name,
+               'content rule %s' % ('enabled' if rule.is_active else 'disabled'))
+    messages.success(request, 'Rule "%s" is now %s.' % (
+        rule.name, 'active' if rule.is_active else 'inactive'))
+    return HttpResponseRedirect(reverse('app_controls'))
+
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def app_version_policy_delete(request, policy_id):
+    rule = get_object_or_404(AppVersionPolicy, id=policy_id)
+    if request.method == 'POST':
+        from .audit import log_action
+        name = rule.name
+        rule.delete()
+        log_action(request, 'app', name, 'content rule deleted')
+        messages.success(request, 'Content rule "%s" deleted.' % name)
+        return HttpResponseRedirect(reverse('app_controls'))
+    return render(request, 'core/object_delete_confirm.html', {
+        'page_title': 'Delete Content Rule',
+        'object_label': 'the app content rule',
+        'object_name': rule.name,
+        'cancel_url_name': 'app_controls',
     })
 
 
@@ -6449,12 +6564,20 @@ def android_app_endpoint(request, app_slug):
             unique_visitor_log.unique_visitor_count += 1
             unique_visitor_log.save(update_fields=['unique_visitor_count', 'updated_at'])
 
+    # Which build is asking: X-App-Version-Code when the build sends its real
+    # versionCode, otherwise the legacy build header. Recorded per device so the
+    # App controls page can show how many installs are still on an old build.
+    build_number, version_name = version_identity(request, build_identifier)
+    record_version(android_app, build_number, version_name, user_id, '')
+
     # Build movie_servers and series_servers from PlayerConfiguration (cached for 5 min)
     cache_key = f'android_endpoint_payload_{android_app.slug}'
     cached_payload = cache.get(cache_key)
     if cached_payload:
-        # Still track device visit but serve cached config
-        return JsonResponse(cached_payload, safe=isinstance(cached_payload, dict))
+        # Still track device visit but serve cached config, with this build's
+        # content switches merged in (the cache never holds them).
+        return JsonResponse(_with_version_features(cached_payload, android_app, build_number),
+                            safe=isinstance(cached_payload, dict))
     
     android_players = PlayerConfiguration.objects.filter(use_for_android=True, is_active=True).order_by('order', 'name')
     movie_servers = []
@@ -6542,9 +6665,11 @@ def android_app_endpoint(request, app_slug):
                 for unit in AdUnit.objects.filter(is_active=True).order_by('order', 'name')
             ]
             response_payload['ads1'] = ads1
-    # Cache the response payload for 5 minutes
+    # Cache the catalog payload for 5 minutes; the per-build switches are merged
+    # only into the response, never into the cache.
     cache.set(cache_key, response_payload, 300)
-    return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
+    return JsonResponse(_with_version_features(response_payload, android_app, build_number),
+                        safe=isinstance(response_payload, dict))
 
 
 def _verification_required_response(django_user):
@@ -12551,7 +12676,7 @@ OFFLINE_POLICY_DEFAULTS = {
 }
 
 
-def _remote_config_payload():
+def _remote_config_payload(android_app=None, build_number=0):
     """Server-driven app settings, read fresh on every sync.
 
     Deliberately not cached: a kill-switch that a worker keeps serving from its
@@ -12562,12 +12687,17 @@ def _remote_config_payload():
 
     Always a dict: a missing row, a broken payload or a database error answer
     with ``{}``, so the sync response keeps its shape whatever the config says.
+
+    The optional ``android_app``/``build_number`` add the build-scoped content
+    switches to ``flags``. They are computed separately from the stored row, so
+    a content rule works even when no remote-config row exists at all.
     """
+    payload = {}
     try:
         from .models import AppRemoteConfig
         conf = AppRemoteConfig.get_config()
         if conf is None:
-            return {}
+            raise LookupError('no remote config row')
         payload = conf.as_dict()
         payload.setdefault('version', conf.updated_at.isoformat(timespec='seconds'))
         # Offline access: who may keep using the app while the server is
@@ -12594,10 +12724,29 @@ def _remote_config_payload():
         else:
             offline.pop('message', None)
         payload['offline'] = offline
-        return payload
+    except LookupError:
+        payload = {}
     except Exception:
         logger.debug('remote config unavailable', exc_info=True)
-        return {}
+        payload = {}
+
+    # Build-scoped content switches, mirrored into flags so a signed-in build
+    # that reads its settings from this sync also learns that an operator has
+    # switched a content kind off for its build. Nothing is added when no rule
+    # matches, so a server with no rules serves exactly what it served before.
+    if android_app is not None:
+        try:
+            features = features_for_build(android_app, build_number)
+        except Exception:
+            features = {}
+        flags = payload.get('flags') if isinstance(payload.get('flags'), dict) else {}
+        flags = dict(flags)
+        for key in ('movies', 'series', 'tv_channels'):
+            flags[key] = bool(features.get(key, True))
+        payload['flags'] = flags
+        if features.get('message'):
+            payload.setdefault('message', features['message'])
+    return payload
 
 
 @_guard_android_api_errors
@@ -12631,6 +12780,13 @@ def api_user_sync(request):
     if rate_err:
         return rate_err
 
+    # Version identity of this install, both for the content rules that are
+    # scoped to a build range and for the "who still runs which build" table.
+    sync_build, sync_version_name = version_identity(
+        request, body.get('buildNumber') or request.headers.get('X-Android-Build') or '')
+    record_version(app_match, sync_build, sync_version_name,
+                   body.get('deviceId') or email, email)
+
     # Throttle full syncs per user. Between full syncs, answer from stored
     # cloud data with a single read — no writes, no TMDB calls. The payload
     # shape is identical so the app can treat the response the same way.
@@ -12646,7 +12802,7 @@ def api_user_sync(request):
                     'message': 'User data synced successfully',
                     'subscription': recent_profile.subscription_payload() if recent_profile else FREE_SUBSCRIPTION,
                     'userData': recent_cloud.get_cloud_payload(),
-                    'remoteConfig': _remote_config_payload(),
+                    'remoteConfig': _remote_config_payload(app_match, sync_build),
                 })
     cache.set(throttle_key, timezone.now(),
               int(getattr(app_match, 'sync_min_interval_seconds', 0)
@@ -12671,7 +12827,7 @@ def api_user_sync(request):
         'message': 'User data synced successfully',
         'subscription': sub_payload,
         'userData': cloud.get_cloud_payload(),
-        'remoteConfig': _remote_config_payload(),
+        'remoteConfig': _remote_config_payload(app_match, sync_build),
     })
 
 
