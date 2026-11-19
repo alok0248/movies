@@ -44,7 +44,7 @@ from bs4 import BeautifulSoup
 import psutil
 import platform
 from . import amazon_links
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AmazonAffiliateProduct, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdUnit, AmazonAffiliateProduct, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -53,7 +53,7 @@ from .forms import (
     ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
     PlayerSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdMonetizationSettingsForm,
-    AdSwitchesForm, GeneralSettingsForm, SecurityProtectionForm,
+    AdSwitchesForm, AdUnitForm, GeneralSettingsForm, SecurityProtectionForm,
     GENERAL_FIELD_SECTIONS, SECURITY_FIELD_SECTIONS
 )
 
@@ -1853,6 +1853,18 @@ def _ad_inventory():
             'is_active': ad.is_active,
             'edit_url': reverse('ad_edit', args=[ad.id]),
         })
+    for unit in AdUnit.objects.all().order_by('order', 'name'):
+        rows.append({
+            'kind': 'adunit',
+            'kind_label': 'App ad unit',
+            'id': unit.id,
+            'name': unit.name or unit.ad_unit_id,
+            'detail': 'AdMob banner · %s · refresh %s' % (
+                unit.get_placement_display(),
+                '%ss' % unit.refresh_seconds if unit.refresh_seconds else 'off'),
+            'is_active': unit.is_active,
+            'edit_url': reverse('ad_list') + '?unit=%d#app-units' % unit.id,
+        })
     for product in AmazonAffiliateProduct.objects.all().order_by('order', 'title'):
         rows.append({
             'kind': 'amazon',
@@ -1886,6 +1898,25 @@ def ad_list(request):
                 ))
             return HttpResponseRedirect(reverse('ad_list') + '#ad-control')
 
+        if request.POST.get('form') == 'app_unit':
+            from .audit import log_action
+
+            unit_id = (request.POST.get('unit_id') or '').strip()
+            instance = AdUnit.objects.filter(id=int(unit_id)).first() if unit_id.isdigit() else None
+            unit_form = AdUnitForm(request.POST, instance=instance)
+            if unit_form.is_valid():
+                unit = unit_form.save()
+                log_action(request, 'ads', unit.name,
+                           'app ad unit %s %s on %s'
+                           % (unit.ad_unit_id, 'edited' if instance else 'added', unit.placement))
+                messages.success(request, 'Ad unit "%s" saved.' % unit.name)
+            else:
+                messages.error(request, 'Could not save ad unit: %s' % '; '.join(
+                    '%s: %s' % (name, ', '.join(errs))
+                    for name, errs in unit_form.errors.items()
+                ))
+            return HttpResponseRedirect(reverse('ad_list') + '#app-units')
+
         ads_form = AdMonetizationSettingsForm(request.POST, instance=site_settings)
         if ads_form.is_valid():
             ads_form.save()
@@ -1900,7 +1931,7 @@ def ad_list(request):
     ads = Ad.objects.all().order_by('order', 'name')
     inventory = _ad_inventory()
     inventory_sources = []
-    for kind, label in (('ad', 'Ad unit'), ('amazon', 'Amazon product')):
+    for kind, label in (('ad', 'Ad unit'), ('adunit', 'App ad unit'), ('amazon', 'Amazon product')):
         rows_of_kind = [r for r in inventory if r['kind'] == kind]
         inventory_sources.append({
             'kind': kind,
@@ -1908,8 +1939,13 @@ def ad_list(request):
             'total': len(rows_of_kind),
             'active': len([r for r in rows_of_kind if r['is_active']]),
         })
+    edit_unit_id = (request.GET.get('unit') or '').strip()
+    edit_unit = AdUnit.objects.filter(id=int(edit_unit_id)).first() if edit_unit_id.isdigit() else None
     return render(request, 'core/ad_list.html', {
         'ads': ads,
+        'app_units': AdUnit.objects.all().order_by('order', 'name'),
+        'unit_form': AdUnitForm(instance=edit_unit),
+        'editing_unit': edit_unit,
         'inventory': inventory,
         'inventory_sources': inventory_sources,
         'inventory_active': len([r for r in inventory if r['is_active']]),
@@ -2046,6 +2082,7 @@ def ad_toggle_any(request, kind, obj_id):
     sources = {
         'ad': (Ad, 'Ad unit'),
         'amazon': (AmazonAffiliateProduct, 'Amazon product'),
+        'adunit': (AdUnit, 'App ad unit'),
     }
     if request.method != 'POST':
         return redirect('ad_list')
@@ -2101,6 +2138,26 @@ def ad_delete(request, ad_id):
     if request.method == 'POST':
         ad.delete()
         return redirect('ad_list')
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def ad_unit_delete(request, unit_id):
+    unit = get_object_or_404(AdUnit, id=unit_id)
+    if request.method == 'POST':
+        from .audit import log_action
+
+        name = unit.name or unit.ad_unit_id
+        unit.delete()
+        log_action(request, 'ads', name, 'app ad unit deleted')
+        messages.success(request, 'Ad unit "%s" deleted.' % name)
+        return HttpResponseRedirect(reverse('ad_list') + '#app-units')
+    return render(request, 'core/object_delete_confirm.html', {
+        'page_title': 'Delete Ad Unit',
+        'object_label': 'the app ad unit',
+        'object_name': unit.name or unit.ad_unit_id,
+        'cancel_url_name': 'ad_list',
+    })
+
+
     return render(request, 'core/object_delete_confirm.html', {
         'page_title': 'Delete Ad',
         'object_label': 'the ad',
@@ -6471,6 +6528,19 @@ def android_app_endpoint(request, app_slug):
                 'library': bool(ad_site.ads_mobile_show_home),
                 'detail': bool(ad_site.ads_mobile_show_detail),
             }
+            # The AdMob banner catalogue from the Ads page. The app shows these
+            # units on the surface each row names and renews them at the given
+            # interval, so adding a unit needs no app release.
+            ads1['units'] = [
+                {
+                    'id': unit.id,
+                    'name': unit.name,
+                    'ad_unit_id': unit.ad_unit_id,
+                    'placement': unit.placement,
+                    'refresh': int(unit.refresh_seconds or 0),
+                }
+                for unit in AdUnit.objects.filter(is_active=True).order_by('order', 'name')
+            ]
             response_payload['ads1'] = ads1
     # Cache the response payload for 5 minutes
     cache.set(cache_key, response_payload, 300)

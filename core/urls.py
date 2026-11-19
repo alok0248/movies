@@ -83,6 +83,7 @@ urlpatterns = [
     path('admin-dashboard/ads/toggle/<str:kind>/<int:obj_id>/', views.ad_toggle_any, name='ad_toggle_any'),
     path('admin-dashboard/ads/<int:ad_id>/edit/', views.ad_edit, name='ad_edit'),
     path('admin-dashboard/ads/<int:ad_id>/delete/', views.ad_delete, name='ad_delete'),
+    path('admin-dashboard/ads/units/<int:unit_id>/delete/', views.ad_unit_delete, name='ad_unit_delete'),
     path('admin-dashboard/ads/<int:ad_id>/toggle/', views.ad_toggle, name='ad_toggle'),
     path('ajax/track-click/', views.track_user_click, name='track_user_click'),
     path('ajax/page-activity/', views.ajax_page_activity, name='ajax_page_activity'),

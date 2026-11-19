@@ -1,6 +1,6 @@
 from django import forms
 from django.core.cache import cache
-from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdUnit
 import json
 class BrandingSettingsForm(forms.ModelForm):
     class Meta:
@@ -430,6 +430,33 @@ class AdForm(forms.ModelForm):
             'order': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Display order'}),
         }
 
+
+
+class AdUnitForm(forms.ModelForm):
+    """One AdMob banner unit for the app, saved from the Ads page."""
+
+    class Meta:
+        model = AdUnit
+        fields = ['name', 'ad_unit_id', 'placement', 'refresh_seconds', 'is_active', 'order']
+        labels = {
+            'name': 'Ad unit name',
+            'ad_unit_id': 'Ad unit ID',
+            'placement': 'Where it shows in the app',
+            'refresh_seconds': 'Refresh every (seconds)',
+            'is_active': 'Serve this unit',
+            'order': 'Rotation order',
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'testing'}),
+            'ad_unit_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ca-app-pub-3676720856033816/3976174493'}),
+            'placement': forms.Select(attrs={'class': 'form-select'}),
+            'refresh_seconds': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': '0', 'max': '600', 'step': '5'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'order': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '1'}),
+        }
 
 
 class AdSwitchesForm(forms.ModelForm):

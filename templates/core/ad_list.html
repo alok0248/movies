@@ -15,6 +15,7 @@
     <div class="mb-4 d-flex gap-2 flex-wrap">
         <a href="#ad-control" class="adm-btn is-sm">Control centre</a>
         <a href="#units" class="adm-btn is-sm">Ad units</a>
+        <a href="#app-units" class="adm-btn is-sm">App ad units</a>
         <a href="#monetization" class="adm-btn is-sm">Monetization</a>
         <a href="{% url 'admin_amazon_links' %}" class="adm-btn is-sm">+ Amazon links</a>
     </div>
@@ -156,6 +157,104 @@
                     {% empty %}
                     <tr>
                         <td colspan="8" class="text-center">No ads found. Create one to get started!</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section id="app-units" class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h2 class="h4 m-0">App ad units (Google AdMob)</h2>
+            <span class="badge bg-secondary">{{ app_units|length }} configured</span>
+        </div>
+        <p class="text-muted mb-3">
+            The Android app downloads this list with its ad config and shows each unit on the surface
+            named here, renewing it at the interval you set. Add as many AdMob banner units as you like:
+            a saved unit is picked up by the app within five minutes, with no app release.
+            Amazon affiliate cards are unaffected by this list and keep running from their own page.
+        </p>
+
+        <div class="adm-card mb-4">
+            <div class="adm-card-body">
+                <h3 class="h6 text-uppercase text-muted mb-3">
+                    {% if editing_unit %}Edit unit: {{ editing_unit.name }}{% else %}Add an ad unit{% endif %}
+                </h3>
+                <form method="post" action="{% url 'ad_list' %}#app-units">
+                    {% csrf_token %}
+                    <input type="hidden" name="form" value="app_unit">
+                    {% if editing_unit %}<input type="hidden" name="unit_id" value="{{ editing_unit.id }}">{% endif %}
+                    <div class="row g-3">
+                        {% for field in unit_form %}
+                        {% if field.field.widget.input_type == 'checkbox' %}
+                        <div class="col-12 col-md-4">
+                            <div class="form-check form-switch">
+                                {{ field }}
+                                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            </div>
+                            {% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}
+                        </div>
+                        {% else %}
+                        <div class="col-12 col-md-4">
+                            <label class="adm-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<small class="text-muted d-block">{{ field.help_text }}</small>{% endif %}
+                            {% if field.errors %}<div class="text-danger small">{{ field.errors|join:", " }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                        <button type="submit" class="adm-btn is-primary is-sm">
+                            {% if editing_unit %}Save changes{% else %}Add ad unit{% endif %}
+                        </button>
+                        {% if editing_unit %}<a href="{% url 'ad_list' %}#app-units" class="adm-btn is-sm">Cancel edit</a>{% endif %}
+                        <span class="text-muted small">Paste the unit ID exactly as AdMob shows it, e.g. ca-app-pub-3676720856033816/3976174493</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="adm-table-wrap">
+            <table class="adm-table align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Ad unit ID</th>
+                        <th>Where in the app</th>
+                        <th>Refresh</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for unit in app_units %}
+                    <tr>
+                        <td>{{ unit.name|default:"&mdash;" }}</td>
+                        <td class="small"><code>{{ unit.ad_unit_id }}</code></td>
+                        <td class="small text-muted">{{ unit.get_placement_display }}</td>
+                        <td class="small text-muted">
+                            {% if unit.refresh_seconds %}{{ unit.refresh_seconds }}s{% else %}off{% endif %}
+                        </td>
+                        <td>
+                            {% if unit.is_active %}<span class="adm-badge is-ok">Enabled</span>{% else %}<span class="adm-badge is-off">Disabled</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            <form method="post" action="{% url 'ad_toggle_any' 'adunit' unit.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="adm-btn is-sm {% if unit.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %} me-2">
+                                    {% if unit.is_active %}Disable{% else %}Enable{% endif %}
+                                </button>
+                            </form>
+                            <a href="{% url 'ad_list' %}?unit={{ unit.id }}#app-units" class="adm-btn is-sm me-2">Edit</a>
+                            <a href="{% url 'ad_unit_delete' unit.id %}" class="adm-btn is-sm is-danger"
+                               onclick="return confirmTyped(event, {what: 'this app ad unit', detail: 'The app stops serving it as soon as it next fetches its config.'});">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No app ad units yet. Add your first AdMob banner above.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

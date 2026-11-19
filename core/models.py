@@ -595,6 +595,65 @@ class Ad(models.Model):
         return self.name
 
 
+class AdUnit(models.Model):
+    """One banner unit from the AdMob account, managed from the Ads page.
+
+    The app carries no compiled-in unit list: it receives the active rows here
+    with its normal ad config and shows each one on the surface it names, so a
+    new AdMob unit goes live by saving it here rather than by shipping a build.
+    """
+
+    PLACEMENT_CHOICES = [
+        ('home', 'Home and browsing rows'),
+        ('detail', 'Movie and series pages'),
+        ('library', 'Downloads, watchlist, history, favourites'),
+    ]
+
+    AD_UNIT_PATTERN = r'^ca-app-pub-\d{16}/\d{6,20}$'
+
+    name = models.CharField(max_length=80, help_text="Internal name, e.g. testing")
+    ad_unit_id = models.CharField(
+        max_length=120, unique=True,
+        help_text="AdMob ad unit ID, e.g. ca-app-pub-3676720856033816/3976174493")
+    placement = models.CharField(
+        max_length=20, choices=PLACEMENT_CHOICES, default='home',
+        help_text="Which app surface shows this banner.")
+    refresh_seconds = models.PositiveIntegerField(
+        default=60,
+        help_text="Seconds between banner renewals. 30-120 suits AdMob; 0 turns automatic refresh off.")
+    is_active = models.BooleanField(
+        default=True, help_text="Untick to stop serving this unit without deleting it.")
+    order = models.IntegerField(default=0, help_text="Rotation order (lower first).")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'App ad unit'
+        verbose_name_plural = 'App ad units'
+
+    def __str__(self):
+        return self.name or self.ad_unit_id
+
+    def clean(self):
+        import re
+
+        from django.core.exceptions import ValidationError
+
+        if not re.match(self.AD_UNIT_PATTERN, (self.ad_unit_id or '').strip()):
+            raise ValidationError({'ad_unit_id': (
+                'Copy the AdMob ad unit ID exactly, e.g. '
+                'ca-app-pub-3676720856033816/3976174493.')})
+        if self.refresh_seconds and self.refresh_seconds < 30:
+            raise ValidationError({'refresh_seconds': (
+                'AdMob fills better at 30 seconds or more; use 0 to turn refresh off.')})
+
+    def save(self, *args, **kwargs):
+        self.ad_unit_id = (self.ad_unit_id or '').strip()
+        self.name = (self.name or '').strip()[:80]
+        super().save(*args, **kwargs)
+
+
 class AdImpression(models.Model):
     ad = models.ForeignKey(Ad, on_delete=models.CASCADE, related_name='impressions')
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='ad_impressions')
