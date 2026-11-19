@@ -26,11 +26,14 @@ def version_identity(request, fallback_build=''):
     never matched by a policy: an install whose build is unknown must keep
     working rather than be switched off by a rule it cannot be compared to.
     """
-    code = (request.headers.get('X-App-Version-Code') or '').strip()
+    code = request.headers.get('X-App-Version-Code')
     if not code:
-        code = (fallback_build or request.headers.get('X-Android-Build') or '').strip()
+        code = fallback_build or request.headers.get('X-Android-Build') or ''
+    # ``fallback_build`` is a JSON number in /api/user/sync's body and a string at
+    # the config endpoint, so it must be coerced before any string handling.
+    code = str(code).strip()
     try:
-        build = int(str(code).lstrip('#'))
+        build = int(code.lstrip('#'))
     except (TypeError, ValueError):
         build = 0
     name = (request.headers.get('X-App-Version-Name') or '').strip()[:64]
