@@ -10725,15 +10725,30 @@ def serve_ad_file(request, filename):
     return response
 
 
+def _serve_verification_file(filename):
+    """Serve a dropped verification file, or a hard 404 when it is missing.
+
+    An empty 200 is the worst answer for an ad-network crawler: it means the
+    file exists but declares nothing, so the network reports a details
+    mismatch and keeps the stale result cached instead of purging it the way
+    it purges a 404. Returning 404 makes a missing file say so.
+    """
+    from django.http import Http404, HttpResponse
+
+    content = _read_ad_file(filename) or ''
+    if not content.strip():
+        raise Http404(filename + ' has not been published')
+    response = HttpResponse(content, content_type='text/plain')
+    response['Cache-Control'] = 'public, max-age=300'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
 def serve_ads_txt(request):
-    content = _read_ad_file('ads.txt')
-    from django.http import HttpResponse
-    return HttpResponse(content, content_type='text/plain')
+    return _serve_verification_file('ads.txt')
 
 def serve_app_ads_txt(request):
-    content = _read_ad_file('app-ads.txt')
-    from django.http import HttpResponse
-    return HttpResponse(content, content_type='text/plain')
+    return _serve_verification_file('app-ads.txt')
 
 
 SEO_SITE_URL = 'https://newmovies.linkpc.net'
