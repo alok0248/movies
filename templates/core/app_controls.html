@@ -6,7 +6,9 @@
     <h1 class="mb-2">App controls</h1>
     <p class="text-muted mb-4">
         Switch whole content kinds off for the Android app &mdash; for everybody, or only for a range of
-        app builds. Rules apply app-wide: never per device, per account or per user.
+        app builds. Rules apply app-wide: never per device, per account or per user. Switching a
+        content kind off also stops new downloads of it on the covered builds, so nobody can queue
+        files that will then refuse to play.
     </p>
 
     {% if messages %}
@@ -33,7 +35,8 @@
             (leave <em>Up to build</em> empty to keep every newer build working). It travels with the same
             config the app already downloads, so a switch reaches devices within minutes and needs no app
             release. A build no rule matches &mdash; including a build the app does not report &mdash; keeps
-            working exactly as before.
+            working exactly as before. Downloads started for a kind that is switched off are refused
+            with the rule's message; files already downloaded are untouched.
         </p>
 
         <div class="adm-card mb-4">
