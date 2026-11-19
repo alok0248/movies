@@ -399,21 +399,39 @@ class SiteSettings(models.Model):
     )
 
     # Adsterra direct-link ads
-    adsterra_clicks_required = models.IntegerField(
-        default=5,
-        help_text="Number of user clicks after which the next enabled Adsterra link opens in the browser. Set 0 to disable auto-open."
-    )
-    adsterra_show_banner = models.BooleanField(
-        default=True,
-        help_text="Show the Adsterra sponsor block on movies and series pages."
-    )
-    enable_adsterra_links = models.BooleanField(
-        default=True,
-        help_text="Master switch for the Adsterra direct-link units: when unchecked, URL units never open automatically, even if the click threshold is reached."
-    )
     enable_autoclick_ads = models.BooleanField(
         default=True,
         help_text="Master switch for click-count auto-click ads: when unchecked, no ad is opened from page clicks, whatever auto_click_every_clicks is set to."
+    )
+
+    # ---- Platform ad switches (admin -> App settings -> Ads) ----
+    # The Android app and this website are monetised separately: the app can be
+    # switched off while the site keeps its sponsor blocks, and each side decides
+    # on which screens advertising may appear. Both default to on, so an install
+    # from before these settings existed keeps behaving as it always did.
+    ads_mobile_enabled = models.BooleanField(
+        default=True,
+        help_text="Master switch for advertising inside the Android app. Delivered to the app with its ad config."
+    )
+    ads_website_enabled = models.BooleanField(
+        default=True,
+        help_text="Master switch for advertising on this website (sponsor block and direct-link units)."
+    )
+    ads_mobile_show_home = models.BooleanField(
+        default=True,
+        help_text="App: show banners on the home screen and the other browsing rows."
+    )
+    ads_mobile_show_detail = models.BooleanField(
+        default=True,
+        help_text="App: show banners on movie and series detail pages."
+    )
+    ads_website_show_home = models.BooleanField(
+        default=True,
+        help_text="Website: show ad units on the home page. Other pages (search, lists, account) follow the master switch."
+    )
+    ads_website_show_detail = models.BooleanField(
+        default=True,
+        help_text="Website: show ad units on movie, series, collection and person detail pages."
     )
 
     IDM_VISIBILITY_CHOICES = [
@@ -534,11 +552,12 @@ class SiteSettings(models.Model):
 
 
 class Ad(models.Model):
+    # Only the two networks this site runs: Google (AdSense) and Amazon
+    # (affiliate). Everything else was removed, so the admin no longer offers a
+    # provider the site cannot render.
     PROVIDER_CHOICES = [
         ('google_adsense', 'Google AdSense'),
         ('amazon_affiliate', 'Amazon Affiliate'),
-        ('custom_script', 'Custom Script'),
-        ('custom_image', 'Custom Image/Banner'),
     ]
 
     POSITION_CHOICES = [
@@ -554,7 +573,7 @@ class Ad(models.Model):
     ]
 
     name = models.CharField(max_length=255, help_text="Name of the ad for internal use")
-    provider = models.CharField(max_length=50, choices=PROVIDER_CHOICES, default='custom_script')
+    provider = models.CharField(max_length=50, choices=PROVIDER_CHOICES, default='google_adsense')
     position = models.CharField(max_length=50, choices=POSITION_CHOICES, default='sidebar', help_text="Where this ad will appear on the site")
     script = models.TextField(blank=True, null=True, help_text="Ad script code (for Custom Script and Google AdSense)")
     affiliate_url = models.URLField(blank=True, null=True, help_text="Amazon Associates tracking/product URL")
@@ -574,89 +593,6 @@ class Ad(models.Model):
 
     def __str__(self):
         return self.name
-
-
-class AdNetworkTag(models.Model):
-    """A snippet pasted from an ad network: site verification or the ad itself.
-
-    Networks hand out two kinds of tag. A *verification* snippet (a meta tag, a
-    script or a file) has to be present on the site before they will serve ads
-    for it, and an *ad* snippet is what actually renders a unit. Keeping both
-    here means the snippet is pasted once and injected by the base template,
-    instead of editing templates per network.
-    """
-
-    KIND_CHOICES = [
-        ('verify', 'Site verification'),
-        ('ad', 'Ad tag'),
-    ]
-    PLACEMENT_CHOICES = [
-        ('head', 'Head (all pages)'),
-        ('body_start', 'Start of the page'),
-        ('body_end', 'End of the page'),
-    ]
-
-    name = models.CharField(max_length=150, blank=True, default='',
-                            help_text='Label, e.g. Adsterra verification')
-    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='verify')
-    placement = models.CharField(max_length=16, choices=PLACEMENT_CHOICES, default='head',
-                                 help_text='Verification tags always go in the head.')
-    code = models.TextField(help_text='The exact HTML/JS the network gave you.')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['id']
-        verbose_name = 'Ad network tag'
-        verbose_name_plural = 'Ad network tags'
-
-    def __str__(self):
-        return self.name or '%s tag #%s' % (self.kind, self.pk)
-
-    @property
-    def effective_placement(self):
-        return 'head' if self.kind == 'verify' else self.placement
-
-
-class AdsterraLink(models.Model):
-    """A saved Adsterra direct link shown/opened from the Adsterra admin page.
-
-    Each link can be enabled or disabled independently. Enabled links rotate: the
-    next enabled link is opened in a background tab once the click threshold is
-    reached. The per-link click counter records how many times that link opened.
-    """
-    name = models.CharField(max_length=200, blank=True, null=True, help_text="Label for this Adsterra unit, e.g. Popunder_1.")
-    ad_type = models.CharField(max_length=100, blank=True, null=True, help_text="Adsterra ad format, e.g. Popunder, Smartlink, Social Bar, Native Banner, Banner 320x50.")
-    unit_id = models.CharField(max_length=50, blank=True, null=True, help_text="Adsterra ad unit / placement ID, e.g. 30866764.")
-    url = models.URLField(max_length=1000, blank=True, null=True, help_text="Adsterra direct link / smartlink URL. Used for link-type units (e.g. Smartlink).")
-    code = models.TextField(blank=True, null=True, help_text="Adsterra JS / HTML ad code. Used for script-type units (Popunder, Social Bar, Native Banner, Banner 320x50).")
-    is_active = models.BooleanField(default=True, help_text="Enable or disable this unit. Only enabled units with a URL open, and only enabled units with code render on movie/series pages.")
-    click_count = models.IntegerField(default=0, help_text="Number of times this link has been opened (counted automatically).")
-    order = models.IntegerField(default=0, help_text="Display / rotation order (lower numbers come first).")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['order', 'id']
-        verbose_name = "Adsterra Link"
-        verbose_name_plural = "Adsterra Links"
-
-    def __str__(self):
-        return self.name or self.url or ('AdsterraLink #%s' % self.pk)
-
-    @property
-    def is_js(self):
-        return bool((self.code or '').strip())
-
-    @property
-    def kind_label(self):
-        if self.is_js and self.url:
-            return 'JS + URL'
-        if self.is_js:
-            return 'JS code'
-        if self.url:
-            return 'URL'
-        return 'Empty'
 
 
 class AdImpression(models.Model):

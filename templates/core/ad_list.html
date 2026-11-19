@@ -15,9 +15,7 @@
     <div class="mb-4 d-flex gap-2 flex-wrap">
         <a href="#ad-control" class="adm-btn is-sm">Control centre</a>
         <a href="#units" class="adm-btn is-sm">Ad units</a>
-        <a href="#adsterra" class="adm-btn is-sm">Adsterra</a>
         <a href="#monetization" class="adm-btn is-sm">Monetization</a>
-        <a href="{% url 'ad_links' %}" class="adm-btn is-primary is-sm">+ Add links</a>
         <a href="{% url 'admin_amazon_links' %}" class="adm-btn is-sm">+ Amazon links</a>
     </div>
 
@@ -58,7 +56,6 @@
                         <button type="submit" class="adm-btn is-primary is-sm">Save switches</button>
                         <span class="text-muted small">
                             Cadence: auto-click every {{ site_settings.auto_click_every_clicks }} click(s) &middot;
-                            Adsterra link every {{ site_settings.adsterra_clicks_required }} click(s) &middot;
                             in-grid tile every {{ site_settings.tile_ad_every_n }} card(s)
                             &mdash; edit the numbers under Monetization.
                         </span>
@@ -164,11 +161,6 @@
                 </tbody>
             </table>
         </div>
-    </section>
-
-    <section id="adsterra" class="mb-5">
-        <h2 class="h4 mb-3">Adsterra</h2>
-        {% include 'core/_adsterra_admin_panel.html' %}
     </section>
 
     <section id="monetization" class="mb-5">

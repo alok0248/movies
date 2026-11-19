@@ -14,6 +14,14 @@
     {% if site_settings.adsense_verification_meta %}
     <meta name="google-adsense-account" content="{{ site_settings.adsense_verification_meta }}">
     {% endif %}
+    {% if site_settings.adsense_verification_meta %}
+    <meta name="google-adsense-account" content="{{ site_settings.adsense_verification_meta }}">
+    {% endif %}
+    {% if website_ads_allowed and site_settings.adsense_client_id %}
+    <!-- AdSense loader: only when the admin Ads card holds a client id and web ads are on. -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ site_settings.adsense_client_id }}"
+            crossorigin="anonymous"></script>
+    {% endif %}
     <title>{% block title %}{{ site_settings.brand_name }}{% endblock %}</title>
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     {% if site_settings.brand_tagline %}<meta name="description" content="{{ site_settings.brand_tagline }}">{% endif%}
@@ -1808,13 +1816,8 @@
     }
     </script>
 
-    <!-- Ad-network tags: verification snippets from the ad admin page. -->
-    {% for tag_code in ad_verify_tags %}{{ tag_code|safe }}
-    {% endfor %}
 </head>
 <body class="{% if '/admin-dashboard/' in request.path %}admin-page{% endif %}">
-    {% for tag_code in ad_body_start_tags %}{{ tag_code|safe }}
-    {% endfor %}
     {% if request.session.preview_by %}
     <!-- "Login as" preview: this window is a session minted for one user, so
          every page says whose eyes it is in and offers the way out. -->
@@ -1899,7 +1902,7 @@
 
     <div class="content-wrapper">
         <!-- Above-content ad slot -->
-        {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+        {% if website_ads_allowed and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
         <div class="container-fluid px-0">
             <div class="deferred-ad-slot" data-ad-position="above_content_top" data-ad-positions="above_content,head"></div>
         </div>
@@ -1908,23 +1911,15 @@
         {% block content %}{% endblock %}
 
         <!-- Below-content ad slot -->
-        {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+        {% if website_ads_allowed and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
         <div class="container mt-3 mb-3">
             <div class="deferred-ad-slot" data-ad-position="below_content_main" data-ad-positions="below_content"></div>
         </div>
         {% endif %}
     </div>
     
-    <!-- Adsterra units (configured on the Ads page) - loaded on every public page,
-         and switched off together from the Ads control centre -->
-    {% if enable_adsterra_links and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
-    <div class="container mt-3 mb-3">
-        {% include 'core/_adsterra_ads.html' %}
-    </div>
-    {% endif %}
-
     <!-- Deferred ad slot placeholders (no ad HTML loaded until click threshold + consent OK) -->
-    {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    {% if website_ads_allowed and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
         <div class="container mt-4 mb-4">
             <!-- Positions: head + sidebar + footer + popup (sitewide slot placeholder) -->
             <div class="deferred-ad-slot" data-ad-position="sitewide" data-ad-positions="head,sidebar,footer,popup"></div>
@@ -1932,7 +1927,7 @@
     {% endif %}
 
     <!-- Auto-click ad infrastructure (no visible widget - runs in background) -->
-    {% if request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
+    {% if website_ads_allowed and request.resolver_match and request.resolver_match.url_name != 'admin_dashboard' and '/admin-dashboard/' not in request.path %}
     <div id="adCountdownWidget" class="hidden-widget" style="display:none !important; visibility:hidden !important;">
         <div class="countdown-ring" id="adCountdownRing">10</div>
         <div class="countdown-label">
@@ -2016,23 +2011,10 @@
                 }, 350);
             }
 
-            function probeHost(cb) {
-                var url = '{{ adsterra_probe_url|default:""|escapejs }}';
-                if (!url || typeof fetch !== 'function') return cb(false);
-                var settled = false;
-                var timer = setTimeout(function () { if (!settled) { settled = true; cb(false); } }, 4000);
-                try {
-                    fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
-                        .then(function () { if (!settled) { settled = true; clearTimeout(timer); cb(false); } })
-                        .catch(function () { if (!settled) { settled = true; clearTimeout(timer); cb(true); } });
-                } catch (e) { clearTimeout(timer); cb(true); }
-            }
-
             function start() {
-                probeCosmetic(function (hidden) {
-                    if (hidden) return show();
-                    probeHost(function (unreachable) { if (unreachable) show(); });
-                });
+                // Cosmetic check only: the network probe belonged to the removed
+                // third-party units, and a missing host is not a blocked ad.
+                probeCosmetic(function (hidden) { if (hidden) show(); });
             }
 
             try {
@@ -5094,111 +5076,6 @@
     </script>
 
     <script>
-        // Adsterra direct-link ad: open the configured URL after N clicks.
-        (function () {
-            var ADSTERRA_LINKS = {{ adsterra_links_json|safe }} || [];
-            var ADSTERRA_THRESHOLD = parseInt({{ adsterra_clicks_required|default:0 }}, 10) || 0;
-            /* Master switch from the Ads page control centre. */
-            var ADSTERRA_LINKS_ENABLED = {{ enable_adsterra_links|yesno:"true,false" }};
-            if (!ADSTERRA_LINKS_ENABLED) return;
-            if (!ADSTERRA_LINKS.length || ADSTERRA_THRESHOLD < 1) return;
-
-            var KEY = 'adsterra_clicks';
-            var IDX_KEY = 'adsterra_link_idx';
-            var CLICK_ENDPOINT = '{% url "ajax_adsterra_click" %}';
-            var lastCounted = 0;
-
-            function nextLink() {
-                var idx = 0;
-                try { idx = parseInt(sessionStorage.getItem(IDX_KEY) || '0', 10) || 0; } catch (e) { idx = 0; }
-                idx = ((idx % ADSTERRA_LINKS.length) + ADSTERRA_LINKS.length) % ADSTERRA_LINKS.length;
-                var link = ADSTERRA_LINKS[idx];
-                try { sessionStorage.setItem(IDX_KEY, String((idx + 1) % ADSTERRA_LINKS.length)); } catch (e) {}
-                return link;
-            }
-
-            function getCount() {
-                try { return parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0; } catch (e) { return 0; }
-            }
-            function setCount(n) {
-                try { sessionStorage.setItem(KEY, String(n)); } catch (e) {}
-            }
-            function inPlayer(t) {
-                var cur = t;
-                for (var i = 0; cur && cur.nodeType === 1 && i < 12; i++) {
-                    var tag = (cur.tagName || '').toLowerCase();
-                    if (tag === 'video' || tag === 'iframe') return true;
-                    var id = cur.id || '';
-                    if (id === 'playerContainer' || id === 'playerClickCatcher' || id === 'playerWrap' || id === 'mainVideo') return true;
-                    cur = cur.parentElement;
-                }
-                return false;
-            }
-            function isFormControl(t) {
-                var cur = t;
-                for (var i = 0; cur && cur.nodeType === 1 && i < 3; i++) {
-                    var tag = (cur.tagName || '').toLowerCase();
-                    if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'option') return true;
-                    cur = cur.parentElement;
-                }
-                return false;
-            }
-
-            /* Open the Adsterra page in a background window that loads fully
-               behind the current page, then hand focus back so the visitor
-               stays on the page they clicked. */
-            function openAdInBackground(url) {
-                try {
-                    if (window.openAdBackground) return window.openAdBackground(url);
-                } catch (e) {}
-                var w = null;
-                try { w = window.openOwnTab(url, '_blank'); } catch (e) {}
-                try {
-                    if (w) {
-                        try { w.opener = null; } catch (e) {}
-                        try { w.blur(); } catch (e) {}
-                    }
-                    try { window.focus(); } catch (e) {}
-                } catch (e) {}
-            }
-
-            document.addEventListener('click', function (event) {
-                try {
-                    if (typeof event.isTrusted === 'boolean' && !event.isTrusted) return;
-                    if (typeof event.button === 'number' && event.button !== 0) return;
-                    if (isFormControl(event.target) || inPlayer(event.target)) return;
-                    /* Clicks that open content on our own site load that content;
-                       they are not spent on an ad. */
-                    if (window.isNavigatingClick && window.isNavigatingClick(event.target)) return;
-                    var now = Date.now();
-                    if (now - lastCounted < 1000) return;
-                    lastCounted = now;
-                    var count = getCount() + 1;
-                    if (count >= ADSTERRA_THRESHOLD) {
-                        setCount(0);
-                        var link = nextLink();
-                        if (!link || !link.url) return;
-                        // Open synchronously inside the click handler so popup blockers allow it.
-                        openAdInBackground(link.url);
-                        try {
-                            fetch(CLICK_ENDPOINT, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded',
-                                    'X-CSRFToken': '{{ csrf_token }}'
-                                },
-                                body: 'link_id=' + encodeURIComponent(String(link.id || ''))
-                            }).catch(function () {});
-                        } catch (e) {}
-                    } else {
-                        setCount(count);
-                    }
-                } catch (e) {}
-            }, true);
-        })();
-    </script>
-
-    <script>
         // Page engagement: how long the visitor stayed on the page and how many
         // clicks they made. Sent once (beacon) when they leave, and attached to
         // this page view's row in the admin Request Log.
@@ -5300,8 +5177,5 @@
 })();
 </script>
 {% endif %}
-
-    {% for tag_code in ad_body_end_tags %}{{ tag_code|safe }}
-    {% endfor %}
 </body>
 </html>

@@ -1,9 +1,10 @@
 import json
 import re
-from .models import (SiteSettings, NavbarItem, Ad, AdsterraLink,
+from .models import (SiteSettings, NavbarItem, Ad,
                      AmazonAffiliateProduct, AppNotificationRecipient,
                      ProviderItem, WatchRegion)
 from .google_auth import google_login_enabled, resolve_client_id
+from django.core.cache import cache
 
 
 def _json_for_inline_script(value):
@@ -103,28 +104,6 @@ def site_settings(request):
             'price': p.price or '',
         })
 
-    # Adsterra ads: URL units rotate/open after N clicks; JS units are injected.
-    adsterra_links = []
-    adsterra_js_codes = []
-    adsterra_banner_url = ''
-    for link in AdsterraLink.objects.filter(is_active=True).order_by('order', 'id')[:100]:
-        if link.url:
-            adsterra_links.append({'id': link.id, 'url': link.url})
-            if not adsterra_banner_url:
-                adsterra_banner_url = link.url
-        code = (link.code or '').strip()
-        if code:
-            adsterra_js_codes.append(code)
-
-    # First script src among the Adsterra JS units - the ad-blocker notice probes it
-    # to see whether the ad host is reachable from the visitor's browser.
-    adsterra_probe_url = ''
-    for _code in adsterra_js_codes:
-        _m = re.search(r'src="([^"]+)"', _code) or re.search(r"src='([^']+)'", _code)
-        if _m:
-            adsterra_probe_url = _m.group(1)
-            break
-
     # Providers and watch regions for navbar
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
     watch_regions_nav = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')[:50]
@@ -155,15 +134,10 @@ def site_settings(request):
         'enable_tile_click_gating': ss.enable_tile_click_gating,
         'tile_gating_source': gating_source,
         'tile_ad_source': tile_ad_source,
-        'adsterra_links_json': _json_for_inline_script(adsterra_links),
-        'adsterra_js_codes': adsterra_js_codes,
-        'adsterra_probe_url': adsterra_probe_url,
-        'adsterra_banner_url': adsterra_banner_url,
-        'adsterra_has_links': bool(adsterra_links),
-        'adsterra_clicks_required': int(ss.adsterra_clicks_required or 0),
-        'adsterra_show_banner': bool(ss.adsterra_show_banner),
-        'enable_adsterra_links': bool(ss.enable_adsterra_links),
         'enable_autoclick_ads': bool(ss.enable_autoclick_ads),
+        'enable_autoclick_ads': bool(ss.enable_autoclick_ads),
+        'ads_website_enabled': bool(ss.ads_website_enabled),
+        'website_ads_allowed': _website_ads_allowed(request, ss),
         # Google Sign-In: whether the popup should offer the Google button, and
         # which OAuth client ID the browser should initialise with. Both come
         # from the admin toggle so the button can be switched off without a
@@ -279,44 +253,7 @@ def admin_badges(request):
     return {'admin_badges': badges}
 
 
-def ad_network_tags(request):
-    """Snippets pasted from an ad network, ready for the base template.
-
-    Verification tags go in <head> so a crawler finds them; ad tags render at
-    the placement they were given. Only public pages get them — an admin page
-    has no business loading a third-party ad script.
-    """
-    from django.core.cache import cache
-    from .models import AdNetworkTag
-
-    path = getattr(request, 'path', '') or ''
-    if path.startswith(('/admin-dashboard/', '/api/', '/ajax/')):
-        return {}
-    tags = cache.get('ad_network_tags_v1')
-    if tags is None:
-        try:
-            tags = list(AdNetworkTag.objects.filter(is_active=True)
-                        .values_list('kind', 'placement', 'code'))
-        except Exception:      # an ad tag is never worth a broken page
-            tags = []
-        cache.set('ad_network_tags_v1', tags, 60)
-
-    buckets = {'head': [], 'body_start': [], 'body_end': []}
-    for kind, placement, code in tags:
-        if not code:
-            continue
-        where = 'head' if kind == 'verify' else placement
-        buckets.setdefault(where, []).append(code)
-    return {
-        'ad_verify_tags': buckets['head'],
-        'ad_body_start_tags': buckets['body_start'],
-        'ad_body_end_tags': buckets['body_end'],
-    }
-
-
 """Values the admin chrome needs on every page."""
-
-from django.core.cache import cache
 
 ALERT_CACHE_KEY = 'data_health_alert_v1'
 ALERT_CACHE_SECONDS = 120
@@ -351,3 +288,51 @@ def data_health_alert(request):
 
     rows = health_alert_rows()
     return {'health_alerts': len(rows), 'health_alert_rows': rows}
+
+# Pages the website ad switches actually name, resolved against core/urls.py.
+#
+# Anything not listed here is not governed by either page switch: it follows the
+# master switch only. That is the point of the explicit map - turning the home
+# switch off must not strip ads from search, list, calendar, account or watchlist
+# pages just because nobody remembered to name them.
+ADS_DETAIL_URL_NAMES = frozenset({
+    'movie_detail',
+    'movie_detail_by_id',
+    'series_detail',
+    'series_detail_by_id',
+    'series_season_episodes',
+    'collection_detail',
+    'person_detail',
+})
+
+ADS_HOME_URL_NAMES = frozenset({
+    'index',
+})
+
+# Player surfaces, where no third-party ad code belongs: the trailer page extends
+# the site base layout, so without this it would carry the site's ad slots.
+ADS_NO_AD_URL_NAMES = frozenset({
+    'trailer_player',
+})
+
+
+def _website_ads_allowed(request, ss):
+    """Whether this page may render ad units.
+
+    The master switch decides whether the site runs ads at all; the two page
+    switches then apply only to the pages they name. A page that is named by
+    neither is left to the master switch, and admin pages never render ad code.
+    """
+    if not ss.ads_website_enabled:
+        return False
+    if '/admin-dashboard/' in (getattr(request, 'path', '') or ''):
+        return False
+    match = getattr(request, 'resolver_match', None)
+    name = (getattr(match, 'url_name', '') or '') if match else ''
+    if name in ADS_NO_AD_URL_NAMES:
+        return False
+    if name in ADS_DETAIL_URL_NAMES:
+        return bool(ss.ads_website_show_detail)
+    if name in ADS_HOME_URL_NAMES:
+        return bool(ss.ads_website_show_home)
+    return True

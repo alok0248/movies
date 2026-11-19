@@ -164,62 +164,6 @@
     </div>
 
     <div class="af-card">
-        <h2>Ad tags — verification and display</h2>
-        <p class="af-meta" style="margin-bottom:.7rem;">
-            Paste the snippet the network gave you. A <strong>verification</strong> tag is injected into
-            <code>&lt;head&gt;</code> on every public page; an <strong>ad tag</strong> is injected where you place it,
-            and that is what shows the ads to visitors. Changes go live on the next page load (60 s cache).
-        </p>
-        <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end;">
-            <div class="af-field">
-                <label class="af-label">Label</label>
-                <input type="text" id="tagName" class="af-input" placeholder="Adsterra verification">
-            </div>
-            <div class="af-field">
-                <label class="af-label">Type</label>
-                <select id="tagKind" class="af-input" onchange="tagKindChanged()">
-                    {% for value, label in tag_kinds %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="af-field" id="tagPlacementWrap" style="display:none;">
-                <label class="af-label">Show it</label>
-                <select id="tagPlacement" class="af-input">
-                    {% for value, label in tag_placements %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                </select>
-            </div>
-        </div>
-        <div style="margin-top:.8rem;">
-            <label class="af-label">Tag code</label>
-            <textarea id="tagCode" rows="6" class="af-input"
-                      placeholder="&lt;script src=&quot;https://...&quot;&gt;&lt;/script&gt;  or  &lt;meta name=&quot;...&quot; content=&quot;...&quot;&gt;"></textarea>
-        </div>
-        <div style="display:flex;gap:.8rem;align-items:center;margin-top:.8rem;">
-            <button onclick="saveTag()" class="af-btn-primary">Save tag</button>
-            <span id="tagStatus" class="af-meta"></span>
-        </div>
-        {% if tags %}
-        <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:1rem;">
-            {% for tag in tags %}
-            <div class="af-row">
-                <div style="flex:1;min-width:0;">
-                    <div class="af-name">{{ tag.name|default:"Untitled tag" }}
-                        {% if not tag.is_active %}<span class="af-meta">(off)</span>{% endif %}
-                    </div>
-                    <div class="af-meta">
-                        {{ tag.get_kind_display }} &middot; {{ tag.get_placement_display }}
-                        &middot; {{ tag.code|truncatechars:70 }}
-                    </div>
-                </div>
-                <button onclick="toggleTag({{ tag.id }}, this)" class="af-btn-sm">{% if tag.is_active %}Turn off{% else %}Turn on{% endif %}</button>
-                <button onclick="deleteTag({{ tag.id }})" class="af-btn-danger">Delete</button>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="af-empty" style="padding:1rem;">No tags saved yet. Verification snippets must be live before a network will serve ads.</div>
-        {% endif %}
-    </div>
-    <div class="af-card">
         <h2>Existing Files</h2>
         {% if files %}
         <div style="display:flex;flex-direction:column;gap:.5rem;">
@@ -371,56 +315,14 @@ function checkFile(name, btn) {
 }
 
 /* ---- ad network tags ---- */
-function tagKindChanged() {
-    var kind = document.getElementById("tagKind").value;
-    document.getElementById("tagPlacementWrap").style.display = (kind === 'ad') ? '' : 'none';
-}
 
-function saveTag() {
-    var payload = {
-        name: document.getElementById("tagName").value.trim(),
-        kind: document.getElementById("tagKind").value,
-        placement: document.getElementById("tagPlacement").value,
-        code: document.getElementById("tagCode").value
-    };
-    if (!payload.code.trim()) { alert('Paste the tag code first.'); return; }
-    var status = document.getElementById("tagStatus");
-    status.textContent = 'Saving…';
-    fetch("/ajax/ad-tags/save/", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
-        body: JSON.stringify(payload)
-    }).then(readJson).then(function (res) {
-        var d = res.data || {};
-        if (d.ok) { location.reload(); }
-        else { status.textContent = d.message || 'Could not save the tag.'; }
-    }).catch(function () { status.textContent = 'The save request failed.'; });
-}
 
-function toggleTag(id, btn) {
-    fetch("/ajax/ad-tags/toggle/", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
-        body: JSON.stringify({id: id})
-    }).then(readJson).then(function (res) {
-        var d = res.data || {};
-        if (d.ok) { location.reload(); } else { alert(d.message || 'Could not change the tag.'); }
-    });
-}
 
-function deleteTag(id) {
-    if (!confirm('Delete this tag? Public pages stop rendering it immediately.')) return;
-    fetch("/ajax/ad-tags/delete/", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", "X-CSRFToken": getCSRFToken()},
-        body: JSON.stringify({id: id})
-    }).then(readJson).then(function (res) {
-        var d = res.data || {};
-        if (d.ok) { location.reload(); } else { alert(d.message || 'Could not delete the tag.'); }
-    });
-}
 
-tagKindChanged();
+
+
+
+
 function deleteFile(name) {
     if (!confirm("Delete " + name + "?")) return;
     fetch("/ajax/ad-files/delete/", {

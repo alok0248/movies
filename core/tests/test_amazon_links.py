@@ -141,10 +141,8 @@ class AmazonLinksPageTest(TestCase):
         self.assertEqual(302, response.status_code)
         self.assertEqual(0, AmazonAffiliateProduct.objects.count())
 
-    def test_the_buttons_are_on_the_ads_page_the_links_page_and_the_app_edit_page(self):
+    def test_the_buttons_are_on_the_ads_page_and_the_app_edit_page(self):
         self.assertContains(self.client.get(reverse('ad_list')),
-                            'href="%s"' % self.page_url())
-        self.assertContains(self.client.get(reverse('ad_links')),
                             'href="%s"' % self.page_url())
 
         from core.models import AndroidApp

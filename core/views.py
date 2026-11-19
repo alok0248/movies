@@ -44,7 +44,7 @@ from bs4 import BeautifulSoup
 import psutil
 import platform
 from . import amazon_links
-from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AdsterraLink, AmazonAffiliateProduct, UserActivity)
+from .models import (SiteSettings, ContentRow, WatchList, PlayerConfiguration, TMDBApiKey, NavbarItem, DataSourceUsageLog, ProviderItem, ProviderRegionAvailability, WatchRegion, CalendarMonthCache, AndroidApp, AndroidAppAccessLog, AndroidAppBuildLog, AndroidAppFailedAttempt, AndroidAppDevice, AndroidAppDailyUniqueVisitor, AndroidAppDeviceVisit, AndroidAppLog, AppClientValidationLog, ApkDownload, WebsiteVisitor, WebsiteVisitorVisit, Ad, AdImpression, AmazonAffiliateProduct, UserActivity)
 from .tmdb_client import get_data_client, get_tmdb_db_connection, TMDBClient
 from .utils import normalize_movie_item, normalize_series_item, normalize_movie_detail, normalize_series_detail
 
@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 from .forms import (
     ContentRowForm, PlayerConfigurationForm, TMDBApiKeyForm, TMDBApiKeyEditForm, NavbarItemForm, ProviderItemForm, WatchRegionForm,
     BrandingSettingsForm, DisplaySettingsForm, FooterSettingsForm, DataSourceSettingsForm, TMDBDBSettingsForm,
-    PlayerSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdsterraSettingsForm, AdsterraLinkForm, AdMonetizationSettingsForm,
+    PlayerSettingsForm, EmailSettingsForm, AndroidAppForm, AdForm, AdMonetizationSettingsForm,
     AdSwitchesForm, GeneralSettingsForm, SecurityProtectionForm,
     GENERAL_FIELD_SECTIONS, SECURITY_FIELD_SECTIONS
 )
@@ -1853,25 +1853,6 @@ def _ad_inventory():
             'is_active': ad.is_active,
             'edit_url': reverse('ad_edit', args=[ad.id]),
         })
-    for link in AdsterraLink.objects.all().order_by('order', 'id'):
-        detail = 'Adsterra'
-        if link.ad_type:
-            detail += ' \u00b7 ' + link.ad_type
-        if link.url:
-            detail += ' \u00b7 link unit (opens after the click threshold)'
-        if (link.code or '').strip():
-            detail += ' \u00b7 JS unit (loaded on every public page)'
-        if not link.url and not (link.code or '').strip():
-            detail += ' \u00b7 no URL or code saved yet'
-        rows.append({
-            'kind': 'adsterra',
-            'kind_label': 'Adsterra',
-            'id': link.id,
-            'name': link.name or link.ad_type or 'Untitled Adsterra unit',
-            'detail': detail,
-            'is_active': link.is_active,
-            'edit_url': reverse('admin_adsterra'),
-        })
     for product in AmazonAffiliateProduct.objects.all().order_by('order', 'title'):
         rows.append({
             'kind': 'amazon',
@@ -1919,7 +1900,7 @@ def ad_list(request):
     ads = Ad.objects.all().order_by('order', 'name')
     inventory = _ad_inventory()
     inventory_sources = []
-    for kind, label in (('ad', 'Ad unit'), ('adsterra', 'Adsterra'), ('amazon', 'Amazon product')):
+    for kind, label in (('ad', 'Ad unit'), ('amazon', 'Amazon product')):
         rows_of_kind = [r for r in inventory if r['kind'] == kind]
         inventory_sources.append({
             'kind': kind,
@@ -1932,62 +1913,10 @@ def ad_list(request):
         'inventory': inventory,
         'inventory_sources': inventory_sources,
         'inventory_active': len([r for r in inventory if r['is_active']]),
-        'links': AdsterraLink.objects.all().order_by('order', 'id'),
-        'link_form': AdsterraLinkForm(),
-        'adsterra_form': AdsterraSettingsForm(instance=site_settings),
         'ads_form': AdMonetizationSettingsForm(instance=site_settings),
         'switches_form': AdSwitchesForm(instance=site_settings),
         'site_settings': site_settings,
     })
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def ad_links(request):
-    """Every ad link added on the site, newest first.
-
-    The Ads page opens this list: one row per link across the sources that store
-    one (an Adsterra direct link / smartlink, an Amazon affiliate product), with
-    when it was added, how many clicks it has served and a button that flips it
-    on or off. Ad units that are markup rather than links stay on the Ads page.
-    """
-    links = []
-    for link in AdsterraLink.objects.all().order_by('-created_at', '-id'):
-        links.append({
-            'kind': 'adsterra',
-            'id': link.id,
-            'service': 'Adsterra',
-            'name': link.name or link.ad_type or 'Adsterra unit',
-            'format': link.ad_type or link.kind_label,
-            'url': link.url or '',
-            'has_code': bool((link.code or '').strip()),
-            'is_active': link.is_active,
-            'clicks': link.click_count,
-            'created_at': link.created_at,
-        })
-    for product in AmazonAffiliateProduct.objects.all().order_by('-created_at', '-id'):
-        links.append({
-            'kind': 'amazon',
-            'id': product.id,
-            'service': 'Amazon',
-            'name': product.title or 'Amazon product',
-            'format': product.price or 'Affiliate product',
-            'url': product.affiliate_url or '',
-            'has_code': False,
-            'is_active': product.is_active,
-            # Amazon links are opened by the public site, which keeps no
-            # per-link counter, so there is no number to show rather than a 0.
-            'clicks': None,
-            'created_at': product.created_at,
-        })
-    links.sort(key=lambda row: row['created_at'], reverse=True)
-    return render(request, 'core/ad_links.html', {
-        'links': links,
-        'link_count': len(links),
-        'active_count': len([row for row in links if row['is_active']]),
-        'this_url': reverse('ad_links'),
-    })
-
 
 def _clean_amazon_url(value):
     """A saved Amazon link, or '' when the value is not a full http(s) URL."""
@@ -2116,7 +2045,6 @@ def ad_toggle_any(request, kind, obj_id):
     """Enable/disable one ad unit of any source from the Ads control centre."""
     sources = {
         'ad': (Ad, 'Ad unit'),
-        'adsterra': (AdsterraLink, 'Adsterra unit'),
         'amazon': (AmazonAffiliateProduct, 'Amazon product'),
     }
     if request.method != 'POST':
@@ -2190,132 +2118,6 @@ def ad_toggle(request, ad_id):
         ad.save()
         return redirect('ad_list')
     return JsonResponse({'success': False, 'message': 'Method not allowed'})
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-def admin_adsterra(request):
-    """Admin page for the Adsterra direct-link ads.
-
-    Manage the saved links (add, enable/disable, delete, reset counts) and the
-    click threshold that triggers opening the next enabled link.
-    """
-    site_settings = SiteSettings.get_settings()
-
-    links = list(AdsterraLink.objects.all())
-
-    def render_page():
-        return render(request, 'core/admin_adsterra.html', {
-            'adsterra_form': AdsterraSettingsForm(instance=site_settings),
-            'link_form': AdsterraLinkForm(),
-            'links': links,
-            'site_settings': site_settings,
-        })
-
-    if request.method == 'POST':
-        action = (request.POST.get('action') or 'save_settings').strip().lower()
-
-        if action == 'edit_link':
-            link = get_object_or_404(AdsterraLink, id=request.POST.get('link_id'))
-            link_form = AdsterraLinkForm(request.POST, instance=link)
-            if link_form.is_valid():
-                link_form.save()
-                messages.success(request, '%s updated.' % (link.name or link.ad_type or 'Unit'))
-                return redirect('ad_list')
-            messages.error(request, 'Could not save that unit: %s' % '; '.join(
-                '%s: %s' % (field, ', '.join(errs))
-                for field, errs in link_form.errors.items()
-            ))
-            return redirect('ad_list')
-
-        if action == 'add_link':
-            link_form = AdsterraLinkForm(request.POST)
-            if link_form.is_valid():
-                link_form.save()
-                messages.success(request, 'Adsterra unit added.')
-                return redirect('ad_list')
-            messages.error(request, 'Could not add that unit: %s' % '; '.join(
-                '%s: %s' % (field, ', '.join(errs))
-                for field, errs in link_form.errors.items()
-            ))
-            return redirect('ad_list')
-
-        settings_form = AdsterraSettingsForm(request.POST, instance=site_settings)
-        if settings_form.is_valid():
-            settings_form.save()
-            messages.success(request, 'Adsterra settings saved.')
-            return redirect('ad_list')
-        messages.error(request, 'Could not save Adsterra settings.')
-        return redirect('ad_list')
-
-    return render_page()
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@require_POST
-def admin_adsterra_link_toggle(request, link_id):
-    """Enable / disable a saved Adsterra link."""
-    link = get_object_or_404(AdsterraLink, id=link_id)
-    link.is_active = not link.is_active
-    link.save(update_fields=['is_active', 'updated_at'])
-    messages.success(request, 'Adsterra link %s.' % ('enabled' if link.is_active else 'disabled'))
-    return redirect('ad_list')
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@require_POST
-def admin_adsterra_link_delete(request, link_id):
-    """Delete a saved Adsterra link."""
-    link = get_object_or_404(AdsterraLink, id=link_id)
-    link.delete()
-    messages.success(request, 'Adsterra link deleted.')
-    return redirect('ad_list')
-
-
-@login_required
-@user_passes_test(is_staff_or_superuser)
-@require_POST
-def admin_adsterra_link_reset(request, link_id):
-    """Reset the click counter of a saved Adsterra link."""
-    AdsterraLink.objects.filter(id=link_id).update(click_count=0)
-    messages.success(request, 'Adsterra link click count reset.')
-    return redirect('ad_list')
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def ajax_adsterra_click(request):
-    """POST /ajax/adsterra/click/ — record that an Adsterra link was opened.
-
-    Increments the click counter on the given link (or the next enabled link when
-    no id is supplied) and returns the running total. The client decides (from the
-    configured threshold) when to open a link; this endpoint just persists it.
-    """
-    try:
-        ss = SiteSettings.get_settings()
-        if int(ss.adsterra_clicks_required or 0) < 1:
-            return JsonResponse({'success': False, 'error': 'adsterra_disabled'})
-
-        link_id = request.POST.get('link_id')
-        usable = AdsterraLink.objects.filter(is_active=True).exclude(url__isnull=True).exclude(url='')
-        link = None
-        if link_id:
-            link = usable.filter(id=link_id).first()
-        if link is None:
-            link = usable.order_by('order', 'id').first()
-        if link is None:
-            return JsonResponse({'success': False, 'error': 'no_active_link'})
-
-        AdsterraLink.objects.filter(pk=link.pk).update(click_count=F('click_count') + 1)
-        link.refresh_from_db(fields=['click_count'])
-        logger.info("ADSTERRA_OPEN link_id=%s total=%s url=%s", link.id, link.click_count, link.url)
-        return JsonResponse({'success': True, 'link_id': link.id, 'click_count': link.click_count, 'url': link.url})
-    except Exception as e:
-        logger.error("adsterra click: %s", e)
-        return JsonResponse({'success': False, 'error': str(e)})
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -6652,6 +6454,24 @@ def android_app_endpoint(request, app_slug):
         response_payload['series_servers'] = series_servers
         response_payload['ads'] = ads_list
         response_payload = _attach_amazon_links(response_payload)
+        # Platform ad switches travel with the payload the app already polls,
+        # so the Ads card can switch app advertising off without an app release.
+        # Older builds ignore the extra keys.
+        from .models import SiteSettings as _AdSiteSettings
+        try:
+            ad_site = _AdSiteSettings.get_settings()
+        except Exception:
+            ad_site = None
+        if ad_site is not None:
+            ads1 = response_payload.get('ads1')
+            ads1 = dict(ads1) if isinstance(ads1, dict) else {}
+            ads1['app_enabled'] = bool(ad_site.ads_mobile_enabled)
+            ads1['placements'] = {
+                'home': bool(ad_site.ads_mobile_show_home),
+                'library': bool(ad_site.ads_mobile_show_home),
+                'detail': bool(ad_site.ads_mobile_show_detail),
+            }
+            response_payload['ads1'] = ads1
     # Cache the response payload for 5 minutes
     cache.set(cache_key, response_payload, 300)
     return JsonResponse(response_payload, safe=isinstance(response_payload, dict))
@@ -11083,10 +10903,9 @@ def serve_google_verification(request):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def admin_ad_files(request):
-    """Ad files and network tags: what the networks came to check, in one place."""
+    """Ad files: what the networks came to check, in one place."""
     if not request.user.is_staff:
         return redirect('/admin/')
-    from .models import AdNetworkTag
 
     files = _list_ad_files()
     site_root = request.build_absolute_uri('/')
@@ -11096,9 +10915,6 @@ def admin_ad_files(request):
         item['publishable'] = item['extension'] in AD_FILE_TYPES
     return render(request, 'core/admin_ad_files.html', {
         'files': files,
-        'tags': AdNetworkTag.objects.all(),
-        'tag_kinds': AdNetworkTag.KIND_CHOICES,
-        'tag_placements': AdNetworkTag.PLACEMENT_CHOICES,
         'site_root': site_root,
     })
 
@@ -11147,73 +10963,7 @@ def ajax_check_ad_file(request):
     return JsonResponse(result)
 
 
-def ajax_save_ad_tag(request):
-    """Add or update one network tag (verification snippet or ad tag)."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
-    if not request.user.is_staff:
-        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
-    from django.core.cache import cache
-    from .models import AdNetworkTag
 
-    try:
-        data = json.loads(request.body or '{}')
-    except ValueError:
-        return JsonResponse({'ok': False, 'message': 'Invalid request'}, status=400)
-
-    kind = (data.get('kind') or 'verify').strip()
-    placement = (data.get('placement') or 'head').strip()
-    code = (data.get('code') or '').strip()
-    name = (data.get('name') or '').strip()[:150]
-    if kind not in dict(AdNetworkTag.KIND_CHOICES):
-        return JsonResponse({'ok': False, 'message': 'Unknown tag type'}, status=400)
-    if placement not in dict(AdNetworkTag.PLACEMENT_CHOICES):
-        return JsonResponse({'ok': False, 'message': 'Unknown placement'}, status=400)
-    if not code:
-        return JsonResponse({'ok': False, 'message': 'Paste the tag code first'}, status=400)
-
-    tag = AdNetworkTag.objects.create(name=name, kind=kind, placement=placement, code=code)
-    cache.delete('ad_network_tags_v1')
-    return JsonResponse({'ok': True, 'id': tag.id,
-                         'message': '%s saved and live on public pages.' % (name or 'Tag')})
-
-
-def ajax_toggle_ad_tag(request):
-    """Switch one network tag off or back on."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
-    if not request.user.is_staff:
-        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
-    from django.core.cache import cache
-    from .models import AdNetworkTag
-
-    try:
-        data = json.loads(request.body or '{}')
-        tag = AdNetworkTag.objects.get(id=int(data.get('id')))
-    except (ValueError, TypeError, AdNetworkTag.DoesNotExist):
-        return JsonResponse({'ok': False, 'message': 'Tag not found'}, status=404)
-    tag.is_active = not tag.is_active
-    tag.save(update_fields=['is_active'])
-    cache.delete('ad_network_tags_v1')
-    return JsonResponse({'ok': True, 'is_active': tag.is_active,
-                         'message': 'Tag %s.' % ('on' if tag.is_active else 'off')})
-
-
-def ajax_delete_ad_tag(request):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'message': 'POST only'}, status=405)
-    if not request.user.is_staff:
-        return JsonResponse({'ok': False, 'message': 'Staff only'}, status=403)
-    from django.core.cache import cache
-    from .models import AdNetworkTag
-
-    try:
-        data = json.loads(request.body or '{}')
-        AdNetworkTag.objects.filter(id=int(data.get('id'))).delete()
-    except (ValueError, TypeError):
-        return JsonResponse({'ok': False, 'message': 'Tag not found'}, status=404)
-    cache.delete('ad_network_tags_v1')
-    return JsonResponse({'ok': True, 'message': 'Tag deleted.'})
 
 def ajax_save_ad_file(request):
     if request.method != 'POST':
@@ -18990,19 +18740,30 @@ def android_app_settings(request, app_id):
     if request.method == 'POST':
         section = (request.POST.get('section') or 'app').strip()
         if section == 'ads':
-            site.adsterra_clicks_required = _admin_int(
-                request.POST.get('adsterra_clicks_required'), 5, 0, 1000)
-            site.adsterra_show_banner = request.POST.get('adsterra_show_banner') == 'on'
-            site.enable_adsterra_links = request.POST.get('enable_adsterra_links') == 'on'
-            site.enable_autoclick_ads = request.POST.get('enable_autoclick_ads') == 'on'
             site.adsense_client_id = (request.POST.get('adsense_client_id') or '').strip()[:100]
             site.adsense_verification_meta = (
                 request.POST.get('adsense_verification_meta') or '').strip()[:200]
             site.save()
+            site.adsense_verification_meta = (
+                request.POST.get('adsense_verification_meta') or '').strip()[:200]
+            # Platform switches: the app and the site are toggled independently,
+            # and each side picks the screens that may carry advertising.
+            site.ads_mobile_enabled = request.POST.get('ads_mobile_enabled') == 'on'
+            site.ads_website_enabled = request.POST.get('ads_website_enabled') == 'on'
+            site.ads_mobile_show_home = request.POST.get('ads_mobile_show_home') == 'on'
+            site.ads_mobile_show_detail = request.POST.get('ads_mobile_show_detail') == 'on'
+            site.ads_website_show_home = request.POST.get('ads_website_show_home') == 'on'
+            site.ads_website_show_detail = request.POST.get('ads_website_show_detail') == 'on'
+            site.save()
             log_action(request, 'app_settings', app_obj.name,
-                       'ad switches: banner=%s links=%s autoclick=%s clicks=%s' % (
-                           site.adsterra_show_banner, site.enable_adsterra_links,
-                           site.enable_autoclick_ads, site.adsterra_clicks_required))
+                       'platform ads: mobile=%s web=%s (app home/detail=%s/%s, web home/detail=%s/%s)' % (
+                           site.ads_mobile_enabled, site.ads_website_enabled,
+                           site.ads_mobile_show_home, site.ads_mobile_show_detail,
+                           site.ads_website_show_home, site.ads_website_show_detail))
+            log_action(request, 'app_settings', app_obj.name,
+                       'ad switches: adsense=%s web=%s app=%s' % (
+                           bool(site.adsense_client_id), site.ads_website_enabled,
+                           site.ads_mobile_enabled))
             messages.success(request, 'Ad settings saved.')
         else:
             app_obj.data_retention_days = _admin_int(

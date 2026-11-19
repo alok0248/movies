@@ -222,11 +222,6 @@
             <input type="hidden" name="section" value="ads">
             <div class="as-grid">
                 <div class="adm-field">
-                    <label for="adsterra_clicks_required">Clicks before a direct link opens</label>
-                    <input id="adsterra_clicks_required" type="number" min="0" max="1000"
-                           name="adsterra_clicks_required" value="{{ site.adsterra_clicks_required }}">
-                </div>
-                <div class="adm-field">
                     <label for="adsense_client_id">AdSense client id</label>
                     <input id="adsense_client_id" type="text" name="adsense_client_id"
                            value="{{ site.adsense_client_id|default:'' }}" placeholder="ca-pub-…">
@@ -238,17 +233,48 @@
                 </div>
             </div>
             <div class="d-flex flex-wrap gap-3 mt-3">
+            </div>
+            <hr class="my-4">
+            <div class="as-sect mb-1"><i class="fas fa-mobile-screen text-success"></i> Where ads may appear</div>
+            <div class="as-sub mb-3">The app and this website are switched separately. Each side then decides
+                which screens may carry advertising; the click threshold above still gates the
+                direct-link units on both.</div>
+            <div class="as-grid">
+                <div class="adm-field">
+                    <label class="as-check" style="font-weight:600;">
+                        <input type="checkbox" name="ads_mobile_enabled" {% if site.ads_mobile_enabled %}checked{% endif %}>
+                        <span>Ads in the Android app</span>
+                    </label>
+                    <div class="as-sub">Master switch. The app reads it with the ad config it already polls.</div>
+                </div>
+                <div class="adm-field">
+                    <label class="as-check" style="font-weight:600;">
+                        <input type="checkbox" name="ads_website_enabled" {% if site.ads_website_enabled %}checked{% endif %}>
+                        <span>Ads on this website</span>
+                    </label>
+                    <div class="as-sub">Master switch for the sponsor block and the direct-link units here.</div>
+                </div>
+            </div>
+            <div class="as-sect mb-1 mt-3">App screens</div>
+            <div class="d-flex flex-wrap gap-3">
                 <label class="as-check">
-                    <input type="checkbox" name="adsterra_show_banner" {% if site.adsterra_show_banner %}checked{% endif %}>
-                    <span>Show the sponsor banner on movie and series pages</span>
+                    <input type="checkbox" name="ads_mobile_show_home" {% if site.ads_mobile_show_home %}checked{% endif %}>
+                    <span>Home and browsing rows</span>
                 </label>
                 <label class="as-check">
-                    <input type="checkbox" name="enable_adsterra_links" {% if site.enable_adsterra_links %}checked{% endif %}>
-                    <span>Direct-link units may open automatically</span>
+                    <input type="checkbox" name="ads_mobile_show_detail" {% if site.ads_mobile_show_detail %}checked{% endif %}>
+                    <span>Movie and series pages</span>
+                </label>
+            </div>
+            <div class="as-sect mb-1 mt-3">Website pages</div>
+            <div class="d-flex flex-wrap gap-3">
+                <label class="as-check">
+                    <input type="checkbox" name="ads_website_show_home" {% if site.ads_website_show_home %}checked{% endif %}>
+                    <span>Home page</span>
                 </label>
                 <label class="as-check">
-                    <input type="checkbox" name="enable_autoclick_ads" {% if site.enable_autoclick_ads %}checked{% endif %}>
-                    <span>Click-count ads may open</span>
+                    <input type="checkbox" name="ads_website_show_detail" {% if site.ads_website_show_detail %}checked{% endif %}>
+                    <span>Movie and series pages</span>
                 </label>
             </div>
             <div class="mt-3">

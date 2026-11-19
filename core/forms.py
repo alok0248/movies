@@ -1,6 +1,6 @@
 from django import forms
 from django.core.cache import cache
-from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad, AdsterraLink
+from .models import SiteSettings, ContentRow, PlayerConfiguration, TMDBApiKey, NavbarItem, ProviderItem, WatchRegion, AndroidApp, Ad
 import json
 class BrandingSettingsForm(forms.ModelForm):
     class Meta:
@@ -432,39 +432,6 @@ class AdForm(forms.ModelForm):
 
 
 
-class AdsterraSettingsForm(forms.ModelForm):
-    """Threshold + banner display settings for the Adsterra direct-link ads page."""
-
-    class Meta:
-        model = SiteSettings
-        fields = ['adsterra_clicks_required', 'adsterra_show_banner']
-        labels = {
-            'adsterra_clicks_required': 'Open the Adsterra page after (clicks)',
-            'adsterra_show_banner': 'Show Adsterra Links on Movies & Series Pages',
-        }
-        widgets = {
-            'adsterra_clicks_required': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'step': '1',
-                'placeholder': 'e.g., 5',
-                'title': 'Number of user clicks after which the next enabled Adsterra link opens automatically. Set 0 to disable auto-open.',
-            }),
-            'adsterra_show_banner': forms.CheckboxInput(attrs={
-                'class': 'form-check-input',
-                'title': 'Render a sponsor block linking to an enabled Adsterra link on movie and series pages.',
-            }),
-        }
-
-    def clean_adsterra_clicks_required(self):
-        value = self.cleaned_data.get('adsterra_clicks_required')
-        if value is None:
-            return 0
-        if value < 0:
-            return 0
-        return value
-
-
 class AdSwitchesForm(forms.ModelForm):
     """The one-click master switches shown on the Ads control centre.
 
@@ -476,23 +443,17 @@ class AdSwitchesForm(forms.ModelForm):
         model = SiteSettings
         fields = [
             'enable_autoclick_ads',
-            'enable_adsterra_links',
             'enable_tile_click_gating',
-            'adsterra_show_banner',
             'require_ad_consent',
         ]
         labels = {
             'enable_autoclick_ads': 'Auto-click ads (open a sponsor after N clicks)',
-            'enable_adsterra_links': 'Adsterra ads (popunder, JS units and direct links)',
             'enable_tile_click_gating': 'Tile click gating (first card click opens a sponsor)',
-            'adsterra_show_banner': 'Adsterra sponsor block on movie & series pages',
             'require_ad_consent': 'Require ad consent before any ad loads',
         }
         widgets = {
             'enable_autoclick_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'enable_adsterra_links': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'enable_tile_click_gating': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'adsterra_show_banner': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'require_ad_consent': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
@@ -528,56 +489,6 @@ class AdMonetizationSettingsForm(forms.ModelForm):
         }
 
 
-class AdsterraLinkForm(forms.ModelForm):
-    """Add / edit a saved Adsterra direct link."""
-
-    class Meta:
-        model = AdsterraLink
-        fields = ['name', 'ad_type', 'unit_id', 'url', 'code', 'order', 'is_active']
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'e.g. Popunder_1',
-                'title': 'A label for this Adsterra unit.',
-            }),
-            'ad_type': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'e.g. Popunder, Smartlink, Social Bar, Native Banner, Banner 320x50',
-                'title': 'The Adsterra ad format for this unit.',
-            }),
-            'unit_id': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'e.g. 30866764',
-                'title': 'The Adsterra ad unit / placement ID.',
-            }),
-            'url': forms.URLInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'https://beta.publishers.adsterra.com/links/... or your direct link',
-                'title': 'For link-type units such as Smartlink: paste the Adsterra direct-link URL.',
-            }),
-            'code': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 6,
-                'placeholder': '<script type="text/javascript">\n  ... Adsterra JS ad code ...\n</script>',
-                'title': 'For script-type units (Popunder, Social Bar, Native Banner, Banner 320x50): paste the Adsterra JS/HTML code.',
-            }),
-            'order': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': '0'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
-
-    def clean_url(self):
-        url = (self.cleaned_data.get('url') or '').strip()
-        return url or None
-
-    def clean(self):
-        cleaned = super().clean()
-        url = (cleaned.get('url') or '').strip()
-        code = (cleaned.get('code') or '').strip()
-        if not url and not code:
-            raise forms.ValidationError('Add either an Adsterra URL or the Adsterra JS code.')
-        return cleaned
-
-
 class GeneralSettingsForm(forms.ModelForm):
     """Site identity, measurements and ad behaviour.
 
@@ -599,7 +510,6 @@ class GeneralSettingsForm(forms.ModelForm):
             'google_login_allowed_domains',
             'enable_autoclick_ads',
             'auto_click_every_clicks',
-            'enable_adsterra_links',
             'default_clicks_required',
             'require_ad_consent',
             'ad_consent_message',
@@ -620,7 +530,6 @@ class GeneralSettingsForm(forms.ModelForm):
             'google_login_allowed_domains': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
             'enable_autoclick_ads': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'auto_click_every_clicks': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
-            'enable_adsterra_links': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'default_clicks_required': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'}),
             'require_ad_consent': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'ad_consent_message': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -658,7 +567,7 @@ GENERAL_FIELD_SECTIONS = [
     ('Google sign-in', 'The "Continue with Google" button and who may use it.',
      ['google_login_enabled', 'google_login_client_id', 'google_login_allowed_domains']),
     ('Ads', 'When ads may open, how often, and who sees the IDM button.',
-     ['enable_autoclick_ads', 'auto_click_every_clicks', 'enable_adsterra_links',
+     ['enable_autoclick_ads', 'auto_click_every_clicks',
       'default_clicks_required', 'require_ad_consent', 'ad_consent_message',
       'max_ad_load_retries', 'idm_visibility', 'tile_ad_every_n',
       'enable_tile_click_gating', 'tile_ad_source', 'tile_gating_source']),
