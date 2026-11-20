@@ -776,7 +776,10 @@ window.__duRow = function (r) {
                 bits += '<span class="pill bg-dark border border-secondary" title="App version this install reported">v'
                     + esc(r.app_version) + '</span>';
             }
-            if (r.app_build) {
+            /* The legacy header is the literal sentinel 1, which carries no
+               information next to a synced version — show the build whenever
+               it is real, and always when it is all the install reported. */
+            if (r.app_build && (r.app_build > 1 || !r.app_version)) {
                 bits += (bits ? ' ' : '') + '<span class="pill bg-dark border border-secondary" title="Build the app reported (no sync needed)">build '
                     + esc(r.app_build) + '</span>';
             }
