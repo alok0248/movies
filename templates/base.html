@@ -1040,11 +1040,17 @@
             display: flex; justify-content: space-around; align-items: center;
             list-style: none; margin: 0; padding: 0;
         }
+        /* The tabs share the width evenly, so a long label can never push the
+           bar wider than the phone it is drawn on. */
+        .mobile-bottom-nav .nav-item { flex: 1 1 0; min-width: 0; }
         .mobile-bottom-nav .nav-item a {
             display: flex; flex-direction: column; align-items: center; gap: 1px;
-            color: var(--text-3); text-decoration: none;
-            font-size: .55rem; font-weight: 500; padding: .25rem .6rem; border-radius: 10px;
+            color: var(--text-3); text-decoration: none; max-width: 100%;
+            font-size: .55rem; font-weight: 500; padding: .25rem .1rem; border-radius: 10px;
             transition: all .2s; position: relative; -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-bottom-nav .nav-item a > span:last-child {
+            max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .mobile-bottom-nav .nav-item a .nav-icon { font-size: 1.2rem; transition: transform .2s; }
         .mobile-bottom-nav .nav-item a:active { transform: scale(.9); }
@@ -1266,7 +1272,7 @@
             position: absolute;
             left: 50%; bottom: calc(100% + 8px);
             transform: translateX(-50%) translateY(10px);
-            width: min(92vw, 360px); max-height: 62vh; overflow-y: auto;
+            width: min(92vw, 360px); max-height: 72vh; overflow-y: auto;
             background: var(--bg-2, #141414);
             border: 1px solid var(--border); border-radius: 16px;
             padding: .8rem .9rem .95rem;
@@ -1842,25 +1848,186 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <!-- The three places a visitor goes: the front page, the film
-                         list and the series list. The rest of what this menu
-                         used to carry (live TV, providers, genres, calendar)
-                         stayed on the pages it belongs to. -->
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.url_name == 'index' %} active{% endif %}" href="{% url 'index' %}" title="Home">
-                            <i class="fas fa-home"></i> Home
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.url_name == 'movie_list' %} active{% endif %}" href="{% url 'movie_list' %}" title="Movies">
-                            <i class="fas fa-film"></i> Movies
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.url_name == 'series_list' %} active{% endif %}" href="{% url 'series_list' %}" title="TV shows">
-                            <i class="fas fa-tv"></i> Shows
-                        </a>
-                    </li>
+                    {% comment %}Every section of the site, in the order the admin
+                       keeps them in Navbar Items (so they can be renamed, reordered
+                       or switched off there), followed by the entries that are not
+                       pages of their own: notifications, the watchlist and the app
+                       download.{% endcomment %}
+                    {% for item in navbar_items %}
+                        {% if item.built_in_id == 'home' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'index' %}" title="Clear provider selection and return home">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'movies' %}
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'movie_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'movie_list' %}" id="movieDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="movieDropdown">
+                                    <li><h6 class="dropdown-header">Browse</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}"><i class="fas fa-th-large me-2"></i>All Movies</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Categories</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=popular"><i class="fas fa-fire me-2" style="color:#ef4444;"></i>Popular</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=top_rated"><i class="fas fa-star me-2" style="color:#f59e0b;"></i>Top Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?filter_type=upcoming"><i class="fas fa-calendar me-2" style="color:#3b82f6;"></i>Upcoming</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Sort By</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=rating&order=desc">Highest Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=year&order=desc">Newest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=year&order=asc">Oldest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}?sort=title&order=asc">A–Z</a></li>
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'tv_shows' %}
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'series_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'series_list' %}" id="seriesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="seriesDropdown">
+                                    <li><h6 class="dropdown-header">Browse</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}"><i class="fas fa-th-large me-2"></i>All TV Shows</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Categories</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=popular"><i class="fas fa-fire me-2" style="color:#ef4444;"></i>Popular</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=top_rated"><i class="fas fa-star me-2" style="color:#f59e0b;"></i>Top Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=airing_today"><i class="fas fa-calendar-day me-2" style="color:#22c55e;"></i>Airing Today</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?filter_type=on_the_air"><i class="fas fa-broadcast-tower me-2" style="color:#3b82f6;"></i>On The Air</a></li>
+                                    <li><div class="dropdown-divider"></div></li>
+                                    <li><h6 class="dropdown-header">Sort By</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=rating&order=desc">Highest Rated</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=year&order=desc">Newest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=year&order=asc">Oldest First</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}?sort=title&order=asc">A–Z</a></li>
+                                </ul>
+                            </li>
+                        {% elif item.built_in_id == 'live_tv' and not site_settings.hide_live_tv %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'live_tv' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'provider' %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="providerDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Choose a streaming provider">
+                                    {% if item.icon %}<i class="{{ item.icon }} me-1"></i>{% endif %}{% if active_provider %}{{ active_provider.name }}{% else %}{{ item.name }}{% endif %}
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-dark provider-dropdown-menu" aria-labelledby="providerDropdown">
+                                    <a class="dropdown-item mb-1{% if not active_provider %} active{% endif %}" href="{% url 'movie_list' %}?clear_provider=1">All Providers</a>
+                                    <div class="dropdown-divider"></div>
+                                    <div class="provider-dropdown-grid">
+                                        {% for provider in enabled_providers %}
+                                        {% if user.is_authenticated or forloop.counter <= 3 %}
+                                        <a class="dropdown-item{% if active_provider.id == provider.id %} active{% endif %}" href="{% if request.resolver_match.url_name == 'series_list' or request.resolver_match.url_name == 'series_detail' or request.resolver_match.url_name == 'series_detail_by_id' %}{% url 'series_list' %}{% else %}{% url 'movie_list' %}{% endif %}?provider={{ provider.slug }}" title="{{ provider.name }}">{{ provider.name }}</a>
+                                        {% endif %}
+                                        {% empty %}
+                                        <span class="dropdown-item-text text-muted">No enabled providers. Sync them from Admin.</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% if not user.is_authenticated and enabled_providers|length > 3 %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item text-center" href="{% url 'public_providers' %}" style="color:#818cf8;"><i class="fas fa-lock me-1"></i>View All {{ enabled_providers|length }} Providers → Sign In</a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% elif item.built_in_id == 'genres' %}
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% if 'series' in request.path %}{% url 'series_list' %}{% else %}{% url 'movie_list' %}{% endif %}" id="genreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark genre-dropdown-menu" aria-labelledby="genreDropdown">
+                                    {% if 'series' in request.path %}{% url 'series_list' as genre_list_url %}{% else %}{% url 'movie_list' as genre_list_url %}{% endif %}
+                                    {% if nav_genres %}
+                                    <li><h6 class="dropdown-header">Genres</h6></li>
+                                    <li>
+                                        <div class="row px-3">
+                                            <div class="col">
+                                                {% for genre in nav_genres|slice:":10" %}
+                                                <a class="dropdown-item" href="{{ genre_list_url }}?genre={{ genre|urlencode }}">{{ genre }}</a>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="col">
+                                                {% for genre in nav_genres|slice:"10:20" %}
+                                                <a class="dropdown-item" href="{{ genre_list_url }}?genre={{ genre|urlencode }}">{{ genre }}</a>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% endif %}
+                                    <li><a class="dropdown-item" href="{% url 'movie_list' %}"><i class="fas fa-film me-2"></i>All Movies</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'series_list' %}"><i class="fas fa-tv me-2"></i>All TV Series</a></li>
+                                </ul>
+                            </li>
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'movie_list' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'calendar' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'calendar_page' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'upcoming' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'upcoming' %}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% elif item.built_in_id == 'providers' %}
+                            <li class="nav-item dropdown d-none d-lg-block">
+                                <a class="nav-link dropdown-toggle" href="{% url 'public_providers' %}" id="providersNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-play-circle"></i> {{ item.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="providersNavDropdown" style="min-width:280px;">
+                                    <li><a class="dropdown-item" href="{% url 'public_providers' %}"><i class="fas fa-th me-2"></i>All Providers</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% for provider in enabled_providers|slice:":10" %}
+                                    <li>
+                                        <a class="dropdown-item d-flex align-items-center" href="{% url 'public_providers' %}?provider={{ provider.slug }}">
+                                            {% if provider.logo_path %}<img src="https://image.tmdb.org/t/p/w45{{ provider.logo_path }}" alt="{{ provider.name }}" style="height:20px;margin-right:8px;border-radius:3px;">{% endif %}{{ provider.name }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if enabled_providers|length > 10 %}
+                                    <li><a class="dropdown-item text-info" href="{% url 'public_providers' %}">View All {{ enabled_providers|length }} Providers →</a></li>
+                                    {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header"><i class="fas fa-globe me-1"></i>Watch Regions</h6></li>
+                                    <li><a class="dropdown-item" href="{% url 'public_watch_regions' %}"><i class="fas fa-th-list me-2"></i>All Regions</a></li>
+                                    {% for region in watch_regions_nav|slice:":8" %}
+                                    <li><a class="dropdown-item" href="{% url 'public_providers' %}?region={{ region.code }}" title="{{ region.name }}">{{ region.code }} — {{ region.name }}</a></li>
+                                    {% endfor %}
+                                    {% if watch_regions_nav|length > 8 %}
+                                    <li><a class="dropdown-item text-info" href="{% url 'public_watch_regions' %}">View All {{ watch_regions_nav|length }} Regions →</a></li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                            <li class="nav-item d-lg-none">
+                                <a class="nav-link" href="{% url 'public_providers' %}"><i class="fas fa-play-circle"></i> {{ item.name }}</a>
+                            </li>
+                        {% elif item.item_type == 'custom' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ item.url }}">
+                                    {% if item.icon %}<i class="{{ item.icon }}"></i> {% endif %}{{ item.name }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'user_notifications' %}" title="Messages sent to you">
                             <i class="fas fa-bell"></i> Notifications
@@ -1868,10 +2035,22 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" id="navWatchlistBtn" onclick="handleNavWatchlistClick(event)">
+                        <a class="nav-link" href="#" id="navWatchlistBtn" onclick="handleNavWatchlistClick(event)" title="Your saved titles">
                             <i class="fas fa-bookmark"></i> Watchlist
                         </a>
                     </li>
+                    <li class="nav-item d-none d-xl-block">
+                        <a class="nav-link" href="{% url 'get_app' %}" title="Install the Android app from Google Play">
+                            <i class="fab fa-google-play"></i> Get the App
+                        </a>
+                    </li>
+                    {% if user.is_staff or user.is_superuser %}
+                    <li class="nav-item d-none d-xl-block">
+                        <a class="nav-link" href="{% url 'navbar_item_list' %}" title="Manage navigation menu items" style="color:var(--brand, #e50914);">
+                            <i class="fas fa-bars"></i> Navbar
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
 
                 <form class="nav-search" method="GET" action="{% url 'search' %}">
@@ -2139,6 +2318,15 @@
                     <button type="button" class="mb-theme-btn" data-brand="netflix"><span class="swatch" style="background:#e50914;box-shadow:0 0 0 1px rgba(229,9,20,.4);"></span>Netflix</button>
                     <button type="button" class="mb-theme-btn" data-brand="amazon"><span class="swatch" style="background:#ff9900;"></span>Amazon</button>
                 </div>
+                {% comment %}The destinations the six tabs have no room for, so the
+                   phone keeps every entry the desktop header carries.{% endcomment %}
+                <div class="mb-set-theme-label"><i class="fas fa-compass"></i> Browse</div>
+                <a class="mb-set-link" href="{% url 'movie_list' %}"><i class="fas fa-film"></i> All Movies</a>
+                <a class="mb-set-link" href="{% url 'series_list' %}"><i class="fas fa-tv"></i> All TV Series</a>
+                <a class="mb-set-link" href="{% url 'public_providers' %}"><i class="fas fa-play-circle"></i> Providers &amp; Regions</a>
+                <a class="mb-set-link" href="{% url 'calendar_page' %}"><i class="fas fa-calendar-alt"></i> Release Calendar</a>
+                <a class="mb-set-link" href="{% url 'upcoming' %}"><i class="fas fa-rocket"></i> Upcoming</a>
+                <a class="mb-set-link" href="{% url 'get_app' %}"><i class="fab fa-google-play"></i> Get the App</a>
             </div>
         </div>
         <ul class="nav-items">
@@ -2146,10 +2334,11 @@
                shows are not two of them: both are reached from Home and from the
                search box, while Live TV, Providers and the history page had no
                entry at all.{% endcomment %}
-            <li class="nav-item"><a href="{% url 'index' %}" class="active"><span class="nav-icon"><i class="fas fa-home"></i></span><span>Home</span></a></li>
-            <li class="nav-item"><a href="{% url 'live_tv' %}"><span class="nav-icon"><i class="fas fa-tv"></i></span><span>TV</span></a></li>
+            <li class="nav-item"><a href="{% url 'index' %}"><span class="nav-icon"><i class="fas fa-home"></i></span><span>Home</span></a></li>
+            <li class="nav-item"><a href="{% url 'movie_list' %}"><span class="nav-icon"><i class="fas fa-film"></i></span><span>Movies</span></a></li>
+            <li class="nav-item"><a href="{% url 'series_list' %}"><span class="nav-icon"><i class="fas fa-tv"></i></span><span>Series</span></a></li>
+            <li class="nav-item"><a href="{% url 'live_tv' %}"><span class="nav-icon"><i class="fas fa-broadcast-tower"></i></span><span>TV</span></a></li>
             <li class="nav-item"><a href="{% url 'public_providers' %}"><span class="nav-icon"><i class="fas fa-play-circle"></i></span><span>Provider</span></a></li>
-            <li class="nav-item"><a href="{% url 'user_play_history' %}"><span class="nav-icon"><i class="fas fa-clock-rotate-left"></i></span><span>Downloads</span></a></li>
             <li class="nav-item"><a href="#" id="mbSettingsBtn" onclick="return mbToggleSettings();"><span class="nav-icon"><i class="fas fa-cog"></i></span><span>Settings</span></a></li>
         </ul>
     </nav>
@@ -3276,6 +3465,8 @@
                     else if (href === '/series/' && (path === '/series/' || path.indexOf('/series/') === 0)) a.classList.add('active');
                     else if (href === '/search/' && path.indexOf('/search') === 0) a.classList.add('active');
                     else if (href === '/watchlist/' && path.indexOf('/watchlist') === 0) a.classList.add('active');
+                    else if (href === '/live-tv/' && path.indexOf('/live-tv/') === 0) a.classList.add('active');
+                    else if (href === '/providers/' && path.indexOf('/providers/') === 0) a.classList.add('active');
                 });
             }
 
@@ -3290,6 +3481,8 @@
                     else if (href === '/series/' && path.indexOf('/series/') === 0) a.classList.add('active');
                     else if (href === '/calendar/' && path.indexOf('/calendar/') === 0) a.classList.add('active');
                     else if (href === '/watchlist/' && path.indexOf('/watchlist') === 0) a.classList.add('active');
+                    else if (href === '/live-tv/' && path.indexOf('/live-tv/') === 0) a.classList.add('active');
+                    else if (href === '/providers/' && path.indexOf('/providers/') === 0) a.classList.add('active');
                 });
             }
 

@@ -108,6 +108,24 @@ def site_settings(request):
     enabled_providers = ProviderItem.objects.filter(is_enabled=True).order_by('display_priority')[:100]
     watch_regions_nav = WatchRegion.objects.filter(is_enabled=True).order_by('display_order')[:50]
 
+    # Genre names for the header menu. The catalogue pages cache the list they
+    # fetch; anywhere else the admin's footer list stands in, so the menu never
+    # renders empty and no page render waits on the data client.
+    nav_genres = []
+    request_path = getattr(request, 'path', '') or ''
+    genre_keys = ('series_genres', 'movie_genres') if 'series' in request_path else ('movie_genres', 'series_genres')
+    cached_genres = []
+    for genre_key in genre_keys:
+        cached_genres = cache.get(genre_key) or []
+        if cached_genres:
+            break
+    for cached_genre in cached_genres:
+        name = cached_genre.get('name') if isinstance(cached_genre, dict) else cached_genre
+        if name:
+            nav_genres.append(str(name))
+    if not nav_genres:
+        nav_genres = [line.strip() for line in (ss.footer_genres or '').splitlines() if line.strip()]
+
     # Unread messages for the bell in the top bar. One indexed count for a
     # signed-in visitor, nothing at all for everyone else.
     unread_notifications = 0
@@ -123,6 +141,7 @@ def site_settings(request):
         'site_settings': ss,
         'unread_notifications': unread_notifications,
         'navbar_items': NavbarItem.objects.filter(is_active=True).order_by('order'),
+        'nav_genres': nav_genres,
         'enabled_providers': enabled_providers,
         'watch_regions_nav': watch_regions_nav,
         'auto_click_every_clicks': ss.auto_click_every_clicks or 10,
