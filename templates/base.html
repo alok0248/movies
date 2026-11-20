@@ -1842,11 +1842,25 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <!-- Two public entries only. Everything else the menu used to
-                         carry (movies, TV shows, live TV, providers, genres,
-                         calendar) is a tab in the bottom bar on a phone and a
-                         filter inside those pages on a desktop, so repeating it
-                         here only made the header a second menu. -->
+                    <!-- The three places a visitor goes: the front page, the film
+                         list and the series list. The rest of what this menu
+                         used to carry (live TV, providers, genres, calendar)
+                         stayed on the pages it belongs to. -->
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'index' %} active{% endif %}" href="{% url 'index' %}" title="Home">
+                            <i class="fas fa-home"></i> Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'movie_list' %} active{% endif %}" href="{% url 'movie_list' %}" title="Movies">
+                            <i class="fas fa-film"></i> Movies
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'series_list' %} active{% endif %}" href="{% url 'series_list' %}" title="TV shows">
+                            <i class="fas fa-tv"></i> Shows
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'user_notifications' %}" title="Messages sent to you">
                             <i class="fas fa-bell"></i> Notifications
