@@ -108,6 +108,9 @@
         background: rgba(185, 28, 28, .18);
         border-color: rgba(248, 113, 113, .4);
     }
+    /* Pinned to the viewport and never taller than it, like every other admin
+       popup: the head and the buttons stay reachable and only the editor
+       scrolls, so a long file is editable on a phone. */
     .af-modal {
         display: none;
         position: fixed;
@@ -117,17 +120,30 @@
         backdrop-filter: blur(4px);
         align-items: center;
         justify-content: center;
+        padding: 1rem;
+        overflow: hidden;
     }
     .af-modal-box {
         background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 1.5rem;
-        width: min(90vw, 700px);
-        max-height: 80vh;
-        overflow: auto;
+        padding: 1.2rem;
+        width: 100%;
+        max-width: 700px;
+        box-sizing: border-box;
+        max-height: calc(100vh - 2rem);
+        max-height: calc(100dvh - 2rem);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
     }
-    .af-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .af-modal-box textarea {
+        flex: 1 1 auto; min-height: 140px; width: 100%; box-sizing: border-box; resize: none;
+    }
+    .af-modal-foot {
+        flex: 0 0 auto; display: flex; gap: .8rem; margin-top: 1rem; justify-content: flex-end;
+    }
+    .af-modal-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .af-modal-head h3 { color: var(--text); font-size: 1rem; margin: 0; }
     .af-modal-close { background: none; border: none; color: var(--text-2); font-size: 1.2rem; cursor: pointer; }
 </style>
@@ -192,7 +208,7 @@
                 <button onclick="closeEditModal()" class="af-modal-close">&times;</button>
             </div>
             <textarea id="editContent" rows="15" class="af-input"></textarea>
-            <div style="display:flex;gap:.8rem;margin-top:1rem;justify-content:flex-end;">
+            <div class="af-modal-foot">
                 <button onclick="closeEditModal()" class="af-btn">Cancel</button>
                 <button onclick="saveEditFile()" class="af-btn-primary">Save</button>
             </div>

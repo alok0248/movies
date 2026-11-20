@@ -138,6 +138,12 @@
         padding: .8rem; flex: 1 1 auto; min-height: 0;
         overflow-y: auto; overscroll-behavior: contain;
     }
+    /* The widest things inside a popup are the requests table and long IPs or
+       paths. Keep them from pushing the dialog past the screen edge: grid
+       children may shrink, the table fills the card and scrolls in it. */
+    .ucm-dialog-body .row > * { min-width: 0; }
+    .ucm-dialog-body table { width: 100%; }
+    .ucm-dialog-body .mono, .ucm-dialog-body td { overflow-wrap: anywhere; }
     /* While a popup is open the page behind it does not scroll (the admin page
        scrolls inside .admin-main, not on <body>). */
     html.ucm-locked .admin-main { overflow: hidden; }
@@ -246,8 +252,8 @@
     .du-watch-row:last-child { border-bottom: 0; }
     @media (max-width: 767px) {
         .du-popup-table { font-size: .7rem; }
-        .ucm-overlay { padding: .5rem; }
-        .ucm-dialog { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); }
+        .ucm-overlay, .ccfg-overlay { padding: .5rem; }
+        .ucm-dialog, .ccfg-dialog { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); }
         /* The table is wider than a phone, so the expanded history cell spans
            that width and its chips and Watched titles run off the visible
            edge. Pin its content to the left of the scroller and let it wrap. */

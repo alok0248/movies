@@ -114,11 +114,14 @@
     .ipgeo-flag-code { font-size: .58rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4; }
     .ipgeo-modal {
         position: fixed; inset: 0; z-index: 3000; display: flex;
-        align-items: center; justify-content: center; padding: 1.5rem;
+        align-items: center; justify-content: center;
+        padding: clamp(.5rem, 3vw, 1.5rem); overflow: hidden;
         background: rgba(2,6,23,.72); backdrop-filter: blur(3px);
     }
     .ipgeo-card {
-        width: min(660px, 100%); max-height: 86vh; display: flex; flex-direction: column;
+        width: min(660px, 100%);
+        max-height: 86vh; max-height: calc(100dvh - 1rem);
+        display: flex; flex-direction: column; overflow: hidden;
         background: #0f172a; border: 1px solid rgba(148,163,184,.2); border-radius: 14px;
         box-shadow: 0 24px 70px rgba(0,0,0,.6);
     }
@@ -1511,14 +1514,19 @@ html[data-theme="light"] .adm-meter > span.is-info { background: #0e7490; }
     </div>
 </div>
 <style>
+    /* Anchored to the viewport with a margin all round, and the list scrolls
+       inside it, so the jump box stays fully on screen on a phone too. */
     .ap-overlay { position: fixed; inset: 0; z-index: 4000; background: rgba(4, 6, 12, .62);
         backdrop-filter: blur(2px); display: flex; align-items: flex-start; justify-content: center;
-        padding-top: 12vh; }
+        padding: 12vh 1rem 1rem; overflow-y: auto; }
     .ap-box { width: 100%; max-width: 560px; background: #12141b; border: 1px solid rgba(255,255,255,.14);
-        border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; }
+        border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden;
+        display: flex; flex-direction: column;
+        max-height: calc(100vh - 13vh); max-height: calc(100dvh - 13vh); }
     .ap-input { width: 100%; box-sizing: border-box; padding: 1rem 1.1rem; border: 0; outline: 0;
         background: transparent; color: #eef1f6; font-size: 1rem; }
-    .ap-list { max-height: 48vh; overflow-y: auto; border-top: 1px solid rgba(255,255,255,.08); }
+    .ap-list { max-height: 48vh; overflow-y: auto; border-top: 1px solid rgba(255,255,255,.08);
+        flex: 1 1 auto; min-height: 0; }
     .ap-item { display: flex; align-items: center; gap: .6rem; padding: .7rem 1.1rem;
         color: #cfd4dd; text-decoration: none; cursor: pointer; font-size: .92rem; }
     .ap-item i { width: 18px; text-align: center; opacity: .6; font-size: .82rem; }
