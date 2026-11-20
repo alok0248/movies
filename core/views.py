@@ -5568,12 +5568,21 @@ def android_app_users_full(request, app_id):
             devices = {d.id: d for d in
                        AndroidAppDevice.objects.filter(id__in=list(device_ip))}
 
-            # App version per install. The install record and its visits only
-            # carry the build number the app reports ("1" on every build), so
-            # the real version comes from the sync/heartbeat rows, which the app
-            # fills in with the version name it is running.
+            # App identity per install. The visit rows only carry the legacy
+            # build header, which older builds send as "1" on every release,
+            # so version and build come from the version table the config
+            # endpoint writes on every poll: it records the real versionCode
+            # (X-App-Version-Code) and versionName (X-App-Version-Name) each
+            # install reports. Sync/heartbeat rows still win on the version
+            # name, because they are the account's own statement of what it is
+            # running, and their build_number is a usable fallback.
+            from .models import AppVersionDevice
             version_by_install = {}
-            wanted_ids = set(device_ip) | {d.account_key for d in devices.values() if d.account_key}
+            build_by_install = {}
+            # The version tables key on the id the app sends (device.user_id),
+            # not on the install row's own pk, so ask for those.
+            wanted_ids = {d.user_id for d in devices.values() if d.user_id}
+            wanted_ids |= {d.account_key for d in devices.values() if d.account_key}
             if wanted_ids:
                 for install_id, ver in (UserHeartbeat.objects
                                         .filter(device_id__in=wanted_ids)
@@ -5581,12 +5590,29 @@ def android_app_users_full(request, app_id):
                                         .values_list('device_id', 'app_version')):
                     if install_id and ver:
                         version_by_install[install_id] = ver
-                for install_id, ver in (SyncedUser.objects
+                for install_id, ver, code in (SyncedUser.objects
                                         .filter(device_id__in=wanted_ids)
                                         .exclude(app_version='')
-                                        .values_list('device_id', 'app_version')):
+                                        .values_list('device_id', 'app_version',
+                                                     'build_number')):
                     if install_id and ver:
                         version_by_install.setdefault(install_id, ver)
+                    if install_id and code:
+                        build_by_install.setdefault(install_id, code)
+                # Ordered oldest first so the newest sighting of an install
+                # (there is one row per build) is the one that stays.
+                for install_id, ver, code in (AppVersionDevice.objects
+                                        .filter(android_app=selected_app,
+                                                device_id__in=wanted_ids)
+                                        .order_by('last_seen')
+                                        .values_list('device_id', 'version_name',
+                                                     'build_code')):
+                    if not install_id:
+                        continue
+                    if ver:
+                        version_by_install.setdefault(install_id, ver)
+                    if code:
+                        build_by_install[install_id] = code
 
             # Location is read from the geo cache. Addresses it has never seen
             # would show as blank, which reads as broken rather than uncached,
@@ -5626,6 +5652,15 @@ def android_app_users_full(request, app_id):
                               and dev.first_seen_at and start <= dev.first_seen_at < end)
                 email = (email_by_device.get(dev.user_id)
                          or email_by_device.get(dev.account_key) or '')
+                # The build the app itself reported, used when no sync row has
+                # a version for this install: a device that never signed in
+                # still shows the release it is running instead of a dash.
+                # Visit rows are collected per install pk, not per app user id.
+                reported_build = (device_build.get(dev.id) or '').strip()
+                build_number = (build_by_install.get(dev.user_id)
+                                or build_by_install.get(dev.account_key) or 0)
+                if not build_number and reported_build.lstrip('#').isdigit():
+                    build_number = int(reported_build.lstrip('#'))
                 list_rows.append({
                     'device_pk': dev.id,
                     'user_id': dev.user_id,
@@ -5633,7 +5668,9 @@ def android_app_users_full(request, app_id):
                     'os': dev.os_version or '',
                     'app_version': (version_by_install.get(dev.user_id)
                                     or version_by_install.get(dev.account_key)
-                                    or device_build.get(dev.user_id, '')),
+                                    or ''),
+                    'app_build': build_number,
+                    'app_build_reported': reported_build,
                     'ip': ip or '',
                     'location': ', '.join(place_bits),
                     'email': email,

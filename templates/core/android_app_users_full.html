@@ -220,6 +220,7 @@
     }
     .inactive-all { display: flex; align-items: center; gap: .45rem; margin: 0; font-size: .76rem; color: #e2e8f0; }
     .inactive-pick, .inactive-all input { accent-color: #22c55e; }
+    .du-popup-table td:nth-child(2) .pill { white-space: nowrap; }
     .du-actions { white-space: nowrap; }
     .du-actions .btn { padding: .1rem .35rem; line-height: 1.1; }
     .du-row.is-blocked { background: rgba(127, 29, 29, .16); }
@@ -769,9 +770,18 @@ window.__duRow = function (r) {
             + ' <span class="sub">\u00b7 ' + esc(r.visits) + ' visits</span>'
             + (blocked ? ' <span class="pill bg-danger">' + esc(r.block_mode) + ' block</span>' : '')
             + '</td>'
-        + '<td class="sub">' + (r.app_version
-            ? '<span class="pill bg-dark border border-secondary" title="App version this install reported">v' + esc(r.app_version) + '</span>'
-            : '&mdash;') + '</td>'
+        + '<td class="sub">' + (function () {
+            var bits = '';
+            if (r.app_version) {
+                bits += '<span class="pill bg-dark border border-secondary" title="App version this install reported">v'
+                    + esc(r.app_version) + '</span>';
+            }
+            if (r.app_build) {
+                bits += (bits ? ' ' : '') + '<span class="pill bg-dark border border-secondary" title="Build the app reported (no sync needed)">build '
+                    + esc(r.app_build) + '</span>';
+            }
+            return bits || '&mdash;';
+        })() + '</td>'
         + '<td>' + (r.registered
             ? esc(r.email || 'account linked')
             : '<span class="sub">unregistered</span>') + '</td>'
