@@ -205,6 +205,12 @@
     /* Popup: stays usable on a phone — head pinned, body scrolls. */
     .du-modal { width: min(1180px, 100%); max-width: 1180px; }
     .du-modal .ucm-dialog-head { position: sticky; top: 0; z-index: 2; }
+    /* The table head is sticky inside this scrolling body, and a sticky header
+       anchors to the padding edge — so the body's top padding leaves a strip
+       where rows slide above the header. Drop the padding here and keep the
+       same gap on the first filter row instead. */
+    .du-modal .ucm-dialog-body { padding-top: 0; }
+    .du-modal .ucm-dialog-body > .du-filter-row:first-child { margin-top: .8rem; }
     .du-filter-row { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; margin-bottom: .35rem; }
     .du-popup-table { font-size: .76rem; }
     .du-popup-table thead th {
@@ -242,6 +248,13 @@
         .du-popup-table { font-size: .7rem; }
         .ucm-overlay { padding: .5rem; }
         .ucm-dialog { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); }
+        /* The table is wider than a phone, so the expanded history cell spans
+           that width and its chips and Watched titles run off the visible
+           edge. Pin its content to the left of the scroller and let it wrap. */
+        .du-history { padding: .5rem .35rem !important; }
+        .du-history > * {
+            position: sticky; left: 0; max-width: calc(100vw - 2.6rem);
+        }
     }
 
     /* App-version filter: a dropdown of every version the scope has reported,

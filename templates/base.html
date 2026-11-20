@@ -4999,6 +4999,17 @@
         var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var content = document.querySelector('.content-wrapper') || document.querySelector('main') || document.body;
         if (!reduce) content.classList.add('page-transition');
+        /* The class animates with fill "forwards", so it leaves a transform on
+           the wrapper for the life of the page. A transformed ancestor makes
+           every position:fixed popup (users, chat, details) size and centre
+           itself in the document instead of the viewport — on a long page that
+           puts the dialog below the fold. Drop the class once it has run; the
+           animation is over and the element is already at its natural state. */
+        content.addEventListener('animationend', function (e) {
+            if (e.target === content && content.classList.contains('page-transition')) {
+                content.classList.remove('page-transition');
+            }
+        });
         document.addEventListener('click', function(e) {
             var link = e.target.closest('a[href]');
             if (!link) return;
