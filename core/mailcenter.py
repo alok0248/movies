@@ -569,6 +569,16 @@ def mail_center(request):
             'subject': request.GET.get('subject') or '',
         })
 
+    # One mailbox, two shapes: the whole page for a normal load, and only the
+    # mailbox itself when the page's own script asks for a fragment. That is
+    # what keeps the admin shell and the scroll position in place while a
+    # folder, a campaign, a filter or a reply changes.
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('partial') == '1':
+        context['partial'] = True
+        response = render(request, 'core/_mail_center_panel.html', context)
+        response['X-Mail-Partial'] = '1'
+        response['Vary'] = 'X-Requested-With'
+        return response
     return render(request, 'core/admin_mail_center.html', context)
 
 

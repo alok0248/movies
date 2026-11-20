@@ -1,0 +1,510 @@
+<div class="ml" id="mlRoot">
+{% if partial and messages %}
+<div class="ml-flash" aria-live="polite">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+    <div class="ml-top">
+        <a class="ml-compose" href="{% url 'mail_center' %}?folder=compose">
+            <i class="fas fa-pen"></i> Compose
+        </a>
+        <form class="ml-search" method="get" action="{% url 'mail_center' %}">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="search" name="q" value="{{ q }}" placeholder="Search mail, messages and notifications"
+                   aria-label="Search the mailbox">
+            <input type="hidden" name="folder" value="{{ folder }}">
+            {% if folder == 'inbox' %}
+            <input type="hidden" name="state" value="{{ state }}">
+            <input type="hidden" name="user" value="{{ user_kind }}">
+            <input type="hidden" name="kind" value="{{ kind }}">
+            {% elif folder == 'sent' %}
+            <input type="hidden" name="status" value="{{ status }}">
+            {% elif folder == 'devices' %}
+            <input type="hidden" name="version" value="{{ version }}">
+            {% endif %}
+        </form>
+        <div class="ml-top-right">
+            <span class="ml-chip" title="Mail written but not yet accepted by the mail box">
+                <i class="fas fa-hourglass-half"></i> {{ stats.pending }} pending
+            </span>
+            <span class="ml-chip" title="Mail the mail box accepted">
+                <i class="fas fa-paper-plane"></i> {{ stats.sent }} sent
+            </span>
+            <span class="ml-chip" title="Read pixel fetched">
+                <i class="fas fa-eye"></i> {{ stats.read }} read
+            </span>
+            {% if stats.failed %}<span class="ml-chip" style="color:#ef4444;border-color:rgba(239,68,68,.45)">
+                <i class="fas fa-triangle-exclamation"></i> {{ stats.failed }} failed</span>{% endif %}
+        </div>
+    </div>
+
+    {% if not address and folder == 'compose' %}
+    <div class="ml-chip" style="color:#ef4444;border-color:rgba(239,68,68,.45);padding:.35rem .7rem">
+        <i class="fas fa-triangle-exclamation"></i> No active SMTP address — queued mail will fail until one is
+        enabled in <a class="adm-link" href="{% url 'email_settings' %}">Email settings</a>. Nothing is lost.
+    </div>
+    {% endif %}
+
+    <div class="ml-body{% if folder == 'compose' or folder == 'devices' %} is-wide{% endif %}">
+        <aside class="ml-rail">
+            {% for key, label, icon, count in folders %}
+            <a class="ml-folder{% if folder == key %} is-active{% endif %}"
+               href="{% url 'mail_center' %}?folder={{ key }}">
+                <i class="fas {{ icon }}"></i> {{ label }}
+                {% if count %}<span class="n">{{ count }}</span>{% endif %}
+            </a>
+            {% endfor %}
+            <div class="ml-rail-sep"></div>
+            <div class="ml-rail-title">Quick filters</div>
+            <a class="ml-folder" href="{% url 'mail_center' %}?folder=inbox&amp;state=open">
+                <i class="fas fa-clock"></i> Waiting on you
+                {% if stats.inbox_open %}<span class="n">{{ stats.inbox_open }}</span>{% endif %}
+            </a>
+            <a class="ml-folder" href="{% url 'mail_center' %}?folder=sent&amp;status=failed">
+                <i class="fas fa-rotate"></i> Failed mail
+                {% if stats.failed %}<span class="n">{{ stats.failed }}</span>{% endif %}
+            </a>
+            <a class="ml-folder" href="{% url 'mail_center' %}?folder=notifications">
+                <i class="fas fa-chart-simple"></i> In-app delivery
+            </a>
+            <div class="ml-rail-sep"></div>
+            <p class="ml-rail-note">{{ stats.users }} accounts · {{ stats.devices }} devices · {{ stats.campaigns }} campaigns</p>
+        </aside>
+
+        {% if folder == 'compose' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">New message</h2>
+                <span class="ml-list-count">Email, in-app, or both</span>
+            </div>
+            <div class="ml-wide-body">
+                <form method="post" action="{% url 'mail_send' %}">
+                    {% csrf_token %}
+                    <div class="ml-form-grid">
+                        <div>
+                            <div class="ml-field">
+                                <label for="ml-aud">Audience</label>
+                                <select id="ml-aud" name="audience">
+                                    {% for value, label in audiences %}
+                                    <option value="{{ value }}"{% if audience == value %} selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-to">Recipients — one per line or comma separated</label>
+                                <textarea id="ml-to" name="selected_emails" rows="3"
+                                          placeholder="name@example.com">{{ to_prefill }}</textarea>
+                                <span class="ml-note">Used for “Selected users”. An address that never synced still gets the mail; it just cannot get the in-app copy.</span>
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-sub">Subject</label>
+                                <input id="ml-sub" name="subject" type="text" maxlength="500" required
+                                       value="{{ subject }}" placeholder="What is new in CineStream">
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-body">Message</label>
+                                <textarea id="ml-body" name="body" rows="9" required
+                                          placeholder="Plain text; sent as text plus a simple HTML body."></textarea>
+                            </div>
+                            <div class="ml-field">
+                                <label>Channels</label>
+                                <div style="display:flex;gap:1.1rem">
+                                    <label class="ml-check"><input type="checkbox" name="send_email" value="1" checked> Email</label>
+                                    <label class="ml-check"><input type="checkbox" name="send_inapp" value="1"> In-app message</label>
+                                </div>
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-link">In-app link (optional)</label>
+                                <input id="ml-link" name="link_url" type="text" maxlength="500"
+                                       placeholder="https://newmovies.linkpc.net/…">
+                            </div>
+                            <div class="ml-field">
+                                <label for="ml-app">App (optional, in-app only)</label>
+                                <select id="ml-app" name="app">
+                                    <option value="">All apps</option>
+                                    {% for app in apps %}
+                                    <option value="{{ app.id }}">{{ app.name|default:app.slug|default:app.id }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button class="ml-send" type="submit"><i class="fas fa-paper-plane"></i> Queue and send</button>
+                        </div>
+                        <div>
+                            <div class="ml-facts">
+                                <div><b>Pending</b><span class="ml-note">row written before the attempt — nothing is lost if SMTP is down</span></div>
+                                <div><b>Sent</b><span class="ml-note">the mail box accepted it for that address</span></div>
+                                <div><b>Read</b><span class="ml-note">the 1×1 pixel in the HTML body was fetched</span></div>
+                                <div><b>Failed</b><span class="ml-note">kept with the SMTP error; retry as often as you like</span></div>
+                                <div><b>In-app</b><span class="ml-note">delivered when a device fetches it, read when the user opens it</span></div>
+                            </div>
+                            <p class="ml-note" style="margin-top:.9rem">
+                                Up to 150 addresses go out immediately; a bigger audience stays queued and
+                                drains with <b>Retry unsent</b> in the Sent folder.
+                            </p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        {% elif folder == 'devices' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Devices</h2>
+                <span class="ml-list-count">{{ rows.paginator.count }} installs</span>
+                <div class="ml-filter">
+                    <button class="ml-chip-btn" type="button" id="mlDevAll">Select all on page</button>
+                    <button class="ml-chip-btn" type="button" id="mlDevSend">Message selected</button>
+                </div>
+            </div>
+            <div class="ml-wide-body">
+                <form method="get" action="{% url 'mail_center' %}" class="ml-toolbar">
+                    <input type="hidden" name="folder" value="devices">
+                    <div class="ml-field" style="margin:0">
+                        <label for="ml-ver">Version</label>
+                        <select id="ml-ver" name="version">
+                            <option value="">Any version</option>
+                            {% for v in versions %}
+                            <option value="{{ v }}"{% if version == v %} selected{% endif %}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="ml-field" style="margin:0;flex:1;min-width:11rem">
+                        <label for="ml-dq">Search</label>
+                        <input id="ml-dq" type="search" name="q" value="{{ q }}" placeholder="Email, device or device id">
+                    </div>
+                    <button class="ml-chip-btn" type="submit"><i class="fas fa-filter"></i> Filter</button>
+                </form>
+                <div class="ml-table-wrap">
+                    <table class="ml-mini">
+                        <thead>
+                            <tr><th></th><th>Email</th><th>Device</th><th>Version</th><th>Device id</th><th>Last seen</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td><input class="ml-dev-check" type="checkbox" data-email="{{ row.email }}"
+                                           {% if not row.email %}disabled{% endif %} aria-label="Select {{ row.email }}"></td>
+                                <td>{{ row.email|default:"(no account)" }}</td>
+                                <td>{{ row.device_model|default:"-" }}</td>
+                                <td>{% if row.app_version %}<span class="ml-pill is-sent">{{ row.app_version }}</span>{% else %}-{% endif %}</td>
+                                <td class="ml-note">{{ row.device_id|default:"-"|truncatechars:26 }}</td>
+                                <td class="ml-note">{{ row.last_seen|date:"d M H:i"|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="ml-note">No devices match.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% include 'core/_adm_pager.html' with pg=rows %}
+            </div>
+        </section>
+
+        {% elif folder == 'inbox' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Inbox</h2>
+                <span class="ml-list-count">{{ conversations|length }} conversations · {{ stats.inbox_open }} waiting</span>
+                <div class="ml-filter">
+                    <form method="get" action="{% url 'mail_center' %}" id="mlInboxFilter">
+                        <input type="hidden" name="folder" value="inbox">
+                        <input type="hidden" name="q" value="{{ q }}">
+                        <select name="state" onchange="this.form.submit()" aria-label="Filter by state">
+                            <option value="all"{% if state == 'all' %} selected{% endif %}>All</option>
+                            <option value="open"{% if state == 'open' %} selected{% endif %}>Waiting</option>
+                            <option value="answered"{% if state == 'answered' %} selected{% endif %}>Answered</option>
+                        </select>
+                        <select name="user" onchange="this.form.submit()" aria-label="Filter by sender">
+                            <option value="all"{% if user_kind == 'all' %} selected{% endif %}>Anyone</option>
+                            <option value="registered"{% if user_kind == 'registered' %} selected{% endif %}>Signed-in</option>
+                            <option value="guest"{% if user_kind == 'guest' %} selected{% endif %}>Guests</option>
+                        </select>
+                        <select name="kind" onchange="this.form.submit()" aria-label="Filter by type">
+                            <option value="all"{% if kind == 'all' %} selected{% endif %}>All types</option>
+                            <option value="suggestion"{% if kind == 'suggestion' %} selected{% endif %}>Suggestion</option>
+                            <option value="reply"{% if kind == 'reply' %} selected{% endif %}>Reply</option>
+                        </select>
+                    </form>
+                </div>
+            </div>
+            <div class="ml-rows">
+                {% for conv in conversations %}
+                <a class="ml-row{% if conv.waiting %} is-unread{% endif %}{% if active and conv.key == active.key %} is-active{% endif %}"
+                   href="{% url 'mail_center' %}?folder=inbox&amp;thread={{ conv.key|urlencode }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">
+                    <span class="ml-av">{{ conv.initials }}</span>
+                    <span class="ml-row-main">
+                        <span class="ml-row-who">
+                            <b>{{ conv.display_user|truncatechars:44 }}</b>
+                            {% if conv.waiting %}<span class="ml-dot is-wait" title="{{ conv.waiting }} waiting"></span>{% endif %}
+                        </span>
+                        <span class="ml-row-sub">{{ conv.last_body|truncatechars:96 }}</span>
+                    </span>
+                    <span class="ml-row-right">
+                        {{ conv.last_at|date:"d M" }}
+                        <span class="dots">{% if conv.total > 1 %}<span class="ml-note">{{ conv.total }}</span>{% endif %}</span>
+                    </span>
+                </a>
+                {% empty %}
+                <div class="ml-empty"><i class="fas fa-inbox"></i><br>Nothing in the inbox for that filter.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ml-pane">
+            {% if active %}
+            <div class="ml-pane-head">
+                <span class="ml-av">{{ active.initials }}</span>
+                <div style="min-width:0">
+                    <h3 class="ml-pane-subject">{{ active.display_user|truncatechars:70 }}</h3>
+                    <div class="ml-pane-meta">
+                        {% if active.email %}{{ active.email }}{% else %}Guest device {{ active.device_id|truncatechars:22 }}{% endif %}
+                        · {{ active.total }} message{{ active.total|pluralize }}
+                        {% if active.waiting %}· <b style="color:#f59e0b">{{ active.waiting }} waiting</b>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="ml-pane-body">
+                {% for msg in messages %}
+                <div style="margin-bottom:1rem">
+                    <div class="ml-pane-meta" style="margin-bottom:.25rem">
+                        {{ msg.created_at|date:"d M Y H:i" }} · {{ msg.get_kind_display }}{% if msg.notification %} · about “{{ msg.notification.title|truncatechars:40 }}”{% endif %}
+                    </div>
+                    <div class="ml-text">{{ msg.body }}</div>
+                    {% if msg.reply_body %}
+                    <div class="ml-quote">
+                        <b>Our reply</b> · {{ msg.replied_at|date:"d M H:i" }}{% if msg.replied_by %} · {{ msg.replied_by }}{% endif %}
+                        <div class="ml-text" style="margin-top:.2rem">{{ msg.reply_body }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="ml-empty">No messages in this thread.</div>
+                {% endfor %}
+            </div>
+            {% if reply_target %}
+            <div class="ml-reply">
+                <form method="post" action="{% url 'mail_center' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reply">
+                    <input type="hidden" name="message_id" value="{{ reply_target.id }}">
+                    <input type="hidden" name="thread" value="{{ thread_key }}">
+                    <textarea name="reply" id="mlReply" required
+                              placeholder="Reply to {{ active.display_user }} — this reaches the app inbox."></textarea>
+                    <div class="ml-reply-foot">
+                        <button class="ml-send" type="submit"><i class="fas fa-reply"></i> Send reply</button>
+                        {% for canned in canned_replies %}
+                        <button class="ml-chip-btn" type="button" data-canned="{{ canned.body|escape }}"
+                                title="{{ canned.title }}">{{ canned.title|truncatechars:26 }}</button>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="ml-empty"><i class="fas fa-envelope-open-text"></i><br>Pick a conversation.</div>
+            {% endif %}
+        </section>
+
+        {% elif folder == 'sent' %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Sent</h2>
+                <span class="ml-list-count">{{ campaigns|length }} sent item{{ campaigns|length|pluralize }}</span>
+                <div class="ml-filter">
+                    <form method="get" action="{% url 'mail_center' %}" id="mlSentFilter">
+                        <input type="hidden" name="folder" value="sent">
+                        <input type="hidden" name="q" value="{{ q }}">
+                        <select name="status" onchange="this.form.submit()" aria-label="Filter by status">
+                            <option value="all"{% if status == 'all' %} selected{% endif %}>Any status</option>
+                            {% for code, label in statuses %}
+                            <option value="{{ code }}"{% if status == code %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    <form method="post" action="{% url 'mail_retry' 'pending' %}" style="margin:0">
+                        {% csrf_token %}
+                        <button class="ml-chip-btn" type="submit"><i class="fas fa-rotate"></i> Retry unsent</button>
+                    </form>
+                </div>
+            </div>
+            <div class="ml-rows">
+                {% for c in campaigns %}
+                <a class="ml-row{% if c.failed %} is-unread{% endif %}{% if active_campaign and c.batch == active_campaign.batch %} is-active{% endif %}"
+                   href="{% url 'mail_center' %}?folder=sent&amp;batch={{ c.batch }}{% if status != 'all' %}&amp;status={{ status }}{% endif %}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">
+                    <span class="ml-av is-mail"><i class="fas fa-paper-plane"></i></span>
+                    <span class="ml-row-main">
+                        <span class="ml-row-who"><b>{{ c.subject|default:"(no subject)"|truncatechars:58 }}</b></span>
+                        <span class="ml-row-sub">{% if c.single %}{{ c.audience|default:"single send" }}{% else %}{{ c.total }} recipient{{ c.total|pluralize }} · {{ c.audience|default:"-" }}{% endif %}</span>
+                    </span>
+                    <span class="ml-row-right">
+                        {{ c.created|date:"d M H:i" }}
+                        <span class="dots">
+                            {% if c.pending %}<span class="ml-dot is-pending" title="{{ c.pending }} pending"></span>{% endif %}
+                            {% if c.sent %}<span class="ml-dot is-sent" title="{{ c.sent }} sent"></span>{% endif %}
+                            {% if c.read %}<span class="ml-dot is-read" title="{{ c.read }} read"></span>{% endif %}
+                            {% if c.failed %}<span class="ml-dot is-failed" title="{{ c.failed }} failed"></span>{% endif %}
+                        </span>
+                    </span>
+                </a>
+                {% empty %}
+                <div class="ml-empty"><i class="fas fa-paper-plane"></i><br>Nothing sent yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ml-pane">
+            {% if active_campaign %}
+            <div class="ml-pane-head">
+                <div style="min-width:0">
+                    <h3 class="ml-pane-subject">{{ active_campaign.subject|default:"(no subject)"|truncatechars:80 }}</h3>
+                    <div class="ml-pane-meta">
+                        {{ active_campaign.created|date:"d M Y H:i" }} · {{ active_campaign.audience|default:"-" }} ·
+                        {{ campaign_total }} recipient{{ campaign_total|pluralize }}
+                    </div>
+                </div>
+                <div class="ml-pane-actions">
+                    <a class="ml-chip-btn" href="{% url 'mail_export' batch %}"><i class="fas fa-file-csv"></i> CSV</a>
+                    {% if not active_campaign.single %}
+                    <form method="post" action="{% url 'mail_retry' batch %}" style="margin:0">
+                        {% csrf_token %}
+                        <button class="ml-chip-btn" type="submit"><i class="fas fa-rotate"></i> Retry unsent</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="ml-pane-body">
+                <div class="ml-stats">
+                    {% for code, label in statuses %}
+                    <span class="ml-pill is-{{ code }}">
+                        {{ label }}
+                        {% for key, value in campaign_counts.items %}{% if key == code %}{{ value }}{% endif %}{% endfor %}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% if active_campaign.body %}
+                <div class="ml-text">{{ active_campaign.body }}</div>
+                {% endif %}
+                <h4 class="ml-note" style="margin:1rem 0 .35rem;text-transform:uppercase;letter-spacing:.06em">Recipients</h4>
+                <table class="ml-mini">
+                    <thead><tr><th>Recipient</th><th>Status</th><th>Read</th><th>Error</th></tr></thead>
+                    <tbody>
+                        {% for r in recipients %}
+                        <tr>
+                            <td>{{ r.recipient }}</td>
+                            <td><span class="ml-pill is-{{ r.status }}">{{ r.get_status_display }}</span></td>
+                            <td class="ml-note">{{ r.read_at|date:"d M H:i"|default:"-" }}</td>
+                            <td class="err">{{ r.error_message|default:""|truncatechars:90 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="ml-note">No recipients.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if campaign_total > recipients|length %}
+                <p class="ml-note" style="margin-top:.5rem">
+                    Showing {{ recipients|length }} of {{ campaign_total }} — the CSV has every row.
+                </p>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="ml-empty"><i class="fas fa-paper-plane"></i><br>Pick a campaign.</div>
+            {% endif %}
+        </section>
+
+        {% else %}
+        <section class="ml-list">
+            <div class="ml-list-head">
+                <h2 class="ml-list-title">Notifications</h2>
+                <span class="ml-list-count">{{ notes|length }} in-app messages</span>
+                <div class="ml-filter">
+                    <form method="get" action="{% url 'mail_center' %}">
+                        <input type="hidden" name="folder" value="notifications">
+                        <input type="hidden" name="q" value="{{ q }}">
+                    </form>
+                </div>
+            </div>
+            <div class="ml-rows">
+                {% for n in notes %}
+                <a class="ml-row{% if not n.is_active %} is-unread{% endif %}{% if active_note and n.id == active_note.id %} is-active{% endif %}"
+                   href="{% url 'mail_center' %}?folder=notifications&amp;item={{ n.id }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}">
+                    <span class="ml-av is-bell"><i class="fas fa-bell"></i></span>
+                    <span class="ml-row-main">
+                        <span class="ml-row-who">
+                            <b>{{ n.title|truncatechars:52 }}</b>
+                            {% if not n.is_active %}<span class="ml-note">off</span>{% endif %}
+                        </span>
+                        <span class="ml-row-sub">{{ n.body|default:"(no body)"|truncatechars:92 }}</span>
+                    </span>
+                    <span class="ml-row-right">
+                        {{ n.sent_at|default:n.created_at|date:"d M" }}
+                        <span class="dots"><span class="ml-note">{{ n.delivered }}/{{ n.total }}</span></span>
+                    </span>
+                </a>
+                {% empty %}
+                <div class="ml-empty"><i class="fas fa-bell-slash"></i><br>No notifications for that filter.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ml-pane">
+            {% if active_note %}
+            <div class="ml-pane-head">
+                <div style="min-width:0">
+                    <h3 class="ml-pane-subject">{{ active_note.title }}</h3>
+                    <div class="ml-pane-meta">
+                        {{ active_note.sent_at|default:active_note.created_at|date:"d M Y H:i" }} ·
+                        {{ active_note.get_audience_display }}{% if active_note.app %} · {{ active_note.app.name|default:active_note.app.slug }}{% endif %}
+                    </div>
+                </div>
+                <div class="ml-pane-actions">
+                    <form method="post" action="{% url 'notification_toggle' active_note.id %}" style="margin:0">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="ml-chip-btn" type="submit">
+                            {% if active_note.is_active %}<i class="fas fa-eye-slash"></i> Turn off{% else %}<i class="fas fa-eye"></i> Turn on{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="ml-pane-body">
+                <div class="ml-stats">
+                    <span class="ml-pill is-sent">Recipients {{ active_note.total }}</span>
+                    <span class="ml-pill is-delivered">Delivered {{ active_note.delivered }}</span>
+                    <span class="ml-pill is-read">Read {{ active_note.read }}</span>
+                    <span class="ml-pill is-pending">Not fetched {{ active_note.pending }}</span>
+                </div>
+                <div class="ml-text">{{ active_note.body|default:"(no body)" }}</div>
+                {% if active_note.link_url %}
+                <p class="ml-note" style="margin-top:.6rem"><i class="fas fa-link"></i> {{ active_note.link_url }}</p>
+                {% endif %}
+                <h4 class="ml-note" style="margin:1rem 0 .35rem;text-transform:uppercase;letter-spacing:.06em">Per user</h4>
+                <table class="ml-mini">
+                    <thead><tr><th>Email</th><th>Delivered</th><th>Read</th><th>Opens</th></tr></thead>
+                    <tbody>
+                        {% for r in note_recipients %}
+                        <tr>
+                            <td>{{ r.email }}</td>
+                            <td class="ml-note">{{ r.delivered_at|date:"d M H:i"|default:"-" }}</td>
+                            <td class="ml-note">{{ r.read_at|date:"d M H:i"|default:"-" }}</td>
+                            <td>{{ r.read_count }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="ml-note">No recipient rows yet — the app creates them on fetch.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="ml-empty"><i class="fas fa-bell"></i><br>Pick a notification.</div>
+            {% endif %}
+        </section>
+        {% endif %}
+    </div>
+</div>
