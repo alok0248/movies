@@ -117,10 +117,12 @@
         renderPicker();
         var overlay = document.getElementById('colCfgOverlay');
         if (overlay) overlay.classList.add('is-open');
+        lockPageBehindPopup();
     };
     window.closeColumnConfig = function () {
         var overlay = document.getElementById('colCfgOverlay');
         if (overlay) overlay.classList.remove('is-open');
+        unlockPageBehindPopup();
     };
     window.columnConfigAdd = function () {
         var el = document.getElementById('colCfgAdd');

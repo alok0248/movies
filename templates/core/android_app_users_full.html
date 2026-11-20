@@ -107,23 +107,40 @@
     }
 
     /* ----- Message popup: one device's chat + watch history ----- */
+    /* Every row popup is pinned to the viewport and never taller than it: the
+       head stays put on top, the body scrolls inside, and the page behind does
+       not move. So a long device list is readable end to end without the popup
+       sliding off the top of the screen; close it (X, Esc, backdrop) to get
+       back to the table behind. */
     .ucm-overlay {
         position: fixed; inset: 0; z-index: 1080; display: none;
-        background: rgba(2, 6, 23, .74); padding: 1.2rem; overflow-y: auto;
+        background: rgba(2, 6, 23, .74); padding: 1rem; overflow: hidden;
     }
-    .ucm-overlay.open { display: block; }
+    .ucm-overlay.open { display: flex; align-items: center; justify-content: center; }
     .ucm-dialog {
-        max-width: 1080px; margin: 1.5rem auto;
+        width: min(1080px, 100%); max-width: 1080px;
+        max-height: calc(100vh - 2rem);
+        max-height: calc(100dvh - 2rem);
+        display: flex; flex-direction: column;
         background: #0b1220; border: 1px solid rgba(148, 163, 184, .3);
         border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
+        overflow: hidden;
     }
     .ucm-dialog-head {
+        flex: 0 0 auto;
         display: flex; justify-content: space-between; align-items: center;
         gap: .5rem; padding: .6rem .8rem;
         border-bottom: 1px solid rgba(148, 163, 184, .25);
+        border-radius: 13px 13px 0 0; background: #0b1220;
     }
     .ucm-dialog-title { font-size: .9rem; font-weight: 700; color: #e2e8f0; }
-    .ucm-dialog-body { padding: .8rem; }
+    .ucm-dialog-body {
+        padding: .8rem; flex: 1 1 auto; min-height: 0;
+        overflow-y: auto; overscroll-behavior: contain;
+    }
+    /* While a popup is open the page behind it does not scroll (the admin page
+       scrolls inside .admin-main, not on <body>). */
+    html.ucm-locked .admin-main { overflow: hidden; }
     .ucm-head { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
     .ucm-card {
         background: rgba(15, 23, 42, .72); border: 1px solid rgba(148, 163, 184, .2);
@@ -186,9 +203,8 @@
     }
 
     /* Popup: stays usable on a phone — head pinned, body scrolls. */
-    .du-modal { max-width: 1180px; display: flex; flex-direction: column; max-height: 92vh; }
-    .du-modal .ucm-dialog-head { position: sticky; top: 0; background: #0b1220; z-index: 2; border-radius: 14px 14px 0 0; }
-    .du-modal .ucm-dialog-body { overflow-y: auto; }
+    .du-modal { width: min(1180px, 100%); max-width: 1180px; }
+    .du-modal .ucm-dialog-head { position: sticky; top: 0; z-index: 2; }
     .du-filter-row { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; margin-bottom: .35rem; }
     .du-popup-table { font-size: .76rem; }
     .du-popup-table thead th {
@@ -213,7 +229,8 @@
     .du-tl-dot { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; flex: 0 0 auto; margin-top: .3rem; }
     @media (max-width: 767px) {
         .du-popup-table { font-size: .7rem; }
-        .du-modal { max-height: 96vh; }
+        .ucm-overlay { padding: .5rem; }
+        .ucm-dialog { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); }
     }
 
     /* App-version filter: a dropdown of every version the scope has reported,
@@ -268,16 +285,20 @@
     }
     .ccfg-overlay.is-open { display: flex; }
     .ccfg-dialog {
-        width: min(620px, 100%); max-height: 88vh; overflow: auto;
+        width: min(620px, 100%);
+        max-height: calc(100vh - 2rem);
+        max-height: calc(100dvh - 2rem);
+        display: flex; flex-direction: column; overflow: hidden;
         background: #0b1220; border: 1px solid rgba(148, 163, 184, .3);
         border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
     }
     .ccfg-head, .ccfg-foot {
+        flex: 0 0 auto;
         display: flex; align-items: center; justify-content: space-between; gap: .6rem;
         padding: .8rem 1rem; border-bottom: 1px solid rgba(148, 163, 184, .2);
     }
     .ccfg-foot { border-bottom: 0; border-top: 1px solid rgba(148, 163, 184, .2); }
-    .ccfg-body { padding: .8rem 1rem; }
+    .ccfg-body { padding: .8rem 1rem; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     .ccfg-row {
         display: flex; align-items: center; gap: .5rem; padding: .35rem .5rem;
         border: 1px solid rgba(148, 163, 184, .22); border-radius: 8px;
@@ -685,6 +706,7 @@ window.__openDailyUsers = function (index) {
         b.classList.toggle('active', b.getAttribute('data-du-acct') === 'all');
     });
     overlay.classList.add('open');
+    lockPageBehindPopup();
     fetch(base + '&slot=' + encodeURIComponent(index), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
         credentials: 'same-origin'
@@ -706,6 +728,7 @@ window.__openDailyUsers = function (index) {
 window.__closeDailyUsers = function () {
     var overlay = document.getElementById('dailyUsersModal');
     if (overlay) { overlay.classList.remove('open'); }
+    unlockPageBehindPopup();
 };
 
 window.__dailyUsersFilter = function (mode) {
@@ -1093,6 +1116,18 @@ function resendCode(id, btn) {
    an incognito window — and the admin's own session is left untouched. */
 var USERS_APP_ID = {{ selected_app.id }};
 
+/* The page stays where it was while a popup is open, and scrolls again once the
+   last one is closed, so checking the list never moves the table underneath. */
+function popupIsOpen() {
+    return !!document.querySelector('.ucm-overlay.open, .ccfg-overlay.is-open');
+}
+function lockPageBehindPopup() {
+    document.documentElement.classList.add('ucm-locked');
+}
+function unlockPageBehindPopup() {
+    if (!popupIsOpen()) { document.documentElement.classList.remove('ucm-locked'); }
+}
+
 /* Both row popups are fetched fragments: the row carries the URL the server
    built for it, so one device with no account and one with a full account use
    the same two buttons. */
@@ -1102,7 +1137,7 @@ function _openPopup(overlayId, url) {
         ? 'userChatBody' : 'userDetailsBody');
     if (!overlay || !body) return;
     overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    lockPageBehindPopup();
     body.innerHTML = '<div class="sub py-4 text-center"><i class="fas fa-spinner fa-spin me-1"></i>Loading&hellip;</div>';
     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -1119,14 +1154,14 @@ function closeUserChat() {
     var overlay = document.getElementById('userChatOverlay');
     if (!overlay) return;
     overlay.classList.remove('open');
-    document.body.style.overflow = '';
+    unlockPageBehindPopup();
 }
 
 function closeUserDetails() {
     var overlay = document.getElementById('userDetailsOverlay');
     if (!overlay) return;
     overlay.classList.remove('open');
-    document.body.style.overflow = '';
+    unlockPageBehindPopup();
 }
 
 document.addEventListener('keydown', function (e) {
