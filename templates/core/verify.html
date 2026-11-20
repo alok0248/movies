@@ -6,6 +6,9 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Verify you are human — {{ site_settings.brand_name|default:"NewMovies" }}</title>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <!-- The same developer-tools guard the rest of the site runs: the
+         challenge page must not be an open door for an inspector either. -->
+    <script src="/static/js/devtools-guard.js?v=1" defer></script>
     <style>
         :root {
             --brand: {{ site_settings.brand_color|default:"#e50914" }};

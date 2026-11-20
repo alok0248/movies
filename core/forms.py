@@ -619,14 +619,13 @@ class SecurityProtectionForm(forms.ModelForm):
 
     class Meta:
         model = SiteSettings
-        fields = ['bot_ips', 'bot_user_agents', 'dev_mode_protection',
+        fields = ['bot_ips', 'bot_user_agents',
                   'require_login_to_browse']
         widgets = {
             'bot_ips': forms.Textarea(attrs={
                 'class': 'form-control', 'rows': 3, 'placeholder': '192.168.1.10, 10.0.0.5'}),
             'bot_user_agents': forms.Textarea(attrs={
                 'class': 'form-control', 'rows': 3, 'placeholder': 'Googlebot, MyCustomCrawler'}),
-            'dev_mode_protection': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'require_login_to_browse': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
@@ -649,8 +648,6 @@ SECURITY_FIELD_SECTIONS = [
     ('Bot signatures',
      'The addresses and user-agent fragments this site treats as its own bot.',
      ['bot_ips', 'bot_user_agents']),
-    ('Browser protection', 'Extra checks applied to visitors, not to staff.',
-     ['dev_mode_protection']),
     ('Access control', 'Whether a visitor has to sign in before any page opens.',
      ['require_login_to_browse']),
 ]
