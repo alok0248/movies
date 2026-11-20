@@ -227,6 +227,16 @@
     .du-timeline { display: flex; flex-direction: column; gap: .2rem; margin-top: .35rem; }
     .du-tl-item { display: flex; align-items: baseline; gap: .4rem; font-size: .72rem; }
     .du-tl-dot { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; flex: 0 0 auto; margin-top: .3rem; }
+    .du-tl-item { flex-wrap: wrap; }
+    .du-tl-page {
+        font-size: .64rem; color: #7dd3fc; background: rgba(56,189,248,.1);
+        border: 1px solid rgba(56,189,248,.3); border-radius: 999px;
+        padding: 0 .4rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .du-watch { margin-top: .5rem; border-top: 1px dashed rgba(148,163,184,.25); padding-top: .45rem; }
+    .du-watch-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin-bottom: .25rem; }
+    .du-watch-row { font-size: .74rem; padding: .18rem 0; border-bottom: 1px solid rgba(148,163,184,.12); }
+    .du-watch-row:last-child { border-bottom: 0; }
     @media (max-width: 767px) {
         .du-popup-table { font-size: .7rem; }
         .ucm-overlay { padding: .5rem; }
@@ -759,6 +769,9 @@ window.__duRow = function (r) {
             + ' <span class="sub">\u00b7 ' + esc(r.visits) + ' visits</span>'
             + (blocked ? ' <span class="pill bg-danger">' + esc(r.block_mode) + ' block</span>' : '')
             + '</td>'
+        + '<td class="sub">' + (r.app_version
+            ? '<span class="pill bg-dark border border-secondary" title="App version this install reported">v' + esc(r.app_version) + '</span>'
+            : '&mdash;') + '</td>'
         + '<td>' + (r.registered
             ? esc(r.email || 'account linked')
             : '<span class="sub">unregistered</span>') + '</td>'
@@ -780,7 +793,7 @@ window.__duRow = function (r) {
             + '</td>'
         + '</tr>'
         + '<tr class="du-history-row" id="du-hist-' + r.device_pk + '" style="display:none;">'
-        + '<td colspan="7" class="du-history"><span class="sub">Loading\u2026</span></td></tr>';
+        + '<td colspan="8" class="du-history"><span class="sub">Loading\u2026</span></td></tr>';
     return html;
 };
 
@@ -825,21 +838,38 @@ window.__duHistory = function (pk, btn) {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin'
     }).then(function (r) { return r.json(); }).then(function (data) {
         var esc = window.__duEsc;
-        var head = '<div class="sub mb-1">First seen ' + esc(data.first_seen)
+        var html = '<div class="sub mb-1">First seen ' + esc(data.first_seen)
             + ' \u00b7 last seen ' + esc(data.last_seen)
             + ' \u00b7 ' + esc(data.total_visits) + ' recorded visits</div>';
         if (!data.visits || !data.visits.length) {
-            cell.innerHTML = head + '<div class="sub">No visits recorded.</div>';
+            html += '<div class="sub">No visits recorded.</div>';
         } else {
-            cell.innerHTML = head + '<div class="du-timeline">'
+            html += '<div class="du-timeline">'
                 + data.visits.map(function (v) {
                     return '<div class="du-tl-item"><span class="du-tl-dot"></span>'
                         + '<span class="text-white">' + esc(v.at) + '</span>'
                         + '<span class="sub"> ' + (v.ip ? esc(v.ip) : 'no ip')
-                        + (v.build ? ' \u00b7 ' + esc(v.build) : '')
-                        + (v.model ? ' \u00b7 ' + esc(v.model) : '') + '</span></div>';
+                        + (v.build ? ' \u00b7 build ' + esc(v.build) : '')
+                        + (v.model ? ' \u00b7 ' + esc(v.model) : '') + '</span>'
+                        + (v.page ? '<span class="du-tl-page" title="endpoint this visit hit">' + esc(v.page) + '</span>' : '')
+                        + '</div>';
                 }).join('') + '</div>';
         }
+        if (data.watched && data.watched.length) {
+            html += '<div class="du-watch">'
+                + '<div class="du-watch-title"><i class="fas fa-clapperboard me-1"></i>Watched'
+                + (data.email ? ' \u00b7 ' + esc(data.email) : '') + '</div>'
+                + data.watched.map(function (w) {
+                    return '<div class="du-watch-row">'
+                        + '<span class="text-white">' + esc(w.title) + '</span>'
+                        + ' <span class="sub">' + esc(w.kind)
+                        + (w.done ? ' \u00b7 finished' : '') + ' \u00b7 ' + esc(w.at) + '</span></div>';
+                }).join('')
+                + '</div>';
+        } else if (data.email) {
+            html += '<div class="sub mt-1">No playback recorded for ' + esc(data.email) + ' yet.</div>';
+        }
+        cell.innerHTML = html;
         row.setAttribute('data-loaded', '1');
     }).catch(function () { cell.innerHTML = '<span class="sub text-danger">Could not load the history.</span>'; });
 };
@@ -861,7 +891,7 @@ window.__renderDailyUsers = function () {
         return;
     }
     var html = '<table class="table table-dark table-sm align-middle mb-0 du-popup-table"><thead><tr>'
-        + '<th>Device</th><th>Account</th><th>IP</th><th>Location</th><th>First seen</th><th></th><th></th>'
+        + '<th>Device</th><th>App</th><th>Account</th><th>IP</th><th>Location</th><th>First seen</th><th></th><th></th>'
         + '</tr></thead><tbody>'
         + rows.map(window.__duRow).join('')
         + '</tbody></table>';

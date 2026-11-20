@@ -5410,6 +5410,18 @@ def android_app_users_full(request, app_id):
                 id=dev_pk, android_app=selected_app).first()
             if dev is None:
                 return JsonResponse({'visits': []})
+            def _visit_page(raw):
+                """The endpoint a visit hit, out of the stored request dump."""
+                if not raw:
+                    return ''
+                try:
+                    data = json.loads(raw)
+                except (TypeError, ValueError):
+                    return ''
+                if not isinstance(data, dict):
+                    return ''
+                return (data.get('path') or '')[:120]
+
             seen_builds = []
             for v in dev.visits.order_by('-visited_at')[:25]:
                 seen_builds.append({
@@ -5417,10 +5429,41 @@ def android_app_users_full(request, app_id):
                     'ip': v.ip_address or '',
                     'build': v.build_identifier or '',
                     'model': v.device_model or '',
+                    'page': _visit_page(v.full_request),
                 })
+
+            # What this install watched: the app syncs playback under the
+            # account, so a registered device can be followed through the play
+            # history. A guest has no account and therefore no rows here.
+            email = (email_by_device.get(dev.user_id)
+                     or email_by_device.get(dev.account_key) or '')
+            watched = []
+            if email:
+                try:
+                    from .models import PlayHistory
+                    from .retention import user_db
+                    for p in (PlayHistory.objects.using(user_db())
+                              .filter(user__email__iexact=email)
+                              .order_by('-last_played_at')[:10]):
+                        label = p.title or '(untitled)'
+                        if p.season_number and p.episode_number:
+                            label += ' S%02dE%02d' % (p.season_number, p.episode_number)
+                            if p.episode_title:
+                                label += ' \u00b7 ' + p.episode_title
+                        watched.append({
+                            'title': label,
+                            'kind': p.get_media_type_display(),
+                            'at': timezone.localtime(p.last_played_at).strftime('%d %b %Y %H:%M')
+                                  if p.last_played_at else '',
+                            'done': bool(p.completed),
+                        })
+                except Exception:
+                    logger.exception('daily users: play history lookup failed for %s', email)
+
             return JsonResponse({
                 'device': dev.device_model or dev.user_id,
                 'user_id': dev.user_id,
+                'email': email,
                 'first_seen': timezone.localtime(dev.first_seen_at).strftime('%d %b %Y %H:%M')
                               if dev.first_seen_at else '',
                 'last_seen': timezone.localtime(dev.last_seen_at).strftime('%d %b %Y %H:%M')
@@ -5428,6 +5471,7 @@ def android_app_users_full(request, app_id):
                 'total_visits': dev.total_visits,
                 'block_mode': dev.block_mode,
                 'visits': seen_builds,
+                'watched': watched,
             })
 
         # Both series are always built now: the chart draws the period's active
@@ -5512,15 +5556,37 @@ def android_app_users_full(request, app_id):
             start, end = _window(slots[slot_index][1]) if slots else (None, None)
 
             device_ip = {}
+            device_build = {}
             if start is not None:
                 for v in (AndroidAppDeviceVisit.objects
                           .filter(android_app=selected_app,
                                   visited_at__gte=start, visited_at__lt=end)
                           .order_by('-visited_at')):
                     device_ip.setdefault(v.device_id, v.ip_address or '')
+                    device_build.setdefault(v.device_id, (v.build_identifier or '').strip())
 
             devices = {d.id: d for d in
                        AndroidAppDevice.objects.filter(id__in=list(device_ip))}
+
+            # App version per install. The install record and its visits only
+            # carry the build number the app reports ("1" on every build), so
+            # the real version comes from the sync/heartbeat rows, which the app
+            # fills in with the version name it is running.
+            version_by_install = {}
+            wanted_ids = set(device_ip) | {d.account_key for d in devices.values() if d.account_key}
+            if wanted_ids:
+                for install_id, ver in (UserHeartbeat.objects
+                                        .filter(device_id__in=wanted_ids)
+                                        .exclude(app_version='')
+                                        .values_list('device_id', 'app_version')):
+                    if install_id and ver:
+                        version_by_install[install_id] = ver
+                for install_id, ver in (SyncedUser.objects
+                                        .filter(device_id__in=wanted_ids)
+                                        .exclude(app_version='')
+                                        .values_list('device_id', 'app_version')):
+                    if install_id and ver:
+                        version_by_install.setdefault(install_id, ver)
 
             # Location is read from the geo cache. Addresses it has never seen
             # would show as blank, which reads as broken rather than uncached,
@@ -5565,6 +5631,9 @@ def android_app_users_full(request, app_id):
                     'user_id': dev.user_id,
                     'device': dev.device_model or 'Unknown device',
                     'os': dev.os_version or '',
+                    'app_version': (version_by_install.get(dev.user_id)
+                                    or version_by_install.get(dev.account_key)
+                                    or device_build.get(dev.user_id, '')),
                     'ip': ip or '',
                     'location': ', '.join(place_bits),
                     'email': email,
