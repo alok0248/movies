@@ -1290,6 +1290,26 @@ def _dashboard_guest_quotas(now, shown=12):
         -r.plays_used,
         -(r.last_play_at.timestamp() if r.last_play_at else 0),
     ))
+    shown_rows = rows[:shown]
+
+    # Tell a blocked viewer who already has an account (sign in) apart from one
+    # who has none (register). One query for every address in the list.
+    addresses = {(r.last_email or '').strip().lower() for r in shown_rows if r.last_email}
+    accounts = {}
+    if addresses:
+        try:
+            from django.db.models import Q
+            from .models import SyncedUser
+            lookup = Q()
+            for address in addresses:
+                lookup |= Q(email__iexact=address)
+            for email, verified in (SyncedUser.objects.filter(lookup)
+                                    .values_list('email', 'is_email_verified')):
+                key = (email or '').strip().lower()
+                accounts[key] = accounts.get(key, False) or bool(verified)
+        except Exception:
+            accounts = {}
+
     quotas['devices'] = [{
         'device_id': r.device_id,
         'plays_used': r.plays_used,
@@ -1298,8 +1318,12 @@ def _dashboard_guest_quotas(now, shown=12):
         'blocked': r.remaining <= 0,
         'last_title': r.last_title,
         'last_play_at': r.last_play_at,
-    } for r in rows[:shown]]
+        'last_email': r.last_email,
+        'email_known': (r.last_email or '').strip().lower() in accounts,
+        'email_verified': bool(accounts.get((r.last_email or '').strip().lower())),
+    } for r in shown_rows]
     quotas['more'] = max(0, len(rows) - shown)
+    quotas['accounts'] = sum(1 for d in quotas['devices'] if d['email_known'])
     return quotas
 
 

@@ -245,6 +245,7 @@
                 <span class="adm-sub">
                     {{ guest_quotas.total }} device{{ guest_quotas.total|pluralize }} tracked
                     &middot; {{ guest_quotas.blocked }} blocked
+                    &middot; {{ guest_quotas.accounts }} with an account
                     &middot; {{ guest_quotas.used_total }} play{{ guest_quotas.used_total|pluralize }} used
                     {% if guest_quotas.last_play %}&middot; last play {{ guest_quotas.last_play|date:'Y-m-d H:i' }}{% endif %}
                 </span>
@@ -255,6 +256,7 @@
                 <thead>
                     <tr>
                         <th>Device</th>
+                        <th>Last email</th>
                         <th class="num">Used</th>
                         <th class="num">Limit</th>
                         <th class="num">Remaining</th>
@@ -267,6 +269,14 @@
                     {% for q in guest_quotas.devices %}
                     <tr>
                         <td><span class="adm-mono adm-trunc" title="{{ q.device_id }}">{{ q.device_id }}</span></td>
+                        <td class="adm-muted adm-trunc" title="{{ q.last_email }}">
+                            {% if q.last_email %}
+                                <span class="adm-mono">{{ q.last_email }}</span>
+                                {% if q.email_verified %}<span class="adm-badge is-ok ms-1">verified</span>
+                                {% elif q.email_known %}<span class="adm-badge is-warn ms-1">unverified</span>
+                                {% else %}<span class="adm-badge is-off ms-1">no account</span>{% endif %}
+                            {% else %}<span class="adm-muted">guest, no email</span>{% endif %}
+                        </td>
                         <td class="num">{{ q.plays_used }}</td>
                         <td class="num">{{ q.limit }}</td>
                         <td class="num">{{ q.remaining }}</td>
@@ -278,7 +288,7 @@
                         <td class="adm-muted">{% if q.last_play_at %}{{ q.last_play_at|date:'Y-m-d H:i' }}{% else %}never{% endif %}</td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="7" class="adm-empty"><i class="fas fa-user-lock"></i>No guest plays recorded yet.</td></tr>
+                    <tr><td colspan="8" class="adm-empty"><i class="fas fa-user-lock"></i>No guest plays recorded yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
