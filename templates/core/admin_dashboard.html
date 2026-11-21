@@ -237,6 +237,61 @@
             </div>
         </div>
     </div>
+    <!-- Guest free previews: who is out of plays and has to register -->
+    <div class="adm-card">
+        <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-user-lock"></i>Guest free previews</div>
+            <div class="adm-btn-group ms-auto">
+                <span class="adm-sub">
+                    {{ guest_quotas.total }} device{{ guest_quotas.total|pluralize }} tracked
+                    &middot; {{ guest_quotas.blocked }} blocked
+                    &middot; {{ guest_quotas.used_total }} play{{ guest_quotas.used_total|pluralize }} used
+                    {% if guest_quotas.last_play %}&middot; last play {{ guest_quotas.last_play|date:'Y-m-d H:i' }}{% endif %}
+                </span>
+            </div>
+        </div>
+        <div class="adm-table-wrap">
+            <table class="adm-table">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th class="num">Used</th>
+                        <th class="num">Limit</th>
+                        <th class="num">Remaining</th>
+                        <th>State</th>
+                        <th>Last title</th>
+                        <th>Last play</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for q in guest_quotas.devices %}
+                    <tr>
+                        <td><span class="adm-mono adm-trunc" title="{{ q.device_id }}">{{ q.device_id }}</span></td>
+                        <td class="num">{{ q.plays_used }}</td>
+                        <td class="num">{{ q.limit }}</td>
+                        <td class="num">{{ q.remaining }}</td>
+                        <td>
+                            {% if q.blocked %}<span class="adm-badge is-danger">blocked</span>
+                            {% else %}<span class="adm-badge is-ok">{{ q.remaining }} left</span>{% endif %}
+                        </td>
+                        <td class="adm-muted adm-trunc">{% if q.last_title %}{{ q.last_title }}{% else %}&mdash;{% endif %}</td>
+                        <td class="adm-muted">{% if q.last_play_at %}{{ q.last_play_at|date:'Y-m-d H:i' }}{% else %}never{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="adm-empty"><i class="fas fa-user-lock"></i>No guest plays recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if guest_quotas.more %}
+        <div class="adm-card-foot">
+            <div class="adm-legend">
+                <span>{{ guest_quotas.more }} more device{{ guest_quotas.more|pluralize }} not shown &mdash; blocked devices are listed first.</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Traffic -->
     <div class="adm-card">
         <div class="adm-card-head">

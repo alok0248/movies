@@ -1263,6 +1263,46 @@ def _dashboard_android(today, now):
     return android
 
 
+def _dashboard_guest_quotas(now, shown=12):
+    """The free-preview count each device has spent, blocked devices first.
+
+    The guest gate refuses playback once a device's remaining count reaches
+    zero, so this is the list to watch: a blocked device is somebody who has to
+    register to keep watching.
+    """
+    from .models import GuestPlayQuota
+
+    quotas = {
+        'devices': [], 'total': 0, 'blocked': 0, 'used_total': 0,
+        'last_play': None, 'more': 0,
+    }
+    try:
+        rows = list(GuestPlayQuota.objects.all()[:5000])
+    except Exception:
+        return quotas
+
+    quotas['total'] = len(rows)
+    quotas['used_total'] = sum(r.plays_used for r in rows)
+    quotas['blocked'] = sum(1 for r in rows if r.remaining <= 0)
+    quotas['last_play'] = max((r.last_play_at for r in rows if r.last_play_at), default=None)
+    rows.sort(key=lambda r: (
+        r.remaining > 0,
+        -r.plays_used,
+        -(r.last_play_at.timestamp() if r.last_play_at else 0),
+    ))
+    quotas['devices'] = [{
+        'device_id': r.device_id,
+        'plays_used': r.plays_used,
+        'limit': r.limit,
+        'remaining': r.remaining,
+        'blocked': r.remaining <= 0,
+        'last_title': r.last_title,
+        'last_play_at': r.last_play_at,
+    } for r in rows[:shown]]
+    quotas['more'] = max(0, len(rows) - shown)
+    return quotas
+
+
 def _dashboard_devices(now):
     """Devices, addresses and accounts, and how far each has spread."""
     devices = {
@@ -1361,6 +1401,8 @@ def admin_dashboard(request):
 
     devices = _dashboard_devices(now)
 
+    guest_quotas = _dashboard_guest_quotas(now)
+
     resources = _dashboard_resources(counts['db_size'])
 
     # Counts and status carry the rest of the template's variables; they are
@@ -1372,6 +1414,7 @@ def admin_dashboard(request):
         'traffic_totals': traffic_totals,
         'android': android,
         'devices': devices,
+        'guest_quotas': guest_quotas,
         'resources': resources,
         'active_db': user_db,
         'failing_checks': failing,
