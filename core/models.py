@@ -4182,6 +4182,12 @@ class AppNotification(models.Model):
     def read_count(self):
         return self.recipients.exclude(read_at=None).count()
 
+    @property
+    def link_name(self):
+        """The link under its short name (``app.apk``, ``example.com``)."""
+        from .linktext import link_label
+        return link_label(self.link_url)
+
 
 class AppNotificationRecipient(models.Model):
     """One user's copy of a notification, with its delivery and read state."""

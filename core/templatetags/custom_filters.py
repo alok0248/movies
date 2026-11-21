@@ -4,6 +4,13 @@ from datetime import date
 register = template.Library()
 
 
+@register.filter(name='linkify')
+def linkify(value):
+    """Show each URL in a message under its short name, as a link."""
+    from core.linktext import linkify as _linkify
+    return _linkify(value)
+
+
 @register.filter(name='get_item')
 def get_item(dictionary, key):
     """Get an item from a dictionary by key."""

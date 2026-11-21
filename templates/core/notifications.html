@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Notifications{% endblock %}
 
@@ -37,8 +38,12 @@
             <h2 class="nt-card-title">{{ n.title }}</h2>
             <span class="nt-when">{{ n.sent_at|date:'d M Y, H:i' }}</span>
         </div>
-        {% if n.body %}<div class="nt-body">{{ n.body }}</div>{% endif %}
-        {% if n.link_url %}<a class="nt-link" href="{{ n.link_url }}" target="_blank" rel="noopener">Open <i class="fas fa-arrow-right ms-1"></i></a>{% endif %}
+        {% if n.body %}<div class="nt-body">{{ n.body|linkify }}</div>{% endif %}
+        {% if n.link_url %}
+        <a class="nt-link" href="{{ n.link_url }}" target="_blank" rel="noopener noreferrer" title="{{ n.link_url }}">
+            <i class="fas fa-link me-1"></i>{{ n.link_name }}
+        </a>
+        {% endif %}
     </article>
     {% empty %}
     <div class="nt-empty">
