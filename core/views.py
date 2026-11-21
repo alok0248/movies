@@ -6774,6 +6774,10 @@ def android_app_endpoint(request, app_slug):
     # Cache the catalog payload for 5 minutes; the per-build switches are merged
     # only into the response, never into the cache.
     cache.set(cache_key, response_payload, 300)
+    # The release manifest is read per request, not cached with the catalog, so
+    # a build published on GitHub is offered on the app's next poll.
+    from .app_release import with_published_release
+    response_payload = with_published_release(response_payload)
     return JsonResponse(_with_version_features(response_payload, android_app, build_number),
                         safe=isinstance(response_payload, dict))
 
