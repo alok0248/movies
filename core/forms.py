@@ -230,6 +230,19 @@ def _payload_flag(value):
     return bool(value)
 
 
+def _payload_count(value, default):
+    """Read a number out of a saved payload: 10, "10" or "no_login_play=10"."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        digits = ''.join(ch for ch in value if ch.isdigit())
+        if digits:
+            return int(digits[:6])
+    return default
+
+
 class AndroidAppForm(forms.ModelForm):
     # The four values the app reads from the top of its config response. They
     # live inside json_payload, but a slider is easier (and safer) to use than
@@ -252,6 +265,12 @@ class AndroidAppForm(forms.ModelForm):
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 30, 'max': 86400, 'step': 1,
                                         'placeholder': '300'}),
         help_text='How often, in seconds, the app re-reads this configuration ("sync": 300).')
+    no_login_play = forms.IntegerField(
+        label='Plays before login', required=False, min_value=0, max_value=1000,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 1000, 'step': 1,
+                                        'placeholder': '10'}),
+        help_text=('How many titles a visitor may play before they must sign in '
+                   '("no_login_play": 10). 0 asks for an account straight away.'))
 
     json_payload_input = forms.CharField(
         label='JSON Data',
@@ -290,6 +309,8 @@ class AndroidAppForm(forms.ModelForm):
             self.fields[key].initial = _payload_flag(payload.get(key))
         sync_value = payload.get('sync')
         self.fields['sync'].initial = sync_value if sync_value not in (None, '') else 300
+        self.fields['no_login_play'].initial = _payload_count(
+            payload.get('no_login_play', payload.get('noLoginPlay')), 10)
 
     def clean_json_payload_input(self):
         value = self.cleaned_data.get('json_payload_input', '')
@@ -323,6 +344,12 @@ class AndroidAppForm(forms.ModelForm):
             payload['sync'] = cleaned['sync']
         elif 'sync' not in payload:
             payload['sync'] = 300
+        if cleaned.get('no_login_play') is not None:
+            payload['no_login_play'] = max(0, min(1000, int(cleaned['no_login_play'])))
+        else:
+            # A blank box keeps whatever was saved, and 10 when nothing was.
+            payload['no_login_play'] = _payload_count(
+                payload.get('no_login_play', payload.get('noLoginPlay')), 10)
         cleaned['parsed_json_payload'] = payload
         return cleaned
 

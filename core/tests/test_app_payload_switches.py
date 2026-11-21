@@ -72,6 +72,11 @@ class AppSwitchPageTest(AppSwitchTestBase):
         self.assertContains(response, 'name="subscription"')
         self.assertContains(response, 'name="without_server"')
         self.assertContains(response, 'name="sync"')
+        self.assertContains(response, 'name="no_login_play"')
+
+    def test_the_plays_before_login_box_defaults_to_ten(self):
+        form = self.client.get(self.edit_url()).context['form']
+        self.assertEqual(10, form['no_login_play'].value())
 
     def test_switched_on_values_are_shown_as_on(self):
         self.app.json_payload.update({'login_required': 1, 'subscription': 1,
@@ -100,6 +105,17 @@ class AppSwitchSaveTest(AppSwitchTestBase):
         self.assertEqual(1, payload['without_server'])
         self.assertEqual(0, payload['subscription'])
         self.assertEqual(600, payload['sync'])
+        self.assertEqual(10, payload['no_login_play'])
+
+    def test_the_plays_box_writes_the_config_key(self):
+        self.post(no_login_play=25)
+        self.assertEqual(25, self.reload()['no_login_play'])
+
+    def test_a_blank_plays_box_keeps_the_saved_value(self):
+        self.app.json_payload['no_login_play'] = 4
+        self.app.save()
+        self.post(no_login_play='')
+        self.assertEqual(4, self.reload()['no_login_play'])
 
     def test_every_other_key_in_the_payload_is_kept(self):
         self.post(login_required='on', sync=120)
@@ -138,6 +154,15 @@ class AppSwitchSaveTest(AppSwitchTestBase):
         self.post(sync=999999)
 
         self.assertEqual(300, self.reload()['sync'])
+
+    def test_a_negative_play_count_is_refused(self):
+        self.app.json_payload['no_login_play'] = 10
+        self.app.save()
+        response = self.post(no_login_play=-3)
+
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, 'Ensure this value is greater than or equal to 0')
+        self.assertEqual(10, self.reload()['no_login_play'])
 
     def test_an_array_payload_cannot_use_the_switches(self):
         response = self.post(payload=[], login_required='on')

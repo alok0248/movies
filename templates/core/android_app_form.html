@@ -87,8 +87,9 @@
                                 <div class="fw-semibold text-white"><i class="fas fa-sliders me-2 text-info"></i>App behaviour</div>
                                 <div class="form-text text-secondary mb-0">
                                     These write <code>login_required</code>, <code>subscription</code>, <code>without_server</code>
-                                    (1 = enabled, 0 = disabled) and <code>sync</code> (seconds) into the JSON payload below,
-                                    which is what the app receives on its first request.
+                                    (1 = enabled, 0 = disabled), <code>sync</code> (seconds) and <code>no_login_play</code>
+                                    (free plays before signing in) into the JSON payload below, which is what the app
+                                    receives on its first request.
                                 </div>
                             </div>
                             <div class="row g-3">
@@ -121,6 +122,12 @@
                                     {{ form.sync }}
                                     <div class="form-text text-secondary">{{ form.sync.help_text }}</div>
                                     {% if form.sync.errors %}<div class="text-danger small mt-1">{{ form.sync.errors|join:', ' }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <label class="adm-label text-white" for="{{ form.no_login_play.id_for_label }}">Plays before login</label>
+                                    {{ form.no_login_play }}
+                                    <div class="form-text text-secondary">{{ form.no_login_play.help_text }}</div>
+                                    {% if form.no_login_play.errors %}<div class="text-danger small mt-1">{{ form.no_login_play.errors|join:', ' }}</div>{% endif %}
                                 </div>
                             </div>
                         </div>
