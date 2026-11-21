@@ -87,6 +87,32 @@ class GuestQuotaLimitTest(GuestQuotaBase):
         self.assertEqual(403, response.status_code)
         self.assertEqual(0, response.json()['limit'])
 
+    def test_a_reinstall_is_already_at_the_limit(self):
+        """The app has no CSRF token and reuses the same device id after a reinstall."""
+        from django.test import Client
+        client = Client(enforce_csrf_checks=True)
+        self.app.json_payload['no_login_play'] = 2
+        self.app.save()
+
+        def play():
+            return client.post(
+                reverse('api_guest_play'),
+                data=json.dumps({'deviceId': 'device-reinstall', 'email': '', 'titleId': '1'}),
+                content_type='application/json',
+                HTTP_AUTHORIZATION=self.auth)
+
+        self.assertEqual(200, play().status_code)
+        self.assertEqual(200, play().status_code)
+        self.assertEqual(403, play().status_code)
+
+        # A fresh install asks with the same id: it is told the plays are used.
+        payload = client.get(
+            reverse('api_guest_quota'),
+            {'deviceId': 'device-reinstall', 'email': ''},
+            HTTP_AUTHORIZATION=self.auth).json()
+        self.assertEqual(0, payload['remaining'])
+        self.assertTrue(payload['blocked'])
+
     def test_a_verified_account_stays_unlimited(self):
         from core.models import SyncedUser
         self.app.json_payload['no_login_play'] = 0

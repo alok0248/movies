@@ -22,6 +22,7 @@ import json
 
 from django.http import JsonResponse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import GuestPlayQuota, SyncedUser
 from .views import _validate_android_auth
@@ -95,6 +96,7 @@ def api_guest_quota(request):
     return JsonResponse(_quota_payload(_get_quota(device_id, limit), limit=limit))
 
 
+@csrf_exempt
 def api_guest_play(request):
     """POST /api/guest/play/ {deviceId, email?, titleId?, titleType?} — use a play."""
     app_match, err = _validate_android_auth(request)
